@@ -651,6 +651,16 @@ public:
         return dir.blobstore;
     }
 
+    void pushMvccSeqForword(size_t seq_nums)
+    {
+        PageId page_id = UINT64_MAX - 100;
+
+        for (size_t idx = 0; idx < seq_nums; idx++)
+        {
+            pushMvcc(page_id);
+        }
+    }
+
 protected:
     BlobStore::Config config;
     FileProviderPtr file_provider;
@@ -658,36 +668,100 @@ protected:
     PageDirectory dir;
 };
 
-TEST_F(PageDirectoryGCTest, TestPageDirectoryGC)
+using PageSeqAndEntryV3 = std::pair<UInt64, PageEntryV3>;
+using PageSeqAndEntriesV3 = std::vector<PageIDAndEntryV3>;
+
+::testing::AssertionResult getEntriesSeqCompare(
+    const char * expected_entries_expr,
+    const char * dir_expr,
+    const char * page_ids_expr,
+    const PageSeqAndEntriesV3 & expected_entries,
+    const PageDirectory & dir,
+    const PageId page_id)
+{
+    auto & mvcc_table = dir.mvcc_table_directory;
+    auto mvcc_it = mvcc_table.find(page_id);
+
+    if (mvcc_it == mvcc_table.end())
+    {
+        return ::testing::AssertionFailure(::testing::Message(
+            fmt::format(
+                "Page [id={}] not exist in {}.",
+                page_id,
+                dir_expr)
+                .c_str()));
+    }
+
+    auto & entries_seq = mvcc_it->second;
+    size_t idx = 0;
+    for (auto & [version_type, entry_del] : entries_seq->entries)
+    {
+        auto & expected_seq_entry = expected_entries[idx++];
+
+        if (entry_del.is_delete)
+        {
+            auto expect_expr = fmt::format("Entry at {} [page_id={}, seq={}] ", idx - 1, page_id, version_type.sequence);
+            auto actual_expr = fmt::format("Get entries {} from {} with [page_id={}] failed. It already been deleted",
+                                           expected_entries_expr,
+                                           dir_expr,
+                                           page_ids_expr);
+            return testing::internal::EqFailure(
+                expect_expr.c_str(),
+                actual_expr.c_str(),
+                toString(expected_seq_entry.second),
+                toString(entry_del.entry),
+                false);
+        }
+
+        if (expected_seq_entry.first != version_type.sequence || !isSameEntry(expected_seq_entry.second, entry_del.entry))
+        {
+            // not the expected entry we want
+            auto expect_expr = fmt::format("Entry at {} [page_id={}, seq={}] ", idx - 1, page_id, version_type.sequence);
+            auto actual_expr = fmt::format("Get entries {} from {} with [page_id={}].",
+                                           expected_entries_expr,
+                                           dir_expr,
+                                           page_ids_expr);
+            return testing::internal::EqFailure(
+                expect_expr.c_str(),
+                actual_expr.c_str(),
+                toString(expected_seq_entry.second),
+                toString(entry_del.entry),
+                false);
+        }
+    }
+
+    return ::testing::AssertionSuccess();
+}
+
+#define EXPECT_SEQ_ENTRIES_EQ(expected_entries, dir, pid) \
+    EXPECT_PRED_FORMAT3(getEntriesSeqCompare, expected_entries, dir, pid)
+
+
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithAlignSeq)
 try
 {
-    /**
-     * case 1
-     * entries: [v2,v5,v10]
-     * lowest_seq: >=1 && <5
-     * after GC => 
-     * entries: [v2,v5,v10]
-     * ===
-     * case 2
-     * entries: [v2,v5,v10]
-     * lowest_seq: >=5 && <10
-     * after GC => 
-     * entries: [v5,v10]
-     * ===
-     * case 3
-     * entries: [v2,v5,v10]
-     * lowest_seq: >=10
-     * after GC => 
-     * entries: [v10]
-     */
-
     PageId page_id = 50;
-    size_t buff_nums = 10;
+    size_t buff_nums = 5;
     size_t buff_size = 123;
     char c_buff[buff_size * buff_nums];
 
-    // generator
+    UInt64 lowest_seq = 3;
+    std::vector<UInt64> version_keep = {lowest_seq, 5};
+
+    auto blob_store = getBlobStore();
+    std::list<PageDirectorySnapshotPtr> snapshots;
+
+    /**
+     * before GC => 
+     *   entries: [v1...v5]
+     *   hold_seq: [v3,v5]
+     * after GC => 
+     *   entries remain: [v3,v4,v5]
+     *   snapshot remain: [v3,v5]
+     */
     WriteBatch wb;
+    PageSeqAndEntriesV3 seq_entries;
+
     for (size_t i = 0; i < buff_nums; ++i)
     {
         for (size_t j = 0; j < buff_size; ++j)
@@ -697,17 +771,84 @@ try
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+
+        auto edit = blob_store->write(wb, nullptr);
+        dir.apply(std::move(edit));
+        dir.createSnapshot();
+        wb.clear();
+
+        if (std::find(version_keep.begin(), version_keep.end(), i + 1)
+            != version_keep.end())
+        {
+            snapshots.emplace_back(dir.createSnapshot());
+        }
+
+        if (i + 1 >= lowest_seq)
+        {
+            const auto & record_last = edit.getRecords().rbegin();
+            // (i + 1) eq. current apply seq
+            seq_entries.emplace_back(std::make_pair(i + 1, record_last->entry));
+        }
     }
 
-    auto blob_store = getBlobStore();
-    auto edit = blob_store->write(wb, nullptr);
+    dir.snapshotsGC();
 
-    auto snap0 = dir.createSnapshot();
-    EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
+    EXPECT_SEQ_ENTRIES_EQ(seq_entries, dir, page_id);
+}
+CATCH
 
-    dir.apply(std::move(edit));
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq)
+try
+{
+    /**
+     * case 1
+     * before GC => 
+     *   entries: [v3, v5, v10]
+     *   lowest_seq: < 3
+     *   hold_seq: [lowest_seq, v3, v5, v10]
+     * after GC => 
+     *   entries: [v3, v5, v10]
+     *   snapshot remain: [v3, v5, v10]
+     */
+    UInt64 lowest_seq = 3;
+    PageId page_id = 0;
+    std::vector<UInt64> version_keep = {lowest_seq, 5};
 
-    std::cout << dir.mvcc_table_directory.size() << std::endl;
+    pushMvccSeqForword(lowest_seq);
+    // TBD
+
+    /**
+     * case 2
+     * before GC => 
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: >=2 && <5
+     *   hold_seq: [lowest_seq, v5, v10]
+     * after GC => 
+     *   entries: [v5, v10]
+     *   snapshot remain: [v2, v5, v10]
+     */
+
+    /**
+     * case 3
+     * before GC => 
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: >=5 && <10
+     *   hold_seq: [lowest_seq, v10]
+     * after GC => 
+     *   entries remain: [v5, v10]
+     *   snapshot remain : [v5, v10]
+     */
+
+    /**
+     * case 4
+     * before GC => 
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: >=10
+     *   hold_seq: [lowest_seq]
+     * after GC => 
+     *   entries remain: [v10]
+     *   snapshot remain : [v10]
+     */
 }
 CATCH
 

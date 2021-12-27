@@ -210,7 +210,8 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
 
     auto page_lock = acquireLock();
 
-    auto iter = MapUtils::findLess(entries, PageVersionType(lowest_seq));
+    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
+
     if (iter == entries.begin())
     {
         return std::make_pair(del_entries, false);
@@ -224,15 +225,15 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
             continue;
         }
 
-        if (!iter->second.is_delete)
-        {
-            del_entries.emplace_back(iter->second.entry);
-        }
-
+        del_entries.emplace_back(iter->second.entry);
         iter = entries.erase(iter);
     }
 
-    return std::make_pair(del_entries, ((iter == entries.begin()) && iter->second.is_delete));
+    // erase begin
+    del_entries.emplace_back(iter->second.entry);
+    entries.erase(iter);
+
+    return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
 PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids)
