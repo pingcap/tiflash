@@ -893,18 +893,46 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any, Map>
 {
-    static void addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & /*it*/, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/)
+    static void addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & /*it*/, size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/)
     {
-        (*filter)[i] = 1;
-        for (size_t j = 0; j < num_columns_to_add; ++j)
+        for (size_t j = 0; j < num_columns_to_add - 1; ++j)
             added_columns[j]->insertDefault();
+        added_columns[num_columns_to_add-1]->insert(toField(Int8(1)));
     }
 
-    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/)
+    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/)
     {
-        (*filter)[i] = 0;
-        for (size_t j = 0; j < num_columns_to_add; ++j)
+        for (size_t j = 0; j < num_columns_to_add - 1; ++j)
             added_columns[j]->insertDefault();
+        added_columns[num_columns_to_add-1]->insert(toField(Int8(0)));
+    }
+};
+
+template <typename Map>
+struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All, Map>
+{
+    static void addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes)
+    {
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
+        {
+            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
+                added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
+            added_columns[num_columns_to_add-1]->insert(toField(Int8(1)));
+
+            ++current_offset;
+        }
+
+        (*offsets)[i] = current_offset;
+    }
+
+    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets)
+    {
+        ++current_offset;
+        (*offsets)[i] = current_offset;
+
+        for (size_t j = 0; j < num_columns_to_add - 1; ++j)
+            added_columns[j]->insertDefault();
+        added_columns[num_columns_to_add-1]->insert(toField(Int8(0)));
     }
 };
 
@@ -924,8 +952,6 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
-        if (KIND == ASTTableJoin::Kind::LeftSemi)
-            (*filter)[i] = 1;
         if (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
             /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
@@ -941,8 +967,6 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
         else
         {
-            if (KIND == ASTTableJoin::Kind::LeftSemi)
-                (*filter)[i] = 0;
             if (KIND == ASTTableJoin::Kind::Anti)
                 (*filter)[i] = 1;
             ++current_offset;
@@ -1137,14 +1161,48 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     {
         /// inner join, just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); i++)
-        {
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
-        }
         return;
     }
 
-    ColumnUInt8::Container row_filter;
-    row_filter.resize(filter.size());
+    ColumnUInt8::Container row_filter(filter.size(), 0);
+
+    if (kind == ASTTableJoin::Kind::LeftSemi)
+    {
+        auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByPosition(block.columns() - 1).column.get());
+        auto & old_vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+
+        auto col_matched = ColumnInt8::create(offsets_to_replicate->size());
+        auto & vec_matched = col_matched->getData();
+
+        /// for leftSemi join, we should keep only one row for each original row of left table.
+        /// and because it is semi join, we needn't save columns of right table, so we just keep the first replica.
+        for (size_t i = 0, prev_offset = 0; i < offsets_to_replicate->size(); i++)
+        {
+            size_t current_offset = (*offsets_to_replicate)[i];
+
+            row_filter[prev_offset] = 1;
+            bool has_row_matched = false;
+            for (size_t index = prev_offset; index < current_offset; index++)
+            {
+                if (filter[index])
+                {
+                    has_row_matched = true;
+                    break;
+                }
+            }
+            /// when all rows fail to satisfy the `other condition`, we set `matched` to false.
+            vec_matched[i] = old_vec_matched[prev_offset] && has_row_matched;
+
+            prev_offset = current_offset;
+        }
+
+        for (size_t i = 0; i < block.columns() - 1; i++)
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        block.getByPosition(block.columns() - 1).column = makeNullable(std::move(col_matched));
+        return;
+    }
+
     for (size_t i = 0, prev_offset = 0; i < offsets_to_replicate->size(); i++)
     {
         size_t current_offset = (*offsets_to_replicate)[i];
@@ -1167,7 +1225,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         if (prev_offset < current_offset)
         {
             /// for outer join, at least one row must be kept
-            if ((isLeftJoin(kind) || kind == ASTTableJoin::Kind::LeftSemi) && !has_row_kept)
+            if (isLeftJoin(kind) && !has_row_kept)
                 row_filter[prev_offset] = 1;
             if (isAntiJoin(kind))
             {
@@ -1183,12 +1241,6 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             }
         }
         prev_offset = current_offset;
-    }
-    if (kind == ASTTableJoin::Kind::LeftSemi)
-    {
-        for (size_t i = 0; i < block.columns(); i++)
-            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
-        return;
     }
     if (isLeftJoin(kind))
     {
@@ -1278,10 +1330,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
 
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-
-    if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
-        num_columns_to_add--;
-
     MutableColumns added_columns;
     added_columns.reserve(num_columns_to_add);
 
@@ -1313,7 +1361,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     std::unique_ptr<IColumn::Filter> filter;
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
-        || kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::LeftSemi)
+        || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
@@ -1353,16 +1401,10 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
-
-    if (filter)
-    {
-        /// If LeftSemi/LeftAnti JOIN - Put filter into block
-        if (kind != ASTTableJoin::Kind::LeftSemi /*&& kind != ASTTableJoin::Kind::LeftAnti*/)
-        {
-            for (size_t i = 0; i < existing_columns; ++i)
-                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
-        }
-    }
+    /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
+    if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
+        for (size_t i = 0; i < existing_columns; ++i)
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
 
     /// If ALL ... JOIN - we replicate all the columns except the new ones.
     if (offsets_to_replicate)
@@ -1375,16 +1417,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
-    }
-
-    /// If LeftSemi/LeftAnti JOIN - Put filter into block
-    if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
-    {
-        auto col_res = ColumnInt8::create(rows);
-        auto & col_data = col_res->getData();
-        for (size_t i = 0; i < rows; ++i)
-            col_data[i] = static_cast<Int8>((*filter)[i]);
-        block.getByName("matched").column = makeNullable(std::move(col_res));
     }
 }
 
