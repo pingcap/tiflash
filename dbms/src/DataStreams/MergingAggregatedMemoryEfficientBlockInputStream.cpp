@@ -183,7 +183,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
             auto & child = children[i];
 
             reading_pool->schedule(
-                ThreadFactory(true, "MergeAggReadThr").newJob([&child] {
+                ThreadFactory::newJob([&child] {
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     child->readPrefix();
                 }));
@@ -475,7 +475,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                reading_pool->schedule(ThreadFactory(true, "MergeAggReadThr").newJob([&input, &read_from_input] {
+                reading_pool->schedule(ThreadFactory::newJob([&input, &read_from_input] {
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
                 }));

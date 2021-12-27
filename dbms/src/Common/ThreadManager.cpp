@@ -32,7 +32,7 @@ void ElasticThreadManager::wait()
 
 void RawThreadManager::schedule(Job job)
 {
-    workers.emplace_back(ThreadFactory(true).newThread(job));
+    workers.emplace_back(ThreadFactory::newThread("tmp-raw-thd", job));
     if (detach_if_possible)
         workers.back().detach();
 }
@@ -47,7 +47,8 @@ void RawThreadManager::wait()
 
 void FixedPoolThreadManager::schedule(Job job)
 {
-    pool.schedule(job);
+    ;
+    pool.schedule(ThreadFactory::newJob(job));
 }
 
 void FixedPoolThreadManager::wait()
