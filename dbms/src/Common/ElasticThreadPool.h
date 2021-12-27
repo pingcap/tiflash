@@ -72,7 +72,7 @@ protected:
     /// init threads size when thread pool is created
     const size_t init_cap;
     /// count of workers which is idle
-    size_t available_cnt;
+    int available_cnt;
     /// count of workers which is active
     size_t alive_cnt;
     /// period of shink shink threads
