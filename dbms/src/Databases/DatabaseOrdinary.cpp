@@ -17,7 +17,6 @@
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-#include "Parsers/IAST.h"
 
 
 namespace DB
@@ -310,7 +309,7 @@ ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & context) const
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.
-        String query = "CREATE DATABASE "+ backQuoteIfNeed(name) + " ENGINE = Ordinary";
+        String query = "CREATE DATABASE " + backQuoteIfNeed(name) + " ENGINE = Ordinary";
         ParserCreateQuery parser;
         ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0);
     }
