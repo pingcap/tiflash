@@ -178,22 +178,19 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         {
             // Put/upsert/ref all should append a new version for this page
             updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
-            auto update_it = updating_locks.find(r.page_id);
-            update_it->second.second -= 1;
-            if (update_it->second.second == 0)
-                updating_locks.erase(records[idx].page_id);
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
             updating_pages[idx]->createDelete(last_sequence + 1);
-            auto update_it = updating_locks.find(r.page_id);
-            update_it->second.second -= 1;
-            if (update_it->second.second == 0)
-                updating_locks.erase(records[idx].page_id);
             break;
         }
         }
+
+        auto update_it = updating_locks.find(r.page_id);
+        update_it->second.second -= 1;
+        if (update_it->second.second == 0)
+            updating_locks.erase(records[idx].page_id);
     }
 
     if (!updating_locks.empty())
