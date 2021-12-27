@@ -183,7 +183,8 @@ def runUTCoverTICS(CURWS, NPROC) {
                         sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tiflash/profile/diff-coverage ./
-                        chown -R 1000:1000 diff-coverage
+                        cp /tiflash/coverage-report.tar.gz ./
+			chown -R 1000:1000 diff-coverage coverage-report.tar.gz
                         """
                         ut_coverage_result = sh(script: "cat diff-coverage", returnStdout: true).trim()
                         sh """
@@ -202,7 +203,7 @@ def runUTCoverTICS(CURWS, NPROC) {
                     }
                 }
 	
-        	archiveArtifacts artifacts: '/tiflash/coverage-report.tar.gz', fingerprint: true        
+        	archiveArtifacts artifacts: 'coverage-report.tar.gz', fingerprint: true        
             }
         }
     }
