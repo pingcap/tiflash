@@ -4,6 +4,8 @@
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
+#include <Flash/Statistics/JoinImpl.h>
+#include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
 
 namespace DB
@@ -52,7 +54,6 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
     assert(dag_context);
-    assert(res.size() == dag_context->getProfileStreamsMap().size());
     for (const auto & entry : res)
     {
         entry.second->collectRuntimeDetail();
