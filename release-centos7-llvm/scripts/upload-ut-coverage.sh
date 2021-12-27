@@ -32,7 +32,10 @@ tar -czf coverage-report.tar.gz report
 cd $SRCPATH
 COMMIT_HASH_BASE=$(git merge-base origin/${BUILD_BRANCH} HEAD)
 SOURCE_DELTA=$(git diff --name-only ${COMMIT_HASH_BASE} | grep -E '.*\.(cpp|h|hpp|cc|c)$')
-echo '```' > /tiflash/profile/diff-coverage
+echo '### Coverage for changed files' > /tiflash/profile/diff-coverage
+echo '```' >> /tiflash/profile/diff-coverage
 llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA >> /tiflash/profile/diff-coverage
 echo '```' >> /tiflash/profile/diff-coverage
+echo '' >> /tiflash/profile/diff-coverage
+echo "[full coverage report](https://ci.pingcap.net/job/tics_ghpr_unit_test/${BUILD_NUMBER}/artifact/coverage-report.tar.gz)" >> /tiflash/profile/diff-coverage
 cat /tiflash/profile/diff-coverage

@@ -180,7 +180,7 @@ def runUTCoverTICS(CURWS, NPROC) {
             stage("Show UT Coverage") {
                 timeout(time: 20, unit: 'MINUTES') {
                     container("builder-llvm") {
-                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
+                        sh "NPROC=${NPROC} BUILD_NUMBER=${BUILD_NUMBER} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tiflash/profile/diff-coverage ./
                         cp /tiflash/coverage-report.tar.gz ./
@@ -191,13 +191,13 @@ def runUTCoverTICS(CURWS, NPROC) {
                         rm -f comment-pr
                         curl -O http://fileserver.pingcap.net/download/comment-pr
                         chmod +x comment-pr
-                        set +x
+			set +x
                         ./comment-pr \
                            --token=$TOKEN \
                            --owner=pingcap \
                            --repo=tics \
                            --number=${ghprbPullId} \
-                           --comment="Coverage:\n${ut_coverage_result}\nSee unit-test artifacts for detailed coverage report."
+                           --comment='${ut_coverage_result}'
                         set -x
                         """
                     }
