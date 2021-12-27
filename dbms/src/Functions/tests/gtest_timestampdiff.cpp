@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "DataTypes/DataTypeMyDuration.h"
 #include "DataTypes/DataTypeNullable.h"
 #include "TestUtils/FunctionTestUtils.h"
@@ -15,7 +17,26 @@ class TestTimestampDiff : public DB::tests::FunctionTest
 const std::string func_name = "tidbTimestampDiff";
 
 #define ASSERT_TIMESTAMP_DIFF(unit, t1, t2, result) \
-    ASSERT_COLUMN_EQ(result, executeFunction(func_name, {createConstColumn<String>(t1.column->size(), unit), t1, t2}))
+    ASSERT_COLUMN_EQ(result, executeFunction(func_name, {createConstColumn<String>((t1).column->size(), unit), t1, t2}))
+
+
+TEST_F(TestTimestampDiff, nullOnly)
+try
+{
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<Int64>>(1, std::nullopt),
+        executeFunction(func_name,
+                        {createConstColumn<String>(1, "year"),
+                         createOnlyNullColumnConst(1),
+                         createDateTimeColumnNullable({{{2020, 1, 1, 0, 0, 0, 0}}}, 6)}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<Int64>>(1, std::nullopt),
+        executeFunction(func_name,
+                        {createConstColumn<String>(1, "year"),
+                         createDateTimeColumnNullable({{{2020, 1, 1, 0, 0, 0, 0}}}, 6),
+                         createOnlyNullColumnConst(1)}));
+}
+CATCH
 
 TEST_F(TestTimestampDiff, constVector)
 try
