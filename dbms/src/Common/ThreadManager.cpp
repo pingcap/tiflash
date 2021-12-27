@@ -47,7 +47,6 @@ void RawThreadManager::wait()
 
 void FixedPoolThreadManager::schedule(Job job)
 {
-    ;
     pool.schedule(ThreadFactory::newJob(job));
 }
 
