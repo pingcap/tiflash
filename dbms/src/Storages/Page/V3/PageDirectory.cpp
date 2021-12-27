@@ -139,7 +139,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     // wal.apply(edit);
 
     // stage 3, create entry version list for pageId. nothing need to be rollback
-    std::unordered_map<PageId, PageLock> updating_locks;
+    std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
     for (const auto & r : edit.getRecords())
@@ -150,9 +150,14 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             iter->second = std::make_shared<VersionedPageEntries>();
         }
 
-        if (auto update_it = updating_locks.find(r.page_id); update_it == updating_locks.end())
+        auto update_it = updating_locks.find(r.page_id);
+        if (update_it == updating_locks.end())
         {
-            updating_locks.emplace(r.page_id, iter->second->acquireLock());
+            updating_locks.emplace(r.page_id, std::make_pair(iter->second->acquireLock(), 1));
+        }
+        else
+        {
+            update_it->second.second += 1;
         }
 
         updating_pages.emplace_back(iter->second);
@@ -173,16 +178,27 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         {
             // Put/upsert/ref all should append a new version for this page
             updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
-            updating_locks.erase(records[idx].page_id);
+            auto update_it = updating_locks.find(r.page_id);
+            update_it->second.second -= 1;
+            if (update_it->second.second == 0)
+                updating_locks.erase(records[idx].page_id);
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
             updating_pages[idx]->createDelete(last_sequence + 1);
-            updating_locks.erase(records[idx].page_id);
+            auto update_it = updating_locks.find(r.page_id);
+            update_it->second.second -= 1;
+            if (update_it->second.second == 0)
+                updating_locks.erase(records[idx].page_id);
             break;
         }
         }
+    }
+
+    if (!updating_locks.empty())
+    {
+        LOG_FMT_WARNING(log, "`updating_locks` must be cleared. But there are some locks not been erased. [remain sizes={}]", updating_locks.size());
     }
 
     // The edit committed, incr the sequence number to publish changes for `createSnapshot`
