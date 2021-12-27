@@ -344,7 +344,7 @@ void DatabaseOrdinary::drop(const Context & context)
 {
     if (context.getFileProvider()->isEncryptionEnabled())
     {
-        LOG_FMT_WARNING(log, "Encryption is enabled. There may be some encryption info left.");
+        LOG_WARNING(log, "Encryption is enabled. There may be some encryption info left.");
     }
     // Remove data dir for this database
     const String database_data_path = getDataPath();

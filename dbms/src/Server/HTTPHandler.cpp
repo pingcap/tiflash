@@ -614,7 +614,7 @@ void HTTPHandler::handleRequest(Poco::Net::HTTPServerRequest & request, Poco::Ne
         }
 
         processQuery(request, params, response, used_output);
-        LOG_FMT_INFO(log, "Done processing query");
+        LOG_INFO(log, "Done processing query");
     }
     catch (...)
     {

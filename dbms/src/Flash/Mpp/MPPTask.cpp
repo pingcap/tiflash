@@ -114,12 +114,12 @@ void MPPTask::unregisterTask()
 {
     if (manager != nullptr)
     {
-        LOG_FMT_DEBUG(log, "task unregistered");
+        LOG_DEBUG(log, "task unregistered");
         manager->unregisterTask(this);
     }
     else
     {
-        LOG_FMT_ERROR(log, "task manager is unset");
+        LOG_ERROR(log, "task manager is unset");
     }
 }
 
@@ -284,7 +284,7 @@ void MPPTask::runImpl()
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     if (!switchStatus(INITIALIZING, RUNNING))
     {
-        LOG_FMT_WARNING(log, "task not in initializing state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
 
@@ -296,7 +296,7 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
     String err_msg;
-    LOG_FMT_INFO(log, "task starts running");
+    LOG_INFO(log, "task starts running");
     try
     {
         preprocess();
@@ -311,7 +311,7 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
         auto from = dag_context->getBlockIO().in;
         from->readPrefix();
-        LOG_FMT_DEBUG(log, "begin read ");
+        LOG_DEBUG(log, "begin read ");
 
         while (from->read())
             continue;
@@ -361,9 +361,9 @@ void MPPTask::runImpl()
     unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))
-        LOG_FMT_INFO(log, "finish task");
+        LOG_INFO(log, "finish task");
     else
-        LOG_FMT_WARNING(log, "finish task which was cancelled before");
+        LOG_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
     mpp_task_statistics.logTracingJson();
@@ -402,7 +402,7 @@ void MPPTask::cancel(const String & reason)
         {
             closeAllTunnels(reason);
             unregisterTask();
-            LOG_FMT_WARNING(log, "Finish cancel task from uninitialized");
+            LOG_WARNING(log, "Finish cancel task from uninitialized");
             return;
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
@@ -410,7 +410,7 @@ void MPPTask::cancel(const String & reason)
             context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
-            LOG_FMT_WARNING(log, "Finish cancel task from running");
+            LOG_WARNING(log, "Finish cancel task from running");
             return;
         }
     }

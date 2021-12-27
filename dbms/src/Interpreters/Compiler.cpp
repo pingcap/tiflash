@@ -47,7 +47,7 @@ Compiler::Compiler(const std::string & path_, size_t threads)
 
 Compiler::~Compiler()
 {
-    LOG_FMT_DEBUG(log, "Waiting for threads to finish.");
+    LOG_DEBUG(log, "Waiting for threads to finish.");
     pool.wait();
 }
 
@@ -171,7 +171,7 @@ SharedLibraryPtr Compiler::getOrCount(
             }
         }
         else
-            LOG_FMT_INFO(log, "All threads are busy.");
+            LOG_INFO(log, "All threads are busy.");
     }
 
     return nullptr;

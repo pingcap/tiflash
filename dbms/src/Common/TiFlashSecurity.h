@@ -57,7 +57,7 @@ public:
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
             {
-                LOG_FMT_INFO(log, "No security config is set.");
+                LOG_INFO(log, "No security config is set.");
             }
             else if (miss_ca_path || miss_cert_path || miss_key_path)
             {

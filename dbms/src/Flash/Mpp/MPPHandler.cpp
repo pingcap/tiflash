@@ -69,7 +69,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     }
     catch (...)
     {
-        LOG_FMT_ERROR(log, "dispatch task meet fatal error");
+        LOG_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
         handleError(task, "fatal error");

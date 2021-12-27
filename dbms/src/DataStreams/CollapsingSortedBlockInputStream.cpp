@@ -53,7 +53,7 @@ void CollapsingSortedBlockInputStream::insertRows(MutableColumns & merged_column
         /// If all the rows in the input streams was collapsed, we still want to give at least one block in the result.
         if (last_in_stream && merged_rows == 0 && !blocks_written)
         {
-            LOG_FMT_INFO(log, "All rows collapsed");
+            LOG_INFO(log, "All rows collapsed");
             ++merged_rows;
             for (size_t i = 0; i < num_columns; ++i)
                 merged_columns[i]->insertFrom(*(*last_positive.columns)[i], last_positive.row_num);
