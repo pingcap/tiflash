@@ -277,15 +277,15 @@ void printGRPCLog(gpr_log_func_args * args)
     String log_msg = fmt::format("{}, line number: {}, log msg : {}", args->file, args->line, args->message);
     if (args->severity == GPR_LOG_SEVERITY_DEBUG)
     {
-        LOG_FMT_DEBUG(grpc_log, log_msg);
+        LOG_DEBUG(grpc_log, log_msg);
     }
     else if (args->severity == GPR_LOG_SEVERITY_INFO)
     {
-        LOG_FMT_INFO(grpc_log, log_msg);
+        LOG_INFO(grpc_log, log_msg);
     }
     else if (args->severity == GPR_LOG_SEVERITY_ERROR)
     {
-        LOG_FMT_ERROR(grpc_log, log_msg);
+        LOG_ERROR(grpc_log, log_msg);
     }
 }
 
@@ -788,7 +788,7 @@ public:
                 debug_msg,
                 current_connections);
         else
-            LOG_FMT_DEBUG(log, debug_msg);
+            LOG_DEBUG(log, debug_msg);
 
         if (current_connections)
         {
@@ -817,7 +817,7 @@ public:
                 debug_msg,
                 current_connections);
         else
-            LOG_FMT_DEBUG(log, debug_msg);
+            LOG_DEBUG(log, debug_msg);
     }
 
     const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }

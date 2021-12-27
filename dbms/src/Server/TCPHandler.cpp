@@ -562,7 +562,7 @@ void TCPHandler::receiveHello()
     if (!user.empty())
         fmt_buf.fmtAppend(", user: {}", user);
     fmt_buf.append(".");
-    LOG_FMT_DEBUG(log, fmt_buf.toString());
+    LOG_DEBUG(log, fmt_buf.toString());
 
     connection_context.setUser(user, password, socket().peerAddress(), "");
 }

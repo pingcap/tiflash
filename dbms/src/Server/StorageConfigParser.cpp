@@ -64,7 +64,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (main_data_paths.empty())
     {
         String error_msg = "The configuration \"storage.main.dir\" is empty. Please check your configuration file.";
-        LOG_FMT_ERROR(log, error_msg);
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
@@ -75,7 +75,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
             "Please check your configuration file.",
             main_data_paths.size(),
             main_capacity_quota.size());
-        LOG_FMT_ERROR(log, error_msg);
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < main_data_paths.size(); ++i)
@@ -109,7 +109,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
             "Please check your configuration file.",
             latest_data_paths.size(),
             latest_capacity_quota.size());
-        LOG_FMT_ERROR(log, error_msg);
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < latest_data_paths.size(); ++i)
@@ -319,7 +319,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         {
             // Can not parse from the deprecated configuration "path".
             String msg = "The configuration \"storage\" section is not defined. Please check your configuration file.";
-            LOG_FMT_ERROR(log, msg);
+            LOG_ERROR(log, msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
