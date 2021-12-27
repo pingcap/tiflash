@@ -71,7 +71,6 @@
 #include <sstream>
 #include <typeinfo>
 
-
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
 using Poco::FileChannel;
@@ -80,11 +79,6 @@ using Poco::Logger;
 using Poco::Message;
 using Poco::Path;
 using Poco::Util::AbstractConfiguration;
-
-#if !USE_UNWIND
-using unw_context_t = ucontext_t;
-#endif
-
 
 constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
 
@@ -327,8 +321,11 @@ public:
                 DB::readPODBinary(unw_context, in);
 #endif
                 DB::readBinary(thread_num, in);
-
+#if USE_UNWIND
                 onFault(sig, info, context, unw_context, thread_num);
+#else
+                onFault(sig, info, context, thread_num);
+#endif
             }
         }
     }
@@ -342,8 +339,11 @@ private:
     {
         LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
     }
-
+#if USE_UNWIND
     void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
+#else
+    void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
+#endif
     {
         LOG_ERROR(log, "########################################");
         LOG_ERROR(log, "(from thread " << thread_num << ") "
