@@ -1,14 +1,15 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-MPPTaskStatistics::MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
-    : log(getMPPTaskLog(log_, "mpp_task_tracing"))
+MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
+    : logger(getMPPTaskTracingLog(id_))
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
@@ -28,9 +29,14 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     error_message.assign(error_message_.data, error_message_.size);
 }
 
-void MPPTaskStatistics::logStats()
+void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
 {
-    log->debug(toJson());
+    if (dag_context.has_read_wait_index)
+    {
+        read_wait_index_start_timestamp = dag_context.read_wait_index_start_timestamp;
+        read_wait_index_end_timestamp = dag_context.read_wait_index_end_timestamp;
+    }
+    // else keep zero timestamp
 }
 
 namespace
@@ -52,23 +58,55 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     executor_statistics_collector.initialize(dag_context);
 }
 
-String MPPTaskStatistics::toJson() const
+BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
 {
-    return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+    executor_statistics_collector.collectRuntimeDetails();
+    const auto & executor_statistics_res = executor_statistics_collector.getResult();
+    auto it = executor_statistics_res.find(sender_executor_id);
+    if (it == executor_statistics_res.end())
+    {
+        throw TiFlashException(
+            "Can't find exchange sender statistics after `collectRuntimeStatistics`",
+            Errors::Coprocessor::Internal);
+    }
+    return it->second->getBaseRuntimeStatistics();
+}
+
+void MPPTaskStatistics::logTracingJson()
+{
+    LOG_FMT_INFO(
+        logger,
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
+        R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
+        R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
+        R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
+        R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,
         executor_statistics_collector.resToJson(),
         host,
         toNanoseconds(task_init_timestamp),
-        toNanoseconds(compile_start_timestamp),
-        toNanoseconds(compile_end_timestamp),
         toNanoseconds(task_start_timestamp),
         toNanoseconds(task_end_timestamp),
+        toNanoseconds(compile_start_timestamp),
+        toNanoseconds(compile_end_timestamp),
+        toNanoseconds(read_wait_index_start_timestamp),
+        toNanoseconds(read_wait_index_end_timestamp),
         taskStatusToString(status),
         error_message,
         working_time,
         memory_peak);
+}
+
+void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
+{
+    memory_peak = memory_peak_;
+}
+
+void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)
+{
+    compile_start_timestamp = start_timestamp;
+    compile_end_timestamp = end_timestamp;
 }
 } // namespace DB
