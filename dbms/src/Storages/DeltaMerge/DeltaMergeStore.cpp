@@ -617,7 +617,7 @@ void DeltaMergeStore::ingestFiles(
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
         String msg = fmt::format("{} try to ingest files into a shutdown table: {}.{}", __FUNCTION__, db_name, table_name);
-        LOG_FMT_WARNING(log, msg);
+        LOG_WARNING(log, msg);
         throw Exception(msg);
     }
 
@@ -1441,11 +1441,11 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         LOG_FMT_ERROR(
             log,
-            fmt::format("Task {} on Segment [{}{}] failed. Error msg: {}",
+            "Task {} on Segment [{}{}] failed. Error msg: {}",
                         toString(task.type),
                         task.segment->segmentId(),
                         task.next_segment ? "] and [" + DB::toString(task.next_segment->segmentId()) : "",
-                        e.message()));
+                        e.message());
         e.rethrow();
     }
     catch (...)
@@ -2064,7 +2064,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
                 },
                 ",");
             fmt_buf.append("}");
-            LOG_FMT_ERROR(log, fmt_buf.toString());
+            LOG_ERROR(log, fmt_buf.toString());
 
             throw Exception(fmt::format("Segment [{}] is expected to have id [{}]", segment_id, next_segment_id));
         }

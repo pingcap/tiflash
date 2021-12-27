@@ -117,7 +117,7 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
     {                                                                               \
         if ((logger)->is((PRIORITY)))                                               \
         {                                                                           \
-            std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) < 2 \
+            std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) > 1 \
                 ? LogFmtDetails::toCheckedFmtStr(                                   \
                     FMT_STRING(LOG_GET_FIRST_ARG(__VA_ARGS__)),                     \
                     __VA_ARGS__)                                                    \

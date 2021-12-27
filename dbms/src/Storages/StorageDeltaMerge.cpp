@@ -492,7 +492,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
         }
         if (!ok)
         {
-            throw Exception(fmt::format("The column-id in written block is not properly set [name={}] [id={}]", name, cid);
+            throw Exception(fmt::format("The column-id in written block is not properly set [name={}] [id={}]", name, cid));
         }
     }
 #endif
@@ -679,7 +679,7 @@ BlockInputStreams StorageDeltaMerge::read(
             },
             ",");
         fmt_buf.append(",");
-        LOG_FMT_TRACE(log, fmt_buf.toString());
+        LOG_TRACE(log, fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
