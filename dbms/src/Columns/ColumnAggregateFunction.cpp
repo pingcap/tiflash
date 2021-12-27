@@ -1,23 +1,25 @@
-#include <Columns/ColumnAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
-#include <DataStreams/ColumnGathererStream.h>
-#include <IO/WriteBufferFromArena.h>
+#include <Columns/ColumnAggregateFunction.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/ColumnGathererStream.h>
+#include <IO/WriteBufferFromArena.h>
+#include <fmt/format.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 ColumnAggregateFunction::~ColumnAggregateFunction()
 {
     if (!func->hasTrivialDestructor() && !src)
-        for (auto val : data)
+        for (auto * val : data)
             func->destroy(val);
 }
 
@@ -65,14 +67,14 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
         auto res = createView();
         res->set(function_state->getNestedFunction());
         res->getData().assign(getData().begin(), getData().end());
-        return std::move(res);
+        return res;
     }
 
     MutableColumnPtr res = function->getReturnType()->createColumn();
     res->reserve(getData().size());
 
-    for (auto val : getData())
-        function->insertResultInto(val, *res);
+    for (auto * val : getData())
+        function->insertResultInto(val, *res, nullptr);
 
     return res;
 }
@@ -83,11 +85,12 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
 
     if (start + length > from_concrete.getData().size())
-        throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length)
-                + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
-                  " (data.size() = "
-                + toString(from_concrete.getData().size())
-                + ").",
+        throw Exception(
+            fmt::format(
+                "Parameters start = {}, length = {} are out of bound in ColumnAggregateFunction::insertRangeFrom method (data.size() = {}).",
+                start,
+                length,
+                from_concrete.getData().size()),
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
@@ -136,7 +139,7 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     if (res_data.size() * 2 < res_data.capacity())
         res_data = Container(res_data.cbegin(), res_data.cend());
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -158,15 +161,45 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
     for (size_t i = 0; i < limit; ++i)
         res->getData()[i] = getData()[perm[i]];
 
-    return std::move(res);
+    return res;
 }
 
 /// Is required to support operations with Set
-void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
     hash.update(wbuf.str().c_str(), wbuf.str().size());
+}
+
+void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+{
+    for (size_t i = 0, size = getData().size(); i < size; ++i)
+    {
+        WriteBufferFromOwnString wbuf;
+        func->serialize(getData()[i], wbuf);
+        hash_values[i].update(wbuf.str().c_str(), wbuf.str().size());
+    }
+}
+
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
+{
+    auto s = data.size();
+    if (hash.getData().size() != data.size())
+        throw Exception(
+            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
+
+    auto & hash_data = hash.getData();
+
+    std::vector<UInt8> v;
+    for (size_t i = 0; i < s; ++i)
+    {
+        WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
+        func->serialize(data[i], wbuf);
+        wbuf.finalize();
+        hash_data[i] = ::updateWeakHash32(v.data(), v.size(), hash_data[i]);
+    }
 }
 
 /// NOTE: Highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
@@ -235,20 +268,20 @@ void ColumnAggregateFunction::insertFrom(const IColumn & src, size_t n)
     insertMergeFrom(src, n);
 }
 
-void ColumnAggregateFunction::insertFrom(ConstAggregateDataPtr place)
+void ColumnAggregateFunction::insertFrom(ConstAggregateDataPtr __restrict place)
 {
     insertDefault();
     insertMergeFrom(place);
 }
 
-void ColumnAggregateFunction::insertMergeFrom(ConstAggregateDataPtr place)
+void ColumnAggregateFunction::insertMergeFrom(ConstAggregateDataPtr __restrict place)
 {
     func->merge(getData().back(), place, &createOrGetArena());
 }
 
-void ColumnAggregateFunction::insertMergeFrom(const IColumn & src, size_t n)
+void ColumnAggregateFunction::insertMergeFrom(const IColumn & src_, size_t n)
 {
-    insertMergeFrom(static_cast<const ColumnAggregateFunction &>(src).getData()[n]);
+    insertMergeFrom(static_cast<const ColumnAggregateFunction &>(src_).getData()[n]);
 }
 
 Arena & ColumnAggregateFunction::createOrGetArena()
@@ -280,7 +313,7 @@ void ColumnAggregateFunction::insertDefault()
     function->create(getData().back());
 }
 
-StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin) const
+StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     IAggregateFunction * function = func.get();
     WriteBufferFromArena out(dst, begin);
@@ -288,7 +321,7 @@ StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst
     return out.finish();
 }
 
-const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena)
+const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &)
 {
     IAggregateFunction * function = func.get();
 
@@ -302,7 +335,7 @@ const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char *
 
     /** We will read from src_arena.
       * There is no limit for reading - it is assumed, that we can read all that we need after src_arena pointer.
-      * Buf ReadBufferFromMemory requires some bound. We will use arbitary big enough number, that will not overflow pointer.
+      * Buf ReadBufferFromMemory requires some bound. We will use arbitrary big enough number, that will not overflow pointer.
       * NOTE Technically, this is not compatible with C++ standard,
       *  as we cannot legally compare pointers after last element + 1 of some valid memory region.
       *  Probably this will not work under UBSan.
@@ -348,7 +381,7 @@ ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) c
             res_data.push_back(data[i]);
     }
 
-    return std::move(res);
+    return res;
 }
 
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const
@@ -361,7 +394,7 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     size_t num_rows = size();
 
     {
-        size_t reserve_size = num_rows / num_columns * 1.1; /// 1.1 is just a guess. Better to use n-sigma rule.
+        size_t reserve_size = 1.1 * num_rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
 
         if (reserve_size > 1)
             for (auto & column : columns)
@@ -413,4 +446,4 @@ void ColumnAggregateFunction::getExtremes(Field & min, Field & max) const
     max = serialized;
 }
 
-}
+} // namespace DB

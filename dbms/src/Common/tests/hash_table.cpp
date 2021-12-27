@@ -1,11 +1,9 @@
-#include <iostream>
-#include <iomanip>
-
-#include <Interpreters/AggregationCommon.h>
-
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
+#include <Interpreters/AggregationCommon.h>
 
+#include <iomanip>
+#include <iostream>
 
 
 int main(int, char **)
@@ -38,7 +36,7 @@ int main(int, char **)
     {
         using Cont = HashSet<
             DB::UInt128,
-            DB::UInt128TrivialHash>;
+            DB::TrivialHash>;
         Cont cont;
 
         DB::WriteBufferFromOwnString wb;

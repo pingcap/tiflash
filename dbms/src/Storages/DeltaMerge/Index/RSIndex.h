@@ -4,10 +4,8 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class EqualIndex;
 using EqualIndexPtr = std::shared_ptr<EqualIndex>;
 
@@ -20,14 +18,19 @@ public:
 
 struct RSIndex
 {
-    DataTypePtr    type;
+    DataTypePtr type;
     MinMaxIndexPtr minmax;
-    EqualIndexPtr  equal;
+    EqualIndexPtr equal;
 
-    RSIndex(const DataTypePtr & type_, const MinMaxIndexPtr & minmax_) : type(type_), minmax(minmax_) {}
+    RSIndex(const DataTypePtr & type_, const MinMaxIndexPtr & minmax_)
+        : type(type_)
+        , minmax(minmax_)
+    {}
 
     RSIndex(const DataTypePtr & type_, const MinMaxIndexPtr & minmax_, const EqualIndexPtr & equal_)
-        : type(type_), minmax(minmax_), equal(equal_)
+        : type(type_)
+        , minmax(minmax_)
+        , equal(equal_)
     {
     }
 };

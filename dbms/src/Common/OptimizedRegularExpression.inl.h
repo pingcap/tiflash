@@ -1,8 +1,7 @@
-#include <iostream>
-
+#include <Common/OptimizedRegularExpression.h>
 #include <Poco/Exception.h>
 
-#include <Common/OptimizedRegularExpression.h>
+#include <iostream>
 
 
 #define MIN_LENGTH_FOR_STRSTR 3
@@ -47,69 +46,66 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
     {
         switch (*pos)
         {
-            case '\0':
-                pos = end;
+        case '\0':
+            pos = end;
+            break;
+
+        case '\\':
+        {
+            ++pos;
+            if (pos == end)
                 break;
 
-            case '\\':
+            switch (*pos)
             {
-                ++pos;
-                if (pos == end)
-                    break;
-
-                switch (*pos)
-                {
-                    case '|': case '(': case ')': case '^': case '$': case '.': case '[': case '?': case '*': case '+': case '{':
-                        if (depth == 0 && !in_curly_braces && !in_square_braces)
-                        {
-                            if (last_substring->first.empty())
-                                last_substring->second = pos - begin;
-                            last_substring->first.push_back(*pos);
-                        }
-                        break;
-                    default:
-                        /// all other escape sequences are not supported
-                        is_trivial = false;
-                        if (!last_substring->first.empty())
-                        {
-                            trivial_substrings.resize(trivial_substrings.size() + 1);
-                            last_substring = &trivial_substrings.back();
-                        }
-                        break;
-                }
-
-                ++pos;
-                break;
-            }
-
             case '|':
-                if (depth == 0)
-                    has_alternative_on_depth_0 = true;
+            case '(':
+            case ')':
+            case '^':
+            case '$':
+            case '.':
+            case '[':
+            case '?':
+            case '*':
+            case '+':
+            case '{':
+                if (depth == 0 && !in_curly_braces && !in_square_braces)
+                {
+                    if (last_substring->first.empty())
+                        last_substring->second = pos - begin;
+                    last_substring->first.push_back(*pos);
+                }
+                break;
+            default:
+                /// all other escape sequences are not supported
                 is_trivial = false;
-                if (!in_square_braces && !last_substring->first.empty())
+                if (!last_substring->first.empty())
                 {
                     trivial_substrings.resize(trivial_substrings.size() + 1);
                     last_substring = &trivial_substrings.back();
                 }
-                ++pos;
                 break;
+            }
 
-            case '(':
-                if (!in_square_braces)
-                {
-                    ++depth;
-                    is_trivial = false;
-                    if (!last_substring->first.empty())
-                    {
-                        trivial_substrings.resize(trivial_substrings.size() + 1);
-                        last_substring = &trivial_substrings.back();
-                    }
-                }
-                ++pos;
-                break;
+            ++pos;
+            break;
+        }
 
-            case '[':
-                in_square_braces = true;
+        case '|':
+            if (depth == 0)
+                has_alternative_on_depth_0 = true;
+            is_trivial = false;
+            if (!in_square_braces && !last_substring->first.empty())
+            {
+                trivial_substrings.resize(trivial_substrings.size() + 1);
+                last_substring = &trivial_substrings.back();
+            }
+            ++pos;
+            break;
+
+        case '(':
+            if (!in_square_braces)
+            {
                 ++depth;
                 is_trivial = false;
                 if (!last_substring->first.empty())
@@ -117,14 +113,40 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
                     trivial_substrings.resize(trivial_substrings.size() + 1);
                     last_substring = &trivial_substrings.back();
                 }
-                ++pos;
-                break;
+            }
+            ++pos;
+            break;
 
-            case ']':
-                if (!in_square_braces)
-                    goto ordinary;
+        case '[':
+            in_square_braces = true;
+            ++depth;
+            is_trivial = false;
+            if (!last_substring->first.empty())
+            {
+                trivial_substrings.resize(trivial_substrings.size() + 1);
+                last_substring = &trivial_substrings.back();
+            }
+            ++pos;
+            break;
 
-                in_square_braces = false;
+        case ']':
+            if (!in_square_braces)
+                goto ordinary;
+
+            in_square_braces = false;
+            --depth;
+            is_trivial = false;
+            if (!last_substring->first.empty())
+            {
+                trivial_substrings.resize(trivial_substrings.size() + 1);
+                last_substring = &trivial_substrings.back();
+            }
+            ++pos;
+            break;
+
+        case ')':
+            if (!in_square_braces)
+            {
                 --depth;
                 is_trivial = false;
                 if (!last_substring->first.empty())
@@ -132,69 +154,59 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
                     trivial_substrings.resize(trivial_substrings.size() + 1);
                     last_substring = &trivial_substrings.back();
                 }
-                ++pos;
-                break;
+            }
+            ++pos;
+            break;
 
-            case ')':
-                if (!in_square_braces)
-                {
-                    --depth;
-                    is_trivial = false;
-                    if (!last_substring->first.empty())
-                    {
-                        trivial_substrings.resize(trivial_substrings.size() + 1);
-                        last_substring = &trivial_substrings.back();
-                    }
-                }
-                ++pos;
-                break;
+        case '^':
+        case '$':
+        case '.':
+        case '+':
+            is_trivial = false;
+            if (!last_substring->first.empty() && !in_square_braces)
+            {
+                trivial_substrings.resize(trivial_substrings.size() + 1);
+                last_substring = &trivial_substrings.back();
+            }
+            ++pos;
+            break;
 
-            case '^': case '$': case '.': case '+':
-                is_trivial = false;
-                if (!last_substring->first.empty() && !in_square_braces)
-                {
-                    trivial_substrings.resize(trivial_substrings.size() + 1);
-                    last_substring = &trivial_substrings.back();
-                }
-                ++pos;
-                break;
-
-            /// Quantifiers that allow a zero number of occurences.
-            case '{':
-                in_curly_braces = true;
-                [[fallthrough]];
-            case '?':
-                [[fallthrough]];
-            case '*':
-                is_trivial = false;
-                if (!last_substring->first.empty() && !in_square_braces)
-                {
-                    last_substring->first.resize(last_substring->first.size() - 1);
-                    trivial_substrings.resize(trivial_substrings.size() + 1);
-                    last_substring = &trivial_substrings.back();
-                }
-                ++pos;
-                break;
-
-            case '}':
-                if (!in_curly_braces)
-                    goto ordinary;
-
-                in_curly_braces = false;
-                ++pos;
-                break;
-
-            ordinary:   /// Normal, not escaped symbol.
+        /// Quantifiers that allow a zero number of occurences.
+        case '{':
+            in_curly_braces = true;
             [[fallthrough]];
-            default:
-                if (depth == 0 && !in_curly_braces && !in_square_braces)
-                {
-                    if (last_substring->first.empty())
-                        last_substring->second = pos - begin;
-                    last_substring->first.push_back(*pos);
-                }
-                ++pos;
-                break;
+        case '?':
+            [[fallthrough]];
+        case '*':
+            is_trivial = false;
+            if (!last_substring->first.empty() && !in_square_braces)
+            {
+                last_substring->first.resize(last_substring->first.size() - 1);
+                trivial_substrings.resize(trivial_substrings.size() + 1);
+                last_substring = &trivial_substrings.back();
+            }
+            ++pos;
+            break;
+
+        case '}':
+            if (!in_curly_braces)
+                goto ordinary;
+
+            in_curly_braces = false;
+            ++pos;
+            break;
+
+        ordinary: /// Normal, not escaped symbol.
+            [[fallthrough]];
+        default:
+            if (depth == 0 && !in_curly_braces && !in_square_braces)
+            {
+                if (last_substring->first.empty())
+                    last_substring->second = pos - begin;
+                last_substring->first.push_back(*pos);
+            }
+            ++pos;
+            break;
         }
     }
 
@@ -213,7 +225,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
             for (Substrings::const_iterator it = trivial_substrings.begin(); it != trivial_substrings.end(); ++it)
             {
                 if (((it->second == 0 && candidate_it->second != 0)
-                        || ((it->second == 0) == (candidate_it->second == 0) && it->first.size() > max_length))
+                     || ((it->second == 0) == (candidate_it->second == 0) && it->first.size() > max_length))
                     /// Tuning for typical usage domain
                     && (it->first.size() > strlen("://") || strncmp(it->first.data(), "://", strlen("://")))
                     && (it->first.size() > strlen("http://") || strncmp(it->first.data(), "http", strlen("http")))
@@ -238,7 +250,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
         required_substring_is_prefix = trivial_substrings.front().second == 0;
     }
 
-/*    std::cerr
+    /*    std::cerr
         << "regexp: " << regexp
         << ", is_trivial: " << is_trivial
         << ", required_substring: " << required_substring
@@ -256,9 +268,9 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
     if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL)))
         throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
 
-    is_case_insensitive   = options & RE_CASELESS;
-    bool is_no_capture    = options & RE_NO_CAPTURE;
-    bool is_dot_nl        = options & RE_DOT_NL;
+    is_case_insensitive = options & RE_CASELESS;
+    bool is_no_capture = options & RE_NO_CAPTURE;
+    bool is_dot_nl = options & RE_DOT_NL;
 
     number_of_subpatterns = 0;
     if (!is_trivial)
@@ -434,4 +446,3 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
 
 #undef MIN_LENGTH_FOR_STRSTR
 #undef MAX_SUBPATTERNS
-

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+
 #include <mutex>
 
 namespace DB
@@ -12,7 +13,9 @@ namespace tests
 class IDGenerator
 {
 public:
-    IDGenerator() : id{0} {}
+    IDGenerator()
+        : id{0}
+    {}
 
     UInt64 get()
     {
@@ -22,7 +25,7 @@ public:
 
 private:
     std::mutex mutex;
-    UInt64     id;
+    UInt64 id;
 };
 } // namespace tests
 } // namespace DM

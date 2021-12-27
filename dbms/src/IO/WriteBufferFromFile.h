@@ -1,14 +1,13 @@
 #pragma once
 
-#include <sys/types.h>
-
 #include <Common/CurrentMetrics.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
+#include <sys/types.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric OpenFileForWrite;
+extern const Metric OpenFileForWrite;
 }
 
 
@@ -18,7 +17,6 @@ namespace CurrentMetrics
 
 namespace DB
 {
-
 /** Accepts path to file and opens it, or pre-opened file descriptor.
   * Closes file by himself (thus "owns" a file descriptor).
   */
@@ -29,7 +27,7 @@ protected:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 
 public:
-    WriteBufferFromFile(
+    explicit WriteBufferFromFile(
         const std::string & file_name_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         int flags = -1,
@@ -38,7 +36,7 @@ public:
         size_t alignment = 0);
 
     /// Use pre-opened file descriptor.
-    WriteBufferFromFile(
+    explicit WriteBufferFromFile(
         int fd,
         const std::string & original_file_name = {},
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
@@ -48,7 +46,7 @@ public:
     ~WriteBufferFromFile() override;
 
     /// Close file before destruction of object.
-    void close();
+    void close() override;
 
     std::string getFileName() const override
     {
@@ -56,4 +54,4 @@ public:
     }
 };
 
-}
+} // namespace DB

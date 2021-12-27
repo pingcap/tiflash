@@ -1,20 +1,17 @@
-#include <Poco/Net/NetException.h>
-
 #include <Common/Exception.h>
-
-#include <IO/ReadBufferFromPocoSocket.h>
 #include <Common/NetException.h>
+#include <IO/ReadBufferFromPocoSocket.h>
+#include <Poco/Net/NetException.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NETWORK_ERROR;
-    extern const int SOCKET_TIMEOUT;
-    extern const int CANNOT_READ_FROM_SOCKET;
-}
+extern const int NETWORK_ERROR;
+extern const int SOCKET_TIMEOUT;
+extern const int CANNOT_READ_FROM_SOCKET;
+} // namespace ErrorCodes
 
 
 bool ReadBufferFromPocoSocket::nextImpl()
@@ -51,7 +48,9 @@ bool ReadBufferFromPocoSocket::nextImpl()
 }
 
 ReadBufferFromPocoSocket::ReadBufferFromPocoSocket(Poco::Net::Socket & socket_, size_t buf_size)
-    : BufferWithOwnMemory<ReadBuffer>(buf_size), socket(socket_), peer_address(socket.peerAddress())
+    : BufferWithOwnMemory<ReadBuffer>(buf_size)
+    , socket(socket_)
+    , peer_address(socket.peerAddress())
 {
 }
 
@@ -60,4 +59,4 @@ bool ReadBufferFromPocoSocket::poll(size_t timeout_microseconds)
     return offset() != buffer().size() || socket.poll(timeout_microseconds, Poco::Net::Socket::SELECT_READ | Poco::Net::Socket::SELECT_ERROR);
 }
 
-}
+} // namespace DB

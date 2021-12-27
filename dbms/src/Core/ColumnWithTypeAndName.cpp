@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 {
     ColumnWithTypeAndName res{(column != nullptr ? column->cloneEmpty() : nullptr), type, name, column_id, default_value};

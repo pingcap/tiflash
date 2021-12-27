@@ -6,10 +6,9 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 /** Calculates quantile by counting number of occurences for each value in a hash map.
@@ -24,11 +23,11 @@ struct QuantileExactWeighted
 
     /// When creating, the hash table must be small.
     using Map = HashMap<
-        Value, Weight,
+        Value,
+        Weight,
         HashCRC32<Value>,
         HashTableGrower<4>,
-        HashTableAllocatorWithStackMemory<sizeof(std::pair<Value, Weight>) * (1 << 3)>
-    >;
+        HashTableAllocatorWithStackMemory<sizeof(std::pair<Value, Weight>) * (1 << 3)>>;
 
     Map map;
 
@@ -48,7 +47,7 @@ struct QuantileExactWeighted
     void merge(const QuantileExactWeighted & rhs)
     {
         for (const auto & pair : rhs.map)
-            map[pair.first] += pair.second;
+            map[pair.getKey()] += pair.getMapped();
     }
 
     void serialize(WriteBuffer & buf) const
@@ -83,8 +82,8 @@ struct QuantileExactWeighted
         UInt64 sum_weight = 0;
         for (const auto & pair : map)
         {
-            sum_weight += pair.second;
-            array[i] = pair;
+            sum_weight += pair.getMapped();
+            array[i] = pair.getValue();
             ++i;
         }
 
@@ -133,8 +132,8 @@ struct QuantileExactWeighted
         UInt64 sum_weight = 0;
         for (const auto & pair : map)
         {
-            sum_weight += pair.second;
-            array[i] = pair;
+            sum_weight += pair.getMapped();
+            array[i] = pair.getValue();
             ++i;
         }
 
@@ -185,4 +184,4 @@ struct QuantileExactWeighted
     }
 };
 
-}
+} // namespace DB

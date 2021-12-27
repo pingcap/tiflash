@@ -11,17 +11,14 @@
 
 namespace DB
 {
-
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 struct DecodedTiKVKey;
+using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct CoprocessorContext
 {
     Context & db_context;
     const kvrpcpb::Context & kv_context;
     const grpc::ServerContext & grpc_server_context;
-    TiFlashMetricsPtr metrics;
 
     CoprocessorContext(Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_);
 };
@@ -39,7 +36,7 @@ public:
 
     grpc::Status execute();
 
-    static std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> GenCopKeyRange(
+    static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> GenCopKeyRange(
         const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
 
 protected:
@@ -57,7 +54,7 @@ protected:
     const coprocessor::Request * cop_request;
     coprocessor::Response * cop_response;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 } // namespace DB

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <common/demangle.h>
-#include <Common/TypeList.h>
 #include <Common/Exception.h>
+#include <Common/TypeList.h>
+#include <common/demangle.h>
 
 /* Generic utils which are intended for visitor pattern implementation.
  * The original purpose is to provide possibility to get concrete template specialisation for type in list.
@@ -51,13 +51,12 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
-template <typename ... Types>
+template <typename... Types>
 class Visitor;
 
 template <>
@@ -78,18 +77,18 @@ public:
     virtual void visit(Type &) = 0;
 };
 
-template <typename Type, typename ... Types>
-class Visitor<Type, Types ...> : public Visitor<Types ...>
+template <typename Type, typename... Types>
+class Visitor<Type, Types...> : public Visitor<Types...>
 {
 public:
-    using List = TypeList<Type, Types ...>;
-    using Visitor<Types ...>::visit;
+    using List = TypeList<Type, Types...>;
+    using Visitor<Types...>::visit;
 
     virtual void visit(Type &) = 0;
 };
 
 
-template <typename Derived, typename VisitorBase, typename ... Types>
+template <typename Derived, typename VisitorBase, typename... Types>
 class VisitorImplHelper;
 
 template <typename Derived, typename VisitorBase>
@@ -109,16 +108,17 @@ protected:
     void visitImpl(Type &)
     {
         throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                        + demangle(typeid(Derived).name()), ErrorCodes::LOGICAL_ERROR);
+                            + demangle(typeid(Derived).name()),
+                        ErrorCodes::LOGICAL_ERROR);
     }
 };
 
-template <typename Derived, typename VisitorBase, typename Type, typename ... Types>
-class VisitorImplHelper<Derived, VisitorBase, Type, Types ...>
-        : public VisitorImplHelper<Derived, VisitorBase, Types ...>
+template <typename Derived, typename VisitorBase, typename Type, typename... Types>
+class VisitorImplHelper<Derived, VisitorBase, Type, Types...>
+    : public VisitorImplHelper<Derived, VisitorBase, Types...>
 {
 public:
-    using VisitorImplHelper<Derived, VisitorBase, Types ...>::visit;
+    using VisitorImplHelper<Derived, VisitorBase, Types...>::visit;
     void visit(Type & value) override { static_cast<Derived *>(this)->visitImpl(value); }
 
 protected:
@@ -126,19 +126,13 @@ protected:
     void visitImpl(Type &)
     {
         throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                        + demangle(typeid(Derived).name()), ErrorCodes::LOGICAL_ERROR);
+                            + demangle(typeid(Derived).name()),
+                        ErrorCodes::LOGICAL_ERROR);
     }
 };
 
 template <typename Derived, typename VisitorBase>
-class VisitorImpl : public
-        ApplyTypeListForClass<
-                VisitorImplHelper,
-                typename TypeListConcat<
-                        TypeList<Derived, VisitorBase>,
-                        typename VisitorBase::List
-                >::Type
-        >::Type
+class VisitorImpl : public ApplyTypeListForClass<VisitorImplHelper, typename TypeListConcat<TypeList<Derived, VisitorBase>, typename VisitorBase::List>::Type>::Type
 {
 };
 
@@ -149,4 +143,4 @@ public:
     void accept(Visitor & visitor) override { visitor.visit(*static_cast<Derived *>(this)); }
 };
 
-}
+} // namespace DB

@@ -18,7 +18,6 @@ namespace DB
 {
 namespace DM
 {
-
 // clang-format off
 RSOperatorPtr createAnd(const RSOperators & children)                                           { return std::make_shared<And>(children); }
 RSOperatorPtr createEqual(const Attr & attr, const Field & value)                               { return std::make_shared<Equal>(attr, value); }

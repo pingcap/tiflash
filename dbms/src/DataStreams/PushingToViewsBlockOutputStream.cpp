@@ -1,22 +1,25 @@
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <Interpreters/InterpreterSelectQuery.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeBlockOutputStream.h>
 
 
 namespace DB
 {
-
 PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
-    const String & database, const String & table, const StoragePtr & storage,
-    const Context & context_, const ASTPtr & query_ptr_, bool no_destination)
-    : context(context_), query_ptr(query_ptr_)
+    const String & database,
+    const String & table,
+    const StoragePtr & storage,
+    const Context & context_,
+    const ASTPtr & query_ptr_,
+    bool no_destination)
+    : context(context_)
+    , query_ptr(query_ptr_)
 {
     /** TODO This is a very important line. At any insertion into the table one of streams should own lock.
       * Although now any insertion into the table is done via PushingToViewsBlockOutputStream,
       *  but it's clear that here is not the best place for this functionality.
       */
-    addTableLock(storage->lockStructure(true, __PRETTY_FUNCTION__));
+    addTableLock(storage->lockForShare(context.getCurrentQueryId()));
 
     if (!table.empty())
     {
@@ -37,7 +40,11 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
 
             auto query = materialized_view.getInnerQuery();
             BlockOutputStreamPtr out = std::make_shared<PushingToViewsBlockOutputStream>(
-                database_table.first, database_table.second, dependent_table, *views_context, ASTPtr());
+                database_table.first,
+                database_table.second,
+                dependent_table,
+                *views_context,
+                ASTPtr());
             views.emplace_back(ViewInfo{std::move(query), database_table.first, database_table.second, std::move(out)});
         }
     }
@@ -46,7 +53,6 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     if (!no_destination)
     {
         output = storage->write(query_ptr, context.getSettingsRef());
-        replicated_output = dynamic_cast<ReplicatedMergeTreeBlockOutputStream *>(output.get());
     }
 }
 
@@ -55,10 +61,6 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
 {
     if (output)
         output->write(block);
-
-    /// Don't process materialized views if this block is duplicate
-    if (replicated_output && replicated_output->lastBlockIsDuplicate())
-        return;
 
     /// Insert data into materialized views only after successful insert into main table
     for (auto & view : views)
@@ -72,7 +74,10 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
             /// even when only one block is inserted into the parent table (e.g. if the query is a GROUP BY
             /// and two-level aggregation is triggered).
             in = std::make_shared<SquashingBlockInputStream>(
-                in, context.getSettingsRef().min_insert_block_size_rows, context.getSettingsRef().min_insert_block_size_bytes);
+                in,
+                context.getSettingsRef().min_insert_block_size_rows,
+                context.getSettingsRef().min_insert_block_size_bytes,
+                nullptr);
 
             in->readPrefix();
 
@@ -89,4 +94,4 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
     }
 }
 
-}
+} // namespace DB

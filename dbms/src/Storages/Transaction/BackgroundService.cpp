@@ -1,26 +1,23 @@
 #include <Interpreters/Context.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
-
 BackgroundService::BackgroundService(TMTContext & tmt_)
-    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Logger::get("BackgroundService"))
+    : tmt(tmt_)
+    , background_pool(tmt.getContext().getBackgroundPool())
+    , log(&Poco::Logger::get("BackgroundService"))
 {
     if (!tmt.isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     single_thread_task_handle = background_pool.addTask(
         [this] {
-            {
-                RegionTable & region_table = tmt.getRegionTable();
-                region_table.checkTableOptimize();
-            }
-            tmt.getKVStore()->gcRegionCache();
+            tmt.getKVStore()->gcRegionPersistedCache();
             return false;
         },
         false);
@@ -30,33 +27,11 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         table_flush_handle = background_pool.addTask([this] {
             RegionTable & region_table = tmt.getRegionTable();
 
-            // if all regions of table is removed, try to optimize data.
-            if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
-            {
-                LOG_INFO(log, "try to final optimize table " << table_id);
-                tryOptimizeStorageFinal(tmt.getContext(), table_id);
-                LOG_INFO(log, "finish final optimize table " << table_id);
-            }
             return region_table.tryFlushRegions();
         });
 
         region_handle = background_pool.addTask([this] {
             bool ok = false;
-            {
-                RegionPtr region = nullptr;
-                {
-                    std::lock_guard<std::mutex> lock(region_mutex);
-                    if (!regions_to_decode.empty())
-                    {
-                        auto it = regions_to_decode.begin();
-                        region = it->second;
-                        regions_to_decode.erase(it);
-                        ok = true;
-                    }
-                }
-                if (region)
-                    region->tryPreDecodeTiKVValue(tmt);
-            }
 
             {
                 RegionPtr region = nullptr;
@@ -82,27 +57,18 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 if (region->dataSize())
                     regions.emplace_back(region);
             });
-
-            for (const auto & region : regions)
-                addRegionToDecode(region);
         }
     }
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
+        auto & global_settings = tmt.getContext().getSettingsRef();
+        storage_gc_handle = background_pool.addTask(
+            [this] { return tmt.getGCManager().work(); },
+            false,
+            /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
+        LOG_INFO(log, "Start background storage gc worker with interval " << global_settings.dt_bg_gc_check_interval << " seconds.");
     }
-}
-
-void BackgroundService::addRegionToDecode(const RegionPtr & region)
-{
-    if (tmt.isBgFlushDisabled())
-        throw Exception("Try to addRegionToDecode while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
-
-    {
-        std::lock_guard<std::mutex> lock(region_mutex);
-        regions_to_decode.emplace(region->id(), region);
-    }
-    region_handle->wake();
 }
 
 void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
@@ -134,6 +100,11 @@ BackgroundService::~BackgroundService()
     {
         background_pool.removeTask(region_handle);
         region_handle = nullptr;
+    }
+    if (storage_gc_handle)
+    {
+        background_pool.removeTask(storage_gc_handle);
+        storage_gc_handle = nullptr;
     }
 }
 

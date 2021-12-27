@@ -1,14 +1,15 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <memory>
 #include <Common/config.h>
 #include <re2/re2.h>
+
+#include <memory>
+#include <string>
+#include <vector>
 #if USE_RE2_ST
-    #include <re2_st/re2.h>
+#include <re2_st/re2.h>
 #else
-    #define re2_st re2
+#define re2_st re2
 #endif
 
 
@@ -32,12 +33,12 @@
 
 namespace OptimizedRegularExpressionDetails
 {
-    struct Match
-    {
-        std::string::size_type offset;
-        std::string::size_type length;
-    };
-}
+struct Match
+{
+    std::string::size_type offset;
+    std::string::size_type length;
+};
+} // namespace OptimizedRegularExpressionDetails
 
 template <bool thread_safe>
 class OptimizedRegularExpressionImpl
@@ -45,9 +46,9 @@ class OptimizedRegularExpressionImpl
 public:
     enum Options
     {
-        RE_CASELESS        = 0x00000001,
-        RE_NO_CAPTURE    = 0x00000010,
-        RE_DOT_NL        = 0x00000100
+        RE_CASELESS = 0x00000001,
+        RE_NO_CAPTURE = 0x00000010,
+        RE_DOT_NL = 0x00000100
     };
 
     using Match = OptimizedRegularExpressionDetails::Match;
@@ -56,7 +57,7 @@ public:
     using RegexType = std::conditional_t<thread_safe, re2::RE2, re2_st::RE2>;
     using StringPieceType = std::conditional_t<thread_safe, re2::StringPiece, re2_st::StringPiece>;
 
-    OptimizedRegularExpressionImpl(const std::string & regexp_, int options = 0);
+    explicit OptimizedRegularExpressionImpl(const std::string & regexp_, int options = 0);
 
     bool match(const std::string & subject) const
     {

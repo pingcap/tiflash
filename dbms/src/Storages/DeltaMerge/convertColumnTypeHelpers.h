@@ -11,7 +11,7 @@ namespace DM
 //==========================================================================================
 
 // If `from_type` is the same as `to_column_define.type`, simply return `from_col`.
-// If `from_type` is different from `to_column_define.type`, check if we can apply 
+// If `from_type` is different from `to_column_define.type`, check if we can apply
 // cast on read, if not, throw exception.
 ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, ColumnPtr && from_col, const ColumnDefine & to_column_define);
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
@@ -7,11 +8,10 @@ namespace DB
 {
 namespace DM
 {
-
 template <typename T>
 struct Range;
 template <typename T>
-String rangeToString(const Range<T> & range);
+String rangeToDebugString(const Range<T> & range);
 
 template <typename T>
 struct Range
@@ -22,8 +22,14 @@ struct Range
     T start;
     T end;
 
-    Range(T start_, T end_) : start(start_), end(end_) {}
-    Range() : start(0), end(0) {}
+    Range(T start_, T end_)
+        : start(start_)
+        , end(end_)
+    {}
+    Range()
+        : start(0)
+        , end(0)
+    {}
 
     void swap(Range & other)
     {
@@ -62,16 +68,16 @@ struct Range
 
     inline bool check(T value) const { return checkStart(value) && checkEnd(value); }
 
-    inline String toString() const { return rangeToString(*this); }
+    inline String toDebugString() const { return rangeToDebugString(*this); }
 
     bool operator==(const Range & rhs) const { return start == rhs.start && end == rhs.end; }
     bool operator!=(const Range & rhs) const { return !(*this == rhs); }
 };
 
 template <class T, bool right_open = true>
-inline String rangeToString(T start, T end)
+inline String rangeToDebugString(T start, T end)
 {
-    String s = "[" + DB::toString(start) + "," + DB::toString(end);
+    String s = "[" + Redact::handleToDebugString(start) + "," + Redact::handleToDebugString(end);
     if constexpr (right_open)
         s += ")";
     else
@@ -80,38 +86,27 @@ inline String rangeToString(T start, T end)
 }
 
 template <typename T>
-inline String rangeToString(const Range<T> & range)
+inline String rangeToDebugString(const Range<T> & range)
 {
-    return rangeToString<T, true>(range.start, range.end);
+    return rangeToDebugString<T, true>(range.start, range.end);
 }
 
 // DB::DM::Handle
-using Handle       = DB::HandleID;
-using HandleRange  = Range<Handle>;
+using Handle = DB::HandleID;
+using HandleRange = Range<Handle>;
 using HandleRanges = std::vector<HandleRange>;
 
-inline String toString(const HandleRanges & ranges)
+inline String toDebugString(const HandleRanges & ranges)
 {
     String s = "{";
     for (auto & r : ranges)
     {
-        s += r.toString() + ",";
+        s += r.toDebugString() + ",";
     }
     if (!ranges.empty())
         s.erase(s.size() - 1);
     s += "}";
     return s;
-}
-
-inline HandleRange mergeRanges(const HandleRanges & ranges)
-{
-    HandleRange range(HandleRange::MAX, HandleRange::MIN);
-    for (auto & r : ranges)
-    {
-        range.start = std::min(range.start, r.start);
-        range.end   = std::max(range.end, r.end);
-    }
-    return range;
 }
 
 } // namespace DM

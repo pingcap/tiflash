@@ -13,7 +13,7 @@ private:
     Poco::Timestamp known_time;
 
 public:
-    FileUpdatesTracker(const std::string & path_)
+    explicit FileUpdatesTracker(const std::string & path_)
         : path(path_)
         , known_time(0)
     {}

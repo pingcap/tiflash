@@ -76,13 +76,19 @@ public:
         return it->second;
     }
 
+    bool hasElement(StringRef name) const
+    {
+        // todo consider collation
+        return name_to_value_map.find(name) != name_to_value_map.end();
+    }
+
     FieldType getValue(StringRef name) const
     {
         const auto it = name_to_value_map.find(name);
         if (it == std::end(name_to_value_map))
             throw Exception{"Unknown element '" + name.toString() + "' for type " + getName(), ErrorCodes::LOGICAL_ERROR};
 
-        return it->second;
+        return it->getMapped();
     }
 
     Field castToName(const Field & value_or_name) const override;

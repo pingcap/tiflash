@@ -12,35 +12,39 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    DMFileBlockInputStream(const Context &       context,
-                           UInt64                max_read_version,
-                           bool                  enable_clean_read,
-                           UInt64                hash_salt,
-                           const DMFilePtr &     dmfile,
+    DMFileBlockInputStream(const Context & context,
+                           UInt64 max_read_version,
+                           bool enable_clean_read,
+                           UInt64 hash_salt,
+                           const DMFilePtr & dmfile,
                            const ColumnDefines & read_columns,
-                           const HandleRange &   handle_range,
+                           const RowKeyRanges & rowkey_ranges,
                            const RSOperatorPtr & filter,
-                           ColumnCachePtr &      column_cache_,
-                           const IdSetPtr &      read_packs,
-                           size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
+                           const ColumnCachePtr & column_cache_,
+                           const IdSetPtr & read_packs,
+                           size_t expected_size = DMFILE_READ_ROWS_THRESHOLD,
+                           bool read_one_pack_every_time_ = false)
         : reader(dmfile,
                  read_columns,
                  // clean read
                  enable_clean_read,
                  max_read_version,
                  // filters
-                 handle_range,
+                 rowkey_ranges,
                  filter,
                  read_packs,
                  // caches
                  hash_salt,
-                 context.getGlobalContext().getMarkCache().get(),
-                 context.getGlobalContext().getMinMaxIndexCache().get(),
+                 context.getGlobalContext().getMarkCache(),
+                 context.getGlobalContext().getMinMaxIndexCache(),
                  context.getSettingsRef().dt_enable_stable_column_cache,
                  column_cache_,
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
-                 expected_size)
+                 context.getFileProvider(),
+                 context.getReadLimiter(),
+                 expected_size,
+                 read_one_pack_every_time_)
     {
     }
 
@@ -57,6 +61,32 @@ public:
 private:
     DMFileReader reader;
 };
+
+using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
+
+/**
+ * Create a simple stream that read all blocks on default.
+ * @param context Database context.
+ * @param file DMFile pointer.
+ * @return A shared pointer of an input stream
+ */
+inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file)
+{
+    // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
+    // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
+    return std::make_shared<DMFileBlockInputStream>(context,
+                                                    DB::DM::MAX_UINT64 /*< max_read_version */,
+                                                    false /*< enable_clean_read */,
+                                                    0 /*< hash_salt */,
+                                                    file,
+                                                    file->getColumnDefines(),
+                                                    DB::DM::RowKeyRanges{},
+                                                    DB::DM::RSOperatorPtr{},
+                                                    DB::DM::ColumnCachePtr{},
+                                                    DB::DM::IdSetPtr{},
+                                                    DMFILE_READ_ROWS_THRESHOLD,
+                                                    true /*< read_one_pack_every_time_ */);
+}
 
 } // namespace DM
 } // namespace DB

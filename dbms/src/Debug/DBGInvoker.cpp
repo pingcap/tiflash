@@ -1,8 +1,9 @@
+#include <Common/FmtUtils.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
-#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
+#include <Debug/dbgFuncMisc.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
@@ -11,25 +12,21 @@
 #include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
 
-#include <cstring>
 #include <thread>
 
 namespace DB
 {
-
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
-    for (auto it = args.begin(); it != args.end(); ++it)
-        output((*it)->getColumnName());
+    for (const auto & arg : args)
+        output(arg->getColumnName());
 }
 
 void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     const Int64 t = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     std::this_thread::sleep_for(std::chrono::milliseconds(t));
-    std::stringstream res;
-    res << "sleep " << t << " ms.";
-    output(res.str());
+    output(fmt::format("sleep {} ms.", t));
 }
 
 DBGInvoker::DBGInvoker()
@@ -62,8 +59,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("raft_delete_row", dbgFuncRaftDeleteRow);
 
     regSchemalessFunc("put_region", dbgFuncPutRegion);
-    regSchemalessFunc("region_snapshot", dbgFuncRegionSnapshot);
-    regSchemalessFunc("region_snapshot_data", dbgFuncRegionSnapshotWithData);
 
     regSchemalessFunc("try_flush", dbgFuncTryFlush);
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
@@ -71,12 +66,11 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("remove_region", dbgFuncRemoveRegion);
-    regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
-    regSchemalessFunc("find_region_by_range", ClusterManage::findRegionByRange);
-    regSchemalessFunc("check_table_optimize", ClusterManage::checkTableOptimize);
+    regSchemalessFunc("find_region_by_range", dbgFuncFindRegionByRange);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regSchemalessFunc("gc_schemas", dbgFuncGcSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
 
@@ -85,18 +79,30 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_commit_merge", MockRaftCommand::dbgFuncCommitMerge);
     regSchemalessFunc("region_rollback_merge", MockRaftCommand::dbgFuncRollbackMerge);
 
+    regSchemalessFunc("region_snapshot", MockRaftCommand::dbgFuncRegionSnapshot);
+    regSchemalessFunc("region_snapshot_data", MockRaftCommand::dbgFuncRegionSnapshotWithData);
+    regSchemalessFunc("region_snapshot_pre_handle_block", /**/ MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock);
+    regSchemalessFunc("region_snapshot_apply_block", /*     */ MockRaftCommand::dbgFuncRegionSnapshotApplyBlock);
+    regSchemalessFunc("region_snapshot_pre_handle_file", /* */ MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles);
+    regSchemalessFunc("region_snapshot_pre_handle_file_pks", MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
+    regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
+    regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
+
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
+    regSchemalessFunc("wait_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
-    regSchemafulFunc("dag", dbgFuncDAG);
-    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
-
-    regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
+    regSchemafulFunc("dag", dbgFuncTiDBQuery);
+    regSchemafulFunc("mock_dag", dbgFuncMockTiDBQuery);
+    regSchemafulFunc("tidb_query", dbgFuncTiDBQuery);
+    regSchemafulFunc("tidb_mock_query", dbgFuncMockTiDBQuery);
 
     regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
+
+    regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -145,19 +151,27 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
 }
 
 BlockInputStreamPtr DBGInvoker::invokeSchemaless(
-    Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args)
+    Context & context,
+    const std::string & name,
+    const SchemalessDBGFunc & func,
+    const ASTs & args)
 {
-    std::stringstream col_name;
-    col_name << name << "(";
-    for (size_t i = 0; i < args.size(); ++i)
-    {
-        std::string arg = args[i]->getColumnName();
-        col_name << normalizeArg(arg) << ((i + 1 == args.size()) ? "" : ", ");
-    }
-    col_name << ")";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{}(", name);
+    fmt_buf.joinStr(
+        args.cbegin(),
+        args.cend(),
+        [](const auto & arg, FmtBuffer & fb) {
+            std::string column_name = arg->getColumnName();
+            fb.append(normalizeArg(column_name));
+        },
+        ", ");
+    fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
-    Printer printer = [&](const std::string & s) { res->append(s); };
+    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
+    Printer printer = [&](const std::string & s) {
+        res->append(s);
+    };
 
     func(context, args, printer);
 

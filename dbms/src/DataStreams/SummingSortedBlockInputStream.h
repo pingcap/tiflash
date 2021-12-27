@@ -38,7 +38,7 @@ protected:
     Block readImpl() override;
 
 private:
-    Logger * log = &Logger::get("SummingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("SummingSortedBlockInputStream");
 
     /// Read up to the end.
     bool finished = false;

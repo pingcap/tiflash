@@ -2,7 +2,6 @@
 
 namespace DB
 {
-
 enum class ZlibCompressionMethod
 {
     /// DEFLATE compression with gzip header and CRC32 checksum.
@@ -13,4 +12,4 @@ enum class ZlibCompressionMethod
     Zlib,
 };
 
-}
+} // namespace DB

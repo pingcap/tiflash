@@ -1,20 +1,23 @@
 #pragma once
 
-#include <mutex>
-#include <thread>
-#include <ext/shared_ptr_helper.h>
 #include <Core/NamesAndTypes.h>
-#include <Storages/IStorage.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Poco/Event.h>
+#include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
+#include <mutex>
+#include <thread>
 
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 
 namespace DB
 {
-
 class Context;
 
 
@@ -36,18 +39,19 @@ class Context;
   * When you destroy a Buffer table, all remaining data is flushed to the subordinate table.
   * The data in the buffer is not replicated, not logged to disk, not indexed. With a rough restart of the server, the data is lost.
   */
-class StorageBuffer : public ext::shared_ptr_helper<StorageBuffer>, public IStorage
+class StorageBuffer : public ext::SharedPtrHelper<StorageBuffer>
+    , public IStorage
 {
-friend class BufferBlockInputStream;
-friend class BufferBlockOutputStream;
+    friend class BufferBlockInputStream;
+    friend class BufferBlockOutputStream;
 
 public:
     /// Thresholds.
     struct Thresholds
     {
-        time_t time;    /// The number of seconds from the insertion of the first row into the block.
-        size_t rows;    /// The number of rows in the block.
-        size_t bytes;   /// The number of (uncompressed) bytes in the block.
+        time_t time; /// The number of seconds from the insertion of the first row into the block.
+        size_t rows; /// The number of rows in the block.
+        size_t bytes; /// The number of (uncompressed) bytes in the block.
     };
 
     std::string getName() const override { return "Buffer"; }
@@ -78,7 +82,7 @@ public:
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const override;
 
     /// The structure of the subordinate table is not checked and does not change.
-    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
 private:
     String name;
@@ -101,7 +105,7 @@ private:
 
     const String destination_database;
     const String destination_table;
-    bool no_destination;    /// If set, do not write data from the buffer, but simply empty the buffer.
+    bool no_destination; /// If set, do not write data from the buffer, but simply empty the buffer.
     bool allow_materialized;
 
     Poco::Logger * log;
@@ -125,10 +129,7 @@ protected:
     /** num_shards - the level of internal parallelism (the number of independent buffers)
       * The buffer is flushed if all minimum thresholds or at least one of the maximum thresholds are exceeded.
       */
-    StorageBuffer(const std::string & name_, const ColumnsDescription & columns_,
-        Context & context_,
-        size_t num_shards_, const Thresholds & min_thresholds_, const Thresholds & max_thresholds_,
-        const String & destination_database_, const String & destination_table_, bool allow_materialized_);
+    StorageBuffer(const std::string & name_, const ColumnsDescription & columns_, Context & context_, size_t num_shards_, const Thresholds & min_thresholds_, const Thresholds & max_thresholds_, const String & destination_database_, const String & destination_table_, bool allow_materialized_);
 };
 
-}
+} // namespace DB

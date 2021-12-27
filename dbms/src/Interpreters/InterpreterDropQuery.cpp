@@ -2,20 +2,20 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/IDatabase.h>
+#include <Encryption/FileProvider.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Poco/File.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageMergeTree.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TABLE_WAS_NOT_DROPPED;
@@ -25,8 +25,15 @@ extern const int READONLY;
 extern const int FAIL_POINT_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_between_drop_meta_and_data[];
+}
 
-InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_) : query_ptr(query_ptr_), context(context_) {}
+InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_)
+    : query_ptr(query_ptr_)
+    , context(context_)
+{}
 
 
 BlockIO InterpreterDropQuery::execute()
@@ -34,9 +41,6 @@ BlockIO InterpreterDropQuery::execute()
     ASTDropQuery & drop = typeid_cast<ASTDropQuery &>(*query_ptr);
 
     checkAccess(drop);
-
-    if (!drop.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, context, {drop.database});
 
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();
@@ -59,11 +63,12 @@ BlockIO InterpreterDropQuery::execute()
             if (drop.database.empty() && !drop.temporary)
             {
                 LOG_WARNING(
-                    (&Logger::get("InterpreterDropQuery")), "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
+                    (&Poco::Logger::get("InterpreterDropQuery")),
+                    "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
             }
             table->shutdown();
             /// If table was already dropped by anyone, an exception will be thrown
-            auto table_lock = table->lockForAlter(__PRETTY_FUNCTION__);
+            auto table_lock = table->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
             /// Delete table data
             table->drop();
             table->is_dropped = true;
@@ -91,8 +96,10 @@ BlockIO InterpreterDropQuery::execute()
 
         if (table)
             tables_to_drop.emplace_back(table,
-                context.getDDLGuard(
-                    database_name, drop.table, "Table " + database_name + "." + drop.table + " is dropping or detaching right now"));
+                                        context.getDDLGuard(
+                                            database_name,
+                                            drop.table,
+                                            "Table " + database_name + "." + drop.table + " is dropping or detaching right now"));
         else
             return {};
     }
@@ -107,9 +114,9 @@ BlockIO InterpreterDropQuery::execute()
 
         for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
             tables_to_drop.emplace_back(iterator->table(),
-                context.getDDLGuard(database_name,
-                    iterator->name(),
-                    "Table " + database_name + "." + iterator->name() + " is dropping or detaching right now"));
+                                        context.getDDLGuard(database_name,
+                                                            iterator->name(),
+                                                            "Table " + database_name + "." + iterator->name() + " is dropping or detaching right now"));
     }
 
     for (auto & table : tables_to_drop)
@@ -122,8 +129,10 @@ BlockIO InterpreterDropQuery::execute()
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
-        /// If table was already dropped by anyone, an exception will be thrown
-        auto table_lock = table.first->lockForAlter(__PRETTY_FUNCTION__);
+        /// If table was already dropped by anyone, an exception will be thrown;
+        /// If can not acquire the drop lock on table within `drop.lock_timeout`,
+        /// an exception will be thrown;
+        auto table_lock = table.first->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
 
         table.first->shutdown();
 
@@ -145,7 +154,7 @@ BlockIO InterpreterDropQuery::execute()
                     storage->removeFromTMTContext();
             });
 
-            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_drop_meta_and_data);
 
             /// Delete table data
             table.first->drop();
@@ -156,10 +165,13 @@ BlockIO InterpreterDropQuery::execute()
             const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
-                String table_data_path = database_data_path + "/" + escapeForFileName(current_table_name);
+                String table_data_path
+                    = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
-                    Poco::File(table_data_path).remove(true);
+                {
+                    context.getFileProvider()->deleteDirectory(table_data_path, false, true);
+                }
             }
         }
     }
@@ -181,7 +193,7 @@ BlockIO InterpreterDropQuery::execute()
         auto database = context.detachDatabase(database_name);
 
         /// Delete the database and remove its data / meta directory if need.
-        database->drop();
+        database->drop(context);
     }
 
     return {};

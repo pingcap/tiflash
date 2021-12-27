@@ -1,5 +1,5 @@
+#include <Common/setThreadName.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
@@ -12,11 +12,12 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
+extern const int ILLFORMAT_RAFT_ROW;
+extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
@@ -41,10 +42,12 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
 {
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id)));
+    // todo check if region_range_keys.mapped_table_id == table.table_id ??
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.rawKeys()));
     if (!ok)
         throw Exception(
-            std::string(__PRETTY_FUNCTION__) + ": insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
+            std::string(__PRETTY_FUNCTION__) + ": insert duplicate internal region " + DB::toString(region_id),
+            ErrorCodes::LOGICAL_ERROR);
 
     // Insert region mapping.
     regions[region_id] = table.table_id;
@@ -72,7 +75,7 @@ void RegionTable::shrinkRegionRange(const Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.range_in_table = region.getHandleRangeByTable(region.getMappedTableID());
+    internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
         dirty_regions.insert(internal_region.region_id);
@@ -90,8 +93,8 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
         {
             LOG_INFO(log,
-                __FUNCTION__ << ": region " << region.region_id << ", cache size " << region.cache_bytes << ", seconds since last "
-                             << std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+                     __FUNCTION__ << ": region " << region.region_id << ", cache size " << region.cache_bytes << ", seconds since last "
+                                  << std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
 
             return true;
         }
@@ -99,21 +102,21 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
 
     if (tmt.isBgFlushDisabled())
     {
         LOG_TRACE(log,
-            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
-                         << region->dataSize() << " bytes");
+                  __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                               << region->dataSize() << " bytes");
     }
     else
     {
         LOG_INFO(log,
-            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
-                         << region->dataSize() << " bytes");
+                 __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                              << region->dataSize() << " bytes");
     }
 
     /// Write region data into corresponding storage.
@@ -137,35 +140,38 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         if (tmt.isBgFlushDisabled())
         {
             LOG_TRACE(log,
-                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                             << " bytes");
+                      __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                                   << " bytes");
         }
         else
         {
             LOG_INFO(log,
-                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                             << " bytes");
+                     __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                                  << " bytes");
         }
     }
 
     return data_list_to_remove;
 }
 
-static const Int64 FTH_BYTES_1 = 1;                // 1 B
-static const Int64 FTH_BYTES_2 = 1024 * 1024;      // 1 MB
+static const Int64 FTH_BYTES_1 = 1; // 1 B
+static const Int64 FTH_BYTES_2 = 1024 * 1024; // 1 MB
 static const Int64 FTH_BYTES_3 = 1024 * 1024 * 10; // 10 MBs
 static const Int64 FTH_BYTES_4 = 1024 * 1024 * 50; // 50 MBs
 
 static const Seconds FTH_PERIOD_1(60 * 60); // 1 hour
-static const Seconds FTH_PERIOD_2(60 * 5);  // 5 minutes
-static const Seconds FTH_PERIOD_3(60);      // 1 minute
-static const Seconds FTH_PERIOD_4(5);       // 5 seconds
+static const Seconds FTH_PERIOD_2(60 * 5); // 5 minutes
+static const Seconds FTH_PERIOD_3(60); // 1 minute
+static const Seconds FTH_PERIOD_4(5); // 5 seconds
 
 RegionTable::RegionTable(Context & context_)
     : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
-        {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
-      context(&context_),
-      log(&Logger::get("RegionTable"))
+        {FTH_BYTES_1, FTH_PERIOD_1},
+        {FTH_BYTES_2, FTH_PERIOD_2},
+        {FTH_BYTES_3, FTH_PERIOD_3},
+        {FTH_BYTES_4, FTH_PERIOD_4}})
+    , context(&context_)
+    , log(&Poco::Logger::get("RegionTable"))
 {}
 
 void RegionTable::restore()
@@ -204,26 +210,17 @@ void RegionTable::updateRegion(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
-        incrDirtyFlag(internal_region.region_id);
-}
-
-TableID RegionTable::popOneTableToOptimize()
-{
-    TableID res = InvalidTableID;
-    std::lock_guard<std::mutex> lock(mutex);
-    if (auto it = table_to_optimize.begin(); it != table_to_optimize.end())
-    {
-        res = *it;
-        table_to_optimize.erase(it);
-    }
-    return res;
+        dirty_regions.insert(internal_region.region_id);
 }
 
 namespace
 {
 /// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
-/// Note that this function will try to acquire lock by `IStorage->lockStructure` with will_modify_data = true
-void removeObsoleteDataInStorage(Context * const context, const TableID table_id, const HandleRange<HandleID> & handle_range)
+/// Note that this function will try to acquire lock by `IStorage->lockForShare`
+void removeObsoleteDataInStorage(
+    Context * const context,
+    const TableID table_id,
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
     TMTContext & tmt = context->getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
@@ -233,22 +230,22 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
 
     try
     {
-        // acquire lock so that no other threads can change storage's structure
-        // if storage is dropped, this will throw exception
-        auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+        // Acquire a `drop_lock` so that no other threads can drop the `storage`
+        auto storage_lock = storage->lockForShare(getThreadName());
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         if (dm_storage == nullptr)
             return;
 
         /// Now we assume that these won't block for long time.
-        auto dm_handle_range = toDMHandleRange(handle_range);
-        dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
-        dm_storage->flushCache(*context, dm_handle_range); // flush to disk
+        auto rowkey_range
+            = DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+        dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
+        dm_storage->flushCache(*context, rowkey_range); // flush to disk
     }
     catch (DB::Exception & e)
     {
-        // We can ignore if storage is dropped.
+        // We can ignore if the storage is already dropped.
         if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
             throw;
     }
@@ -258,7 +255,7 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
 void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &)
 {
     TableID table_id = 0;
-    HandleRange<HandleID> handle_range;
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> handle_range;
 
     {
         /// We need to protect `regions` and `table` under mutex lock
@@ -280,9 +277,6 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
-            /// All regions of this table is removed, the storage maybe drop or pd
-            /// move it to another node, we can optimize outdated data.
-            table_to_optimize.insert(table_id);
             tables.erase(table_id);
         }
         LOG_INFO(log, __FUNCTION__ << ": remove [region " << region_id << "] in RegionTable done");
@@ -293,9 +287,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     {
         // Try to remove obsolete data in storage
 
-        // Note that we should do this without lock on RegionTable, or apply DDL changes
-        // may meet deadlock since `removeObsoleteDataInStorage` acquire lock by
-        // `IStorage->lockStructure` with will_modify_data = true.
+        // Note that we should do this without lock on RegionTable.
         // But caller(KVStore) should ensure that no new data write into this handle_range
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
@@ -316,7 +308,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
     return tryFlushRegion(region, try_persist);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
 
@@ -353,6 +345,17 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
     {
         data_list_to_remove = flushRegion(region, try_persist);
     }
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
+        {
+            // br or lighting may write illegal data into tikv, skip flush.
+            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+                        "Got error while reading region committed cache: " << e.displayText() << ". Skip flush region and keep original cache.");
+        }
+        else
+            first_exception = std::current_exception();
+    }
     catch (...)
     {
         first_exception = std::current_exception();
@@ -362,9 +365,9 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
         internal_region.pause_flush = false;
         internal_region.cache_bytes = region->dataSize();
         if (internal_region.cache_bytes)
-            incrDirtyFlag(region_id);
+            dirty_regions.insert(region_id);
         else
-            clearDirtyFlag(region_id);
+            dirty_regions.erase(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -379,7 +382,6 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
 RegionID RegionTable::pickRegionToFlush()
 {
     std::lock_guard<std::mutex> lock(mutex);
-    std::lock_guard<std::mutex> dirty_regions_lock(dirty_regions_mutex);
 
     for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
     {
@@ -398,7 +400,7 @@ RegionID RegionTable::pickRegionToFlush()
         else
         {
             // Region{region_id} is removed, remove its dirty flag
-            dirty_it = clearDirtyFlag(dirty_it, dirty_regions_lock);
+            dirty_it = dirty_regions.erase(dirty_it);
         }
     }
     return InvalidRegionID;
@@ -413,37 +415,6 @@ bool RegionTable::tryFlushRegions()
     }
 
     return false;
-}
-
-void RegionTable::incrDirtyFlag(RegionID region_id)
-{
-    std::lock_guard lock(dirty_regions_mutex);
-    dirty_regions.insert(region_id);
-}
-
-void RegionTable::clearDirtyFlag(RegionID region_id)
-{
-    std::lock_guard lock(dirty_regions_mutex);
-    if (auto iter = dirty_regions.find(region_id); iter != dirty_regions.end())
-        clearDirtyFlag(iter, lock);
-}
-
-RegionTable::DirtyRegions::iterator RegionTable::clearDirtyFlag(
-    const RegionTable::DirtyRegions::iterator & region_iter, std::lock_guard<std::mutex> &)
-{
-    // Removing invalid iterator will cause segment fault.
-    if (unlikely(region_iter == dirty_regions.end()))
-        return region_iter;
-
-    auto next_iter = dirty_regions.erase(region_iter);
-    dirty_regions_cv.notify_all();
-    return next_iter;
-}
-
-void RegionTable::waitTillRegionFlushed(const RegionID region_id)
-{
-    std::unique_lock lock(dirty_regions_mutex);
-    dirty_regions_cv.wait(lock, [this, region_id] { return dirty_regions.count(region_id) == 0; });
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
@@ -479,25 +450,29 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     std::lock_guard<std::mutex> lock(mutex);
 
     auto table_id = region_range_keys.getMappedTableID();
-    auto new_handle_range = region_range_keys.getHandleRangeByTable(table_id);
+    auto new_handle_range = region_range_keys.rawKeys();
 
     if (auto it = regions.find(region_id); it != regions.end())
     {
         if (table_id != it->second)
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id " + std::to_string(table_id) + " not match previous one "
-                    + std::to_string(it->second) + " in regions " + std::to_string(region_id),
-                ErrorCodes::LOGICAL_ERROR);
+                                + std::to_string(it->second) + " in regions " + std::to_string(region_id),
+                            ErrorCodes::LOGICAL_ERROR);
 
         InternalRegion & internal_region = doGetInternalRegion(table_id, region_id);
-        if (internal_region.range_in_table.first <= new_handle_range.first
-            && internal_region.range_in_table.second >= new_handle_range.second)
+        if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
+            && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
             LOG_INFO(log, __FUNCTION__ << ": table " << table_id << ", internal region " << region_id << " has larger range");
         }
         else
         {
-            internal_region.range_in_table.first = std::min(new_handle_range.first, internal_region.range_in_table.first);
-            internal_region.range_in_table.second = std::max(new_handle_range.second, internal_region.range_in_table.second);
+            internal_region.range_in_table.first = *new_handle_range.first < *internal_region.range_in_table.first
+                ? new_handle_range.first
+                : internal_region.range_in_table.first;
+            internal_region.range_in_table.second = *new_handle_range.second > *internal_region.range_in_table.second
+                ? new_handle_range.second
+                : internal_region.range_in_table.second;
         }
     }
     else

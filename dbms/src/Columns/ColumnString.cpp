@@ -1,8 +1,7 @@
-#include <Core/Defines.h>
-
 #include <Columns/Collator.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
+#include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
@@ -11,12 +10,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
@@ -24,7 +22,7 @@ MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
     auto res = ColumnString::create();
 
     if (to_size == 0)
-        return std::move(res);
+        return res;
 
     size_t from_size = size();
 
@@ -59,7 +57,7 @@ MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -72,7 +70,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
 
     if (start + length > src_concrete.offsets.size())
         throw Exception("Parameter out of bound in IColumnString::insertRangeFrom method.",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t nested_offset = src_concrete.offsetAt(start);
     size_t nested_length = src_concrete.offsets[start + length - 1] - nested_offset;
@@ -99,7 +97,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
 
 ColumnPtr ColumnString::filter(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (offsets.size() == 0)
+    if (offsets.empty())
         return ColumnString::create();
 
     auto res = ColumnString::create();
@@ -108,7 +106,7 @@ ColumnPtr ColumnString::filter(const Filter & filt, ssize_t result_size_hint) co
     Offsets & res_offsets = res->offsets;
 
     filterArraysImpl<UInt8>(chars, offsets, res_chars, res_offsets, filt, result_size_hint);
-    return std::move(res);
+    return res;
 }
 
 
@@ -158,7 +156,7 @@ ColumnPtr ColumnString::permute(const Permutation & perm, size_t limit) const
         res_offsets[i] = current_new_offset;
     }
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -166,7 +164,9 @@ template <bool positive>
 struct ColumnString::less
 {
     const ColumnString & parent;
-    explicit less(const ColumnString & parent_) : parent(parent_) {}
+    explicit less(const ColumnString & parent_)
+        : parent(parent_)
+    {}
     bool operator()(size_t lhs, size_t rhs) const
     {
         size_t left_len = parent.sizeAt(lhs);
@@ -217,7 +217,7 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
     auto res = ColumnString::create();
 
     if (0 == col_size)
-        return std::move(res);
+        return res;
 
     Chars_t & res_chars = res->chars;
     Offsets & res_offsets = res->offsets;
@@ -240,14 +240,16 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
 
             res_chars.resize(res_chars.size() + string_size);
             memcpySmallAllowReadWriteOverflow15(
-                &res_chars[res_chars.size() - string_size], &chars[prev_string_offset], string_size);
+                &res_chars[res_chars.size() - string_size],
+                &chars[prev_string_offset],
+                string_size);
         }
 
         prev_replicate_offset = replicate_offsets[i];
         prev_string_offset = offsets[i];
     }
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -297,8 +299,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
     const ColumnString & rhs = static_cast<const ColumnString &>(rhs_);
 
     return collator.compare(
-        reinterpret_cast<const char *>(&chars[offsetAt(n)]), sizeAt(n),
-        reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]), rhs.sizeAt(m));
+        reinterpret_cast<const char *>(&chars[offsetAt(n)]),
+        sizeAt(n),
+        reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
+        rhs.sizeAt(m));
 }
 
 
@@ -308,13 +312,18 @@ struct ColumnString::lessWithCollation
     const ColumnString & parent;
     const ICollator & collator;
 
-    lessWithCollation(const ColumnString & parent_, const ICollator & collator_) : parent(parent_), collator(collator_) {}
+    lessWithCollation(const ColumnString & parent_, const ICollator & collator_)
+        : parent(parent_)
+        , collator(collator_)
+    {}
 
     bool operator()(size_t lhs, size_t rhs) const
     {
         int res = collator.compare(
-            reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]), parent.sizeAt(lhs),
-            reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]), parent.sizeAt(rhs));
+            reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
+            parent.sizeAt(lhs),
+            reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
+            parent.sizeAt(rhs));
 
         return positive ? (res < 0) : (res > 0);
     }
@@ -346,4 +355,45 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
     }
 }
 
+void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+{
+    auto s = offsets.size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const UInt8 * pos = chars.data();
+    UInt32 * hash_data = hash.getData().data();
+    Offset prev_offset = 0;
+
+    if (collator != nullptr)
+    {
+        for (const auto & offset : offsets)
+        {
+            auto str_size = offset - prev_offset;
+            /// Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
+            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+
+            pos += str_size;
+            prev_offset = offset;
+            ++hash_data;
+        }
+    }
+    else
+    {
+        for (const auto & offset : offsets)
+        {
+            auto str_size = offset - prev_offset;
+            /// Skip last zero byte.
+            *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
+
+            pos += str_size;
+            prev_offset = offset;
+            ++hash_data;
+        }
+    }
 }
+
+
+} // namespace DB

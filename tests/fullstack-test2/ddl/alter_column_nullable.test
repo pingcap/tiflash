@@ -1,0 +1,79 @@
+mysql> drop table if exists test.a1
+mysql> create table test.a1(id int primary key, id1 int, id2 int not null default 88);
+mysql> alter table test.a1 set tiflash replica 1;
+
+func> wait_table test a1
+
+mysql> insert into test.a1 values(1,1,1),(2,2,2),(3,NULL,3),(4,NULL,4);
+mysql> insert into test.a1(id, id1) values(5,5);
+
+mysql> select * from test.a1;
++----+------+-----+
+| id | id1  | id2 |
++----+------+-----+
+|  1 |    1 |   1 |
+|  2 |    2 |   2 |
+|  3 | NULL |   3 |
+|  4 | NULL |   4 |
+|  5 |    5 |  88 |
++----+------+-----+
+
+##########
+# From not null to nullable
+mysql> alter table test.a1 change id2 id2 int;
+mysql> select * from test.a1;
++----+------+------+
+| id | id1  | id2  |
++----+------+------+
+|  1 |    1 |    1 |
+|  2 |    2 |    2 |
+|  3 | NULL |    3 |
+|  4 | NULL |    4 |
+|  5 |    5 |   88 |
++----+------+------+
+# insert null value
+mysql> insert into test.a1(id) values(6);
+mysql> select * from test.a1;
++----+------+------+
+| id | id1  | id2  |
++----+------+------+
+|  1 |    1 |    1 |
+|  2 |    2 |    2 |
+|  3 | NULL |    3 |
+|  4 | NULL |    4 |
+|  5 |    5 |   88 |
+|  6 | NULL | NULL |
++----+------+------+
+
+
+##########
+# From nullable to not null, user need to update records to fill the changing column first
+mysql> update test.a1 set id1=99 where id1 is NULL;
+mysql> select count(id1) from test.a1 where id1 is null;
++------------+
+| count(id1) |
++------------+
+|          0 |
++------------+
+# Change from nullable to not null
+mysql> alter table test.a1 change id1 id1 int not null default 99;
+mysql> select count(id1) from test.a1;
++------------+
+| count(id1) |
++------------+
+|          6 |
++------------+
+
+mysql> select * from test.a1
++----+-----+------+
+| id | id1 | id2  |
++----+-----+------+
+|  1 |   1 |    1 |
+|  2 |   2 |    2 |
+|  3 |  99 |    3 |
+|  4 |  99 |    4 |
+|  5 |   5 |   88 |
+|  6 |  99 | NULL |
++----+-----+------+
+
+mysql> drop table if exists test.a1

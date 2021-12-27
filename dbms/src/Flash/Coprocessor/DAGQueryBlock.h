@@ -13,10 +13,17 @@
 
 namespace DB
 {
-
 class Context;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+
+class QueryBlockIDGenerator
+{
+    UInt32 current_id = 0; //Root query block id is 1, so set current_id initial value to 0
+public:
+    UInt32 nextBlockID()
+    {
+        return ++current_id;
+    }
+};
 
 /// DAGQueryBlock is a dag query from single source,
 /// which means the query block contains a source node(tablescan or join)
@@ -24,7 +31,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class DAGQueryBlock
 {
 public:
-    DAGQueryBlock(UInt32 id, const tipb::Executor & root);
+    DAGQueryBlock(const tipb::Executor & root, QueryBlockIDGenerator & id_generator);
     DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
     /// the xxx_name is added for compatibility issues: before join is supported, executor does not
     /// has executor name, after join is supported in dag request, every executor has an unique
@@ -36,8 +43,12 @@ public:
     String selection_name;
     const tipb::Executor * aggregation = nullptr;
     String aggregation_name;
+    const tipb::Executor * having = nullptr;
+    String having_name;
     const tipb::Executor * limitOrTopN = nullptr;
     String limitOrTopN_name;
+    const tipb::Executor * exchangeSender = nullptr;
+    String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;

@@ -1,26 +1,23 @@
 #pragma once
 
+#include <IO/WriteBuffer.h>
+#include <common/ThreadPool.h>
 #include <math.h>
 
 #include <vector>
 
-#include <common/ThreadPool.h>
-#include <IO/WriteBuffer.h>
-
 
 namespace DB
 {
-
-
 /** Writes data asynchronously using double buffering.
   */
 class AsynchronousWriteBuffer : public WriteBuffer
 {
 private:
-    WriteBuffer & out;               /// The main buffer, responsible for writing data.
-    std::vector <char> memory;       /// A piece of memory for duplicating the buffer.
-    ThreadPool pool;                 /// For asynchronous data writing.
-    bool started;                    /// Has an asynchronous data write started?
+    WriteBuffer & out; /// The main buffer, responsible for writing data.
+    std::vector<char> memory; /// A piece of memory for duplicating the buffer.
+    ThreadPool pool; /// For asynchronous data writing.
+    bool started; /// Has an asynchronous data write started?
 
     /// Swap the main and duplicate buffers.
     void swapBuffers()
@@ -46,7 +43,12 @@ private:
     }
 
 public:
-    AsynchronousWriteBuffer(WriteBuffer & out_) : WriteBuffer(nullptr, 0), out(out_), memory(out.buffer().size()), pool(1), started(false)
+    AsynchronousWriteBuffer(WriteBuffer & out_)
+        : WriteBuffer(nullptr, 0)
+        , out(out_)
+        , memory(out.buffer().size())
+        , pool(1)
+        , started(false)
     {
         /// Data is written to the duplicate buffer.
         set(memory.data(), memory.size());
@@ -75,4 +77,4 @@ public:
     }
 };
 
-}
+} // namespace DB

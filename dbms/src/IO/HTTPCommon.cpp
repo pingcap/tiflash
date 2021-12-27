@@ -1,6 +1,5 @@
-#include <IO/HTTPCommon.h>
-
 #include <Common/config.h>
+#include <IO/HTTPCommon.h>
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/AcceptCertificateHandler.h>
 #include <Poco/Net/Context.h>
@@ -34,4 +33,4 @@ void SSLInit()
     Poco::Net::initializeSSL();
 #endif
 }
-}
+} // namespace DB

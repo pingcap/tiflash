@@ -1,0 +1,14 @@
+mysql> drop table if exists test.t
+mysql> create table test.t( col_20 time default '22:04:02.00' not null , col_21 smallint default 15900 , col_22 blob(273) , col_23 text not null , col_24 text(459) not null , primary key idx_12 ( col_24(5),col_21 ) clustered, unique key idx_13 ( col_22(3),col_21 ) );
+mysql> insert into test.t values ( '03:24:15.00',-27200,'XcqRrDOS','EpP','' ) ;
+mysql> alter table test.t set tiflash replica 1 
+
+func> wait_table test t
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select col_20, col_21, hex(col_22), col_23, col_24 from test.t;
++----------+--------+------------------+--------+--------+
+| col_20   | col_21 | hex(col_22)      | col_23 | col_24 |
++----------+--------+------------------+--------+--------+
+| 03:24:15 | -27200 | 5863715272444F53 | EpP    |        |
++----------+--------+------------------+--------+--------+
+mysql> drop table test.t;

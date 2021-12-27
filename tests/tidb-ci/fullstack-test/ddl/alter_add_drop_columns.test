@@ -1,0 +1,50 @@
+#TODO: multi-schema-change is not a feature of release-5.0, this tests are disabled
+#RETURN
+
+>> DBGInvoke __enable_schema_sync_service('true')
+mysql> drop table if exists test.t;
+
+mysql> create table test.t(id int);
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> insert into test.t values (1);
+
+mysql> alter table test.t add column (a int, b int);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+------+------+
+| id   | a    | b    |
++------+------+------+
+|    1 | NULL | NULL |
++------+------+------+
+
+mysql> alter table test.t add column (c int, d int);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+------+------+------+------+
+| id   | a    | b    | c    | d    |
++------+------+------+------+------+
+|    1 | NULL | NULL | NULL | NULL |
++------+------+------+------+------+
+
+mysql> alter table test.t drop a, drop b, drop c, drop d;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+
+| id   |
++------+
+|    1 |
++------+
+
+mysql> alter table test.t add column (c int, d int);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+------+------+
+| id   | c    | d    |
++------+------+------+
+|    1 | NULL | NULL |
++------+------+------+
+
+mysql> drop table if exists test.t;

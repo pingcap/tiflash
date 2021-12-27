@@ -1,28 +1,25 @@
 #include <Columns/ColumnFixedString.h>
-
 #include <Common/Arena.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-
 #include <DataStreams/ColumnGathererStream.h>
-
 #include <IO/WriteHelpers.h>
 
 #if __SSE2__
-    #include <emmintrin.h>
+#include <emmintrin.h>
 #endif
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_STRING_SIZE;
-    extern const int SIZE_OF_FIXED_STRING_DOESNT_MATCH;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-    extern const int PARAMETER_OUT_OF_BOUND;
-}
+extern const int TOO_LARGE_STRING_SIZE;
+extern const int SIZE_OF_FIXED_STRING_DOESNT_MATCH;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+extern const int PARAMETER_OUT_OF_BOUND;
+} // namespace ErrorCodes
 
 
 MutableColumnPtr ColumnFixedString::cloneResized(size_t size) const
@@ -78,14 +75,14 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memcpy(&chars[old_size], pos, length);
 }
 
-StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin) const
+StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto pos = arena.allocContinue(n, begin);
+    auto * pos = arena.allocContinue(n, begin);
     memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
-const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);
@@ -93,16 +90,46 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos)
     return pos + n;
 }
 
-void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash) const
+void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
+
+void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+{
+    for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
+    {
+        hash_values[i].update(reinterpret_cast<const char *>(&chars[n * i]), n);
+    }
+}
+
+void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
+{
+    auto s = size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const UInt8 * pos = chars.data();
+    UInt32 * hash_data = hash.getData().data();
+
+    for (size_t row = 0; row < s; ++row)
+    {
+        *hash_data = ::updateWeakHash32(pos, n, *hash_data);
+
+        pos += n;
+        ++hash_data;
+    }
+}
+
 
 template <bool positive>
 struct ColumnFixedString::less
 {
     const ColumnFixedString & parent;
-    explicit less(const ColumnFixedString & parent_) : parent(parent_) {}
+    explicit less(const ColumnFixedString & parent_)
+        : parent(parent_)
+    {}
     bool operator()(size_t lhs, size_t rhs) const
     {
         /// TODO: memcmp slows down.
@@ -143,10 +170,11 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
 
     if (start + length > src_concrete.size())
         throw Exception("Parameters start = "
-            + toString(start) + ", length = "
-            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
-            " (size() = " + toString(src_concrete.size()) + ").",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                            + toString(start) + ", length = "
+                            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
+                                                 " (size() = "
+                            + toString(src_concrete.size()) + ").",
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = chars.size();
     chars.resize(old_size + length * n);
@@ -227,7 +255,7 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
         data_pos += n;
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnFixedString::permute(const Permutation & perm, size_t limit) const
@@ -255,7 +283,7 @@ ColumnPtr ColumnFixedString::permute(const Permutation & perm, size_t limit) con
     for (size_t i = 0; i < limit; ++i, offset += n)
         memcpySmallAllowReadWriteOverflow15(&res_chars[offset], &chars[perm[i] * n], n);
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
@@ -267,7 +295,7 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
     auto res = ColumnFixedString::create(n);
 
     if (0 == col_size)
-        return std::move(res);
+        return res;
 
     Chars_t & res_chars = res->chars;
     res_chars.resize(n * offsets.back());
@@ -277,7 +305,7 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
         for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
             memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);
 
-    return std::move(res);
+    return res;
 }
 
 void ColumnFixedString::gather(ColumnGathererStream & gatherer)
@@ -312,4 +340,4 @@ void ColumnFixedString::getExtremes(Field & min, Field & max) const
     get(max_idx, max);
 }
 
-}
+} // namespace DB

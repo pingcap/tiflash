@@ -20,44 +20,38 @@ SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
-install_dir="$SRCPATH/release-centos7/tiflash"
-
-if [ -d "$SRCPATH/contrib/kvproto" ]; then
-  cd "$SRCPATH/contrib/kvproto"
-  rm -rf cpp/kvproto
-  ./scripts/generate_cpp.sh
-  cd -
-fi
-
-if [ -d "$SRCPATH/contrib/tipb" ]; then
-  cd "$SRCPATH/contrib/tipb"
-  rm -rf cpp/tipb
-  ./generate-cpp.sh
-  cd -
-fi
+INSTALL_DIR="${SRCPATH}/release-centos7/tiflash"
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
 
-build_dir="$SRCPATH/release-centos7/build-release"
-rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
+BUILD_DIR="${SRCPATH}/release-centos7/build-release"
+rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
-cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
+cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
-      -Wno-dev
+      -Wno-dev \
+      -DUSE_CCACHE=OFF
 
-make -j $NPROC
+make -j ${NPROC} tiflash
 
-cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
+# Reduce binary size by compressing.
+objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
 
-ldd "$install_dir/tiflash"
-cd "$install_dir"
-chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
-ldd "$install_dir/tiflash"
+cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
+
+ldd "${INSTALL_DIR}/tiflash"
+
+ldd "${INSTALL_DIR}/tiflash" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
+
+cd "${INSTALL_DIR}"
+chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
+ldd "${INSTALL_DIR}/tiflash"
+ls -lh "${INSTALL_DIR}"

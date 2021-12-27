@@ -1,32 +1,27 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnVector.h>
-
 #include <Common/FieldVisitors.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/convertFieldToType.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE 0xFFFFFF
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_ARRAY_SIZE;
-    extern const int CANNOT_CONVERT_TYPE;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+extern const int CANNOT_CONVERT_TYPE;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 /** Aggregate function, that takes two arguments: value and position,
@@ -46,7 +41,7 @@ namespace ErrorCodes
 /// Generic case (inefficient).
 struct AggregateFunctionGroupArrayInsertAtDataGeneric
 {
-    Array value;    /// TODO Add MemoryTracker
+    Array value; /// TODO Add MemoryTracker
 };
 
 
@@ -56,7 +51,7 @@ class AggregateFunctionGroupArrayInsertAtGeneric final
 private:
     DataTypePtr type;
     Field default_value;
-    UInt64 length_to_resize = 0;    /// zero means - do not do resizing.
+    UInt64 length_to_resize = 0; /// zero means - do not do resizing.
 
 public:
     AggregateFunctionGroupArrayInsertAtGeneric(const DataTypes & arguments, const Array & params)
@@ -91,7 +86,9 @@ public:
             Field converted = convertFieldToType(default_value, *type);
             if (converted.isNull())
                 throw Exception("Cannot convert parameter of aggregate function " + getName() + " (" + applyVisitor(FieldVisitorToString(), default_value) + ")"
-                    " to type " + type->getName() + " to be used as default value in array", ErrorCodes::CANNOT_CONVERT_TYPE);
+                                                                                                                                                             " to type "
+                                    + type->getName() + " to be used as default value in array",
+                                ErrorCodes::CANNOT_CONVERT_TYPE);
 
             default_value = converted;
         }
@@ -104,7 +101,7 @@ public:
         return std::make_shared<DataTypeArray>(type);
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         /// TODO Do positions need to be 1-based for this function?
         size_t position = columns[1]->get64(row_num);
@@ -115,8 +112,9 @@ public:
 
         if (position >= AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE)
             throw Exception("Too large array size: position argument (" + toString(position) + ")"
-                " is greater or equals to limit (" + toString(AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE) + ")",
-                ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+                                                                                               " is greater or equals to limit ("
+                                + toString(AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE) + ")",
+                            ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         Array & arr = data(place).value;
 
@@ -128,7 +126,7 @@ public:
         columns[0]->get(row_num, arr[position]);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         Array & arr_lhs = data(place).value;
         const Array & arr_rhs = data(rhs).value;
@@ -141,7 +139,7 @@ public:
                 arr_lhs[i] = arr_rhs[i];
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         const Array & arr = data(place).value;
         size_t size = arr.size();
@@ -161,7 +159,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         size_t size = 0;
         readVarUInt(size, buf);
@@ -181,7 +179,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         ColumnArray & to_array = static_cast<ColumnArray &>(to);
         IColumn & to_data = to_array.getData();
@@ -212,4 +210,4 @@ public:
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE
 
-}
+} // namespace DB

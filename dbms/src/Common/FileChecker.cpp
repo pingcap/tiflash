@@ -1,19 +1,16 @@
-#include <common/JSON.h>
-#include <Poco/Path.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Common/FileChecker.h>
+#include <Common/escapeForFileName.h>
 #include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <Common/escapeForFileName.h>
-
-#include <Common/FileChecker.h>
+#include <Poco/Path.h>
+#include <common/JSON.h>
 
 
 namespace DB
 {
-
-
 FileChecker::FileChecker(const std::string & file_info_path_)
 {
     setPath(file_info_path_);
@@ -102,7 +99,7 @@ void FileChecker::save() const
 
             /// `escapeForFileName` is not really needed. But it is left for compatibility with the old code.
             writeJSONString(escapeForFileName(it->first), out);
-            writeString(":{\"size\":\"", out);
+            writeString(R"(:{"size":")", out);
             writeIntText(it->second, out);
             writeString("\"}", out);
         }
@@ -145,8 +142,9 @@ void FileChecker::load(Map & map) const
     JSON json(out.str());
 
     JSON files = json["yandex"];
-    for (const auto & name_value : files)
+    // Note: loop variable 'name_value' should always be a copy because the return type of iterator of type 'JSON' is not a reference.
+    for (const auto name_value : files)
         map[unescapeForFileName(name_value.getName())] = name_value.getValue()["size"].toUInt();
 }
 
-}
+} // namespace DB

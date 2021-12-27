@@ -1,30 +1,33 @@
 #pragma once
 
-#include <Dictionaries/IDictionary.h>
-#include <Dictionaries/IDictionarySource.h>
-#include <Dictionaries/DictionaryStructure.h>
-#include <common/StringRef.h>
-#include <Common/HashTable/HashMap.h>
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
-#include <ext/range.h>
+#include <Common/HashTable/HashMap.h>
+#include <Dictionaries/DictionaryStructure.h>
+#include <Dictionaries/IDictionary.h>
+#include <Dictionaries/IDictionarySource.h>
+#include <common/StringRef.h>
+#include <common/logger_useful.h>
+
 #include <atomic>
+#include <ext/range.h>
 #include <memory>
 #include <tuple>
-#include <common/logger_useful.h>
 
 struct btrie_s;
 typedef struct btrie_s btrie_t;
 
 namespace DB
 {
-
 class TrieDictionary final : public IDictionaryBase
 {
 public:
     TrieDictionary(
-        const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr,
-        const DictionaryLifetime dict_lifetime, bool require_nonempty);
+        const std::string & name,
+        const DictionaryStructure & dict_struct,
+        DictionarySourcePtr source_ptr,
+        const DictionaryLifetime dict_lifetime,
+        bool require_nonempty);
 
     TrieDictionary(const TrieDictionary & other);
 
@@ -68,9 +71,11 @@ public:
         return dict_struct.attributes[&getAttribute(attribute_name) - attributes.data()].injective;
     }
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
         PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
@@ -86,13 +91,18 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
         ColumnString * out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
-        const PaddedPODArray<TYPE> & def, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const PaddedPODArray<TYPE> & def,   \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -107,13 +117,19 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
-        const ColumnString * const def, ColumnString * const out) const;
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
+        const ColumnString * const def,
+        ColumnString * const out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
-        const TYPE def, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const TYPE def,                     \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -128,32 +144,53 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
-        const String & def, ColumnString * const out) const;
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
+        const String & def,
+        ColumnString * const out) const;
 
     void has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const;
 
     BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
 
 private:
-    template <typename Value> using ContainerType = std::vector<Value>;
-    template <typename Value> using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
+    template <typename Value>
+    using ContainerType = std::vector<Value>;
+    template <typename Value>
+    using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
 
     struct Attribute final
     {
         AttributeUnderlyingType type;
         std::tuple<
-            UInt8, UInt16, UInt32, UInt64,
+            UInt8,
+            UInt16,
+            UInt32,
+            UInt64,
             UInt128,
-            Int8, Int16, Int32, Int64,
-            Float32, Float64,
-            String> null_values;
+            Int8,
+            Int16,
+            Int32,
+            Int64,
+            Float32,
+            Float64,
+            String>
+            null_values;
         std::tuple<
-            ContainerPtrType<UInt8>, ContainerPtrType<UInt16>, ContainerPtrType<UInt32>, ContainerPtrType<UInt64>,
+            ContainerPtrType<UInt8>,
+            ContainerPtrType<UInt16>,
+            ContainerPtrType<UInt32>,
+            ContainerPtrType<UInt64>,
             ContainerPtrType<UInt128>,
-            ContainerPtrType<Int8>, ContainerPtrType<Int16>, ContainerPtrType<Int32>, ContainerPtrType<Int64>,
-            ContainerPtrType<Float32>, ContainerPtrType<Float64>,
-            ContainerPtrType<StringRef>> maps;
+            ContainerPtrType<Int8>,
+            ContainerPtrType<Int16>,
+            ContainerPtrType<Int32>,
+            ContainerPtrType<Int64>,
+            ContainerPtrType<Float32>,
+            ContainerPtrType<Float64>,
+            ContainerPtrType<StringRef>>
+            maps;
         std::unique_ptr<Arena> string_arena;
     };
 
@@ -225,8 +262,8 @@ private:
 
     std::exception_ptr creation_exception;
 
-    Logger * logger;
+    Poco::Logger * logger;
 };
 
 
-}
+} // namespace DB

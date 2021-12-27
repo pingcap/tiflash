@@ -150,7 +150,7 @@ private:
                 --ptr->refcount;
                 if (!ptr->refcount)
                 {
-                    if (std::uncaught_exception())
+                    if (std::uncaught_exceptions() > 0)
                         delete ptr;
                     else
                         ptr->output_blocks->push_back(ptr);
@@ -225,7 +225,7 @@ private:
     const SortDescription description;
     String sign_column_name;
 
-    Logger * log = &Logger::get("CollapsingFinalBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("CollapsingFinalBlockInputStream");
 
     bool first = true;
 

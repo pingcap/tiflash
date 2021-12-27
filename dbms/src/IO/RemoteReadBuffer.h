@@ -1,6 +1,7 @@
 #pragma once
 
 #include <IO/ReadWriteBufferFromHTTP.h>
+
 #include "ReadHelpers.h"
 
 #define DEFAULT_REMOTE_READ_BUFFER_CONNECTION_TIMEOUT 1
@@ -9,7 +10,6 @@
 
 namespace DB
 {
-
 /** Allows you to read a file from a remote server via riod.
   */
 class RemoteReadBuffer : public ReadBuffer
@@ -34,11 +34,9 @@ public:
         uri.setHost(host);
         uri.setPort(port);
         uri.setQueryParameters(
-        {
-            std::make_pair("action", "read"),
-            std::make_pair("path", path),
-            std::make_pair("compress", (compress ? "true" : "false"))
-        });
+            {std::make_pair("action", "read"),
+             std::make_pair("path", path),
+             std::make_pair("compress", (compress ? "true" : "false"))});
 
         ConnectionTimeouts timeouts(connection_timeout, send_timeout, receive_timeout);
         ReadWriteBufferFromHTTP::OutStreamCallback callback;
@@ -66,9 +64,8 @@ public:
         uri.setHost(host);
         uri.setPort(port);
         uri.setQueryParameters(
-        {
-            std::make_pair("action", "list"),
-            std::make_pair("path", path)});
+            {std::make_pair("action", "list"),
+             std::make_pair("path", path)});
 
         ReadWriteBufferFromHTTP in(uri, {}, {}, timeouts);
 
@@ -85,4 +82,4 @@ public:
     }
 };
 
-}
+} // namespace DB

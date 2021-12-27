@@ -1,12 +1,11 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Columns/FilterDescription.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 
 namespace DB
 {
-
 class ExpressionActions;
 
 
@@ -20,7 +19,11 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name_);
+    FilterBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const ExpressionActionsPtr & expression_,
+        const String & filter_column_name_,
+        const LogWithPrefixPtr & log_);
 
     String getName() const override;
     Block getTotals() override;
@@ -35,6 +38,8 @@ private:
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+
+    const LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

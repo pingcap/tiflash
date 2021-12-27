@@ -13,11 +13,13 @@ namespace DB
 class DefaultChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
-    std::stringstream ss;
-    String getString() override { return ss.str(); }
+    explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+        : ChunkCodecStream(field_types)
+    {}
+    WriteBufferFromOwnString ss;
+    String getString() override { return ss.releaseStr(); }
     void encode(const Block & block, size_t start, size_t end) override;
-    void clear() override { ss.str(""); }
+    void clear() override { ss.restart(); }
 };
 
 void DefaultChunkCodecStream::encode(const Block & block, size_t start, size_t end)
@@ -35,15 +37,14 @@ void DefaultChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
+Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
 {
     std::vector<std::vector<Field>> rows;
     std::vector<Field> curr_row;
-    const std::string & data = chunk.rows_data();
     size_t cursor = 0;
     while (cursor < data.size())
     {
-        curr_row.push_back(DecodeDatum(cursor, data));
+        curr_row.push_back(DecodeDatumForCHRow(cursor, data, schema[curr_row.size()].second));
         if (curr_row.size() == schema.size())
         {
             rows.emplace_back(std::move(curr_row));
@@ -55,7 +56,7 @@ Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
     for (auto & field : schema)
     {
         const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfo(field.second);
+        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         ColumnWithTypeAndName col(data_type, name);
         col.column->assumeMutable()->reserve(rows.size());
         columns.emplace_back(std::move(col));

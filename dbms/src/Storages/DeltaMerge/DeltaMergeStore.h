@@ -5,50 +5,52 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
 
 namespace DB
 {
-
 namespace DM
 {
 class Segment;
-using SegmentPtr  = std::shared_ptr<Segment>;
+using SegmentPtr = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
-using NotCompress  = std::unordered_set<ColId>;
+using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 
-static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
-    UInt64      segment_id;
-    HandleRange range;
+    UInt64 segment_id;
+    RowKeyRange range;
 
-    UInt64 rows          = 0;
-    UInt64 size          = 0;
+    UInt64 rows = 0;
+    UInt64 size = 0;
     UInt64 delete_ranges = 0;
 
     UInt64 stable_size_on_disk = 0;
 
-    UInt64 delta_pack_count  = 0;
+    UInt64 delta_pack_count = 0;
     UInt64 stable_pack_count = 0;
 
-    Float64 avg_delta_pack_rows  = 0;
+    Float64 avg_delta_pack_rows = 0;
     Float64 avg_stable_pack_rows = 0;
 
-    Float64 delta_rate       = 0;
-    UInt64  delta_cache_size = 0;
+    Float64 delta_rate = 0;
+    UInt64 delta_cache_size = 0;
 
     UInt64 delta_index_size = 0;
 };
@@ -58,16 +60,16 @@ struct DeltaMergeStoreStat
 {
     UInt64 segment_count = 0;
 
-    UInt64 total_rows          = 0;
-    UInt64 total_size          = 0;
+    UInt64 total_rows = 0;
+    UInt64 total_size = 0;
     UInt64 total_delete_ranges = 0;
 
-    Float64 delta_rate_rows     = 0;
+    Float64 delta_rate_rows = 0;
     Float64 delta_rate_segments = 0;
 
-    Float64 delta_placed_rate       = 0;
-    UInt64  delta_cache_size        = 0;
-    Float64 delta_cache_rate        = 0;
+    Float64 delta_placed_rate = 0;
+    UInt64 delta_cache_size = 0;
+    Float64 delta_cache_rate = 0;
     Float64 delta_cache_wasted_rate = 0;
 
     UInt64 delta_index_size = 0;
@@ -75,44 +77,50 @@ struct DeltaMergeStoreStat
     Float64 avg_segment_rows = 0;
     Float64 avg_segment_size = 0;
 
-    UInt64  delta_count             = 0;
-    UInt64  total_delta_rows        = 0;
-    UInt64  total_delta_size        = 0;
-    Float64 avg_delta_rows          = 0;
-    Float64 avg_delta_size          = 0;
+    UInt64 delta_count = 0;
+    UInt64 total_delta_rows = 0;
+    UInt64 total_delta_size = 0;
+    Float64 avg_delta_rows = 0;
+    Float64 avg_delta_size = 0;
     Float64 avg_delta_delete_ranges = 0;
 
-    UInt64  stable_count              = 0;
-    UInt64  total_stable_rows         = 0;
-    UInt64  total_stable_size         = 0;
-    UInt64  total_stable_size_on_disk = 0;
-    Float64 avg_stable_rows           = 0;
-    Float64 avg_stable_size           = 0;
+    UInt64 stable_count = 0;
+    UInt64 total_stable_rows = 0;
+    UInt64 total_stable_size = 0;
+    UInt64 total_stable_size_on_disk = 0;
+    Float64 avg_stable_rows = 0;
+    Float64 avg_stable_size = 0;
 
-    UInt64  total_pack_count_in_delta = 0;
-    Float64 avg_pack_count_in_delta   = 0;
-    Float64 avg_pack_rows_in_delta    = 0;
-    Float64 avg_pack_size_in_delta    = 0;
+    UInt64 total_pack_count_in_delta = 0;
+    Float64 avg_pack_count_in_delta = 0;
+    Float64 avg_pack_rows_in_delta = 0;
+    Float64 avg_pack_size_in_delta = 0;
 
-    UInt64  total_pack_count_in_stable = 0;
-    Float64 avg_pack_count_in_stable   = 0;
-    Float64 avg_pack_rows_in_stable    = 0;
-    Float64 avg_pack_size_in_stable    = 0;
+    UInt64 total_pack_count_in_stable = 0;
+    Float64 avg_pack_count_in_stable = 0;
+    Float64 avg_pack_rows_in_stable = 0;
+    Float64 avg_pack_size_in_stable = 0;
 
-    UInt64 storage_stable_num_snapshots    = 0;
-    UInt64 storage_stable_num_pages        = 0;
+    UInt64 storage_stable_num_snapshots = 0;
+    Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
+    UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id      = 0;
+    UInt64 storage_stable_max_page_id = 0;
 
-    UInt64 storage_delta_num_snapshots    = 0;
-    UInt64 storage_delta_num_pages        = 0;
+    UInt64 storage_delta_num_snapshots = 0;
+    Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
+    UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id      = 0;
+    UInt64 storage_delta_max_page_id = 0;
 
-    UInt64 storage_meta_num_snapshots    = 0;
-    UInt64 storage_meta_num_pages        = 0;
+    UInt64 storage_meta_num_snapshots = 0;
+    Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
+    UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id      = 0;
+    UInt64 storage_meta_max_page_id = 0;
 
     UInt64 background_tasks_length = 0;
 };
@@ -127,9 +135,10 @@ public:
     {
         NotCompress not_compress_columns{};
     };
+    static Settings EMPTY_SETTINGS;
 
-    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
-    using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
+    using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
+    using SegmentMap = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType
     {
@@ -141,6 +150,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC,
     };
 
     enum TaskType
@@ -151,6 +161,13 @@ public:
         Compact,
         Flush,
         PlaceIndex,
+    };
+
+    enum TaskRunThread
+    {
+        BackgroundThreadPool,
+        Foreground,
+        BackgroundGCThread,
     };
 
     static std::string toString(ThreadType type)
@@ -173,6 +190,8 @@ public:
             return "BG_Compact";
         case BG_Flush:
             return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
         default:
             return "Unknown";
         }
@@ -199,41 +218,69 @@ public:
         }
     }
 
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case BackgroundThreadPool:
+            return "BackgroundThreadPool";
+        case Foreground:
+            return "Foreground";
+        case BackgroundGCThread:
+            return "BackgroundGCThread";
+        default:
+            return "Unknown";
+        }
+    }
+
     struct BackgroundTask
     {
         TaskType type;
 
         DMContextPtr dm_context;
-        SegmentPtr   segment;
-        SegmentPtr   next_segment;
+        SegmentPtr segment;
+        SegmentPtr next_segment;
 
         explicit operator bool() { return (bool)segment; }
     };
 
     class MergeDeltaTaskPool
     {
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#else
+    public:
+#endif
+
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
-        TaskQueue tasks;
+        TaskQueue light_tasks;
+        TaskQueue heavy_tasks;
 
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return light_tasks.size() + heavy_tasks.size();
+        }
 
-        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
+        // first element of return value means whether task is added or not
+        // second element of return value means whether task is heavy or not
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_);
 
-        BackgroundTask nextTask(Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
 
-    DeltaMergeStore(Context &             db_context, //
-                    const String &        path_,
-                    bool                  data_path_contains_database_name,
-                    const String &        db_name,
-                    const String &        tbl_name,
+    DeltaMergeStore(Context & db_context, //
+                    bool data_path_contains_database_name,
+                    const String & db_name,
+                    const String & tbl_name,
                     const ColumnDefines & columns,
-                    const ColumnDefine &  handle,
-                    const Settings &      settings_);
+                    const ColumnDefine & handle,
+                    bool is_common_handle_,
+                    size_t rowkey_column_size_,
+                    const Settings & settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -248,101 +295,167 @@ public:
     // Stop all background tasks.
     void shutdown();
 
-    void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
+    static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+    void write(const Context & db_context, const DB::Settings & db_settings, Block & block);
 
-    BlockInputStreams readRaw(const Context &       db_context,
-                              const DB::Settings &  db_settings,
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
+
+    std::tuple<String, PageId> preAllocateIngestFile();
+
+    void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
+
+    void ingestFiles(const DMContextPtr & dm_context, //
+                     const RowKeyRange & range,
+                     const std::vector<PageId> & file_ids,
+                     bool clear_data_in_range);
+
+    void ingestFiles(const Context & db_context, //
+                     const DB::Settings & db_settings,
+                     const RowKeyRange & range,
+                     const std::vector<PageId> & file_ids,
+                     bool clear_data_in_range)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
+    }
+
+    /// Read all rows without MVCC filtering
+    BlockInputStreams readRaw(const Context & db_context,
+                              const DB::Settings & db_settings,
                               const ColumnDefines & column_defines,
-                              size_t                num_streams,
-                              const SegmentIdSet &  read_segments = {});
+                              size_t num_streams,
+                              const SegmentIdSet & read_segments = {});
 
-    /// ranges should be sorted and merged already.
-    BlockInputStreams read(const Context &       db_context,
-                           const DB::Settings &  db_settings,
+    /// Read rows with MVCC filtering
+    /// `sorted_ranges` should be already sorted and merged
+    BlockInputStreams read(const Context & db_context,
+                           const DB::Settings & db_settings,
                            const ColumnDefines & columns_to_read,
-                           const HandleRanges &  sorted_ranges,
-                           size_t                num_streams,
-                           UInt64                max_version,
+                           const RowKeyRanges & sorted_ranges,
+                           size_t num_streams,
+                           UInt64 max_version,
                            const RSOperatorPtr & filter,
-                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet &  read_segments       = {});
+                           size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+                           const SegmentIdSet & read_segments = {});
 
     /// Force flush all data to disk.
-    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    void flushCache(const Context & context, const RowKeyRange & range)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
         flushCache(dm_context, range);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
     /// Compact fregment packs into bigger one.
-    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
+    void compact(const Context & context, const RowKeyRange & range);
 
-    /// Apply `commands` on `table_columns`
-    void applyAlters(const AlterCommands &         commands, //
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
+    /// Apply DDL `commands` on `table_columns`
+    void applyAlters(const AlterCommands & commands, //
                      const OptionTableInfoConstRef table_info,
-                     ColumnID &                    max_column_id_used,
-                     const Context &               context);
+                     ColumnID & max_column_id_used,
+                     const Context & context);
 
+    const ColumnDefinesPtr getStoreColumns() const
+    {
+        std::shared_lock lock(read_write_mutex);
+        return store_columns;
+    }
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
-    const ColumnDefine &  getHandle() const { return original_table_handle_define; }
-    BlockPtr              getHeader() const;
-    const Settings &      getSettings() const { return settings; }
-    DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
-    SortDescription       getPrimarySortDescription() const;
+    const ColumnDefine & getHandle() const { return original_table_handle_define; }
+    BlockPtr getHeader() const;
+    const Settings & getSettings() const { return settings; }
+    DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
+    SortDescription getPrimarySortDescription() const;
 
-    void                check(const Context & db_context);
+    void check(const Context & db_context);
     DeltaMergeStoreStat getStat();
-    SegmentStats        getSegmentStats();
+    SegmentStats getSegmentStats();
+    bool isCommonHandle() const { return is_common_handle; }
+    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
 
+public:
+    /// Methods mainly used by region split.
+
+    RowsAndBytes getRowsAndBytesInRange(const Context & db_context, const RowKeyRange & check_range, bool is_exact);
+    RowsAndBytes getRowsAndBytesInRange(DMContext & dm_context, const RowKeyRange & check_range, bool is_exact);
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
+#endif
 
-    bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
+
+    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
-    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
+    SegmentPtr segmentMergeDelta(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const TaskRunThread thread,
+        SegmentSnapshotPtr segment_snap = nullptr);
 
-    bool handleBackgroundTask();
+    bool updateGCSafePoint();
 
-    bool isSegmentValid(const SegmentPtr & segment);
+    bool handleBackgroundTask(bool heavy);
 
-    void restoreExtraPathCapacity();
+    // isSegmentValid should be protected by lock on `read_write_mutex`
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    bool doIsSegmentValid(const SegmentPtr & segment);
 
+    void restoreStableFiles();
+
+    SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
+                                          const RowKeyRanges & sorted_ranges,
+                                          size_t expected_tasks_count = 1,
+                                          const SegmentIdSet & read_segments = {});
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    String      path;
-    PathPool    extra_paths;
-    Context &   global_context;
-    Settings    settings;
+#endif
+
+    Context & global_context;
+    StoragePathPool path_pool;
+    Settings settings;
     StoragePool storage_pool;
 
     String db_name;
     String table_name;
 
-    ColumnDefines      original_table_columns;
-    BlockPtr           original_table_header; // Used to speed up getHeader()
-    const ColumnDefine original_table_handle_define;
+    bool is_common_handle;
+    size_t rowkey_column_size;
+
+    ColumnDefines original_table_columns;
+    BlockPtr original_table_header; // Used to speed up getHeader()
+    ColumnDefine original_table_handle_define;
 
     // The columns we actually store.
+    // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+    // No matter `tidb_rowid` exist in `table_columns` or not.
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};
 
-    BackgroundProcessingPool &           background_pool;
+    BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
+
+    BackgroundProcessingPool & blockable_background_pool;
+    BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
 
     /// end of range -> segment
     SegmentSortedMap segments;
@@ -351,13 +464,16 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
-    DB::Timestamp latest_gc_safe_point = 0;
+    std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+
+    RowKeyValue next_gc_check_key;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
-    UInt64   hash_salt;
-    Logger * log;
+    UInt64 hash_salt;
+
+    Poco::Logger * log;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

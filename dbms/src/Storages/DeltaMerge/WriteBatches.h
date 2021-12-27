@@ -7,7 +7,6 @@ namespace DB
 {
 namespace DM
 {
-
 struct WriteBatches : private boost::noncopyable
 {
     WriteBatch log;
@@ -22,16 +21,22 @@ struct WriteBatches : private boost::noncopyable
     WriteBatch removed_meta;
 
     StoragePool & storage_pool;
-    bool          should_roll_back = false;
+    bool should_roll_back = false;
 
-    WriteBatches(StoragePool & storage_pool_) : storage_pool(storage_pool_) {}
+    WriteLimiterPtr write_limiter;
+
+    WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
+        : storage_pool(storage_pool_)
+        , write_limiter(write_limiter_)
+    {
+    }
 
     ~WriteBatches()
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger      = &Logger::get("WriteBatches");
-            auto     check_empty = [&](const WriteBatch & wb, const String & name) {
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
+            auto check_empty = [&](const WriteBatch & wb, const String & name) {
                 if (!wb.empty())
                 {
                     StackTrace trace;
@@ -63,8 +68,8 @@ struct WriteBatches : private boost::noncopyable
 
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
-            auto     check  = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -84,8 +89,8 @@ struct WriteBatches : private boost::noncopyable
         for (auto & w : data.getWrites())
             data_write_pages.push_back(w.page_id);
 
-        storage_pool.log().write(std::move(log));
-        storage_pool.data().write(std::move(data));
+        storage_pool.log()->write(std::move(log), write_limiter);
+        storage_pool.data()->write(std::move(data), write_limiter);
 
         for (auto page_id : log_write_pages)
             writtenLog.push_back(page_id);
@@ -107,9 +112,9 @@ struct WriteBatches : private boost::noncopyable
 
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -124,8 +129,8 @@ struct WriteBatches : private boost::noncopyable
             check(data_wb, "data_wb", logger);
         }
 
-        storage_pool.log().write(std::move(log_wb));
-        storage_pool.data().write(std::move(data_wb));
+        storage_pool.log()->write(std::move(log_wb), write_limiter);
+        storage_pool.data()->write(std::move(data_wb), write_limiter);
 
         writtenLog.clear();
         writtenData.clear();
@@ -135,9 +140,9 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -151,7 +156,7 @@ struct WriteBatches : private boost::noncopyable
             check(meta, "meta", logger);
         }
 
-        storage_pool.meta().write(std::move(meta));
+        storage_pool.meta()->write(std::move(meta), write_limiter);
         meta.clear();
     }
 
@@ -159,9 +164,9 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -177,9 +182,9 @@ struct WriteBatches : private boost::noncopyable
             check(removed_meta, "removed_meta", logger);
         }
 
-        storage_pool.log().write(std::move(removed_log));
-        storage_pool.data().write(std::move(removed_data));
-        storage_pool.meta().write(std::move(removed_meta));
+        storage_pool.log()->write(std::move(removed_log), write_limiter);
+        storage_pool.data()->write(std::move(removed_data), write_limiter);
+        storage_pool.meta()->write(std::move(removed_meta), write_limiter);
 
         removed_log.clear();
         removed_data.clear();

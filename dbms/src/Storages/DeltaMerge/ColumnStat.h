@@ -3,26 +3,24 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/File/DMFileDefines.h>
 
 namespace DB
 {
 namespace DM
 {
-
 struct ColumnStat
 {
-    ColId       col_id;
+    ColId col_id;
     DataTypePtr type;
-    // A hint size for speeding up deserialize.
+    // The average size of values. A hint for speeding up deserialize.
     double avg_size;
-    // Serialize size in disk.
+    // The serialized size of the column data on disk.
     size_t serialized_bytes = 0;
 };
 
 using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
-inline void readText(ColumnStats & column_sats, DMFileVersion ver, ReadBuffer & buf)
+inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
@@ -31,16 +29,16 @@ inline void readText(ColumnStats & column_sats, DMFileVersion ver, ReadBuffer & 
     DB::readText(count, buf);
     DB::assertString("\n\n", buf);
 
-    ColId  id = 0;
+    ColId id = 0;
     String type_name;
-    double avg_size         = 0.0;
+    double avg_size = 0.0;
     size_t serialized_bytes = 0;
     for (size_t i = 0; i < count; ++i)
     {
         DB::readText(id, buf);
         DB::assertChar(' ', buf);
         DB::readText(avg_size, buf);
-        if (ver >= DMFileVersion::VERSION_WITH_COLUMN_SIZE)
+        if (ver >= DMFileFormat::V1)
         {
             DB::assertChar(' ', buf);
             DB::readText(serialized_bytes, buf);
@@ -54,7 +52,7 @@ inline void readText(ColumnStats & column_sats, DMFileVersion ver, ReadBuffer & 
     }
 }
 
-inline void writeText(const ColumnStats & column_sats, DMFileVersion ver, WriteBuffer & buf)
+inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver, WriteBuffer & buf)
 {
     DB::writeString("Columns: ", buf);
     DB::writeText(column_sats.size(), buf);
@@ -65,14 +63,14 @@ inline void writeText(const ColumnStats & column_sats, DMFileVersion ver, WriteB
         DB::writeText(id, buf);
         DB::writeChar(' ', buf);
         DB::writeText(stat.avg_size, buf);
-        if (ver >= DMFileVersion::VERSION_WITH_COLUMN_SIZE)
+        if (ver >= DMFileFormat::V1)
         {
             DB::writeChar(' ', buf);
             DB::writeText(stat.serialized_bytes, buf);
         }
         DB::writeChar(' ', buf);
         // Note that name of DataType may contains ' '
-        DB::writeString(stat.type->getName(), buf); 
+        DB::writeString(stat.type->getName(), buf);
         DB::writeChar('\n', buf);
     }
 }

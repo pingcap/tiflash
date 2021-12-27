@@ -45,6 +45,11 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
+set (TIFLASH_EDITION $ENV{TIFLASH_EDITION})
+if (NOT TIFLASH_EDITION)
+    set (TIFLASH_EDITION Community)
+endif ()
+
 execute_process(
   COMMAND git rev-parse HEAD
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -60,7 +65,9 @@ execute_process(
   )
 
 execute_process(
-  COMMAND date -u "+%Y-%m-%d %I:%M:%S"
+  COMMAND date -u "+%Y-%m-%d %H:%M:%S"
   OUTPUT_VARIABLE TIFLASH_UTC_BUILD_TIME
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+set (TIFLASH_PROFILE ${CMAKE_BUILD_TYPE})

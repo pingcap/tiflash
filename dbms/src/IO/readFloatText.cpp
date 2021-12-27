@@ -2,10 +2,9 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
 }
 
 /** Must successfully parse inf, INF and Infinity.
@@ -67,4 +66,4 @@ template void readFloatText<Float64>(Float64 &, ReadBuffer &);
 template bool tryReadFloatText<Float32>(Float32 &, ReadBuffer &);
 template bool tryReadFloatText<Float64>(Float64 &, ReadBuffer &);
 
-}
+} // namespace DB

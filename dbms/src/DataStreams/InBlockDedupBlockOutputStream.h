@@ -12,7 +12,7 @@ public:
     InBlockDedupBlockOutputStream(BlockOutputStreamPtr & output_, const SortDescription & description_)
         : output(output_), description(description_)
     {
-        log = &Logger::get("InBlockDedupBlockInputStream");
+        log = &Poco::Logger::get("InBlockDedupBlockInputStream");
     }
 
     void write(const Block & block) override
@@ -30,7 +30,7 @@ public:
 private:
     BlockOutputStreamPtr output;
     const SortDescription description;
-    Logger * log;
+    Poco::Logger * log;
 };
 
 }

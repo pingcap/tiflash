@@ -1,25 +1,23 @@
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-
-#include <IO/WriteBuffer.h>
 #include <IO/ReadBuffer.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 struct AggregateFunctionForEachData
@@ -50,7 +48,7 @@ private:
     size_t nested_size_of_data = 0;
     size_t num_arguments;
 
-    AggregateFunctionForEachData & ensureAggregateData(AggregateDataPtr place, size_t new_size, Arena & arena) const
+    AggregateFunctionForEachData & ensureAggregateData(AggregateDataPtr __restrict place, size_t new_size, Arena & arena) const
     {
         AggregateFunctionForEachData & state = data(place);
 
@@ -97,7 +95,8 @@ private:
 
 public:
     AggregateFunctionForEach(AggregateFunctionPtr nested_, const DataTypes & arguments)
-        : nested_func(nested_), num_arguments(arguments.size())
+        : nested_func(nested_)
+        , num_arguments(arguments.size())
     {
         nested_size_of_data = nested_func->sizeOfData();
 
@@ -119,7 +118,7 @@ public:
         return std::make_shared<DataTypeArray>(nested_func->getReturnType());
     }
 
-    void destroy(AggregateDataPtr place) const noexcept override
+    void destroy(AggregateDataPtr __restrict place) const noexcept override
     {
         AggregateFunctionForEachData & state = data(place);
 
@@ -136,7 +135,7 @@ public:
         return nested_func->hasTrivialDestructor();
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         const IColumn * nested[num_arguments];
 
@@ -169,7 +168,7 @@ public:
         }
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         const AggregateFunctionForEachData & rhs_state = data(rhs);
         AggregateFunctionForEachData & state = ensureAggregateData(place, rhs_state.dynamic_array_size, *arena);
@@ -186,7 +185,7 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         const AggregateFunctionForEachData & state = data(place);
         writeBinary(state.dynamic_array_size, buf);
@@ -199,7 +198,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         AggregateFunctionForEachData & state = data(place);
 
@@ -216,7 +215,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
         const AggregateFunctionForEachData & state = data(place);
 
@@ -227,7 +226,7 @@ public:
         const char * nested_state = state.array_of_aggregate_datas;
         for (size_t i = 0; i < state.dynamic_array_size; ++i)
         {
-            nested_func->insertResultInto(nested_state, elems_to);
+            nested_func->insertResultInto(nested_state, elems_to, arena);
             nested_state += nested_size_of_data;
         }
 
@@ -243,4 +242,4 @@ public:
 };
 
 
-}
+} // namespace DB

@@ -1,18 +1,17 @@
 #pragma once
 
-#include <Common/Arena.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnsCommon.h>
+#include <Columns/IColumn.h>
+#include <Common/Arena.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 
 /** Base class for columns-constants that contain a value that is not in the `Field`.
@@ -21,8 +20,12 @@ namespace ErrorCodes
 class IColumnDummy : public IColumn
 {
 public:
-    IColumnDummy() : s(0) {}
-    IColumnDummy(size_t s_) : s(s_) {}
+    IColumnDummy()
+        : s(0)
+    {}
+    explicit IColumnDummy(size_t s_)
+        : s(s_)
+    {}
 
 public:
     virtual MutableColumnPtr cloneDummy(size_t s_) const = 0;
@@ -49,22 +52,31 @@ public:
         ++s;
     }
 
-    StringRef serializeValueIntoArena(size_t /*n*/, Arena & arena, char const *& begin) const override
+    StringRef serializeValueIntoArena(size_t /*n*/, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override
     {
-        return { arena.allocContinue(0, begin), 0 };
+        return {arena.allocContinue(0, begin), 0};
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos) override
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
     {
         ++s;
         return pos;
     }
 
-    void updateHashWithValue(size_t /*n*/, SipHash & /*hash*/) const override
+    void updateHashWithValue(size_t /*n*/, SipHash & /*hash*/, const TiDB::TiDBCollatorPtr &, String &) const override
     {
     }
 
-    void insertFrom(const IColumn &, size_t) override
+    void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override
+    {
+    }
+
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
+    {
+    }
+
+    void insertFrom(const IColumn &, size_t)
+        override
     {
         ++s;
     }
@@ -141,4 +153,4 @@ protected:
     size_t s;
 };
 
-}
+} // namespace DB

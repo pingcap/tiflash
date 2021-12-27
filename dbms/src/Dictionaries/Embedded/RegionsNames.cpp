@@ -1,12 +1,9 @@
-#include <Dictionaries/Embedded/RegionsNames.h>
 #include <Dictionaries/Embedded/GeodataProviders/INamesProvider.h>
-
-#include <Poco/Util/Application.h>
-#include <Poco/Exception.h>
-
-#include <common/logger_useful.h>
-
+#include <Dictionaries/Embedded/RegionsNames.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Exception.h>
+#include <Poco/Util/Application.h>
+#include <common/logger_useful.h>
 
 
 RegionsNames::RegionsNames(IRegionsNamesDataProviderPtr data_provider)
@@ -36,7 +33,7 @@ std::string RegionsNames::dumpSupportedLanguagesNames()
 
 void RegionsNames::reload()
 {
-    Logger * log = &Logger::get("RegionsNames");
+    Poco::Logger * log = &Poco::Logger::get("RegionsNames");
     LOG_DEBUG(log, "Reloading regions names");
 
     RegionID max_region_id = 0;

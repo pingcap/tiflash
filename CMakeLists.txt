@@ -4,32 +4,35 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7 AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
         message (FATAL_ERROR "GCC version must be at least 7! For example, if GCC 7 is available under gcc-7, g++-7 names, do the following: export CC=gcc-7 CXX=g++-7; rm -rf CMakeCache.txt CMakeFiles; and re run cmake or ./release.")
     endif ()
+    set(MOST_DEBUGGABLE_LEVEL -Og)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # Require at least clang 5
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5)
         message (FATAL_ERROR "Clang version must be at least 5!")
     endif ()
+    set(MOST_DEBUGGABLE_LEVEL -O0)
 else ()
     message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
 
-
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
+option (USE_CCACHE "Set to OFF to disable ccache" ON)
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
-    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = RELWITHDEBINFO")
-    set (CMAKE_BUILD_TYPE "RELWITHDEBINFO")
+    set (CMAKE_BUILD_TYPE "RelWithDebInfo")
+    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = ${CMAKE_BUILD_TYPE}")
 endif ()
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UC)
-message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
+message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 # ASan - build type with address sanitizer
 # UBSan - build type with undefined behaviour sanitizer
@@ -37,6 +40,32 @@ message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
 set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan" CACHE STRING "" FORCE)
 
 include (cmake/arch.cmake)
+
+if (ARCH_AMD64)
+    option(TIFLASH_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
+    option(TIFLASH_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
+endif ()
+
+if (ARCH_AARCH64)
+    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" ON)
+    option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
+endif ()
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_AVX512_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_SVE_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
+endif ()
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
@@ -55,15 +84,13 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
+    # clang: warning: private field 'hash_salt' is not used [-Wunused-private-field]
+    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument -Wno-unused-private-field")
 endif ()
 
 if (ARCH_LINUX)
     set (CXX11_ABI "ENABLE" CACHE STRING "Use C++11 ABI: DEFAULT, ENABLE, DISABLE")
 endif ()
-
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
 
 option (USE_STATIC_LIBRARIES "Set to FALSE to use shared libraries" ON)
 option (MAKE_STATIC_LIBRARIES "Set to FALSE to make shared libraries" ${USE_STATIC_LIBRARIES})
@@ -107,10 +134,12 @@ string(REGEX MATCH "-?[0-9]+(.[0-9]+)?$" COMPILER_POSTFIX ${CMAKE_CXX_COMPILER})
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH AND NOT LINKER_NAME)
-    set (LINKER_NAME "lld")
-elseif (GOLD_PATH)
-    set (LINKER_NAME "gold")
+if (NOT LINKER_NAME)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
+        set (LINKER_NAME "lld")
+    elseif (GOLD_PATH)
+        set (LINKER_NAME "gold")
+    endif ()
 endif ()
 
 if (LINKER_NAME)
@@ -139,11 +168,8 @@ if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
     set (CMAKE_CXX_STANDARD 17)
-    set (CMAKE_CXX_EXTENSIONS 0) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
+    set (CMAKE_CXX_EXTENSIONS 1) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
-    set (CXX_FLAGS_INTERNAL_COMPILER "-std=c++1z")
-    # This needs to propagate to vendored projects in contrib
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 endif ()
 
 if (NOT ARCH_ARM)
@@ -151,14 +177,24 @@ if (NOT ARCH_ARM)
     set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
 endif ()
 
+option (DEBUG_WITHOUT_DEBUG_INFO "Set to ON to build dev target without debug info (remove flag `-g` in order to accelerate compiling speed and reduce target binary size)" OFF)
+if (DEBUG_WITHOUT_DEBUG_INFO)
+    string(REPLACE "-g" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    string(REPLACE "-g" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    message (STATUS "Build debug target without debug info")
+else ()
+    set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -ggdb3")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3 -ggdb3")
+endif ()
+
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
 set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_ADD}")
-set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
+set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
 
 set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
-set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
 if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
@@ -213,17 +249,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     endif()
 endif ()
 
-# Flags for test coverage
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
-endif ()
-
-if (ENABLE_TESTS)
-    message (STATUS "Tests are enabled")
-    enable_testing()
-endif ()
-
 # when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
 if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
     set (CLICKHOUSE_ETC_DIR "/etc")
@@ -242,10 +267,11 @@ if (UNBUNDLED OR NOT (ARCH_LINUX OR APPLE) OR ARCH_32)
     option (NO_WERROR "Disable -Werror compiler option" ON)
 endif ()
 
-message (STATUS "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ; USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES} MAKE_STATIC_LIBRARIES=${MAKE_STATIC_LIBRARIES} UNBUNDLED=${UNBUNDLED} CCACHE=${CCACHE_FOUND} ${CCACHE_VERSION}")
+message (STATUS "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ; USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES} MAKE_STATIC_LIBRARIES=${MAKE_STATIC_LIBRARIES} UNBUNDLED=${UNBUNDLED}")
 
 include(GNUInstallDirs)
 
+# openssl, zlib before poco
 include (cmake/find_ssl.cmake)
 if (NOT OPENSSL_FOUND)
     message (FATAL_ERROR "Need openssl for build. debian tip: sudo apt install libssl-dev")
@@ -254,18 +280,12 @@ endif ()
 include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
-# openssl, zlib before poco
 
-# Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default. But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
-# If `ENABLE_RDKAFKA` is true, librdkafka will fix the conflict by using the standard one.
-# librdkafka is useless for tiflash, need to set `USE_INTERNAL_ZLIB_LIBRARY` and `ENABLE_RDKAFKA` to OFF.
-set (ENABLE_RDKAFKA OFF CACHE BOOL "" FORCE)
 set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
+option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
 include (cmake/find_zstd.cmake)
-option (ENABLE_ODBC "Set to ON to link odbc libraries if exists" OFF)
-message(STATUS "enalbe odbc: ${ENABLE_ODBC}")
 if (ENABLE_ODBC)
     include (cmake/find_ltdl.cmake) # for odbc
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/poco/cmake/FindODBC.cmake)
@@ -282,14 +302,13 @@ include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
 include (cmake/find_readline_edit.cmake)
 include (cmake/find_re2.cmake)
-include (cmake/find_rdkafka.cmake)
-include (cmake/find_capnp.cmake)
 include (cmake/find_llvm.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
 include (cmake/find_prometheus.cmake)
-
+include (cmake/find_raftstore_proxy.cmake)
+include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
 find_contrib_lib(cityhash)
@@ -298,12 +317,18 @@ find_contrib_lib(metrohash)
 find_contrib_lib(btrie)
 find_contrib_lib(double-conversion)
 
+# Find libunwind, must be before jemalloc
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+include (libs/libdaemon/cmake/find_unwind.cmake)
+
 # Need to process before "contrib" dir:
 include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
+include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
-include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
-include (libs/libdaemon/cmake/find_unwind.cmake)
+if (ENABLE_MYSQL_STORAGE)
+    include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
+endif()
 
 include (cmake/print_flags.cmake)
 
@@ -313,9 +338,57 @@ if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
     add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
 endif ()
 
-add_subdirectory (contrib)
+# Enable tests by default when build type is debug
+if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (ENABLE_TESTS_DEFAULT ON)
+else ()
+    set (ENABLE_TESTS_DEFAULT OFF)
+endif ()
+option (ENABLE_TESTS "Enables unit tests" ${ENABLE_TESTS_DEFAULT})
+
+add_subdirectory (contrib) # Should be done after option ENABLE_TESTS, cause we will disable tests under contrib/
+
+# Enable failpoints injection by default when ENABLE_TESTS is turn ON.
+if (ENABLE_TESTS)
+    enable_testing()
+    set (ENABLE_FAILPOINTS_DEFAULT ON)
+    message (STATUS "Tests are enabled")
+else ()
+    set (ENABLE_FAILPOINTS_DEFAULT OFF)
+    message (STATUS "Tests are disabled")
+endif()
+option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
+if (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are enabled")
+else (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are disabled")
+endif (ENABLE_FAILPOINTS)
+
+# Enable PageStorage V3 test.
+option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
+
+# Flags for test coverage
+option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    include(CodeCoverage)
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
+endif ()
+
+if (ARCH_AMD64)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+    if(TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+        add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
+    else()
+        add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+    endif()
+else()
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+endif()
+
 add_subdirectory (libs)
-add_subdirectory (utils)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
+

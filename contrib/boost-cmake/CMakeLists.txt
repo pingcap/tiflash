@@ -16,36 +16,19 @@ if (NOT MSVC)
     add_definitions(-Wno-unused-variable -Wno-deprecated-declarations)
 endif ()
 
-add_library(boost_program_options_internal
-${LIBRARY_DIR}/libs/program_options/src/cmdline.cpp
-${LIBRARY_DIR}/libs/program_options/src/config_file.cpp
-${LIBRARY_DIR}/libs/program_options/src/convert.cpp
-${LIBRARY_DIR}/libs/program_options/src/options_description.cpp
-${LIBRARY_DIR}/libs/program_options/src/parsers.cpp
-${LIBRARY_DIR}/libs/program_options/src/positional_options.cpp
-${LIBRARY_DIR}/libs/program_options/src/split.cpp
-${LIBRARY_DIR}/libs/program_options/src/utf8_codecvt_facet.cpp
-${LIBRARY_DIR}/libs/program_options/src/value_semantic.cpp
-${LIBRARY_DIR}/libs/program_options/src/variables_map.cpp
-${LIBRARY_DIR}/libs/program_options/src/winmain.cpp)
+include(context.cmake)
+include(fiber.cmake)
 
-add_library(boost_filesystem_internal
-${LIBRARY_DIR}/libs/filesystem/src/codecvt_error_category.cpp
-${LIBRARY_DIR}/libs/filesystem/src/operations.cpp
-${LIBRARY_DIR}/libs/filesystem/src/path.cpp
-${LIBRARY_DIR}/libs/filesystem/src/path_traits.cpp
-${LIBRARY_DIR}/libs/filesystem/src/portability.cpp
-${LIBRARY_DIR}/libs/filesystem/src/unique_path.cpp
-${LIBRARY_DIR}/libs/filesystem/src/utf8_codecvt_facet.cpp
-${LIBRARY_DIR}/libs/filesystem/src/windows_file_codecvt.cpp)
+file(GLOB BOOST_INTERNAL_SRC
+    ${LIBRARY_DIR}/libs/filesystem/src/*.cpp
+    ${LIBRARY_DIR}/libs/program_options/src/*.cpp
+    ${LIBRARY_DIR}/libs/serialization/src/*.cpp)
 
-add_library(boost_system_internal
-${LIBRARY_DIR}/libs/system/src/error_code.cpp)
+add_library(boost_internal STATIC ${BOOST_INTERNAL_SRC})
 
-target_include_directories (boost_program_options_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
-target_include_directories (boost_filesystem_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
-target_include_directories (boost_system_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
+target_include_directories (boost_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
-target_compile_definitions (boost_program_options_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
-target_compile_definitions (boost_filesystem_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
-target_compile_definitions (boost_system_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
+target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
+
+target_link_libraries (boost_internal boost_fiber boost_context)
+

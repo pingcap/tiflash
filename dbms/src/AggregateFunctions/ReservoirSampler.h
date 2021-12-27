@@ -1,17 +1,18 @@
 #pragma once
 
-#include <limits>
-#include <algorithm>
-#include <climits>
-#include <sstream>
-#include <common/Types.h>
+#include <Common/NaNUtils.h>
+#include <Common/PODArray.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Common/PODArray.h>
-#include <Common/NaNUtils.h>
 #include <Poco/Exception.h>
+#include <common/types.h>
+
+#include <algorithm>
+#include <climits>
+#include <limits>
 #include <pcg_random.hpp>
+#include <sstream>
 
 
 /// Implementing the Reservoir Sampling algorithm. Incrementally selects from the added objects a random subset of the sample_count size.
@@ -24,12 +25,12 @@ const size_t DEFAULT_SAMPLE_COUNT = 8192;
 /// What if there is not a single value - throw an exception, or return 0 or NaN in the case of double?
 namespace ReservoirSamplerOnEmpty
 {
-    enum Enum
-    {
-        THROW,
-        RETURN_NAN_OR_ZERO,
-    };
-}
+enum Enum
+{
+    THROW,
+    RETURN_NAN_OR_ZERO,
+};
+} // namespace ReservoirSamplerOnEmpty
 
 template <typename ResultType, bool IsFloatingPoint>
 struct NanLikeValueConstructor

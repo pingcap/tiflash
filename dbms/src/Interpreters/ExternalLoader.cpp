@@ -1,21 +1,21 @@
-#include <Interpreters/ExternalLoader.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/MemoryTracker.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/setThreadName.h>
-#include <ext/scope_guard.h>
+#include <Interpreters/ExternalLoader.h>
 #include <Poco/Util/Application.h>
+
 #include <cmath>
+#include <ext/scope_guard.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int BAD_ARGUMENTS;
 extern const int EXTERNAL_LOADABLE_ALREADY_EXISTS;
-}
+} // namespace ErrorCodes
 
 
 ExternalLoadableLifetime::ExternalLoadableLifetime(const Poco::Util::AbstractConfiguration & config,
@@ -46,13 +46,14 @@ ExternalLoader::ExternalLoader(const Poco::Util::AbstractConfiguration & config,
                                const ExternalLoaderUpdateSettings & update_settings,
                                const ExternalLoaderConfigSettings & config_settings,
                                std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
-                               Logger * log, const std::string & loadable_object_name)
-        : config(config)
-        , update_settings(update_settings)
-        , config_settings(config_settings)
-        , config_repository(std::move(config_repository))
-        , log(log)
-        , object_name(loadable_object_name)
+                               Poco::Logger * log,
+                               const std::string & loadable_object_name)
+    : config(config)
+    , update_settings(update_settings)
+    , config_settings(config_settings)
+    , config_repository(std::move(config_repository))
+    , log(log)
+    , object_name(loadable_object_name)
 {
 }
 
@@ -106,11 +107,12 @@ void ExternalLoader::reloadAndUpdate(bool throw_on_error)
             {
                 /// recalculate next attempt time
                 std::uniform_int_distribution<UInt64> distribution(
-                        0, static_cast<UInt64>(std::exp2(failed_loadable_object.second.error_count)));
+                    0,
+                    static_cast<UInt64>(std::exp2(failed_loadable_object.second.error_count)));
 
                 std::chrono::seconds delay(std::min<UInt64>(
-                        update_settings.backoff_max_sec,
-                        update_settings.backoff_initial_sec + distribution(rnd_engine)));
+                    update_settings.backoff_max_sec,
+                    update_settings.backoff_initial_sec + distribution(rnd_engine)));
                 failed_loadable_object.second.next_attempt_time = std::chrono::system_clock::now() + delay;
 
                 ++failed_loadable_object.second.error_count;
@@ -176,10 +178,10 @@ void ExternalLoader::reloadAndUpdate(bool throw_on_error)
                     continue;
 
                 SCOPE_EXIT({
-                        /// calculate next update time
-                        std::uniform_int_distribution<UInt64> distribution{lifetime.min_sec, lifetime.max_sec};
-                        update_time = std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)};
-                           });
+                    /// calculate next update time
+                    std::uniform_int_distribution<UInt64> distribution{lifetime.min_sec, lifetime.max_sec};
+                    update_time = std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)};
+                });
 
                 /// check source modified
                 if (current->isModified())
@@ -230,8 +232,7 @@ void ExternalLoader::reloadFromConfigFiles(const bool throw_on_error, const bool
     }
 }
 
-void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const bool throw_on_error,
-                                          const bool force_reload, const std::string & loadable_name)
+void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const bool throw_on_error, const bool force_reload, const std::string & loadable_name)
 {
     if (config_path.empty() || !config_repository->exists(config_path))
     {
@@ -269,8 +270,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                 if (!startsWith(key, config_settings.external_config))
                 {
                     if (!startsWith(key, "comment") && !startsWith(key, "include_from"))
-                        LOG_WARNING(log, config_path << ": unknown node in file: '" << key
-                                                     << "', expected '" << config_settings.external_config << "'");
+                        LOG_WARNING(log, config_path << ": unknown node in file: '" << key << "', expected '" << config_settings.external_config << "'");
                     continue;
                 }
 
@@ -295,7 +295,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                     /// Object with the same name was declared in other config file.
                     if (object_it != std::end(loadable_objects) && object_it->second.origin != config_path)
                         throw Exception(object_name + " '" + name + "' from file " + config_path
-                                        + " already declared in file " + object_it->second.origin,
+                                            + " already declared in file " + object_it->second.origin,
                                         ErrorCodes::EXTERNAL_LOADABLE_ALREADY_EXISTS);
 
                     auto object_ptr = create(name, *config, key);
@@ -320,8 +320,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                         {
                             std::uniform_int_distribution<UInt64> distribution(lifetime.min_sec, lifetime.max_sec);
 
-                            update_times[name] = std::chrono::system_clock::now() +
-                                                 std::chrono::seconds{distribution(rnd_engine)};
+                            update_times[name] = std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)};
                         }
                     }
 
@@ -358,8 +357,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                             loadable_it->second.exception = exception_ptr;
                     }
 
-                    tryLogCurrentException(log, "Cannot create " + object_name + " '"
-                                                + name + "' from config path " + config_path);
+                    tryLogCurrentException(log, "Cannot create " + object_name + " '" + name + "' from config path " + config_path);
 
                     /// propagate exception
                     if (throw_on_error)
@@ -419,4 +417,4 @@ ExternalLoader::LockedObjectsMap ExternalLoader::getObjectsMap() const
     return LockedObjectsMap(map_mutex, loadable_objects);
 }
 
-}
+} // namespace DB

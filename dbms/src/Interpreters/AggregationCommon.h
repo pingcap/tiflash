@@ -4,18 +4,10 @@
 
 #include <Common/SipHash.h>
 #include <Common/Arena.h>
-#include <Common/UInt128.h>
 #include <Common/HashTable/Hash.h>
-#include <Core/Defines.h>
-#include <common/StringRef.h>
 #include <Columns/IColumn.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnFixedString.h>
-
-
-template <>
-struct DefaultHash<StringRef> : public StringRefHash {};
-
 
 namespace DB
 {
@@ -174,7 +166,7 @@ static inline T ALWAYS_INLINE packFixed(
 
 /// Hash a set of keys into a UInt128 value.
 static inline UInt128 ALWAYS_INLINE hash128(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, const TiDB::TiDBCollators & collators, std::vector<String> & sort_key_containers)
 {
     UInt128 key;
     SipHash hash;
@@ -183,10 +175,17 @@ static inline UInt128 ALWAYS_INLINE hash128(
     {
         /// Hashes the key.
         keys[j] = key_columns[j]->getDataAtWithTerminatingZero(i);
+        if (!collators.empty() && collators[j] != nullptr)
+        {
+            // todo check if need to handle the terminating zero
+            /// Note if collation is enabled, keys only exists before next call to hash128 since it
+            /// will be overwritten in the next call
+            keys[j] = collators[j]->sortKey(keys[j].data, keys[j].size - 1, sort_key_containers[j]);
+        }
         hash.update(keys[j].data, keys[j].size);
     }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key);
 
     return key;
 }
@@ -194,16 +193,23 @@ static inline UInt128 ALWAYS_INLINE hash128(
 
 /// Almost the same as above but it doesn't return any reference to key data.
 static inline UInt128 ALWAYS_INLINE hash128(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators, std::vector<std::string> & sort_key_containers)
 {
     UInt128 key;
     SipHash hash;
 
-    for (size_t j = 0; j < keys_size; ++j)
-        // todo support collation
-        key_columns[j]->updateHashWithValue(i, hash);
+    if (collators.empty())
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            key_columns[j]->updateHashWithValue(i, hash, nullptr, TiDB::dummy_sort_key_contaner);
+    }
+    else
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            key_columns[j]->updateHashWithValue(i, hash, collators[j], sort_key_containers[j]);
+    }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key);
 
     return key;
 }
@@ -262,12 +268,17 @@ static inline StringRef * ALWAYS_INLINE extractKeysAndPlaceInPool(
 /// Return a StringRef object, referring to the area (1) of the memory
 /// chunk that contains the keys. In other words, we ignore their StringRefs.
 inline StringRef ALWAYS_INLINE extractKeysAndPlaceInPoolContiguous(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, Arena & pool)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, const TiDB::TiDBCollators & collators, std::vector<std::string> & sort_key_containers, Arena & pool)
 {
     size_t sum_keys_size = 0;
     for (size_t j = 0; j < keys_size; ++j)
     {
         keys[j] = key_columns[j]->getDataAtWithTerminatingZero(i);
+        if (!collators.empty() && collators[j] != nullptr)
+        {
+            // todo check if need to handle the terminating zero
+            keys[j] = collators[j]->sortKey(keys[j].data, keys[j].size - 1, sort_key_containers[j]);
+        }
         sum_keys_size += keys[j].size;
     }
 
@@ -291,16 +302,109 @@ inline StringRef ALWAYS_INLINE extractKeysAndPlaceInPoolContiguous(
 /** Serialize keys into a continuous chunk of memory.
   */
 static inline StringRef ALWAYS_INLINE serializeKeysToPoolContiguous(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, Arena & pool)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators, std::vector<String> & sort_key_containers, Arena & pool)
 {
     const char * begin = nullptr;
 
     size_t sum_size = 0;
-    for (size_t j = 0; j < keys_size; ++j)
-        sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin).size;
+    if (!collators.empty())
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, collators[j],
+                                                                sort_key_containers[j]).size;
+    }
+    else
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, nullptr,
+                                                                TiDB::dummy_sort_key_contaner).size;
+    }
 
     return {begin, sum_size};
 }
 
+/** Pack elements with shuffle instruction.
+  * See the explanation in ColumnsHashing.h
+  */
+#if defined(__SSSE3__) && !defined(MEMORY_SANITIZER)
+template <typename T>
+static T inline packFixedShuffle(
+    const char * __restrict * __restrict srcs,
+    size_t num_srcs,
+    const size_t * __restrict elem_sizes,
+    size_t idx,
+    const uint8_t * __restrict masks)
+{
+    assert(num_srcs > 0);
+
+    __m128i res = _mm_shuffle_epi8(
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(srcs[0] + elem_sizes[0] * idx)),
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(masks)));
+
+    for (size_t i = 1; i < num_srcs; ++i)
+    {
+        res = _mm_xor_si128(res,
+            _mm_shuffle_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(srcs[i] + elem_sizes[i] * idx)),
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(&masks[i * sizeof(T)]))));
+    }
+
+    T out;
+    __builtin_memcpy(&out, &res, sizeof(T));
+    return out;
+}
+#endif
+
+
+template<typename T, size_t step>
+void fillFixedBatch(size_t num_rows, const T * source, T * dest)
+{
+    for (size_t i = 0; i < num_rows; ++i)
+    {
+        *dest = *source;
+        ++source;
+        dest += step;
+    }
+}
+
+/// Move keys of size T into binary blob, starting from offset.
+/// It is assumed that offset is aligned to sizeof(T).
+/// Example: sizeof(key) = 16, sizeof(T) = 4, offset = 8
+/// out[0] : [--------****----]
+/// out[1] : [--------****----]
+/// ...
+template<typename T, typename Key>
+void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<Key> & out, size_t & offset)
+{
+    for (size_t i = 0; i < keys_size; ++i)
+    {
+        if (key_sizes[i] == sizeof(T))
+        {
+            const auto * column = key_columns[i];
+            size_t num_rows = column->size();
+            out.resize_fill(num_rows);
+
+            /// Note: here we violate strict aliasing.
+            /// It should be ok as log as we do not reffer to any value from `out` before filling.
+            const char * source = static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<sizeof(T)>();
+            T * dest = reinterpret_cast<T *>(reinterpret_cast<char *>(out.data()) + offset);
+            fillFixedBatch<T, sizeof(Key) / sizeof(T)>(num_rows, reinterpret_cast<const T *>(source), dest);
+            offset += sizeof(T);
+        }
+    }
+}
+
+/// Pack into a binary blob of type T a set of fixed-size keys. Granted that all the keys fit into the
+/// binary blob. Keys are placed starting from the longest one.
+template <typename T>
+void packFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<T> & out)
+{
+    size_t offset = 0;
+    fillFixedBatch<UInt128>(keys_size, key_columns, key_sizes, out, offset);
+    fillFixedBatch<UInt64>(keys_size, key_columns, key_sizes, out, offset);
+    fillFixedBatch<UInt32>(keys_size, key_columns, key_sizes, out, offset);
+    fillFixedBatch<UInt16>(keys_size, key_columns, key_sizes, out, offset);
+    fillFixedBatch<UInt8>(keys_size, key_columns, key_sizes, out, offset);
+}
 
 }

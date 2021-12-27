@@ -1,57 +1,60 @@
 #pragma once
 
-#include <Common/HashTable/TwoLevelHashTable.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/TwoLevelHashTable.h>
 
 
-template
-<
+template <
     typename Key,
     typename Cell,
     typename Hash = DefaultHash<Key>,
     typename Grower = TwoLevelHashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
-class TwoLevelHashMapTable : public TwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, HashMapTable<Key, Cell, Hash, Grower, Allocator>>
+    typename Allocator = HashTableAllocator,
+    template <typename...> typename ImplTable = HashMapTable>
+class TwoLevelHashMapTable : public TwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>
 {
 public:
-    using key_type = Key;
-    using mapped_type = typename Cell::Mapped;
-    using value_type = typename Cell::value_type;
+    using Impl = ImplTable<Key, Cell, Hash, Grower, Allocator>;
+    using LookupResult = typename Impl::LookupResult;
 
-    using TwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, HashMapTable<Key, Cell, Hash, Grower, Allocator>>::TwoLevelHashTable;
+    using TwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>::TwoLevelHashTable;
 
-    mapped_type & ALWAYS_INLINE operator[](Key x)
+    template <typename Func>
+    void ALWAYS_INLINE forEachMapped(Func && func)
     {
-        typename TwoLevelHashMapTable::iterator it;
+        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+            this->impls[i].forEachMapped(func);
+    }
+
+    typename Cell::Mapped & ALWAYS_INLINE operator[](const Key & x)
+    {
+        LookupResult it;
         bool inserted;
         this->emplace(x, it, inserted);
 
         if (inserted)
-            new(&it->second) mapped_type();
+            new (&it->getMapped()) typename Cell::Mapped();
 
-        return it->second;
+        return it->getMapped();
     }
 };
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = TwoLevelHashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
-using TwoLevelHashMap = TwoLevelHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+    typename Allocator = HashTableAllocator,
+    template <typename...> typename ImplTable = HashMapTable>
+using TwoLevelHashMap = TwoLevelHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = TwoLevelHashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
-using TwoLevelHashMapWithSavedHash = TwoLevelHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+    typename Allocator = HashTableAllocator,
+    template <typename...> typename ImplTable = HashMapTable>
+using TwoLevelHashMapWithSavedHash = TwoLevelHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;

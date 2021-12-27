@@ -3,13 +3,23 @@
 *\#
 .tramp_history
 
+# vscode clangd cache
+.cache
+
+# JSON Compilation Database Format Specification
+# https://clang.llvm.org/docs/JSONCompilationDatabase.html
+compile_commands.json
+
+# git patch reject report
+*.rej
+
 # vim cache files
 *.swp
 
 # auto generated files
 *.logrt
 
-build
+/build
 /docs/en_single_page/
 /docs/ru_single_page/
 /docs/venv/
@@ -225,6 +235,7 @@ nbproject/*
 config-preprocessed.xml
 
 # Protobuf
+*.pb.cc
 *.pb.cpp
 *.pb.h
 
@@ -247,13 +258,10 @@ release-centos7/tiflash
 release-centos7/build-release
 release-darwin/tiflash
 release-darwin/build-release
-tests/docker/data
-tests/docker/log
-tests/fullstack-test/dml/dml_gen/*
-tests/mutable-test/mutable_dedup/skipping.visual.test/*
-tests/mutable-test/mutable_dedup/small_parts.visual.test/*
 libs/libtiflash-proxy
 
 tmp/
+
+tests/fullstack-test2/auto_gen
 
 CoverageReport

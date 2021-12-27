@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 bool LimitReadBuffer::nextImpl()
 {
     /// Let underlying buffer calculate read bytes in `next()` call.
@@ -22,7 +21,9 @@ bool LimitReadBuffer::nextImpl()
 
 
 LimitReadBuffer::LimitReadBuffer(ReadBuffer & in_, size_t limit_)
-    : ReadBuffer(in_.position(), 0), in(in_), limit(limit_)
+    : ReadBuffer(in_.position(), 0)
+    , in(in_)
+    , limit(limit_)
 {
     size_t remaining_bytes_in_buffer = in.buffer().end() - in.position();
     if (remaining_bytes_in_buffer > limit)
@@ -39,4 +40,4 @@ LimitReadBuffer::~LimitReadBuffer()
         in.position() = position();
 }
 
-}
+} // namespace DB

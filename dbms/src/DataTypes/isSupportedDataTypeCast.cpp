@@ -1,20 +1,21 @@
-#include <DataTypes/isSupportedDataTypeCast.h>
 #include <Common/typeid_cast.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/isSupportedDataTypeCast.h>
+#include <Functions/FunctionHelpers.h>
 
 namespace DB
 {
 
-bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
+bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
 {
     assert(from != nullptr && to != nullptr);
     /// `to` is equal to `from`
@@ -55,7 +56,12 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
     /// For numeric types (integer, floats)
     if (from->isNumber() && to->isNumber())
     {
-        /// int <-> float, or float32 <-> float64, is not supported
+        // float32 -> float64 is supported
+        if (from->getTypeId() == TypeIndex::Float32 && to->getTypeId() == TypeIndex::Float64)
+        {
+            return true;
+        }
+        /// int <-> float, is not supported
         if (!from->isInteger() || !to->isInteger())
         {
             return false;
@@ -96,17 +102,38 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
         bool to_is_decimal = IsDecimalDataType(to);
         if (from_is_decimal || to_is_decimal)
         {
-            if (from_is_decimal && to_is_decimal)
-            {
-                // not support change Decimal to other type, neither other type to Decimal
-                return false;
-            }
-
-            return from->equals(*to);
+            // not support change Decimal to other type, neither other type to Decimal
+            return false;
         }
     }
 
-    // TODO enums, set?
+    if (from->isEnum() && to->isEnum())
+    {
+        /// support cast Enum to Enum if the from type is a subset of the target type
+        const auto from_enum8 = checkAndGetDataType<DataTypeEnum8>(from.get());
+        const auto to_enum8 = checkAndGetDataType<DataTypeEnum8>(to.get());
+        if (from_enum8 && to_enum8)
+        {
+            for (auto & value : from_enum8->getValues())
+            {
+                if (!to_enum8->hasElement(value.first) || to_enum8->getValue(value.first) != value.second)
+                    return false;
+            }
+        }
+        const auto from_enum16 = checkAndGetDataType<DataTypeEnum16>(from.get());
+        const auto to_enum16 = checkAndGetDataType<DataTypeEnum16>(to.get());
+        if (from_enum16 && to_enum16)
+        {
+            for (auto & value : from_enum16->getValues())
+            {
+                if (!to_enum16->hasElement(value.first) || to_enum16->getValue(value.first) != value.second)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    // TODO set?
 
     /// some DataTypes that support in ClickHouse but not in TiDB
 

@@ -1,13 +1,9 @@
 #pragma once
 
-#include <Common/Arena.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
-
 #include <Columns/IColumn.h>
-
+#include <Common/Arena.h>
 #include <Core/Field.h>
-
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -15,8 +11,6 @@
 
 namespace DB
 {
-
-
 /** Column of states of aggregate functions.
   * Presented as an array of pointers to the states of aggregate functions (data).
   * The states themselves are stored in one of the pools (arenas).
@@ -62,7 +56,7 @@ private:
     /// Array of pointers to aggregation states, that are placed in arenas.
     Container data;
 
-    ColumnAggregateFunction() {}
+    ColumnAggregateFunction() = default;
 
     /// Create a new column that has another column as a source.
     MutablePtr createView() const
@@ -72,18 +66,23 @@ private:
         return res;
     }
 
-    ColumnAggregateFunction(const AggregateFunctionPtr & func_)
+    explicit ColumnAggregateFunction(const AggregateFunctionPtr & func_)
         : func(func_)
     {
     }
 
     ColumnAggregateFunction(const AggregateFunctionPtr & func_, const Arenas & arenas_)
-        : arenas(arenas_), func(func_)
+        : arenas(arenas_)
+        , func(func_)
     {
     }
 
     ColumnAggregateFunction(const ColumnAggregateFunction & src_)
-        : arenas(src_.arenas), func(src_.func), src(src_.getPtr()), data(src_.data.begin(), src_.data.end())
+        : COWPtrHelper<IColumn, ColumnAggregateFunction>(src_)
+        , arenas(src_.arenas)
+        , func(src_.func)
+        , src(src_.getPtr())
+        , data(src_.data.begin(), src_.data.end())
     {
     }
 
@@ -125,10 +124,10 @@ public:
 
     void insertFrom(const IColumn & src, size_t n) override;
 
-    void insertFrom(ConstAggregateDataPtr place);
+    void insertFrom(ConstAggregateDataPtr __restrict place);
 
     /// Merge state at last row with specified state in another column.
-    void insertMergeFrom(ConstAggregateDataPtr place);
+    void insertMergeFrom(ConstAggregateDataPtr __restrict place);
 
     void insertMergeFrom(const IColumn & src, size_t n);
 
@@ -138,11 +137,15 @@ public:
 
     void insertDefault() override;
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos) override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void updateHashWithValue(size_t n, SipHash & hash) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     size_t byteSize() const override;
 
@@ -184,4 +187,4 @@ public:
 };
 
 
-}
+} // namespace DB

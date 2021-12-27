@@ -1,19 +1,18 @@
-#include <common/logger_useful.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabasesCommon.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 }
 
 DatabaseMemory::DatabaseMemory(String name_)
     : DatabaseWithOwnTablesBase(std::move(name_))
-    , log(&Logger::get("DatabaseMemory(" + name + ")"))
+    , log(&Poco::Logger::get("DatabaseMemory(" + name + ")"))
 {}
 
 void DatabaseMemory::loadTables(
@@ -78,9 +77,9 @@ ASTPtr DatabaseMemory::getCreateDatabaseQuery(
     throw Exception("There is no CREATE DATABASE query for DatabaseMemory", ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
 }
 
-void DatabaseMemory::drop()
+void DatabaseMemory::drop(const Context & /*context*/)
 {
     /// Additional actions to delete database are not required.
 }
 
-}
+} // namespace DB

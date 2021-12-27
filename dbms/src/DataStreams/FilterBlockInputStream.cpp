@@ -3,13 +3,12 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/ExpressionActions.h>
-
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
@@ -18,8 +17,12 @@ extern const int LOGICAL_ERROR;
 
 
 FilterBlockInputStream::FilterBlockInputStream(
-    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name)
+    const BlockInputStreamPtr & input,
+    const ExpressionActionsPtr & expression_,
+    const String & filter_column_name,
+    const LogWithPrefixPtr & log_)
     : expression(expression_)
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
 
@@ -43,7 +46,10 @@ FilterBlockInputStream::FilterBlockInputStream(
 }
 
 
-String FilterBlockInputStream::getName() const { return "Filter"; }
+String FilterBlockInputStream::getName() const
+{
+    return "Filter";
+}
 
 
 Block FilterBlockInputStream::getTotals()
@@ -58,7 +64,10 @@ Block FilterBlockInputStream::getTotals()
 }
 
 
-Block FilterBlockInputStream::getHeader() const { return header; }
+Block FilterBlockInputStream::getHeader() const
+{
+    return header;
+}
 
 
 Block FilterBlockInputStream::readImpl()
@@ -69,7 +78,7 @@ Block FilterBlockInputStream::readImpl()
         return res;
 
     /// Until non-empty block after filtering or end of stream.
-    while (1)
+    while (true)
     {
         IColumn::Filter * child_filter = nullptr;
 
@@ -197,7 +206,7 @@ Block FilterBlockInputStream::readImpl()
             if (current_column.column->isColumnConst())
                 current_column.column = current_column.column->cut(0, filtered_rows);
             else
-                current_column.column = current_column.column->filter(*filter, -1);
+                current_column.column = current_column.column->filter(*filter, filtered_rows);
         }
 
         return res;

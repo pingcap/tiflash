@@ -1,11 +1,11 @@
 #pragma once
 
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/Transaction/TiDB.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/expression.pb.h>
-#include <Core/NamesAndTypes.h>
 
 #pragma GCC diagnostic pop
 
@@ -15,9 +15,13 @@ using ColumnInfo = TiDB::ColumnInfo;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
+// Because for compatible issues, we need to deal with the duration type separately for computing layer.
+// TODO: Need a better implement.
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info);
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
+DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type);
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 
@@ -29,4 +33,3 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value, bool for_test);
 
 } // namespace DB
-

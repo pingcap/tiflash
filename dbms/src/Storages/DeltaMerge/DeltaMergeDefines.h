@@ -7,6 +7,7 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 
@@ -51,41 +52,47 @@ struct EmptyValueSpace
     void removeFromInsert(UInt64) {}
 };
 
-using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
+using EntryIterator = DTEntryIterator<DT_M, DT_F, DT_S>;
 using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
-using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
-using BlockPtr         = std::shared_ptr<Block>;
+using DeltaTreePtr = std::shared_ptr<DefaultDeltaTree>;
+using BlockPtr = std::shared_ptr<Block>;
 
 using RowId = UInt64;
 using ColId = DB::ColumnID;
+using Handle = DB::HandleID;
 
-using ColIds     = std::vector<ColId>;
+using ColIds = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
+
+using RowsAndBytes = std::pair<size_t, size_t>;
 
 using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB::TableInfo>>;
 
 struct ColumnDefine
 {
-    ColId       id;
-    String      name;
+    ColId id;
+    String name;
     DataTypePtr type;
-    Field       default_value;
+    Field default_value;
 
-    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
-        : id(id_), name(std::move(name_)), type(std::move(type_))
+    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
+        : id(id_)
+        , name(std::move(name_))
+        , type(std::move(type_))
+        , default_value(std::move(default_value_))
     {
     }
 };
 
-using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap  = std::unordered_map<ColId, ColumnDefine>;
+using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
 
-using ColumnMap        = std::unordered_map<ColId, ColumnPtr>;
+using ColumnMap = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;
-using LockGuard        = std::lock_guard<std::mutex>;
+using LockGuard = std::lock_guard<std::mutex>;
 
-static const UInt64 INITIAL_EPOCH = 0;
+inline static const UInt64 INITIAL_EPOCH = 0;
 
 // TODO maybe we should use those variables instead of macros?
 #define EXTRA_HANDLE_COLUMN_NAME ::DB::MutableSupport::tidb_pk_column_name
@@ -96,14 +103,26 @@ static const UInt64 INITIAL_EPOCH = 0;
 #define VERSION_COLUMN_ID ::DB::VersionColumnID
 #define TAG_COLUMN_ID ::DB::DelMarkColumnID
 
-#define EXTRA_HANDLE_COLUMN_TYPE ::DB::MutableSupport::tidb_pk_column_type
+#define EXTRA_HANDLE_COLUMN_INT_TYPE ::DB::MutableSupport::tidb_pk_column_int_type
+#define EXTRA_HANDLE_COLUMN_STRING_TYPE ::DB::MutableSupport::tidb_pk_column_string_type
 #define VERSION_COLUMN_TYPE ::DB::MutableSupport::version_column_type
 #define TAG_COLUMN_TYPE ::DB::MutableSupport::delmark_column_type
 
-inline const ColumnDefine & getExtraHandleColumnDefine()
+inline const ColumnDefine & getExtraIntHandleColumnDefine()
 {
-    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
     return EXTRA_HANDLE_COLUMN_DEFINE_;
+}
+inline const ColumnDefine & getExtraStringHandleColumnDefine()
+{
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE};
+    return EXTRA_HANDLE_COLUMN_DEFINE_;
+}
+inline const ColumnDefine & getExtraHandleColumnDefine(bool is_common_handle)
+{
+    if (is_common_handle)
+        return getExtraStringHandleColumnDefine();
+    return getExtraIntHandleColumnDefine();
 }
 inline const ColumnDefine & getVersionColumnDefine()
 {
@@ -129,8 +148,6 @@ static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "
 static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");
 
 static constexpr bool DM_RUN_CHECK = true;
-
-#define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
 
 } // namespace DM
 } // namespace DB

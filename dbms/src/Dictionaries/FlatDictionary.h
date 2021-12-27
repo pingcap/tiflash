@@ -213,7 +213,7 @@ private:
     std::map<std::string, size_t> attribute_index_by_name;
     std::vector<Attribute> attributes;
     const Attribute * hierarchical_attribute = nullptr;
-    std::vector<bool> loaded_ids;
+    BoolVec loaded_ids;
 
     size_t bytes_allocated = 0;
     size_t element_count = 0;

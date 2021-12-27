@@ -1,13 +1,16 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -19,7 +22,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TABLE_ALREADY_EXISTS;
@@ -32,15 +34,21 @@ extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_drop_table_during_remove_meta[];
+extern const char exception_before_rename_table_old_meta_removed[];
+} // namespace FailPoints
+
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
-DatabaseTiFlash::DatabaseTiFlash(
-    String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, DatabaseTiFlash::Version version_, const Context & context)
-    : DatabaseWithOwnTablesBase(std::move(name_)),
-      metadata_path(metadata_path_),
-      data_path(context.getPath() + "data/"),
-      db_info(std::make_shared<TiDB::DBInfo>(db_info_)),
-      log(&Logger::get("DatabaseTiFlash (" + name + ")"))
+DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, DatabaseTiFlash::Version version_, Timestamp tombstone_, const Context & context)
+    : DatabaseWithOwnTablesBase(std::move(name_))
+    , metadata_path(metadata_path_)
+    , data_path(context.getPath() + "data/")
+    , db_info(std::make_shared<TiDB::DBInfo>(db_info_))
+    , tombstone(tombstone_)
+    , log(&Poco::Logger::get("DatabaseTiFlash (" + name + ")"))
 {
     if (unlikely(version_ != DatabaseTiFlash::CURRENT_VERSION))
         throw Exception("Can not create database TiFlash with unknown version: " + DB::toString(version_), ErrorCodes::LOGICAL_ERROR);
@@ -48,7 +56,10 @@ DatabaseTiFlash::DatabaseTiFlash(
     Poco::File(data_path).createDirectories();
 }
 
-TiDB::DBInfo & DatabaseTiFlash::getDatabaseInfo() const { return *db_info; }
+TiDB::DBInfo & DatabaseTiFlash::getDatabaseInfo() const
+{
+    return *db_info;
+}
 
 // metadata/${db_name}.sql
 String getDatabaseMetadataPath(const String & base_path)
@@ -57,7 +68,10 @@ String getDatabaseMetadataPath(const String & base_path)
 }
 
 // metadata/${db_name}/
-String DatabaseTiFlash::getMetadataPath() const { return metadata_path; }
+String DatabaseTiFlash::getMetadataPath() const
+{
+    return metadata_path;
+}
 
 // metadata/${db_name}/${tbl_name}.sql
 String DatabaseTiFlash::getTableMetadataPath(const String & table_name) const
@@ -67,7 +81,10 @@ String DatabaseTiFlash::getTableMetadataPath(const String & table_name) const
 
 // data/
 // Note that data path of all databases are flatten.
-String DatabaseTiFlash::getDataPath() const { return data_path; }
+String DatabaseTiFlash::getDataPath() const
+{
+    return data_path;
+}
 
 
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
@@ -103,7 +120,14 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 
             const String & table_file = *it;
             DatabaseLoading::loadTable(
-                context, *this, metadata_path, name, data_path, getEngineName(), table_file, has_force_restore_data_flag);
+                context,
+                *this,
+                metadata_path,
+                name,
+                data_path,
+                getEngineName(),
+                table_file,
+                has_force_restore_data_flag);
         }
     };
 
@@ -158,7 +182,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -177,16 +201,16 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path, EncryptionPath(table_metadata_path, ""), true);
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
 
-void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & table_name)
+void DatabaseTiFlash::removeTable(const Context & context, const String & table_name)
 {
     StoragePtr res = detachTable(table_name);
 
@@ -196,8 +220,8 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
         // full apply schema from TiDB. And the old table's metadata and data
         // will be removed.
         String table_metadata_path = getTableMetadataPath(table_name);
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
-        Poco::File(table_metadata_path).remove();
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_drop_table_during_remove_meta);
+        context.getFileProvider()->deleteRegularFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
@@ -207,17 +231,22 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
 }
 
 void DatabaseTiFlash::renameTable(
-    const Context & /*context*/, const String & /*table_name*/, IDatabase & /*to_database*/, const String & /*to_table_name*/)
+    const Context & /*context*/,
+    const String & /*table_name*/,
+    IDatabase & /*to_database*/,
+    const String & /*to_table_name*/)
 {
     throw Exception(DB::toString(__PRETTY_FUNCTION__) + " should never called!");
 }
 
 // This function will tidy up path and compare if them are the same one.
 // For example "/tmp/data/a.sql" is equal to "/tmp//data//a.sql"
-static inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString(); }
+static inline bool isSamePath(const String & lhs, const String & rhs)
+{
+    return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString();
+}
 
-void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name,
-    const String & /* display_database */, const String & display_table)
+void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name, const String & /* display_database */, const String & display_table)
 {
     DatabaseTiFlash * to_database_concrete = typeid_cast<DatabaseTiFlash *>(&to_database);
     if (!to_database_concrete)
@@ -246,7 +275,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         {
             {
                 char in_buf[METADATA_FILE_BUFFER_SIZE];
-                ReadBufferFromFile in(old_tbl_meta_file, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+                ReadBufferFromFileProvider in(context.getFileProvider(), old_tbl_meta_file, EncryptionPath(old_tbl_meta_file, ""), METADATA_FILE_BUFFER_SIZE, /*read_limiter*/ nullptr, -1, in_buf);
                 readStringUntilEOF(statement, in);
             }
             ParserCreateQuery parser;
@@ -263,8 +292,17 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         }
         statement = getTableDefinitionFromCreateQuery(ast);
 
+        // 1. Assume the case that we need to rename the file `t_31.sql.tmp` to `t_31.sql`,
+        // and t_31.sql already exists and is a encrypted file.
+        // 2. The implementation in this function assume that the rename operation is atomic.
+        // 3. If we create new encryption info for `t_31.sql.tmp`,
+        // then we cannot rename the encryption info and the file in an atomic operation.
+        bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(new_tbl_meta_file, ""));
+        EncryptionPath encryption_path
+            = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
-            WriteBufferFromFile out(new_tbl_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -275,15 +313,20 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            Poco::File(new_tbl_meta_file_tmp).renameTo(new_tbl_meta_file);
+            context.getFileProvider()->renameFile(
+                new_tbl_meta_file_tmp,
+                encryption_path,
+                new_tbl_meta_file,
+                EncryptionPath(new_tbl_meta_file, ""),
+                !use_target_encrypt_info);
         }
         catch (...)
         {
-            Poco::File(new_tbl_meta_file_tmp).remove();
+            context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
             throw;
         }
 
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_rename_table_old_meta_removed);
 
         // If only display name updated, don't remove `old_tbl_meta_file`.
         if (!isSamePath(old_tbl_meta_file, new_tbl_meta_file))
@@ -291,7 +334,9 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             // If process crash before removing old table meta file, we will continue or rollback this
             // rename command next time `loadTables` is called. See `loadTables` and
             // `DatabaseLoading::startupTables` for more details.
-            Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+            context.getFileProvider()->deleteRegularFile(
+                old_tbl_meta_file,
+                EncryptionPath(old_tbl_meta_file, "")); // Then remove old meta file
         }
     }
 
@@ -300,28 +345,40 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
     // Detach from this database and attach to new database
     // Not atomic between two databases in memory, but not big deal,
-    // because of locks in InterpreterRenameQuery
+    // because of alter_locks in InterpreterRenameQuery
     StoragePtr detach_storage = detachTable(table_name);
     to_database_concrete->attachTable(to_table_name, detach_storage);
 
     // Update database and table name in TiDB table info for IManageableStorage
     table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree just ignored this param
-        /*new_database_name=*/to_database_concrete->name, to_table_name, display_table);
+                  /*new_database_name=*/to_database_concrete->name,
+                  to_table_name,
+                  display_table);
 }
 
 void DatabaseTiFlash::alterTable(
-    const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & storage_modifier)
+    const Context & context,
+    const String & name,
+    const ColumnsDescription & columns,
+    const ASTModifier & storage_modifier)
 {
     /// Read the definition of the table and replace the necessary parts with new ones.
 
     const String table_name_escaped = escapeForFileName(name);
-    const String table_metadata_tmp_path = metadata_path + "/" + table_name_escaped + ".sql.tmp";
-    const String table_metadata_path = metadata_path + "/" + table_name_escaped + ".sql";
+    const String table_metadata_tmp_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql.tmp";
+    const String table_metadata_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql";
     String statement;
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+        ReadBufferFromFileProvider in(
+            context.getFileProvider(),
+            table_metadata_path,
+            EncryptionPath(table_metadata_path, ""),
+            METADATA_FILE_BUFFER_SIZE,
+            /*read_limiter*/ nullptr,
+            -1,
+            in_buf);
         readStringUntilEOF(statement, in);
     }
 
@@ -338,8 +395,13 @@ void DatabaseTiFlash::alterTable(
 
     statement = getTableDefinitionFromCreateQuery(ast);
 
+    // refer to the comment in `renameTable`
+    bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
+    EncryptionPath encryption_path
+        = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -350,11 +412,11 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path, EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -373,10 +435,10 @@ time_t DatabaseTiFlash::getTableMetadataModificationTime(const Context & /*conte
     }
 }
 
-ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & /*context*/, const String & table_name, bool throw_on_error) const
+ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const
 {
     const auto table_metadata_path = getTableMetadataPath(table_name);
-    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
@@ -394,10 +456,10 @@ ASTPtr DatabaseTiFlash::tryGetCreateTableQuery(const Context & context, const St
     return getCreateTableQueryImpl(context, table_name, false);
 }
 
-ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & /*context*/) const
+ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & context) const
 {
     const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
-    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, database_metadata_path, name, true);
     if (!ast)
     {
         throw Exception("There is no metadata file for database " + name, ErrorCodes::LOGICAL_ERROR);
@@ -430,18 +492,103 @@ void DatabaseTiFlash::shutdown()
     tables.clear();
 }
 
+void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombstone_)
+{
+    const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
+    const auto database_metadata_tmp_path = database_metadata_path + ".tmp";
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, database_metadata_path, name, true);
+    if (!ast)
+    {
+        throw Exception("There is no metadata file for database " + name, ErrorCodes::LOGICAL_ERROR);
+    }
 
-void DatabaseTiFlash::drop()
+    {
+        // Alter the attach statement in metadata.
+        auto dbinfo_literal = std::make_shared<ASTLiteral>(Field(db_info == nullptr ? "" : (db_info->serialize())));
+        Field format_version_field((UInt64)DatabaseTiFlash::CURRENT_VERSION);
+        auto version_literal = std::make_shared<ASTLiteral>(format_version_field);
+        auto tombstone_literal = std::make_shared<ASTLiteral>(Field(tombstone_));
+
+        auto & create = typeid_cast<ASTCreateQuery &>(*ast);
+        create.attach = true; // Should be an attach statement but not create
+        auto & storage_ast = create.storage;
+        if (!storage_ast->engine->arguments)
+            storage_ast->engine->arguments = std::make_shared<ASTExpressionList>();
+
+        auto & args = typeid_cast<ASTExpressionList &>(*storage_ast->engine->arguments);
+        if (args.children.empty())
+        {
+            args.children.emplace_back(dbinfo_literal);
+            args.children.emplace_back(version_literal);
+            args.children.emplace_back(tombstone_literal);
+        }
+        else if (args.children.size() == 1)
+        {
+            args.children.emplace_back(version_literal);
+            args.children.emplace_back(tombstone_literal);
+        }
+        else if (args.children.size() == 2)
+        {
+            args.children.emplace_back(tombstone_literal);
+        }
+        else
+        {
+            // udpate the tombstone mark
+            args.children[2] = tombstone_literal;
+        }
+    }
+
+    String statement;
+    {
+        std::ostringstream stream;
+        formatAST(*ast, stream, false, false);
+        stream << '\n';
+        statement = stream.str();
+    }
+
+    {
+        // Atomic replace database metadata file and its encryption info
+        auto provider = context.getFileProvider();
+        bool reuse_encrypt_info = provider->isFileEncrypted(EncryptionPath(database_metadata_path, ""));
+        EncryptionPath encryption_path
+            = reuse_encrypt_info ? EncryptionPath(database_metadata_path, "") : EncryptionPath(database_metadata_tmp_path, "");
+        {
+            WriteBufferFromFileProvider out(provider, database_metadata_tmp_path, encryption_path, !reuse_encrypt_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_TRUNC);
+            writeString(statement, out);
+            out.next();
+            if (context.getSettingsRef().fsync_metadata)
+                out.sync();
+            out.close();
+        }
+
+        try
+        {
+            provider->renameFile(database_metadata_tmp_path, encryption_path, database_metadata_path, EncryptionPath(database_metadata_path, ""), !reuse_encrypt_info);
+        }
+        catch (...)
+        {
+            provider->deleteRegularFile(database_metadata_tmp_path, EncryptionPath(database_metadata_tmp_path, ""));
+            throw;
+        }
+    }
+
+    // After all done, set the tombstone
+    tombstone = tombstone_;
+}
+
+void DatabaseTiFlash::drop(const Context & context)
 {
     // Remove metadata dir for this database
     if (auto dir = Poco::File(getMetadataPath()); dir.exists())
     {
-        dir.remove(false);
+        context.getFileProvider()->deleteDirectory(getMetadataPath(), false, false);
     }
-    // Removd meta file for this database
+    // Remove meta file for this database
     if (auto meta_file = Poco::File(getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
     {
-        meta_file.remove();
+        context.getFileProvider()->deleteRegularFile(
+            getDatabaseMetadataPath(getMetadataPath()),
+            EncryptionPath(getDatabaseMetadataPath(getMetadataPath()), ""));
     }
 }
 

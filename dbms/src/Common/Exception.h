@@ -1,27 +1,40 @@
 #pragma once
 
-#include <cerrno>
-#include <vector>
-#include <memory>
-
+#include <Common/StackTrace.h>
 #include <Poco/Exception.h>
 
-#include <Common/StackTrace.h>
+#include <cerrno>
+#include <memory>
+#include <vector>
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
 class Exception : public Poco::Exception
 {
 public:
-    Exception() {}  /// For deferred initialization.
-    Exception(const std::string & msg, int code = 0) : Poco::Exception(msg, code) {}
-    Exception(const std::string & msg, const std::string & arg, int code = 0) : Poco::Exception(msg, arg, code) {}
-    Exception(const std::string & msg, const Exception & exc, int code = 0) : Poco::Exception(msg, exc, code), trace(exc.trace) {}
-    explicit Exception(const Poco::Exception & exc) : Poco::Exception(exc.displayText()) {}
+    Exception() = default; /// For deferred initialization.
+    explicit Exception(const std::string & msg, int code = 0)
+        : Poco::Exception(msg, code)
+    {}
+    Exception(const std::string & msg, const std::string & arg, int code = 0)
+        : Poco::Exception(msg, arg, code)
+    {}
+    Exception(const std::string & msg, const Exception & exc, int code = 0)
+        : Poco::Exception(msg, exc, code)
+        , trace(exc.trace)
+    {}
+    explicit Exception(const Poco::Exception & exc)
+        : Poco::Exception(exc.displayText())
+    {}
 
     const char * name() const throw() override { return "DB::Exception"; }
     const char * className() const throw() override { return "DB::Exception"; }
@@ -42,12 +55,18 @@ private:
 class ErrnoException : public Exception
 {
 public:
-    ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
-        : Exception(msg, code), saved_errno(saved_errno_) {}
+    explicit ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
+        : Exception(msg, code)
+        , saved_errno(saved_errno_)
+    {}
     ErrnoException(const std::string & msg, const std::string & arg, int code = 0, int saved_errno_ = 0)
-        : Exception(msg, arg, code), saved_errno(saved_errno_) {}
+        : Exception(msg, arg, code)
+        , saved_errno(saved_errno_)
+    {}
     ErrnoException(const std::string & msg, const Exception & exc, int code = 0, int saved_errno_ = 0)
-        : Exception(msg, exc, code), saved_errno(saved_errno_) {}
+        : Exception(msg, exc, code)
+        , saved_errno(saved_errno_)
+    {}
 
     int getErrno() const { return saved_errno; }
 
@@ -59,13 +78,14 @@ private:
 using Exceptions = std::vector<std::exception_ptr>;
 
 
-[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int the_errno = errno);
+[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int e = errno);
 
 
 /** Try to write an exception to the log (and forget about it).
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 
@@ -89,7 +109,9 @@ struct ExecutionStatus
     ExecutionStatus() = default;
 
     explicit ExecutionStatus(int return_code, const std::string & exception_message = "")
-    : code(return_code), message(exception_message) {}
+        : code(return_code)
+        , message(exception_message)
+    {}
 
     static ExecutionStatus fromCurrentException(const std::string & start_of_message = "");
 
@@ -100,9 +122,6 @@ struct ExecutionStatus
     bool tryDeserializeText(const std::string & data);
 };
 
-
-void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message = "");
-void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message = "");
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);
@@ -128,4 +147,4 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
     }
 }
 
-}
+} // namespace DB

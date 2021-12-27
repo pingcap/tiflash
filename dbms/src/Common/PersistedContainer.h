@@ -1,14 +1,5 @@
 #pragma once
 
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-
-#include <ext/range.h>
-
-#include <Poco/File.h>
-#include <Poco/Path.h>
-
 #include <Core/Types.h>
 #include <IO/HashingReadBuffer.h>
 #include <IO/HashingWriteBuffer.h>
@@ -16,10 +7,16 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
+#include <Poco/Path.h>
+
+#include <ext/range.h>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int CHECKSUM_DOESNT_MATCH;
@@ -36,7 +33,9 @@ public:
     using Write = typename Trait::Write;
     using Read = typename Trait::Read;
 
-    explicit PersistedContainer(const std::string & path_) : path(path_) {}
+    explicit PersistedContainer(const std::string & path_)
+        : path(path_)
+    {}
 
     auto & get() { return container; }
     const auto & get() const { return container; }

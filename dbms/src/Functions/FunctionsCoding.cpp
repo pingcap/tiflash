@@ -3,9 +3,14 @@
 
 namespace DB
 {
-
-struct NameFunctionIPv4NumToString { static constexpr auto name = "IPv4NumToString"; };
-struct NameFunctionIPv4NumToStringClassC { static constexpr auto name = "IPv4NumToStringClassC"; };
+struct NameFunctionIPv4NumToString
+{
+    static constexpr auto name = "IPv4NumToString";
+};
+struct NameFunctionIPv4NumToStringClassC
+{
+    static constexpr auto name = "IPv4NumToStringClassC";
+};
 
 
 void registerFunctionsCoding(FunctionFactory & factory)
@@ -17,6 +22,9 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionIPv4NumToString<0, NameFunctionIPv4NumToString>>();
     factory.registerFunction<FunctionIPv4NumToString<1, NameFunctionIPv4NumToStringClassC>>();
     factory.registerFunction<FunctionIPv4StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv4StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv6StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv6NumToString>();
     factory.registerFunction<FunctionIPv4ToIPv6>();
     factory.registerFunction<FunctionMACNumToString>();
     factory.registerFunction<FunctionMACStringTo<ParseMACImpl>>();
@@ -29,4 +37,4 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionBitmaskToArray>();
 }
 
-}
+} // namespace DB

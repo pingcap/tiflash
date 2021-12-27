@@ -3,7 +3,9 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <IO/Endian.h>
+#include <IO/WriteBuffer.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 /// Functions in this file are used for individual datum codec, i.e. UInt/Int64, Float64, String/Bytes, Decimal, Enum, Set, etc.
 /// The internal representation of a datum in TiFlash is Field.
@@ -44,33 +46,41 @@ Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
+Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info);
+
 Field DecodeDatum(size_t & cursor, const String & raw_value);
+
+Field DecodeDatumForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info);
 
 void SkipDatum(size_t & cursor, const String & raw_value);
 
 template <typename T>
-inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, std::stringstream & ss)
+inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, WriteBuffer & ss)
 {
     u = toBigEndian(u);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void EncodeInt64(Int64 i, std::stringstream & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss); }
+inline void EncodeInt64(Int64 i, WriteBuffer & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss); }
 
-void EncodeFloat64(Float64 num, std::stringstream & ss);
+void EncodeFloat64(Float64 num, WriteBuffer & ss);
 
-void EncodeBytes(const String & ori_str, std::stringstream & ss);
+void EncodeBytes(const String & ori_str, WriteBuffer & ss);
 
-void EncodeCompactBytes(const String & str, std::stringstream & ss);
+void EncodeCompactBytes(const String & str, WriteBuffer & ss);
 
-void EncodeJSON(const String & str, std::stringstream & ss);
+void EncodeJSON(const String & str, WriteBuffer & ss);
 
-void EncodeVarUInt(UInt64 num, std::stringstream & ss);
+void EncodeVarUInt(UInt64 num, WriteBuffer & ss);
 
-void EncodeVarInt(Int64 num, std::stringstream & ss);
+void EncodeVarInt(Int64 num, WriteBuffer & ss);
 
-void EncodeDecimal(const Field & field, std::stringstream & ss);
+void EncodeDecimal(const Field & field, WriteBuffer & ss);
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
+void EncodeDecimalForRow(const Field & field, WriteBuffer & ss, const ColumnInfo & column_info);
+
+void EncodeDatum(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss);
+
+void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss, const ColumnInfo & column_info);
 
 } // namespace DB

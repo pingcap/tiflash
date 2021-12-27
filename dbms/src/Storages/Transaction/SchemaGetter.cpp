@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
@@ -31,19 +32,19 @@ struct TxnStructure
 
     static String encodeStringDataKey(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
         EncodeUInt<UInt64>(UInt64(StringData), stream);
 
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static String encodeHashDataKey(const String & key, const String & field)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
@@ -51,25 +52,25 @@ struct TxnStructure
         EncodeUInt<UInt64>(UInt64(HashData), stream);
         EncodeBytes(field, stream);
 
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static String hashDataKeyPrefix(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
         EncodeUInt<UInt64>(UInt64(HashData), stream);
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static std::pair<String, String> decodeHashDataKey(const String & key)
     {
         if (key.rfind(metaPrefix, 0) != 0)
         {
-            throw Exception("invalid encoded hash data key prefix.", ErrorCodes::SCHEMA_SYNC_ERROR);
+            throw TiFlashException("invalid encoded hash data key prefix.", Errors::Table::SyncError);
         }
 
 
@@ -80,28 +81,11 @@ struct TxnStructure
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
         if (char(tp) != HashData)
         {
-            throw Exception("invalid encoded hash data key flag:" + std::to_string(tp), ErrorCodes::SCHEMA_SYNC_ERROR);
+            throw TiFlashException("invalid encoded hash data key flag:" + std::to_string(tp), Errors::Table::SyncError);
         }
 
         String field = DecodeBytes(idx, key);
         return make_pair(decode_key, field);
-    }
-
-    // only for debug
-    static String StringToHex(const std::string & input)
-    {
-        static const char * const lut = "0123456789ABCDEF";
-        size_t len = input.length();
-
-        std::string output;
-        output.reserve(2 * len);
-        for (size_t i = 0; i < len; ++i)
-        {
-            const unsigned char c = input[i];
-            output.push_back(lut[c >> 4]);
-            output.push_back(lut[c & 15]);
-        }
-        return output;
     }
 
 public:
@@ -155,7 +139,7 @@ void SchemaDiff::deserialize(const String & data)
     Poco::Dynamic::Var result = parser.parse(data);
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     version = obj->getValue<Int64>("version");
-    type = (SchemaActionType)obj->getValue<Int32>("type");
+    type = static_cast<SchemaActionType>(obj->getValue<Int32>("type"));
     schema_id = obj->getValue<Int64>("schema_id");
     table_id = obj->getValue<Int64>("table_id");
 
@@ -191,7 +175,7 @@ SchemaDiff SchemaGetter::getSchemaDiff(Int64 ver)
     String data = TxnStructure::Get(snap, key);
     if (data == "")
     {
-        throw Exception("cannot find schema diff for version: " + std::to_string(ver), ErrorCodes::SCHEMA_SYNC_ERROR);
+        throw TiFlashException("cannot find schema diff for version: " + std::to_string(ver), Errors::Table::SyncError);
     }
     SchemaDiff diff;
     diff.deserialize(data);
@@ -254,7 +238,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        throw Exception("DB Not Exists!", ErrorCodes::SCHEMA_SYNC_ERROR);
+        throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
     }
 
     std::vector<TiDB::TableInfoPtr> res;

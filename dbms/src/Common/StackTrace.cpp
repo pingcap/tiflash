@@ -1,13 +1,12 @@
 #if !defined(__APPLE__) && !defined(__FreeBSD__)
 #include <malloc.h>
 #endif
+#include <Common/StackTrace.h>
+#include <common/demangle.h>
 #include <execinfo.h>
 #include <string.h>
 
 #include <sstream>
-
-#include <Common/StackTrace.h>
-#include <common/demangle.h>
 
 
 StackTrace::StackTrace()

@@ -1,17 +1,16 @@
 #pragma once
 
-#include <memory>
-
 #include <Common/PODArray.h>
-
-#include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/CompressionSettings.h>
+#include <IO/WriteBuffer.h>
+
+#include <memory>
 
 
 namespace DB
 {
-
+template <bool add_checksum = true>
 class CompressedWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 {
 private:
@@ -51,4 +50,4 @@ public:
     ~CompressedWriteBuffer() override;
 };
 
-}
+} // namespace DB

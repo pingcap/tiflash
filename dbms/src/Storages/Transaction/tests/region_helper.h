@@ -1,43 +1,44 @@
 #pragma once
-#include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/RegionPersister.h>
+
+#include <optional>
 
 using namespace DB;
 
-#define ASSERT_CHECK(cond, res)                                 \
-    do                                                          \
-    {                                                           \
-        if (!(cond))                                            \
-        {                                                       \
-            std::cerr << __FILE__ << ":" << __LINE__ << ":"     \
+#define ASSERT_CHECK(cond, res)                                  \
+    do                                                           \
+    {                                                            \
+        if (!(cond))                                             \
+        {                                                        \
+            std::cerr << __FILE__ << ":" << __LINE__ << ":"      \
                       << " Assertion " << #cond << " failed.\n"; \
-            if ((res))                                          \
-            {                                                   \
-                (res) = false;                                  \
-            }                                                   \
-        }                                                       \
+            if ((res))                                           \
+            {                                                    \
+                (res) = false;                                   \
+            }                                                    \
+        }                                                        \
     } while (0)
 
-#define ASSERT_CHECK_EQUAL(a, b, res)                                        \
-    do                                                                       \
-    {                                                                        \
-        if (!(a == b))                                                       \
-        {                                                                    \
-            std::cerr << __FILE__ << ":" << __LINE__ << ":"                  \
+#define ASSERT_CHECK_EQUAL(a, b, res)                                         \
+    do                                                                        \
+    {                                                                         \
+        if (!(a == b))                                                        \
+        {                                                                     \
+            std::cerr << __FILE__ << ":" << __LINE__ << ":"                   \
                       << " Assertion " << #a << " == " << #b << " failed.\n"; \
-            if ((res))                                                       \
-            {                                                                \
-                (res) = false;                                               \
-            }                                                                \
-        }                                                                    \
+            if ((res))                                                        \
+            {                                                                 \
+                (res) = false;                                                \
+            }                                                                 \
+        }                                                                     \
     } while (0)
 
 
-inline metapb::Peer createPeer(UInt64 id, bool is_learner)
+inline metapb::Peer createPeer(UInt64 id, bool)
 {
     metapb::Peer peer;
     peer.set_id(id);
-    peer.set_is_learner(is_learner);
     return peer;
 }
 
@@ -54,7 +55,9 @@ inline metapb::Region createRegionInfo(UInt64 id, const std::string start_key, c
     return region_info;
 }
 
-inline RegionMeta createRegionMeta(UInt64 id)
+inline RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id, std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
 {
-    return RegionMeta(createPeer(31, true), createRegionInfo(id, "", ""), initialApplyState());
+    return RegionMeta(/*peer=*/createPeer(31, true),
+        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
+        /*apply_state_=*/apply_state.value_or(initialApplyState()));
 }

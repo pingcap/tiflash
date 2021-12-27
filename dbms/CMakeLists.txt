@@ -9,7 +9,7 @@ set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
 
 include (cmake/version.cmake)
-message (STATUS "Will build ${VERSION_FULL} (${TIFLASH_VERSION_FULL})")
+message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
@@ -28,6 +28,14 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
+find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
+if (TARGET CURL::libcurl)
+    set(CURL_LIBRARIES CURL::libcurl)
+endif()
+
+if (ENABLE_FAILPOINTS)
+    add_definitions(-DFIU_ENABLE)
+endif()
 
 include_directories (src)
 add_subdirectory (src)
@@ -50,6 +58,7 @@ add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
 add_headers_and_sources(dbms src/Debug)
+add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
 add_headers_and_sources(dbms src/Columns)
@@ -61,15 +70,20 @@ add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
 add_headers_and_sources(dbms src/Storages/Distributed)
-add_headers_and_sources(dbms src/Storages/MergeTree)
 add_headers_and_sources(dbms src/Storages/Transaction)
-add_headers_and_sources(dbms src/Storages/Page)
-add_headers_and_sources(dbms src/Storages/Page/mvcc)
-add_headers_and_sources(dbms src/Storages/Page/VersionSet)
-add_headers_and_sources(dbms src/Storages/Page/gc)
-add_headers_and_sources(dbms src/Storages/Page/stable)
-add_headers_and_sources(dbms src/Storages/Page/stable/mvcc)
-add_headers_and_sources(dbms src/Storages/Page/stable/VersionSet)
+add_headers_and_sources(dbms src/Storages/Page/V1)
+add_headers_and_sources(dbms src/Storages/Page/V1/mvcc)
+add_headers_and_sources(dbms src/Storages/Page/V1/VersionSet)
+add_headers_and_sources(dbms src/Storages/Page/V2)
+add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
+add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
+add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+if (ENABLE_V3_PAGESTORAGE)
+    add_headers_and_sources(dbms src/Storages/Page/V3)
+    add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
+    add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+endif()
+add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -77,6 +91,7 @@ add_headers_only(dbms src/Server)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
+list (APPEND clickhouse_common_io_headers ${fiu_include_dirs})
 
 list (APPEND dbms_sources src/Functions/IFunction.cpp src/Functions/FunctionFactory.cpp src/Functions/FunctionHelpers.cpp)
 list (APPEND dbms_headers src/Functions/IFunction.h src/Functions/FunctionFactory.h src/Functions/FunctionHelpers.h)
@@ -101,12 +116,12 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
 if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
-add_subdirectory(src/Common/ZooKeeper)
 add_subdirectory(src/Common/Config)
 
 if (MAKE_STATIC_LIBRARIES)
@@ -117,6 +132,7 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
 endif ()
 
+target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
@@ -131,7 +147,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate3.cpp
-        src/Dictionaries/ODBCBlockInputStream.cpp
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
@@ -144,6 +159,7 @@ if (NOT ARCH_ARM)
 endif()
 
 target_link_libraries (clickhouse_common_io
+    PUBLIC
     common
     string_utils
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
@@ -156,10 +172,13 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    fiu
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
+    cpptoml
 )
+target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
 target_link_libraries (dbms
     clickhouse_parsers
@@ -169,17 +188,15 @@ target_link_libraries (dbms
     kvproto
     kv_client
     tipb
+    dtpb
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}
-    ${MYSQLXX_LIBRARY}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
 )
-
-target_include_directories (dbms BEFORE PRIVATE ${kvClient_INCLUDE_DIR})
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
@@ -187,35 +204,13 @@ endif ()
 
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
-if (Poco_SQLODBC_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_SQL_LIBRARY})
-    target_link_libraries (dbms ${Poco_SQLODBC_LIBRARY} ${Poco_SQL_LIBRARY})
-    if (NOT USE_INTERNAL_POCO_LIBRARY)
-        target_include_directories (clickhouse_common_io PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_SQL_INCLUDE_DIRS})
-        target_include_directories (dbms PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_SQLODBC_INCLUDE_DIRS} PUBLIC ${Poco_SQL_INCLUDE_DIRS})
-    endif()
-endif()
-
 if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (clickhouse_common_io PRIVATE ${Poco_Data_INCLUDE_DIRS})
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
 endif()
 
-if (Poco_DataODBC_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_Data_LIBRARY})
-    target_link_libraries (dbms ${Poco_DataODBC_LIBRARY})
-    if (NOT USE_INTERNAL_POCO_LIBRARY)
-        target_include_directories (dbms PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_DataODBC_INCLUDE_DIRS})
-    endif()
-endif()
-
-
-if (Poco_MongoDB_FOUND)
-    target_link_libraries (dbms ${Poco_MongoDB_LIBRARY})
-endif()
-
 if (Poco_NetSSL_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_NetSSL_LIBRARY})
+    target_link_libraries (clickhouse_common_io PRIVATE ${Poco_NetSSL_LIBRARY})
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
@@ -223,20 +218,6 @@ target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
 if (USE_ICU)
     target_link_libraries (dbms ${ICU_LIBS})
     target_include_directories (dbms PRIVATE ${ICU_INCLUDE_DIR})
-endif ()
-
-if (USE_CAPNP)
-    target_link_libraries (dbms ${CAPNP_LIBRARY})
-    if (NOT USE_INTERNAL_CAPNP_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${CAPNP_INCLUDE_DIR})
-    endif ()
-endif ()
-
-if (USE_RDKAFKA)
-    target_link_libraries (dbms ${RDKAFKA_LIBRARY})
-    if (NOT USE_INTERNAL_RDKAFKA_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
-    endif ()
 endif ()
 
 target_link_libraries (dbms
@@ -253,24 +234,18 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-#use libfiu
-target_include_directories(dbms PUBLIC ${fiu_include_dirs})
-
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
-target_include_directories (clickhouse_common_io PUBLIC ${Poco_DataODBC_INCLUDE_DIRS})
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
 
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
-
-add_subdirectory (tests)
+# https://cmake.org/pipermail/cmake/2016-May/063400.html
+target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
-
-    add_definitions(-DFIU_ENABLE)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources
@@ -287,34 +262,46 @@ if (ENABLE_TESTS)
 
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
-    add_executable(gtests_dbms EXCLUDE_FROM_ALL ${dbms_gtest_sources})
+    add_executable(gtests_dbms EXCLUDE_FROM_ALL
+        ${dbms_gtest_sources}
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+    )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
-    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
+    target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
+
+    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
+
+    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(COVERAGE_LCOV_EXCLUDES
-            '/Library/Developer/CommandLineTools/usr/include/*'
-            '/usr/include/*'
-            '/usr/local/*'
-            '/usr/lib/*'
-            '${CMAKE_SOURCE_DIR}/cmake-build-*/*'
-            '${CMAKE_SOURCE_DIR}/contrib/*'
-            )
-    SETUP_TARGET_FOR_COVERAGE_LCOV(
-            NAME tiflash_lcov_coverage
-            DEPENDENCIES gtests_dbms
-            EXECUTABLE gtests_dbms
-    )
-    set(COVERAGE_GCOVR_EXCLUDES
-            'contrib'
-            'cmake-build-debugwithcov'
-    )
-    SETUP_TARGET_FOR_COVERAGE_GCOVR_HTML(
+    set (COVERAGE_LCOV_EXCLUDES
+        "/Library/Developer/CommandLineTools/usr/include/*"
+        "/usr/include/*"
+        "/usr/local/*"
+        "/usr/lib/*"
+        "${CMAKE_SOURCE_DIR}/cmake-build-*/*"
+        "${CMAKE_SOURCE_DIR}/contrib/*"
+        )
+    set (COVERAGE_GCOVR_EXCLUDES ${COVERAGE_LCOV_EXCLUDES})
+
+    if (TEST_COVERAGE_XML)
+        setup_target_for_coverage_gcovr_xml (
             NAME tiflash_gcovr_coverage
-            DEPENDENCIES gtests_dbms
-            EXECUTABLE gtests_dbms
-    )
-endif()
+            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
+            EXECUTABLE echo "please run gtests manually"
+        )
+    else ()
+        setup_target_for_coverage_lcov (
+            NAME tiflash_coverage_lcov
+            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
+            EXECUTABLE echo "please run gtests manually"
+        )
+    endif ()
+endif ()

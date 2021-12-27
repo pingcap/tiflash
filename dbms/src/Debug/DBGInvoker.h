@@ -1,16 +1,16 @@
 #pragma once
 
+#include <Common/Exception.h>
+#include <Parsers/IAST.h>
+
+#include <functional>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include <Common/Exception.h>
-#include <Parsers/IAST.h>
-
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -34,8 +34,8 @@ public:
     void regSchemafulFunc(const std::string & name, SchemafulDBGFunc func) { schemaful_funcs[name] = func; }
 
     BlockInputStreamPtr invoke(Context & context, const std::string & ori_name, const ASTs & args);
-    BlockInputStreamPtr invokeSchemaless(Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args);
-    BlockInputStreamPtr invokeSchemaful(Context & context, const std::string & name, const SchemafulDBGFunc & func, const ASTs & args);
+    static BlockInputStreamPtr invokeSchemaless(Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args);
+    static BlockInputStreamPtr invokeSchemaful(Context & context, const std::string & name, const SchemafulDBGFunc & func, const ASTs & args);
 
 private:
     std::unordered_map<std::string, SchemalessDBGFunc> schemaless_funcs;

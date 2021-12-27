@@ -3,13 +3,11 @@
 #pragma once
 
 #include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
+#include <Common/assert_cast.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsConversion.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
@@ -18,10 +16,8 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
 inline Handle encodeToPK(T v)
 {
@@ -45,14 +41,14 @@ inline size_t getPosByColumnId(const Block & block, ColId col_id)
     throw Exception("Column with column id " + DB::toString(col_id) + " not found");
 }
 
-inline ColumnWithTypeAndName & getByColumnId(Block & block, ColId col_id)
+inline ColumnWithTypeAndName tryGetByColumnId(const Block & block, ColId col_id)
 {
     for (auto & c : block)
     {
         if (c.column_id == col_id)
             return c;
     }
-    throw Exception("Column with column id " + DB::toString(col_id) + " not found");
+    return {};
 }
 
 // TODO: we should later optimize getByColumnId.
@@ -97,12 +93,12 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
     {
         auto * const_col = static_cast<const ColumnConst *>(column.get());
 
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(const_col->getDataColumn());
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(const_col->getDataColumn());
         return &c.getData();
     }
     else
     {
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
         return &c.getData();
     }
 }
@@ -110,21 +106,28 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 template <typename T>
 inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr & column)
 {
-    ColumnVector<T> & c = typeid_cast<ColumnVector<T> &>(*(column));
+    ColumnVector<T> & c = assert_cast<ColumnVector<T> &>(*(column));
     return &c.getData();
+}
+
+template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const IColumn & column)
+{
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(column);
+    return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const MutableColumnPtr & column)
 {
-    auto & c = typeid_cast<ColumnVector<T> &>(*(column));
+    auto & c = assert_cast<ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
@@ -140,12 +143,12 @@ inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, siz
     return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
-inline void addColumnToBlock(Block &             block,
-                             ColId               col_id,
-                             const String &      col_name,
+inline void addColumnToBlock(Block & block,
+                             ColId col_id,
+                             const String & col_name,
                              const DataTypePtr & col_type,
-                             const ColumnPtr &   col,
-                             const Field &       default_value = Field())
+                             const ColumnPtr & col,
+                             const Field & default_value = Field())
 {
     ColumnWithTypeAndName column(col, col_type, col_name, col_id, default_value);
     block.insert(std::move(column));
@@ -164,6 +167,22 @@ inline Block toEmptyBlock(const ColumnDefines & column_defines)
     return block;
 }
 
+/// Generate a block from column_defines
+inline Block genBlock(const ColumnDefines & column_defines, const Columns & columns)
+{
+    if (unlikely(column_defines.size() != columns.size()))
+        throw Exception("column_defines and columns have different size: " + DB::toString(column_defines.size()) + ", "
+                        + DB::toString(columns.size()));
+
+    Block block;
+    for (size_t i = 0; i < column_defines.size(); ++i)
+    {
+        auto & c = column_defines[i];
+        addColumnToBlock(block, c.id, c.name, c.type, columns[i], c.default_value);
+    }
+    return block;
+}
+
 inline Block getNewBlockByHeader(const Block & header, const Block & block)
 {
     Block new_block;
@@ -175,8 +194,8 @@ inline Block getNewBlockByHeader(const Block & header, const Block & block)
 inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
 {
     ColumnDefines columns;
-    for (auto & c : block)
-        columns.push_back(ColumnDefine(c.column_id, c.name, c.type));
+    for (const auto & c : block)
+        columns.emplace_back(ColumnDefine{c.column_id, c.name, c.type, c.default_value});
     return columns;
 }
 
@@ -191,7 +210,7 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
 }
 
 template <bool check_default_value = false>
-inline bool checkSchema(const Block & a, const Block & b)
+inline bool isSameSchema(const Block & a, const Block & b)
 {
     if (a.columns() != b.columns())
         return false;
@@ -200,9 +219,9 @@ inline bool checkSchema(const Block & a, const Block & b)
         auto & ca = a.getByPosition(i);
         auto & cb = b.getByPosition(i);
 
-        bool col_ok   = ca.column_id == cb.column_id;
-        bool name_ok  = ca.name == cb.name;
-        bool type_ok  = ca.type->equals(*(cb.type));
+        bool col_ok = ca.column_id == cb.column_id;
+        bool name_ok = ca.name == cb.name;
+        bool type_ok = ca.type->equals(*(cb.type));
         bool value_ok = !check_default_value || ca.default_value == cb.default_value;
 
         if (!col_ok || !name_ok || !type_ok || !value_ok)
@@ -233,18 +252,25 @@ inline void concat(Block & base, const Block & next)
     size_t next_rows = next.rows();
     for (size_t i = 0; i < base.columns(); ++i)
     {
-        auto & col     = base.getByPosition(i).column;
+        auto & col = base.getByPosition(i).column;
         auto * col_raw = const_cast<IColumn *>(col.get());
         col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
     }
 }
 
-inline size_t blockBytes(const Block & block)
+/// acc_seq is the accumulative sequence, offset is the pos we need to locate.
+/// Returns <item index, the offset inside item>
+inline std::pair<size_t, size_t> locatePosByAccumulation(const std::vector<size_t> & acc_seq, size_t offset)
 {
-    size_t bytes = 0;
-    for (auto & c : block)
-        bytes += c.column->byteSize();
-    return bytes;
+    auto it_begin = acc_seq.begin();
+    auto it = std::upper_bound(it_begin, acc_seq.end(), offset);
+    if (it == acc_seq.end())
+        return {acc_seq.size(), 0};
+    else
+    {
+        auto item_offset = it == it_begin ? 0 : *(it - 1);
+        return {it - it_begin, offset - item_offset};
+    }
 }
 
 } // namespace DM

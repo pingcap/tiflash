@@ -1,9 +1,9 @@
 #pragma once
 
-#include <map>
-#include <tuple>
-#include <mutex>
 #include <ext/function_traits.h>
+#include <map>
+#include <mutex>
+#include <tuple>
 
 
 /** The simplest cache for a free function.
@@ -17,7 +17,7 @@
   * SimpleCache<decltype(func), &func> func_cached;
   * std::cerr << func_cached(args...);
   */
-template <typename F, F* f>
+template <typename F, F * f>
 class SimpleCache
 {
 private:
@@ -29,7 +29,7 @@ private:
 
 public:
     template <typename... Args>
-    Result operator() (Args &&... args)
+    Result operator()(Args &&... args)
     {
         {
             std::lock_guard<std::mutex> lock(mutex);

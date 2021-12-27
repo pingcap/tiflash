@@ -4,24 +4,136 @@
 #include <Common/FunctionTimerTask.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
+#include <Poco/Crypto/X509Certificate.h>
+#include <Poco/Net/Context.h>
+#include <Poco/Net/HTTPRequestHandler.h>
+#include <Poco/Net/HTTPRequestHandlerFactory.h>
+#include <Poco/Net/HTTPServerRequest.h>
+#include <Poco/Net/HTTPServerResponse.h>
+#include <Poco/Net/SecureServerSocket.h>
 #include <daemon/BaseDaemon.h>
+#include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
-
+#include <prometheus/text_serializer.h>
 
 namespace DB
 {
+class MetricHandler : public Poco::Net::HTTPRequestHandler
+{
+public:
+    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
+
+    ~MetricHandler() {}
+
+    void handleRequest(Poco::Net::HTTPServerRequest &, Poco::Net::HTTPServerResponse & response) override
+    {
+        auto metrics = CollectMetrics();
+        auto serializer = std::unique_ptr<prometheus::Serializer>{new prometheus::TextSerializer()};
+        String body = serializer->Serialize(metrics);
+        response.sendBuffer(body.data(), body.size());
+    }
+
+private:
+    std::vector<prometheus::MetricFamily> CollectMetrics() const
+    {
+        auto collected_metrics = std::vector<prometheus::MetricFamily>{};
+
+        auto collect = collectable.lock();
+        if (collect)
+        {
+            auto && metrics = collect->Collect();
+            collected_metrics.insert(
+                collected_metrics.end(),
+                std::make_move_iterator(metrics.begin()),
+                std::make_move_iterator(metrics.end()));
+        }
+        return collected_metrics;
+    }
+
+    std::weak_ptr<prometheus::Collectable> collectable;
+};
+
+class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
+{
+public:
+    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
+
+    ~MetricHandlerFactory() {}
+
+    Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
+    {
+        String uri = request.getURI();
+        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
+        {
+            if (uri == "/metrics")
+            {
+                return new MetricHandler(collectable);
+            }
+        }
+        return nullptr;
+    }
+
+private:
+    std::weak_ptr<prometheus::Collectable> collectable;
+};
+
+std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+    const TiFlashSecurityConfig & security_config,
+    const std::weak_ptr<prometheus::Collectable> & collectable,
+    const String & metrics_port)
+{
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(
+        Poco::Net::Context::TLSV1_2_SERVER_USE,
+        security_config.key_path,
+        security_config.cert_path,
+        security_config.ca_path,
+        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+
+    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+        if (security_config.allowed_common_names.empty())
+        {
+            return true;
+        }
+        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+    };
+
+    context->setAdhocVerification(check_common_name);
+
+    Poco::Net::SecureServerSocket socket(context);
+
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+
+    Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
+    socket.bind(addr, true);
+    socket.listen();
+    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
+    return server;
+}
 
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
-MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_)
-    : timer(), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+MetricsPrometheus::MetricsPrometheus(
+    Context & context,
+    const AsynchronousMetrics & async_metrics_,
+    const TiFlashSecurityConfig & security_config)
+    : timer("Prometheus")
+    , async_metrics(async_metrics_)
+    , log(&Poco::Logger::get("Prometheus"))
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
 
+    // Interval to collect `ProfileEvents::Event`/`CurrentMetrics::Metric`/`AsynchronousMetrics`
+    // When push mode is enabled, it also define the interval that Prometheus client push to pushgateway.
     metrics_interval = conf.getInt(status_metrics_interval, 15);
     if (metrics_interval < 5)
     {
@@ -35,6 +147,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
     }
     LOG_INFO(log, "Config: " << status_metrics_interval << " = " << metrics_interval);
 
+    // Usually TiFlash disable prometheus push mode when deployed by TiUP/TiDB-Operator
     if (!conf.hasOption(status_metrics_addr))
     {
         LOG_INFO(log, "Disable prometheus push mode, cause " << status_metrics_addr << " is not set!");
@@ -63,18 +176,29 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             ::gethostname(hostname, sizeof(hostname));
 
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
-            gateway->RegisterCollectable(tiflash_metrics->registry);
+            gateway->RegisterCollectable(tiflash_metrics.registry);
 
             LOG_INFO(log, "Enable prometheus push mode; interval =" << metrics_interval << "; addr = " << metrics_addr);
         }
     }
 
-    if (conf.hasOption(status_metrics_port))
+    // Usually TiFlash enables Prometheus pull mode when deployed by TiUP/TiDB-Operator.
+    // Enable pull mode by default when push mode is disabled.
+    if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
-        auto metrics_port = conf.getString(status_metrics_port);
-        exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-        exposer->RegisterCollectable(tiflash_metrics->registry);
-        LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
+        if (security_config.has_tls_config)
+        {
+            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
+            server->start();
+            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
+        }
+        else
+        {
+            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+            exposer->RegisterCollectable(tiflash_metrics.registry);
+            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        }
     }
     else
     {
@@ -82,23 +206,29 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
     }
 
     timer.scheduleAtFixedRate(
-        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)), INIT_DELAY * MILLISECOND, metrics_interval * MILLISECOND);
+        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)),
+        INIT_DELAY * MILLISECOND,
+        metrics_interval * MILLISECOND);
 }
 
-MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
+MetricsPrometheus::~MetricsPrometheus()
+{
+    timer.cancel(true);
+}
 
 void MetricsPrometheus::run()
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_profile_events[event]->Set(value);
+        tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
     for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_current_metrics[metric]->Set(value);
+        tiflash_metrics.registered_current_metrics[metric]->Set(value);
     }
 
     auto async_metric_values = async_metrics.getValues();
@@ -106,7 +236,7 @@ void MetricsPrometheus::run()
     {
         const auto & origin_name = metric.first;
         const auto & value = metric.second;
-        if (!tiflash_metrics->registered_async_metrics.count(origin_name))
+        if (!tiflash_metrics.registered_async_metrics.count(origin_name))
         {
             // Register this async metric into registry on flight, as async metrics are not accumulated at once.
             auto prometheus_name = TiFlashMetrics::async_metrics_prefix + metric.first;
@@ -115,17 +245,16 @@ void MetricsPrometheus::run()
             auto & family = prometheus::BuildGauge()
                                 .Name(prometheus_name)
                                 .Help("System asynchronous metric " + prometheus_name)
-                                .Register(*tiflash_metrics->registry);
+                                .Register(*(tiflash_metrics.registry));
             // Use original name as key for the sake of further accesses.
-            tiflash_metrics->registered_async_metrics.emplace(origin_name, &family.Add({}));
+            tiflash_metrics.registered_async_metrics.emplace(origin_name, &family.Add({}));
         }
-        tiflash_metrics->registered_async_metrics[origin_name]->Set(value);
+        tiflash_metrics.registered_async_metrics[origin_name]->Set(value);
     }
 
     if (gateway != nullptr)
     {
-        auto return_code = gateway->Push();
-        if (return_code != 200)
+        if (auto return_code = gateway->Push(); return_code != 200)
         {
             LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << return_code);
         }

@@ -13,15 +13,15 @@ namespace DB
 
 using ImutRegionRangePtr = std::shared_ptr<const RegionRangeKeys>;
 
-class RegionState : private raft_serverpb::RegionLocalState, private boost::noncopyable
+class RegionState : private boost::noncopyable
 {
 public:
     using Base = raft_serverpb::RegionLocalState;
 
     RegionState() = default;
-    explicit RegionState(RegionState && region_state);
+    RegionState(RegionState && region_state) noexcept;
     explicit RegionState(Base && region_state);
-    RegionState & operator=(RegionState && from);
+    RegionState & operator=(RegionState && from) noexcept;
 
     void setRegion(metapb::Region region);
     void setVersion(const UInt64 version);
@@ -42,10 +42,14 @@ public:
     raft_serverpb::MergeState & getMutMergeState();
 
 private:
+    Base base;
     void updateRegionRange();
 
 private:
     ImutRegionRangePtr region_range = nullptr;
 };
+
+HandleRange<HandleID> getHandleRangeByTable(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys, TableID table_id);
+bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id);
 
 } // namespace DB

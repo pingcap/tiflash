@@ -1,20 +1,17 @@
-#include <Poco/Net/NetException.h>
-
 #include <Common/Exception.h>
-
-#include <IO/WriteBufferFromPocoSocket.h>
 #include <Common/NetException.h>
+#include <IO/WriteBufferFromPocoSocket.h>
+#include <Poco/Net/NetException.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NETWORK_ERROR;
-    extern const int SOCKET_TIMEOUT;
-    extern const int CANNOT_WRITE_TO_SOCKET;
-}
+extern const int NETWORK_ERROR;
+extern const int SOCKET_TIMEOUT;
+extern const int CANNOT_WRITE_TO_SOCKET;
+} // namespace ErrorCodes
 
 
 void WriteBufferFromPocoSocket::nextImpl()
@@ -52,7 +49,9 @@ void WriteBufferFromPocoSocket::nextImpl()
 }
 
 WriteBufferFromPocoSocket::WriteBufferFromPocoSocket(Poco::Net::Socket & socket_, size_t buf_size)
-    : BufferWithOwnMemory<WriteBuffer>(buf_size), socket(socket_), peer_address(socket.peerAddress())
+    : BufferWithOwnMemory<WriteBuffer>(buf_size)
+    , socket(socket_)
+    , peer_address(socket.peerAddress())
 {
 }
 
@@ -68,4 +67,4 @@ WriteBufferFromPocoSocket::~WriteBufferFromPocoSocket()
     }
 }
 
-}
+} // namespace DB

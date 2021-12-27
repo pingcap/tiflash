@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -18,8 +17,9 @@ extern const int BAD_ARGUMENTS;
 
 static ASTPtr extractKeyExpressionList(IAST & node)
 {
+    // For multiple primary key, this is a ASTFunction with name "tuple".
+    // For single primary key, this is a ASTExpressionList.
     const ASTFunction * expr_func = typeid_cast<const ASTFunction *>(&node);
-
     if (expr_func && expr_func->name == "tuple")
     {
         /// Primary key is specified in tuple.
@@ -90,7 +90,14 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(
-            args.data_path, args.database_engine, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
+            args.database_engine,
+            args.database_name,
+            args.table_name,
+            table_info,
+            args.columns,
+            primary_expr_list,
+            tombstone,
+            args.context);
     });
 }
 

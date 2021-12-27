@@ -1,0 +1,18 @@
+# Preparation.
+mysql> drop table if exists test.a
+mysql> create table test.a (pk int not null, id int not null, value varchar(64))
+
+mysql> alter table test.a set tiflash replica 1
+
+func> wait_table test a
+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select count(distinct pk), count(id), count(value), count(1) from a;
++--------------------+-----------+--------------+----------+
+| count(distinct pk) | count(id) | count(value) | count(1) |
++--------------------+-----------+--------------+----------+
+|                  0 |         0 |            0 |        0 |
++--------------------+-----------+--------------+----------+
+
+# Clean up.
+ mysql> drop table if exists test.a

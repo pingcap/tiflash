@@ -66,7 +66,7 @@ String QuotaForInterval::toString() const
     auto loaded_rounded_time = rounded_time.load(std::memory_order_relaxed);
 
     res << std::fixed << std::setprecision(3)
-        << "Interval:       " << LocalDateTime(loaded_rounded_time) << " - " << LocalDateTime(loaded_rounded_time + duration) << ".\n"
+        << "Interval:       " << LocalDateTime(loaded_rounded_time).toString() << " - " << LocalDateTime(loaded_rounded_time + duration).toString() << ".\n"
         << "Queries:        " << used.queries         << ".\n"
         << "Errors:         " << used.errors         << ".\n"
         << "Result rows:    " << used.result_rows     << ".\n"
@@ -152,7 +152,7 @@ void QuotaForInterval::check(
 
         message << " has been exceeded. "
             << resource_name << ": " << used_amount << ", max: " << max_amount << ". "
-            << "Interval will end at " << LocalDateTime(rounded_time.load(std::memory_order_relaxed) + duration) << ". "
+            << "Interval will end at " << LocalDateTime(rounded_time.load(std::memory_order_relaxed) + duration).toString() << ". "
             << "Name of quota template: '" << quota_name << "'.";
 
         throw Exception(message.str(), ErrorCodes::QUOTA_EXPIRED);
@@ -324,12 +324,16 @@ void Quotas::loadFromConfig(Poco::Util::AbstractConfiguration & config)
             cont.erase(it++);
     }
 
+    // Load quotas from current config
     for (Poco::Util::AbstractConfiguration::Keys::const_iterator it = config_keys.begin(); it != config_keys.end(); ++it)
     {
         if (!cont.count(*it))
             cont.try_emplace(*it);
         cont[*it].loadFromConfig("quotas." + *it, *it, config, rng);
     }
+    // Create a "default" if not exists
+    if (!cont.count(QuotaForInterval::DEFAULT_QUOTA_NAME))
+        cont.try_emplace(QuotaForInterval::DEFAULT_QUOTA_NAME);
 }
 
 QuotaForIntervalsPtr Quotas::get(const String & name, const String & quota_key, const String & user_name, const Poco::Net::IPAddress & ip)

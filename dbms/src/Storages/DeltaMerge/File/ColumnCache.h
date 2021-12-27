@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
+
 #include <cstddef>
 #include <memory>
 
@@ -11,11 +12,12 @@ namespace DB
 {
 namespace DM
 {
-using ColId      = DB::ColumnID;
-using PackId     = size_t;
-using PackRange  = std::pair<PackId, PackId>;
+using ColId = DB::ColumnID;
+using PackId = size_t;
+using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
-class ColumnCache : public std::enable_shared_from_this<ColumnCache>, private boost::noncopyable
+class ColumnCache : public std::enable_shared_from_this<ColumnCache>
+    , private boost::noncopyable
 {
 public:
     enum class Strategy
@@ -27,7 +29,7 @@ public:
 
     ColumnCache() = default;
 
-    using RangeWithStrategy  = std::pair<PackRange, ColumnCache::Strategy>;
+    using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
     RangeWithStrategys getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
 
@@ -50,9 +52,9 @@ private:
     std::unordered_map<PackId, ColumnCacheEntry> column_caches;
 };
 
-using ColumnCachePtr     = std::shared_ptr<ColumnCache>;
-using ColumnCachePtrs    = std::vector<ColumnCachePtr>;
-using RangeWithStrategy  = ColumnCache::RangeWithStrategy;
+using ColumnCachePtr = std::shared_ptr<ColumnCache>;
+using ColumnCachePtrs = std::vector<ColumnCachePtr>;
+using RangeWithStrategy = ColumnCache::RangeWithStrategy;
 using RangeWithStrategys = ColumnCache::RangeWithStrategys;
 using ColumnCacheElement = ColumnCache::ColumnCacheElement;
 } // namespace DM

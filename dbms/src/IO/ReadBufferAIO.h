@@ -2,32 +2,35 @@
 
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
-#include <IO/ReadBufferFromFileBase.h>
-#include <IO/ReadBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
-#include <Core/Defines.h>
 #include <Common/AIO.h>
 #include <Common/CurrentMetrics.h>
-#include <string>
-#include <limits>
-#include <unistd.h>
+#include <Core/Defines.h>
+#include <IO/BufferWithOwnMemory.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromFileBase.h>
 #include <fcntl.h>
+#include <unistd.h>
+
+#include <limits>
+#include <string>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric OpenFileForRead;
+extern const Metric OpenFileForRead;
 }
 
 namespace DB
 {
-
 /** Class for asynchronous data reading.
   */
 class ReadBufferAIO : public ReadBufferFromFileBase
 {
 public:
-    ReadBufferAIO(const std::string & filename_, size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE, int flags_ = -1,
+    explicit ReadBufferAIO(
+        const std::string & filename_,
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+        int flags_ = -1,
         char * existing_memory_ = nullptr);
     ~ReadBufferAIO() override;
 
@@ -107,6 +110,6 @@ private:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
 };
 
-}
+} // namespace DB
 
 #endif

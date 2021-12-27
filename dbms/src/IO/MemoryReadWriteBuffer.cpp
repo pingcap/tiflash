@@ -1,24 +1,26 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <common/likely.h>
+
 #include <boost/noncopyable.hpp>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CURRENT_WRITE_BUFFER_IS_EXHAUSTED;
+extern const int CURRENT_WRITE_BUFFER_IS_EXHAUSTED;
 }
 
 
-class ReadBufferFromMemoryWriteBuffer : public ReadBuffer, boost::noncopyable, private Allocator<false>
+class ReadBufferFromMemoryWriteBuffer : public ReadBuffer
+    , boost::noncopyable
+    , private Allocator<false>
 {
 public:
     explicit ReadBufferFromMemoryWriteBuffer(MemoryWriteBuffer && origin)
-    : ReadBuffer(nullptr, 0),
-        chunk_list(std::move(origin.chunk_list)),
-        end_pos(origin.position())
+        : ReadBuffer(nullptr, 0)
+        , chunk_list(std::move(origin.chunk_list))
+        , end_pos(origin.position())
     {
         chunk_head = chunk_list.begin();
         setChunk();
@@ -40,7 +42,6 @@ public:
     }
 
 private:
-
     /// update buffers and position according to chunk_head pointer
     bool setChunk()
     {
@@ -74,11 +75,11 @@ private:
 
 
 MemoryWriteBuffer::MemoryWriteBuffer(size_t max_total_size_, size_t initial_chunk_size_, double growth_rate_, size_t max_chunk_size_)
-    : WriteBuffer(nullptr, 0),
-    max_total_size(max_total_size_),
-    initial_chunk_size(initial_chunk_size_),
-    max_chunk_size(max_chunk_size_),
-    growth_rate(growth_rate_)
+    : WriteBuffer(nullptr, 0)
+    , max_total_size(max_total_size_)
+    , initial_chunk_size(initial_chunk_size_)
+    , max_chunk_size(max_chunk_size_)
+    , growth_rate(growth_rate_)
 {
     addChunk();
 }
@@ -149,4 +150,4 @@ MemoryWriteBuffer::~MemoryWriteBuffer()
         free(range.begin(), range.size());
 }
 
-}
+} // namespace DB

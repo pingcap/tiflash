@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Use ready file descriptor. Does not open or close a file.
   */
 class WriteBufferFromFileDescriptor : public WriteBufferFromFileBase
@@ -19,7 +18,7 @@ protected:
     std::string getFileName() const override;
 
 public:
-    WriteBufferFromFileDescriptor(
+    explicit WriteBufferFromFileDescriptor(
         int fd_ = -1,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
@@ -44,10 +43,12 @@ public:
 
     void sync() override;
 
+    void close() override;
+
 private:
     off_t doSeek(off_t offset, int whence) override;
 
     void doTruncate(off_t length) override;
 };
 
-}
+} // namespace DB

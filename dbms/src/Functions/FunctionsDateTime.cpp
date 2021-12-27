@@ -3,16 +3,14 @@
 
 namespace DB
 {
-
-
 static std::string extractTimeZoneNameFromColumn(const IColumn & column)
 {
     const ColumnConst * time_zone_column = checkAndGetColumnConst<ColumnString>(&column);
 
     if (!time_zone_column)
         throw Exception("Illegal column " + column.getName()
-            + " of time zone argument of function, must be constant string",
-            ErrorCodes::ILLEGAL_COLUMN);
+                            + " of time zone argument of function, must be constant string",
+                        ErrorCodes::ILLEGAL_COLUMN);
 
     return time_zone_column->getValue<String>();
 }
@@ -38,8 +36,7 @@ std::string extractTimeZoneNameFromFunctionArguments(const ColumnsWithTypeAndNam
     }
 }
 
-const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const ColumnNumbers & arguments,
-        size_t time_zone_arg_num, size_t datetime_arg_num)
+const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const ColumnNumbers & arguments, size_t time_zone_arg_num, size_t datetime_arg_num)
 {
     if (arguments.size() == time_zone_arg_num + 1)
         return DateLUT::instance(extractTimeZoneNameFromColumn(*block.getByPosition(arguments[time_zone_arg_num]).column));
@@ -60,7 +57,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMyTimeZoneConverter<true>>();
     factory.registerFunction<FunctionMyTimeZoneConverter<false>>();
-    factory.registerFunction<FunctionMyTimeZoneConvertByOffset>();
+    factory.registerFunction<FunctionMyTimeZoneConvertByOffset<true>>();
+    factory.registerFunction<FunctionMyTimeZoneConvertByOffset<false>>();
     factory.registerFunction<FunctionToYear>();
     factory.registerFunction<FunctionToQuarter>();
     factory.registerFunction<FunctionToMonth>();
@@ -112,10 +110,15 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionSubtractMonths>();
     factory.registerFunction<FunctionSubtractYears>();
 
+    factory.registerFunction<FunctionSysDateWithFsp>();
+    factory.registerFunction<FunctionSysDateWithoutFsp>();
+
     factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTiDBTimestampDiff>();
+    factory.registerFunction<FunctionExtractMyDateTime>();
+    factory.registerFunction<FunctionTiDBDateDiff>();
 
     factory.registerFunction<FunctionToTimeZone>();
 }
 
-}
+} // namespace DB

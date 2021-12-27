@@ -1,18 +1,18 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
-
 #include <Common/OptimizedRegularExpression.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 /** A table that represents the union of an arbitrary number of other tables.
   * All tables must have the same structure.
   */
-class StorageMerge : public ext::shared_ptr_helper<StorageMerge>, public IStorage
+class StorageMerge : public ext::SharedPtrHelper<StorageMerge>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "Merge"; }
@@ -42,7 +42,7 @@ public:
 
     /// you need to add and remove columns in the sub-tables manually
     /// the structure of sub-tables is not checked
-    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const override;
 
@@ -52,7 +52,7 @@ private:
     OptimizedRegularExpression table_name_regexp;
     const Context & context;
 
-    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableStructureReadLockPtr>>;
+    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableLockHolder>>;
 
     StorageListWithLocks getSelectedTables() const;
 
@@ -67,4 +67,4 @@ protected:
         const Context & context_);
 };
 
-}
+} // namespace DB

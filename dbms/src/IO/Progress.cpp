@@ -1,14 +1,13 @@
 #include "Progress.h"
 
 #include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 void ProgressValues::read(ReadBuffer & in, UInt64 /*server_revision*/)
 {
     size_t new_rows = 0;
@@ -70,4 +69,4 @@ void Progress::writeJSON(WriteBuffer & out) const
     getValues().writeJSON(out);
 }
 
-}
+} // namespace DB

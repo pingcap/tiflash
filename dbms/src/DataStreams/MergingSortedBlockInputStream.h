@@ -224,7 +224,7 @@ private:
     template <typename TSortCursor>
     void merge(MutableColumns & merged_columns, std::priority_queue<TSortCursor> & queue);
 
-    Logger * log = &Logger::get("MergingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MergingSortedBlockInputStream");
 
     /// Read is finished.
     bool finished = false;

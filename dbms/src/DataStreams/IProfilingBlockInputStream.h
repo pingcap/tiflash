@@ -1,22 +1,22 @@
 #pragma once
 
-#include <IO/Progress.h>
-
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
-
+#include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
+#include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <atomic>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int QUERY_WAS_CANCELLED;
+extern const int QUERY_WAS_CANCELLED;
 }
 
 class QuotaForIntervals;
@@ -206,7 +206,7 @@ private:
 
     LocalLimits limits;
 
-    QuotaForIntervals * quota = nullptr;    /// If nullptr - the quota is not used.
+    QuotaForIntervals * quota = nullptr; /// If nullptr - the quota is not used.
     double prev_elapsed = 0;
 
     /// The approximate total number of rows to read. For progress bar.
@@ -245,4 +245,4 @@ private:
     }
 };
 
-}
+} // namespace DB

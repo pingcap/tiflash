@@ -12,9 +12,9 @@
 #if defined(WIN32) || defined(_WIN32)
 #include <Windows.h>
 #else
-#include <unistd.h>
-#include <sys/types.h>
 #include <sys/param.h>
+#include <sys/types.h>
+#include <unistd.h>
 #if defined(BSD)
 #include <sys/sysctl.h>
 #endif
@@ -32,7 +32,7 @@ uint64_t getMemoryAmount()
     /* New 64-bit MEMORYSTATUSEX isn't available.  Use old 32.bit */
     MEMORYSTATUS status;
     status.dwLength = sizeof(status);
-    GlobalMemoryStatus( &status );
+    GlobalMemoryStatus(&status);
     return status.dwTotalPhys;
 
 #elif defined(WIN32) || defined(_WIN32)
@@ -40,7 +40,7 @@ uint64_t getMemoryAmount()
     /* Use new 64-bit MEMORYSTATUSEX, not old 32-bit MEMORYSTATUS */
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);
-    GlobalMemoryStatusEx( &status );
+    GlobalMemoryStatusEx(&status);
     return status.ullTotalPhys;
 
 #else
@@ -57,24 +57,25 @@ uint64_t getMemoryAmount()
 #endif
     uint64_t size = 0; /* 64-bit */
     size_t len = sizeof(size);
-    if ( sysctl( mib, 2, &size, &len, NULL, 0 ) == 0 ) {
+    if (sysctl(mib, 2, &size, &len, NULL, 0) == 0)
+    {
         return size;
     }
     return 0; /* Failed? */
 
 #elif defined(_SC_AIX_REALMEM)
     /* AIX. ----------------------------------------------------- */
-    return sysconf( _SC_AIX_REALMEM ) * 1024;
+    return sysconf(_SC_AIX_REALMEM) * 1024;
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
     /* FreeBSD, Linux, OpenBSD, and Solaris. -------------------- */
-    return (uint64_t)sysconf( _SC_PHYS_PAGES )
-           * (uint64_t)sysconf( _SC_PAGESIZE );
+    return static_cast<uint64_t>(sysconf(_SC_PHYS_PAGES))
+        * static_cast<uint64_t>(sysconf(_SC_PAGESIZE));
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGE_SIZE)
     /* Legacy. -------------------------------------------------- */
-    return (uint64_t)sysconf( _SC_PHYS_PAGES )
-           * (uint64_t)sysconf( _SC_PAGE_SIZE );
+    return (uint64_t)sysconf(_SC_PHYS_PAGES)
+        * (uint64_t)sysconf(_SC_PAGE_SIZE);
 
 #elif defined(CTL_HW) && (defined(HW_PHYSMEM) || defined(HW_REALMEM))
     /* DragonFly BSD, FreeBSD, NetBSD, OpenBSD, and OSX. -------- */
@@ -86,8 +87,9 @@ uint64_t getMemoryAmount()
     mib[1] = HW_PHYSMEM; /* Others. ------------------ */
 #endif
     unsigned int size = 0; /* 32-bit */
-    size_t len = sizeof( size );
-    if ( sysctl( mib, 2, &size, &len, NULL, 0 ) == 0 ) {
+    size_t len = sizeof(size);
+    if (sysctl(mib, 2, &size, &len, NULL, 0) == 0)
+    {
         return size;
     }
     return 0; /* Failed? */

@@ -1,19 +1,17 @@
 #pragma once
 
-#include <iostream>
-
 #include <Common/Exception.h>
-
-#include <IO/ReadBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/ReadBuffer.h>
+
+#include <iostream>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_READ_FROM_ISTREAM;
+extern const int CANNOT_READ_FROM_ISTREAM;
 }
 
 
@@ -42,7 +40,9 @@ private:
 
 public:
     ReadBufferFromIStream(std::istream & istr_, size_t size = DBMS_DEFAULT_BUFFER_SIZE)
-        : BufferWithOwnMemory<ReadBuffer>(size), istr(istr_) {}
+        : BufferWithOwnMemory<ReadBuffer>(size)
+        , istr(istr_)
+    {}
 };
 
-}
+} // namespace DB

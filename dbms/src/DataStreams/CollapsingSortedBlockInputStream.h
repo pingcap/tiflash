@@ -40,7 +40,7 @@ protected:
 private:
     size_t sign_column_number;
 
-    Logger * log = &Logger::get("CollapsingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("CollapsingSortedBlockInputStream");
 
     /// Read is finished.
     bool finished = false;

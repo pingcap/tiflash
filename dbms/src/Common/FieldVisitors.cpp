@@ -1,17 +1,16 @@
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
 #include <Common/FieldVisitors.h>
+#include <Common/RedactHelpers.h>
 #include <Common/SipHash.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
-
 template <typename T>
 static inline String formatQuoted(T x)
 {
@@ -38,24 +37,48 @@ static inline String formatQuotedWithPrefix(T x, const char * prefix)
 }
 
 
-String FieldVisitorDump::operator() (const Null &) const { return "NULL"; }
-String FieldVisitorDump::operator() (const UInt64 & x) const { return formatQuotedWithPrefix(x, "UInt64_"); }
-String FieldVisitorDump::operator() (const Int64 & x) const { return formatQuotedWithPrefix(x, "Int64_"); }
-String FieldVisitorDump::operator() (const Float64 & x) const { return formatQuotedWithPrefix(x, "Float64_"); }
-String FieldVisitorDump::operator() (const DecimalField<Decimal32> & x) const { return "Decimal32_" + x.toString(); }
-String FieldVisitorDump::operator() (const DecimalField<Decimal64> & x) const { return "Decimal64_" + x.toString(); }
-String FieldVisitorDump::operator() (const DecimalField<Decimal128> & x) const { return "Decimal128_" + x.toString(); }
-String FieldVisitorDump::operator() (const DecimalField<Decimal256> & x) const { return "Decimal256_" + x.toString(); }
+String FieldVisitorDump::operator()(const Null &) const
+{
+    return "NULL";
+}
+String FieldVisitorDump::operator()(const UInt64 & x) const
+{
+    return formatQuotedWithPrefix(x, "UInt64_");
+}
+String FieldVisitorDump::operator()(const Int64 & x) const
+{
+    return formatQuotedWithPrefix(x, "Int64_");
+}
+String FieldVisitorDump::operator()(const Float64 & x) const
+{
+    return formatQuotedWithPrefix(x, "Float64_");
+}
+String FieldVisitorDump::operator()(const DecimalField<Decimal32> & x) const
+{
+    return "Decimal32_" + x.toString();
+}
+String FieldVisitorDump::operator()(const DecimalField<Decimal64> & x) const
+{
+    return "Decimal64_" + x.toString();
+}
+String FieldVisitorDump::operator()(const DecimalField<Decimal128> & x) const
+{
+    return "Decimal128_" + x.toString();
+}
+String FieldVisitorDump::operator()(const DecimalField<Decimal256> & x) const
+{
+    return "Decimal256_" + x.toString();
+}
 
 
-String FieldVisitorDump::operator() (const String & x) const
+String FieldVisitorDump::operator()(const String & x) const
 {
     WriteBufferFromOwnString wb;
     writeQuoted(x, wb);
     return wb.str();
 }
 
-String FieldVisitorDump::operator() (const Array & x) const
+String FieldVisitorDump::operator()(const Array & x) const
 {
     WriteBufferFromOwnString wb;
 
@@ -71,9 +94,9 @@ String FieldVisitorDump::operator() (const Array & x) const
     return wb.str();
 }
 
-String FieldVisitorDump::operator() (const Tuple & x_def) const
+String FieldVisitorDump::operator()(const Tuple & x_def) const
 {
-    auto & x = x_def.t;
+    const auto & x = x_def.toUnderType();
     WriteBufferFromOwnString wb;
 
     wb.write("Tuple_(", 7);
@@ -107,22 +130,48 @@ static String formatFloat(const Float64 x)
     if (!result)
         throw Exception("Cannot print float or double number", ErrorCodes::CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER);
 
-    return { buffer, buffer + builder.position() };
+    return {buffer, buffer + builder.position()};
 }
 
 
-String FieldVisitorToString::operator() (const Null &) const { return "NULL"; }
-String FieldVisitorToString::operator() (const UInt64 & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const Int64 & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const Float64 & x) const { return formatFloat(x); }
-String FieldVisitorToString::operator() (const String & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal32> & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal64> & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal128> & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal256> & x) const { return formatQuoted(x); }
+String FieldVisitorToString::operator()(const Null &) const
+{
+    return "NULL";
+}
+String FieldVisitorToString::operator()(const UInt64 & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const Int64 & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const Float64 & x) const
+{
+    return formatFloat(x);
+}
+String FieldVisitorToString::operator()(const String & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const DecimalField<Decimal32> & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const DecimalField<Decimal64> & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const DecimalField<Decimal128> & x) const
+{
+    return formatQuoted(x);
+}
+String FieldVisitorToString::operator()(const DecimalField<Decimal256> & x) const
+{
+    return formatQuoted(x);
+}
 
-
-String FieldVisitorToString::operator() (const Array & x) const
+String FieldVisitorToString::operator()(const Array & x) const
 {
     WriteBufferFromOwnString wb;
 
@@ -138,9 +187,9 @@ String FieldVisitorToString::operator() (const Array & x) const
     return wb.str();
 }
 
-String FieldVisitorToString::operator() (const Tuple & x_def) const
+String FieldVisitorToString::operator()(const Tuple & x_def) const
 {
-    auto & x = x_def.t;
+    const auto & x = x_def.toUnderType();
     WriteBufferFromOwnString wb;
 
     writeChar('(', wb);
@@ -156,64 +205,155 @@ String FieldVisitorToString::operator() (const Tuple & x_def) const
 }
 
 
-FieldVisitorHash::FieldVisitorHash(SipHash & hash) : hash(hash) {}
+String FieldVisitorToDebugString::operator()(const Null &) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return "NULL";
+}
+String FieldVisitorToDebugString::operator()(const UInt64 & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const Int64 & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const Float64 & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatFloat(x);
+}
+String FieldVisitorToDebugString::operator()(const String & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const DecimalField<Decimal32> & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const DecimalField<Decimal64> & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const DecimalField<Decimal128> & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
+String FieldVisitorToDebugString::operator()(const DecimalField<Decimal256> & x) const
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+    return formatQuoted(x);
+}
 
-void FieldVisitorHash::operator() (const Null &) const
+String FieldVisitorToDebugString::operator()(const Array & x) const
+{
+    WriteBufferFromOwnString wb;
+
+    writeChar('[', wb);
+    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb.write(", ", 2);
+        writeString(applyVisitor(*this, *it), wb);
+    }
+    writeChar(']', wb);
+
+    return wb.str();
+}
+
+String FieldVisitorToDebugString::operator()(const Tuple & x_def) const
+{
+    const auto & x = x_def.toUnderType();
+    WriteBufferFromOwnString wb;
+
+    writeChar('(', wb);
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb.write(", ", 2);
+        writeString(applyVisitor(*this, *it), wb);
+    }
+    writeChar(')', wb);
+
+    return wb.str();
+}
+
+
+FieldVisitorHash::FieldVisitorHash(SipHash & hash)
+    : hash(hash)
+{}
+
+void FieldVisitorHash::operator()(const Null &) const
 {
     UInt8 type = Field::Types::Null;
     hash.update(type);
 }
 
-void FieldVisitorHash::operator() (const UInt64 & x) const
+void FieldVisitorHash::operator()(const UInt64 & x) const
 {
     UInt8 type = Field::Types::UInt64;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const Int64 & x) const
+void FieldVisitorHash::operator()(const Int64 & x) const
 {
     UInt8 type = Field::Types::Int64;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const Float64 & x) const
+void FieldVisitorHash::operator()(const Float64 & x) const
 {
     UInt8 type = Field::Types::Float64;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const DecimalField<Decimal32> & x) const
+void FieldVisitorHash::operator()(const DecimalField<Decimal32> & x) const
 {
     UInt8 type = Field::Types::Decimal32;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const DecimalField<Decimal64> & x) const
+void FieldVisitorHash::operator()(const DecimalField<Decimal64> & x) const
 {
     UInt8 type = Field::Types::Decimal64;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const DecimalField<Decimal128> & x) const
+void FieldVisitorHash::operator()(const DecimalField<Decimal128> & x) const
 {
     UInt8 type = Field::Types::Decimal128;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const DecimalField<Decimal256> & x) const
+void FieldVisitorHash::operator()(const DecimalField<Decimal256> & x) const
 {
     UInt8 type = Field::Types::Decimal256;
     hash.update(type);
     hash.update(x);
 }
 
-void FieldVisitorHash::operator() (const String & x) const
+void FieldVisitorHash::operator()(const String & x) const
 {
     UInt8 type = Field::Types::String;
     hash.update(type);
@@ -221,7 +361,7 @@ void FieldVisitorHash::operator() (const String & x) const
     hash.update(x.data(), x.size());
 }
 
-void FieldVisitorHash::operator() (const Array & x) const
+void FieldVisitorHash::operator()(const Array & x) const
 {
     UInt8 type = Field::Types::Array;
     hash.update(type);
@@ -231,4 +371,4 @@ void FieldVisitorHash::operator() (const Array & x) const
         applyVisitor(*this, elem);
 }
 
-}
+} // namespace DB

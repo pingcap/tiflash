@@ -1,18 +1,16 @@
 #pragma once
 
-#include <IO/ReadBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/ReadBuffer.h>
 #include <IO/ZlibCompressionMethod.h>
-
 #include <zlib.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ZLIB_INFLATE_FAILED;
+extern const int ZLIB_INFLATE_FAILED;
 }
 
 /// Reads compressed data from ReadBuffer in_ and performs decompression using zlib library.
@@ -21,11 +19,11 @@ class ZlibInflatingReadBuffer : public BufferWithOwnMemory<ReadBuffer>
 {
 public:
     ZlibInflatingReadBuffer(
-            ReadBuffer & in_,
-            ZlibCompressionMethod compression_method,
-            size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-            char * existing_memory = nullptr,
-            size_t alignment = 0);
+        ReadBuffer & in_,
+        ZlibCompressionMethod compression_method,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        char * existing_memory = nullptr,
+        size_t alignment = 0);
 
     ~ZlibInflatingReadBuffer() override;
 
@@ -37,4 +35,4 @@ private:
     bool eof;
 };
 
-}
+} // namespace DB

@@ -1,0 +1,89 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(i integer, test_sign float, test_ln float, test_log2 float, test_log10 float, test_exp float, test_radians float, test_degrees float, test_crc32 char(10), test_conv varchar(10))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(2, -1.1, EXP(1), 0.25, 100, 1, 180 / PI(), PI(), 'hello', 'af')
+
+func> wait_table test t
+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sign(test_sign)) from test.t;
++----------------------+
+| sum(sign(test_sign)) |
++----------------------+
+|                   -1 |
++----------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ round(sum(ln(test_ln))) from test.t;
++-------------------------+
+| round(sum(ln(test_ln))) |
++-------------------------+
+|                       1 |
++-------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(log2(test_log2)) from test.t;
++----------------------+
+| sum(log2(test_log2)) |
++----------------------+
+|                   -2 |
++----------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(log10(test_log10)) from test.t;
++------------------------+
+| sum(log10(test_log10)) |
++------------------------+
+|                      2 |
++------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(log(i, test_log2)) from test.t;
++------------------------+
+| sum(log(i, test_log2)) |
++------------------------+
+|                     -2 |
++------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ round(sum(exp(test_exp)), 3) from test.t;
++------------------------------+
+| round(sum(exp(test_exp)), 3) |
++------------------------------+
+|                        2.718 |
++------------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(pow(i, i))  from test.t;
++----------------+
+| sum(pow(i, i)) |
++----------------+
+|              4 |
++----------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ round(sum(degrees(test_degrees))) from test.t;
++-----------------------------------+
+| round(sum(degrees(test_degrees))) |
++-----------------------------------+
+|                               180 |
++-----------------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ round(sum(radians(test_radians))) from test.t;
++-----------------------------------+
+| round(sum(radians(test_radians))) |
++-----------------------------------+
+|                                 1 |
++-----------------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(crc32(test_crc32)) from test.t;
++------------------------+
+| sum(crc32(test_crc32)) |
++------------------------+
+|              907060870 |
++------------------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(cast(conv(test_conv, 16, i + 8) as unsigned)) from test.t;
++---------------------------------------------------+
+| sum(cast(conv(test_conv, 16, i + 8) as unsigned)) |
++---------------------------------------------------+
+|                                               175 |
++---------------------------------------------------+
+
+
+mysql> drop table if exists test.t
+
+

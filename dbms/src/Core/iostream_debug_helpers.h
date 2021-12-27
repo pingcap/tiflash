@@ -1,12 +1,11 @@
 #pragma once
-#include <iostream>
-
 #include <Client/Connection.h>
+
+#include <iostream>
 
 
 namespace DB
 {
-
 class IBlockInputStream;
 std::ostream & operator<<(std::ostream & stream, const IBlockInputStream & what);
 
@@ -42,7 +41,7 @@ std::ostream & operator<<(std::ostream & stream, const IAST & what);
 
 std::ostream & operator<<(std::ostream & stream, const Connection::Packet & what);
 
-}
+} // namespace DB
 
 /// some operator<< should be declared before operator<<(... std::shared_ptr<>)
 #include <common/iostream_debug_helpers.h>

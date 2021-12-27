@@ -1,13 +1,13 @@
 #pragma once
 
-#include <cmath>
-
 #include <Columns/ColumnVectorHelper.h>
+#include <IO/Endian.h>
+
+#include <cmath>
 
 
 namespace DB
 {
-
 /** Stuff for comparing numbers.
   * Integer values are compared as usual.
   * Floating-point numbers are compared this way that NaNs always end up at the end
@@ -82,16 +82,26 @@ struct FloatCompareHelper
     }
 };
 
-template <> struct CompareHelper<Float32> : public FloatCompareHelper<Float32> {};
-template <> struct CompareHelper<Float64> : public FloatCompareHelper<Float64> {};
+template <>
+struct CompareHelper<Float32> : public FloatCompareHelper<Float32>
+{
+};
+template <>
+struct CompareHelper<Float64> : public FloatCompareHelper<Float64>
+{
+};
 
 
 /** To implement `get64` function.
   */
 template <typename T>
-inline UInt64 unionCastToUInt64(T x) { return x; }
+inline UInt64 unionCastToUInt64(T x)
+{
+    return x;
+}
 
-template <> inline UInt64 unionCastToUInt64(Float64 x)
+template <>
+inline UInt64 unionCastToUInt64(Float64 x)
 {
     union
     {
@@ -103,7 +113,8 @@ template <> inline UInt64 unionCastToUInt64(Float64 x)
     return res;
 }
 
-template <> inline UInt64 unionCastToUInt64(Float32 x)
+template <>
+inline UInt64 unionCastToUInt64(Float32 x)
 {
     union
     {
@@ -116,6 +127,19 @@ template <> inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
+template <typename targetType, typename encodeType>
+inline targetType decodeInt(const char * pos)
+{
+    if (is_signed_v<targetType>)
+    {
+        return static_cast<targetType>(static_cast<std::make_signed_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+    }
+    else
+    {
+        return static_cast<targetType>(static_cast<std::make_unsigned_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+    }
+}
+
 
 /** A template for columns that use a simple array to store.
   */
@@ -123,6 +147,7 @@ template <typename T>
 class ColumnVector final : public COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>
 {
     static_assert(!IsDecimal<T>);
+
 private:
     friend class COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>;
 
@@ -136,16 +161,23 @@ public:
     using Container = PaddedPODArray<value_type>;
 
 private:
-    ColumnVector() {}
-    explicit ColumnVector(const size_t n) : data(n) {}
-    ColumnVector(const size_t n, const value_type x) : data(n, x) {}
-    ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {};
+    ColumnVector() = default;
+    explicit ColumnVector(const size_t n)
+        : data(n)
+    {}
+    ColumnVector(const size_t n, const value_type x)
+        : data(n, x)
+    {}
+    ColumnVector(const ColumnVector & src)
+        : data(src.data.begin(), src.data.end()){};
 
     /// Sugar constructor.
-    ColumnVector(std::initializer_list<T> il) : data{il} {}
+    ColumnVector(std::initializer_list<T> il)
+        : data{il}
+    {}
 
 public:
-    bool isNumeric() const override { return IsNumber<T>; }
+    bool isNumeric() const override { return is_arithmetic_v<T>; }
 
     size_t size() const override
     {
@@ -167,6 +199,61 @@ public:
         data.push_back(*reinterpret_cast<const T *>(pos));
     }
 
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode [[maybe_unused]]) override
+    {
+        if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
+        {
+            if (unlikely(length != sizeof(Float64)))
+            {
+                throw Exception("Invalid float value length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
+            constexpr UInt64 SIGN_MASK = UInt64(1) << 63;
+            auto num = readBigEndian<UInt64>(raw_value.c_str() + cursor);
+            if (num & SIGN_MASK)
+                num ^= SIGN_MASK;
+            else
+                num = ~num;
+            Float64 res;
+            memcpy(&res, &num, sizeof(UInt64));
+            data.push_back(res);
+        }
+        else
+        {
+            // check overflow
+            if (length > sizeof(T))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow when decoding integer of length " + std::to_string(length) + " with column type " + this->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+
+            switch (length)
+            {
+            case sizeof(UInt8):
+                data.push_back(decodeInt<T, UInt8>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt16):
+                data.push_back(decodeInt<T, UInt16>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt32):
+                data.push_back(decodeInt<T, UInt32>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt64):
+                data.push_back(decodeInt<T, UInt64>(raw_value.c_str() + cursor));
+                break;
+            default:
+                throw Exception("Invalid integer length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        return true;
+    }
+
     void insertDefault() override
     {
         data.push_back(T());
@@ -177,15 +264,22 @@ public:
         data.resize_assume_reserved(data.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos) override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void updateHashWithValue(size_t n, SipHash & hash) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     size_t byteSize() const override
     {
         return data.size() * sizeof(data[0]);
+    }
+
+    size_t byteSize(size_t /*offset*/, size_t limit) const override
+    {
+        return limit * sizeof(data[0]);
     }
 
     size_t allocatedBytes() const override
@@ -253,12 +347,15 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-
     bool canBeInsideNullable() const override { return true; }
 
     bool isFixedAndContiguous() const override { return true; }
     size_t sizeOfValueIfFixed() const override { return sizeof(T); }
 
+    StringRef getRawData() const override
+    {
+        return StringRef(reinterpret_cast<const char *>(data.data()), byteSize());
+    }
 
     /** More efficient methods of manipulation - to manipulate with data directly. */
     Container & getData()
@@ -286,4 +383,4 @@ protected:
 };
 
 
-}
+} // namespace DB

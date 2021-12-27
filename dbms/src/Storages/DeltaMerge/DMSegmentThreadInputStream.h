@@ -1,43 +1,55 @@
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_when_reading_from_dt_stream[];
+} // namespace FailPoints
+
 namespace DM
 {
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(const DMContextPtr &           dm_context_,
-                               const SegmentReadTaskPoolPtr & task_pool_,
-                               AfterSegmentRead               after_segment_read_,
-                               const ColumnDefines &          columns_to_read_,
-                               const RSOperatorPtr &          filter_,
-                               UInt64                         max_version_,
-                               size_t                         expected_block_size_,
-                               bool                           is_raw_,
-                               bool                           do_range_filter_for_raw_)
-        : dm_context(dm_context_),
-          task_pool(task_pool_),
-          after_segment_read(after_segment_read_),
-          columns_to_read(columns_to_read_),
-          filter(filter_),
-          header(toEmptyBlock(columns_to_read)),
-          max_version(max_version_),
-          expected_block_size(expected_block_size_),
-          is_raw(is_raw_),
-          do_range_filter_for_raw(do_range_filter_for_raw_),
-          log(&Logger::get("DMSegmentThreadInputStream"))
+    DMSegmentThreadInputStream(
+        const DMContextPtr & dm_context_,
+        const SegmentReadTaskPoolPtr & task_pool_,
+        AfterSegmentRead after_segment_read_,
+        const ColumnDefines & columns_to_read_,
+        const RSOperatorPtr & filter_,
+        UInt64 max_version_,
+        size_t expected_block_size_,
+        bool is_raw_,
+        bool do_range_filter_for_raw_,
+        const LogWithPrefixPtr & log_)
+        : dm_context(dm_context_)
+        , task_pool(task_pool_)
+        , after_segment_read(after_segment_read_)
+        , columns_to_read(columns_to_read_)
+        , filter(filter_)
+        , header(toEmptyBlock(columns_to_read))
+        , max_version(max_version_)
+        , expected_block_size(expected_block_size_)
+        , is_raw(is_raw_)
+        , do_range_filter_for_raw(do_range_filter_for_raw_)
+        , log(getMPPTaskLog(log_, getName()))
     {
     }
 
     String getName() const override { return "DeltaMergeSegmentThread"; }
-    Block  getHeader() const override { return header; }
+    Block getHeader() const override { return header; }
 
 protected:
     Block readImpl() override
@@ -52,7 +64,7 @@ protected:
             return {};
         while (true)
         {
-            if (!cur_stream)
+            while (!cur_stream)
             {
                 auto task = task_pool->nextTask();
                 if (!task)
@@ -80,6 +92,7 @@ protected:
                 }
                 LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
+            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
             Block res = cur_stream->read(res_filter, return_filter);
 
@@ -93,24 +106,24 @@ protected:
             else
             {
                 after_segment_read(dm_context, cur_segment);
-                LOG_TRACE(log, "Finish reading segment [" + DB::toString(cur_segment->segmentId()) + "]");
+                LOG_TRACE(log, "Finish reading segment [" << cur_segment->segmentId() << "]");
                 cur_segment = {};
-                cur_stream  = {};
+                cur_stream = {};
             }
         }
     }
 
 private:
-    DMContextPtr           dm_context;
+    DMContextPtr dm_context;
     SegmentReadTaskPoolPtr task_pool;
-    AfterSegmentRead       after_segment_read;
-    ColumnDefines          columns_to_read;
-    RSOperatorPtr          filter;
-    Block                  header;
-    UInt64                 max_version;
-    size_t                 expected_block_size;
-    bool                   is_raw;
-    bool                   do_range_filter_for_raw;
+    AfterSegmentRead after_segment_read;
+    ColumnDefines columns_to_read;
+    RSOperatorPtr filter;
+    Block header;
+    const UInt64 max_version;
+    const size_t expected_block_size;
+    const bool is_raw;
+    const bool do_range_filter_for_raw;
 
     bool done = false;
 
@@ -118,7 +131,7 @@ private:
 
     SegmentPtr cur_segment;
 
-    Logger * log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace DM

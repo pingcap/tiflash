@@ -1,80 +1,78 @@
-#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Interpreters/Context.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ParserQuery.h>
-#include <Parsers/parseQuery.h>
+#include <Parsers/makeDummyQuery.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, const bool is_batch_cop_)
-    : writer(std::make_shared<StreamWriter>(writer_)),
-      context(context_),
-      dag_context(dag_context_),
-      regions(regions_),
-      dag_request(dag_request_),
-      metrics(context.getTiFlashMetrics()),
-      is_batch_cop(is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_)
+    : context(context_)
 {
+    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        QueryBlockIDGenerator id_generator;
+        root_query_block = std::make_shared<DAGQueryBlock>(dag_request.root_executor(), id_generator);
     }
     else
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
-    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(dag_context.qb_id_to_join_alias_map);
+    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(getDAGContext().getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
-    if (root_query_block->aggregation != nullptr)
+    for (UInt32 i : dag_request.output_offsets())
     {
-        for (auto & field_type : root_query_block->output_field_types)
-            result_field_types.push_back(field_type);
+        if (unlikely(i >= root_query_block->output_field_types.size()))
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
+                                       + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                                   Errors::Coprocessor::BadRequest);
+        getDAGContext().result_field_types.push_back(root_query_block->output_field_types[i]);
     }
-    else
-    {
-        for (UInt32 i : dag_request.output_offsets())
-        {
-            result_field_types.push_back(root_query_block->output_field_types[i]);
-        }
-    }
-    analyzeDAGEncodeType();
+    auto encode_type = analyzeDAGEncodeType();
+    getDAGContext().encode_type = encode_type;
+    getDAGContext().keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
-void DAGQuerySource::analyzeDAGEncodeType()
+tipb::EncodeType DAGQuerySource::analyzeDAGEncodeType()
 {
-    encode_type = dag_request.encode_type();
-    if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
-        encode_type = tipb::EncodeType::TypeDefault;
+    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
+    const tipb::EncodeType encode_type = dag_request.encode_type();
+    if (getDAGContext().isMPPTask() && !getDAGContext().isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        return tipb::EncodeType::TypeCHBlock;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
+        return encode_type;
+    }
+    if (isUnsupportedEncodeType(getDAGContext().result_field_types, encode_type))
+        return tipb::EncodeType::TypeDefault;
     if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
         && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
         // todo support BigEndian encode for chunk encode type
-        encode_type = tipb::EncodeType::TypeDefault;
+        return tipb::EncodeType::TypeDefault;
+    return encode_type;
 }
 
-std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
+std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
 {
     // this is a WAR to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
     // todo find a way to enable key range extraction for dag query
-    String tmp = "select 1";
-    ParserQuery parser(tmp.data() + tmp.size());
-    ASTPtr parent = parseQuery(parser, tmp.data(), tmp.data() + tmp.size(), "", max_query_size);
-    auto query = dag_request.DebugString();
-    ast = ((ASTSelectWithUnionQuery *)parent.get())->list_of_selects->children.at(0);
-    return std::make_tuple(query, ast);
+    return {getDAGContext().dag_request->DebugString(), makeDummyQuery()};
 }
 
-String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
+String DAGQuerySource::str(size_t)
+{
+    return getDAGContext().dag_request->DebugString();
+}
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {

@@ -1,6 +1,6 @@
-set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -DSANITIZER")
+set (SAN_FLAGS "${SAN_FLAGS} -g3 -fno-omit-frame-pointer -DSANITIZER")
 if (SAN_DEBUG)
-    set (SAN_FLAGS "${SAN_FLAGS} -O0")
+    set (SAN_FLAGS "${SAN_FLAGS} ${MOST_DEBUGGABLE_LEVEL}")
 else ()
     set (SAN_FLAGS "${SAN_FLAGS} -O3")
 endif ()

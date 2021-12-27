@@ -1,25 +1,22 @@
-#include <common/DateLUTImpl.h>
 #include <Common/StringUtils/StringUtils.h>
-
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/parseDateTimeBestEffort.h>
+#include <common/DateLUTImpl.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int CANNOT_PARSE_DATETIME;
-}
+extern const int LOGICAL_ERROR;
+extern const int CANNOT_PARSE_DATETIME;
+} // namespace ErrorCodes
 
 
 namespace
 {
-
 inline size_t readDigits(char * res, size_t max_chars, ReadBuffer & in)
 {
     size_t num_chars = 0;
@@ -62,8 +59,7 @@ inline void readDecimalNumber(T & res, const char * src)
 template <typename ReturnType>
 ReturnType parseDateTimeBestEffortImpl(time_t & res, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone)
 {
-    auto on_error = [](const std::string & message [[maybe_unused]], int code [[maybe_unused]])
-    {
+    auto on_error = [](const std::string & message [[maybe_unused]], int code [[maybe_unused]]) {
         if constexpr (std::is_same_v<ReturnType, void>)
             throw Exception(message, code);
         else
@@ -310,7 +306,7 @@ ReturnType parseDateTimeBestEffortImpl(time_t & res, ReadBuffer & in, const Date
                 ++in.position();
                 has_time_zone_offset = true;
             }
-            else if (c == '.')  /// We don't support comma (ISO 8601:2004) for fractional part of second to not mess up with CSV separator.
+            else if (c == '.') /// We don't support comma (ISO 8601:2004) for fractional part of second to not mess up with CSV separator.
             {
                 if (!has_time)
                     return on_error("Cannot read DateTime: unexpected point symbol", ErrorCodes::CANNOT_PARSE_DATETIME);
@@ -401,31 +397,60 @@ ReturnType parseDateTimeBestEffortImpl(time_t & res, ReadBuffer & in, const Date
                 {
                     bool has_day_of_week = false;
 
-                         if (0 == strncasecmp(alpha, "Jan", 3)) month = 1;
-                    else if (0 == strncasecmp(alpha, "Feb", 3)) month = 2;
-                    else if (0 == strncasecmp(alpha, "Mar", 3)) month = 3;
-                    else if (0 == strncasecmp(alpha, "Apr", 3)) month = 4;
-                    else if (0 == strncasecmp(alpha, "May", 3)) month = 5;
-                    else if (0 == strncasecmp(alpha, "Jun", 3)) month = 6;
-                    else if (0 == strncasecmp(alpha, "Jul", 3)) month = 7;
-                    else if (0 == strncasecmp(alpha, "Aug", 3)) month = 8;
-                    else if (0 == strncasecmp(alpha, "Sep", 3)) month = 9;
-                    else if (0 == strncasecmp(alpha, "Oct", 3)) month = 10;
-                    else if (0 == strncasecmp(alpha, "Nov", 3)) month = 11;
-                    else if (0 == strncasecmp(alpha, "Dec", 3)) month = 12;
+                    if (0 == strncasecmp(alpha, "Jan", 3))
+                        month = 1;
+                    else if (0 == strncasecmp(alpha, "Feb", 3))
+                        month = 2;
+                    else if (0 == strncasecmp(alpha, "Mar", 3))
+                        month = 3;
+                    else if (0 == strncasecmp(alpha, "Apr", 3))
+                        month = 4;
+                    else if (0 == strncasecmp(alpha, "May", 3))
+                        month = 5;
+                    else if (0 == strncasecmp(alpha, "Jun", 3))
+                        month = 6;
+                    else if (0 == strncasecmp(alpha, "Jul", 3))
+                        month = 7;
+                    else if (0 == strncasecmp(alpha, "Aug", 3))
+                        month = 8;
+                    else if (0 == strncasecmp(alpha, "Sep", 3))
+                        month = 9;
+                    else if (0 == strncasecmp(alpha, "Oct", 3))
+                        month = 10;
+                    else if (0 == strncasecmp(alpha, "Nov", 3))
+                        month = 11;
+                    else if (0 == strncasecmp(alpha, "Dec", 3))
+                        month = 12;
 
-                    else if (0 == strncasecmp(alpha, "UTC", 3)) has_time_zone_offset = true;
-                    else if (0 == strncasecmp(alpha, "GMT", 3)) has_time_zone_offset = true;
-                    else if (0 == strncasecmp(alpha, "MSK", 3)) { has_time_zone_offset = true; time_zone_offset_hour = 3; }
-                    else if (0 == strncasecmp(alpha, "MSD", 3)) { has_time_zone_offset = true; time_zone_offset_hour = 4; }
+                    else if (0 == strncasecmp(alpha, "UTC", 3))
+                        has_time_zone_offset = true;
+                    else if (0 == strncasecmp(alpha, "GMT", 3))
+                        has_time_zone_offset = true;
+                    else if (0 == strncasecmp(alpha, "MSK", 3))
+                    {
+                        has_time_zone_offset = true;
+                        time_zone_offset_hour = 3;
+                    }
+                    else if (0 == strncasecmp(alpha, "MSD", 3))
+                    {
+                        has_time_zone_offset = true;
+                        time_zone_offset_hour = 4;
+                    }
 
-                    else if (0 == strncasecmp(alpha, "Mon", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Tue", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Wed", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Thu", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Fri", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Sat", 3)) has_day_of_week = true;
-                    else if (0 == strncasecmp(alpha, "Sun", 3)) has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Mon", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Tue", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Wed", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Thu", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Fri", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Sat", 3))
+                        has_day_of_week = true;
+                    else if (0 == strncasecmp(alpha, "Sun", 3))
+                        has_day_of_week = true;
 
                     else
                         return on_error("Cannot read DateTime: unexpected word", ErrorCodes::CANNOT_PARSE_DATETIME);
@@ -453,8 +478,7 @@ ReturnType parseDateTimeBestEffortImpl(time_t & res, ReadBuffer & in, const Date
     if (is_pm && hour < 12)
         hour += 12;
 
-    auto adjust_time_zone = [&]
-    {
+    auto adjust_time_zone = [&] {
         if (time_zone_offset_hour)
         {
             if (time_zone_offset_negative)
@@ -485,7 +509,7 @@ ReturnType parseDateTimeBestEffortImpl(time_t & res, ReadBuffer & in, const Date
     return ReturnType(true);
 }
 
-}
+} // namespace
 
 
 void parseDateTimeBestEffort(time_t & res, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone)
@@ -498,4 +522,4 @@ bool tryParseDateTimeBestEffort(time_t & res, ReadBuffer & in, const DateLUTImpl
     return parseDateTimeBestEffortImpl<bool>(res, in, local_time_zone, utc_time_zone);
 }
 
-}
+} // namespace DB

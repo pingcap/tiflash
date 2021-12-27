@@ -4,8 +4,6 @@
 #include <Core/DecimalComparison.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <Functions/FunctionHelpers.h>
-
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -14,14 +12,13 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
 
 
 namespace DB
 {
-
 namespace DM
 {
-
 template <typename T>
 std::string compareTypeToString(const T & v)
 {
@@ -37,11 +34,11 @@ template <template <typename, typename> class Op>
 struct ValueComparision
 {
     // Used to check operation type
-    using OpInt              = Op<int, int>;
-    using EqualsInt          = EqualsOp<int, int>;
-    using LessInt            = LessOp<int, int>;
-    using LessOrEqualsInt    = LessOrEqualsOp<int, int>;
-    using GreaterInt         = GreaterOp<int, int>;
+    using OpInt = Op<int, int>;
+    using EqualsInt = EqualsOp<int, int>;
+    using LessInt = LessOp<int, int>;
+    using LessOrEqualsInt = LessOrEqualsOp<int, int>;
+    using GreaterInt = GreaterOp<int, int>;
     using GreaterOrEqualsInt = GreaterOrEqualsOp<int, int>;
 
     /// 1: true, -1: false, 0: cannot compare.
@@ -83,7 +80,6 @@ private:
         case Field::Types::Which::UInt64:
         case Field::Types::Which::Int64:
         case Field::Types::Which::Float64:
-        case Field::Types::Which::UInt128:
         case Field::Types::Which::Int128:
             return Number;
         case Field::Types::Which::Decimal32:
@@ -101,7 +97,7 @@ private:
     template <typename T>
     static constexpr ValueGroupType getGroupType()
     {
-        if constexpr (DB::IsNumber<T>)
+        if constexpr (is_arithmetic_v<T>)
             return Number;
         else if constexpr (
             // clang-format off
@@ -127,7 +123,6 @@ private:
             if (!(compareNumberLeftType<Field::Types::Which::UInt64, UInt64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int64, Int64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Float64, Float64>(left_field, right, res)
-                  || compareNumberLeftType<Field::Types::Which::UInt128, UInt128>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int128, Int128>(left_field, right, res)))
                 throw Exception("Illegal compare " + std::string(left_field.getTypeName()) + " with " + compareTypeToString(right));
             return true;
@@ -139,7 +134,6 @@ private:
 //            if (!(compareDecimalLeftType<Field::Types::Which::UInt64, UInt64, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int64, Int64, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Float64, Float64, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::UInt128, UInt128, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int128, Int128, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int256, Int256, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Decimal32, DecimalField<Decimal32>, Decimal>(left_field, right, res)
@@ -212,8 +206,8 @@ private:
         if constexpr (LeftGroupType != Decimal && RightGroupType != Decimal)
             return false;
 
-        auto & left        = left_field.safeGet<Left>();
-        UInt32 left_scale  = 1;
+        auto & left = left_field.safeGet<Left>();
+        UInt32 left_scale = 1;
         UInt32 right_scale = 1;
 
         if constexpr (LeftGroupType == Decimal)
@@ -251,11 +245,11 @@ private:
     {
         const IDataType * number_type = right_type.get();
 
-        bool is_date      = false;
+        bool is_date = false;
         bool is_date_time = false;
-        bool is_uuid      = false;
-        bool is_enum8     = false;
-        bool is_enum16    = false;
+        bool is_uuid = false;
+        bool is_enum8 = false;
+        bool is_enum16 = false;
 
         const auto legal_types = (is_date = checkAndGetDataType<DataTypeDate>(number_type))
             || (is_date_time = checkAndGetDataType<DataTypeDateTime>(number_type))
@@ -270,7 +264,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDate::FieldType, Right>)
             {
-                DayNum_t             date;
+                DayNum date;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateText(date, in);
                 if (!in.eof())
@@ -283,7 +277,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDateTime::FieldType, Right>)
             {
-                time_t               date_time;
+                time_t date_time;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateTimeText(date_time, in);
                 if (!in.eof())
@@ -296,7 +290,7 @@ private:
         {
             if constexpr (std::is_same_v<UUID, Right>)
             {
-                UUID                 uuid;
+                UUID uuid;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readText(uuid, in);
                 if (!in.eof())
@@ -309,9 +303,9 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum8::FieldType, Right>)
             {
-                auto type            = static_cast<const DataTypeEnum8 *>(right_type.get());
+                auto type = static_cast<const DataTypeEnum8 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
-                res                  = Op<Int8, Right>::apply(left_enum_value, right);
+                res = Op<Int8, Right>::apply(left_enum_value, right);
                 return true;
             }
         }
@@ -319,9 +313,9 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum16::FieldType, Right>)
             {
-                auto type            = static_cast<const DataTypeEnum16 *>(right_type.get());
+                auto type = static_cast<const DataTypeEnum16 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
-                res                  = Op<Int16, Right>::apply(left_enum_value, right);
+                res = Op<Int16, Right>::apply(left_enum_value, right);
                 return true;
             }
         }

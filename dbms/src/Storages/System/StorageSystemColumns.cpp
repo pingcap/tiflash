@@ -1,44 +1,47 @@
-#include <Storages/System/StorageSystemColumns.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <Storages/VirtualColumnUtils.h>
-#include <Parsers/queryToString.h>
 #include <Databases/IDatabase.h>
+#include <Interpreters/Context.h>
+#include <Parsers/queryToString.h>
+#include <Storages/ColumnDefault.h>
+#include <Storages/System/StorageSystemColumns.h>
+#include <Storages/VirtualColumnUtils.h>
 
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TABLE_IS_DROPPED;
+} // namespace ErrorCodes
 
 StorageSystemColumns::StorageSystemColumns(const std::string & name_)
     : name(name_)
 {
     setColumns(ColumnsDescription({
-        { "database",           std::make_shared<DataTypeString>() },
-        { "table",              std::make_shared<DataTypeString>() },
-        { "name",               std::make_shared<DataTypeString>() },
-        { "type",               std::make_shared<DataTypeString>() },
-        { "default_kind",       std::make_shared<DataTypeString>() },
-        { "default_expression", std::make_shared<DataTypeString>() },
-        { "data_compressed_bytes",      std::make_shared<DataTypeUInt64>() },
-        { "data_uncompressed_bytes",    std::make_shared<DataTypeUInt64>() },
-        { "marks_bytes",                std::make_shared<DataTypeUInt64>() },
+        {"database", std::make_shared<DataTypeString>()},
+        {"table", std::make_shared<DataTypeString>()},
+        {"name", std::make_shared<DataTypeString>()},
+        {"type", std::make_shared<DataTypeString>()},
+        {"default_kind", std::make_shared<DataTypeString>()},
+        {"default_expression", std::make_shared<DataTypeString>()},
+        {"data_compressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"data_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"marks_bytes", std::make_shared<DataTypeUInt64>()},
     }));
 }
 
 
-BlockInputStreams StorageSystemColumns::read(
-    const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+BlockInputStreams StorageSystemColumns::read(const Names & column_names,
+                                             const SelectQueryInfo & query_info,
+                                             const Context & context,
+                                             QueryProcessingStage::Enum & processed_stage,
+                                             const size_t /*max_block_size*/,
+                                             const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -77,7 +80,8 @@ BlockInputStreams StorageSystemColumns::read(
             for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
             {
                 const String & table_name = iterator->name();
-                storages.emplace(std::piecewise_construct,
+                storages.emplace(
+                    std::piecewise_construct,
                     std::forward_as_tuple(database_name, table_name),
                     std::forward_as_tuple(iterator->table()));
                 table_column_mut->insert(table_name);
@@ -114,15 +118,14 @@ BlockInputStreams StorageSystemColumns::read(
 
         NamesAndTypesList columns;
         ColumnDefaults column_defaults;
-        MergeTreeData::ColumnSizeByName column_sizes;
 
         {
             StoragePtr storage = storages.at(std::make_pair(database_name, table_name));
-            TableStructureReadLockPtr table_lock;
+            TableStructureLockHolder table_lock;
 
             try
             {
-                table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                table_lock = storage->lockStructureForShare(context.getCurrentQueryId());
             }
             catch (const Exception & e)
             {
@@ -139,18 +142,6 @@ BlockInputStreams StorageSystemColumns::read(
 
             columns = storage->getColumns().getAll();
             column_defaults = storage->getColumns().defaults;
-
-            /** Info about sizes of columns for tables of MergeTree family.
-              * NOTE: It is possible to add getter for this info to IStorage interface.
-              */
-            if (auto storage_concrete = dynamic_cast<StorageMergeTree *>(storage.get()))
-            {
-                column_sizes = storage_concrete->getData().getColumnSizes();
-            }
-            else if (auto storage_concrete = dynamic_cast<StorageReplicatedMergeTree *>(storage.get()))
-            {
-                column_sizes = storage_concrete->getData().getColumnSizes();
-            }
         }
 
         for (const auto & column : columns)
@@ -177,19 +168,9 @@ BlockInputStreams StorageSystemColumns::read(
             }
 
             {
-                const auto it = column_sizes.find(column.name);
-                if (it == std::end(column_sizes))
-                {
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                }
-                else
-                {
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_compressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_uncompressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.marks));
-                }
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
             }
         }
     }
@@ -197,4 +178,4 @@ BlockInputStreams StorageSystemColumns::read(
     return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
-}
+} // namespace DB

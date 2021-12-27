@@ -1,127 +1,118 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/coprocessor.pb.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/IInterpreter.h>
-#include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/TableLockHolder.h>
+#include <Storages/Transaction/TiDB.h>
+#include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
+class DAGQueryBlock;
+class ExchangeReceiver;
+class DAGExpressionAnalyzer;
 
-class Context;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-
-struct Pipeline
-{
-    BlockInputStreams streams;
-
-    BlockInputStreamPtr & firstStream() { return streams.at(0); }
-
-    template <typename Transform>
-    void transform(Transform && transform)
-    {
-        for (auto & stream : streams)
-            transform(stream);
-    }
-
-    bool hasMoreThanOneStream() const { return streams.size() > 1; }
-};
-
-struct AnalysisResult
-{
-    bool has_where = false;
-    bool need_aggregate = false;
-    bool has_order_by = false;
-
-    ExpressionActionsPtr before_where;
-    ExpressionActionsPtr before_aggregation;
-    ExpressionActionsPtr before_order_and_select;
-    ExpressionActionsPtr final_projection;
-
-    String filter_column_name;
-    std::vector<NameAndTypePair> order_columns;
-    /// Columns from the SELECT list, before renaming them to aliases.
-    Names selected_columns;
-
-    Names aggregation_keys;
-    AggregateDescriptions aggregate_descriptions;
-};
 /** build ch plan from dag request: dag executors -> ch plan
   */
 class DAGQueryBlockInterpreter
 {
 public:
-    DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst, ASTPtr dummp_query,
-        const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_);
+    DAGQueryBlockInterpreter(
+        Context & context_,
+        const std::vector<BlockInputStreams> & input_streams_vec_,
+        const DAGQueryBlock & query_block_,
+        size_t max_streams_,
+        bool keep_session_timezone_info_,
+        std::vector<SubqueriesForSets> & subqueries_for_sets_,
+        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
 
     ~DAGQueryBlockInterpreter() = default;
 
     BlockInputStreams execute();
 
 private:
-    void executeRemoteQuery(Pipeline & pipeline);
-    void executeImpl(Pipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
-    void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoinKeys(const tipb::Join & join, const DataTypes & key_types, Pipeline & pipeline, Names & key_names, bool tiflash_left);
-    void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
-    void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
-    void executeUnion(Pipeline & pipeline);
-    void executeLimit(Pipeline & pipeline);
-    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
+    void executeRemoteQuery(DAGPipeline & pipeline);
+    void executeImpl(DAGPipeline & pipeline);
+    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void prepareJoin(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        DAGPipeline & pipeline,
+        Names & key_names,
+        bool left,
+        bool is_right_out_join,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+        String & filter_column_name);
+    void executeExchangeReceiver(DAGPipeline & pipeline);
+    void executeSourceProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
+    void executeExtraCastAndSelection(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & extra_cast,
+        const NamesWithAliases & project_after_ts_and_filter_for_remote_read,
+        const ExpressionActionsPtr & before_where,
+        const ExpressionActionsPtr & project_after_where,
+        const String & filter_column_name);
+    ExpressionActionsPtr genJoinOtherConditionAction(
+        const tipb::Join & join,
+        std::vector<NameAndTypePair> & source_columns,
+        String & filter_column_for_other_condition,
+        String & filter_column_for_other_eq_condition);
+    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
+    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
+    void executeLimit(DAGPipeline & pipeline);
+    void executeAggregation(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expression_actions_ptr,
+        Names & key_names,
+        TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions);
-    void executeFinalProject(Pipeline & pipeline);
-    void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
-    SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
-    AnalysisResult analyzeExpressions();
-    void recordProfileStreams(Pipeline & pipeline, const String & key);
-    bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
+    void executeExchangeSender(DAGPipeline & pipeline);
 
-private:
-    void executeRemoteQueryImpl(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-        ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
+    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
+
+    void recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr);
+
+    void restorePipelineConcurrency(DAGPipeline & pipeline);
+
+    void executeRemoteQueryImpl(
+        DAGPipeline & pipeline,
+        const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+        ::tipb::DAGRequest & dag_req,
+        const DAGSchema & schema);
+
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+    const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-    const tipb::DAGRequest & rqst;
-    ASTPtr dummy_query;
 
     NamesWithAliases final_project;
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
 
-    /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
-    TableStructureReadLockPtr table_lock;
+    TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
-
     std::vector<const tipb::Expr *> conditions;
-    const DAGQuerySource & dag;
-    std::vector<SubqueriesForSets> & subqueriesForSets;
+    std::vector<SubqueriesForSets> & subqueries_for_sets;
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
+    std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 };
 } // namespace DB

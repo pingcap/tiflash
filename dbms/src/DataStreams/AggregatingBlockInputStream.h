@@ -1,15 +1,15 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/CompressedReadBuffer.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
+#include <IO/CompressedReadBuffer.h>
+#include <Interpreters/Aggregator.h>
 
 
 namespace DB
 {
-
-
 /** Aggregates the stream of blocks using the specified key columns and aggregate functions.
   * Columns with aggregate functions adds to the end of the block.
   * If final = false, the aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -22,8 +22,17 @@ public:
       * Aggregate functions are searched everywhere in the expression.
       * Columns corresponding to keys and arguments of aggregate functions must already be computed.
       */
-    AggregatingBlockInputStream(const BlockInputStreamPtr & input, const Aggregator::Params & params_, bool final_)
-        : params(params_), aggregator(params), final(final_)
+    AggregatingBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const Aggregator::Params & params_,
+        const FileProviderPtr & file_provider_,
+        bool final_,
+        const LogWithPrefixPtr & log_)
+        : log(getMPPTaskLog(log_, getName()))
+        , params(params_)
+        , aggregator(params, log)
+        , file_provider{file_provider_}
+        , final(final_)
     {
         children.push_back(input);
     }
@@ -35,8 +44,11 @@ public:
 protected:
     Block readImpl() override;
 
+    LogWithPrefixPtr log;
+
     Aggregator::Params params;
     Aggregator aggregator;
+    FileProviderPtr file_provider;
     bool final;
 
     bool executed = false;
@@ -44,18 +56,18 @@ protected:
     /// To read the data that was flushed into the temporary data file.
     struct TemporaryFileStream
     {
-        ReadBufferFromFile file_in;
-        CompressedReadBuffer compressed_in;
+        FileProviderPtr file_provider;
+        ReadBufferFromFileProvider file_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
-        TemporaryFileStream(const std::string & path);
+        TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
+        ~TemporaryFileStream();
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
-     /** From here we will get the completed blocks after the aggregation. */
+    /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
-
-    Logger * log = &Logger::get("AggregatingBlockInputStream");
 };
 
-}
+} // namespace DB

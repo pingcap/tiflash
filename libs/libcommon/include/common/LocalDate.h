@@ -1,12 +1,9 @@
 #pragma once
 
-#include <string.h>
-#include <string>
-#include <sstream>
-#include <exception>
 #include <common/DateLUT.h>
+#include <fmt/format.h>
 
-
+#include <exception>
 /** Stores a calendar date in broken-down form (year, month, day-in-month).
   * Could be initialized from date in text form, like '2011-01-01' or from time_t with rounding to date.
   * Also could be initialized from date in text form like '20110101... (only first 8 symbols are used).
@@ -51,8 +48,8 @@ private:
         }
         else
         {
-            m_month = (s[4] -'0') * 10 + (s[5] -'0');
-            m_day = (s[6] - '0')* 10 + (s[7] -'0');
+            m_month = (s[4] - '0') * 10 + (s[5] - '0');
+            m_day = (s[6] - '0') * 10 + (s[7] - '0');
         }
     }
 
@@ -62,16 +59,18 @@ public:
         init(time);
     }
 
-    LocalDate(DayNum_t day_num)
+    LocalDate(DayNum day_num)
     {
         const auto & values = DateLUT::instance().getValues(day_num);
-        m_year  = values.year;
+        m_year = values.year;
         m_month = values.month;
-        m_day   = values.day_of_month;
+        m_day = values.day_of_month;
     }
 
     LocalDate(unsigned short year_, unsigned char month_, unsigned char day_)
-        : m_year(year_), m_month(month_), m_day(day_)
+        : m_year(year_)
+        , m_month(month_)
+        , m_day(day_)
     {
     }
 
@@ -85,30 +84,23 @@ public:
         init(data, length);
     }
 
-    LocalDate() : m_year(0), m_month(0), m_day(0)
+    LocalDate()
+        : m_year(0)
+        , m_month(0)
+        , m_day(0)
     {
     }
 
     LocalDate(const LocalDate &) noexcept = default;
-    LocalDate & operator= (const LocalDate &) noexcept = default;
+    LocalDate & operator=(const LocalDate &) noexcept = default;
 
-    LocalDate & operator= (time_t time)
+    DayNum getDayNum() const
     {
-        init(time);
-        return *this;
+        const auto & lut = DateLUT::instance();
+        return DayNum(lut.makeDayNum(m_year, m_month, m_day).toUnderType());
     }
 
-    operator time_t() const
-    {
-        return DateLUT::instance().makeDate(m_year, m_month, m_day);
-    }
-
-    DayNum_t getDayNum() const
-    {
-        return DateLUT::instance().makeDayNum(m_year, m_month, m_day);
-    }
-
-    operator DayNum_t() const
+    operator DayNum() const
     {
         return getDayNum();
     }
@@ -121,32 +113,32 @@ public:
     void month(unsigned char x) { m_month = x; }
     void day(unsigned char x) { m_day = x; }
 
-    bool operator< (const LocalDate & other) const
+    bool operator<(const LocalDate & other) const
     {
         return 0 > memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator> (const LocalDate & other) const
+    bool operator>(const LocalDate & other) const
     {
         return 0 < memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator<= (const LocalDate & other) const
+    bool operator<=(const LocalDate & other) const
     {
         return 0 >= memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator>= (const LocalDate & other) const
+    bool operator>=(const LocalDate & other) const
     {
         return 0 <= memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator== (const LocalDate & other) const
+    bool operator==(const LocalDate & other) const
     {
         return 0 == memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator!= (const LocalDate & other) const
+    bool operator!=(const LocalDate & other) const
     {
         return !(*this == other);
     }
@@ -154,29 +146,11 @@ public:
     /// NOTE Inefficient.
     std::string toString(char separator = '-') const
     {
-        std::stringstream ss;
         if (separator)
-            ss << year() << separator << (month() / 10) << (month() % 10)
-                << separator << (day() / 10) << (day() % 10);
+            return fmt::format("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
         else
-            ss << year() << (month() / 10) << (month() % 10)
-                << (day() / 10) << (day() % 10);
-        return ss.str();
+            return fmt::format("{}{}{}{}{}", year(), month() / 10, month() % 10, day() / 10, day() % 10);
     }
 };
 
-inline std::ostream & operator<< (std::ostream & ostr, const LocalDate & date)
-{
-    return ostr << date.year()
-        << '-' << (date.month() / 10) << (date.month() % 10)
-        << '-' << (date.day() / 10) << (date.day() % 10);
-}
-
-
-namespace std
-{
-inline string to_string(const LocalDate & date)
-{
-    return date.toString();
-}
-}
+static_assert(sizeof(LocalDate) == 4);

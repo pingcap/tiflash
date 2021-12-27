@@ -1,24 +1,21 @@
+#include <Common/Exception.h>
+#include <Common/config.h>
+#include <Common/setThreadName.h>
+#include <Dictionaries/Embedded/IGeoDictionariesLoader.h>
 #include <Dictionaries/Embedded/RegionsHierarchies.h>
 #include <Dictionaries/Embedded/RegionsNames.h>
 #include <Dictionaries/Embedded/TechDataHierarchy.h>
-#include <Dictionaries/Embedded/IGeoDictionariesLoader.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
-
-#include <Common/setThreadName.h>
-#include <Common/Exception.h>
-#include <Common/config.h>
-#include <common/logger_useful.h>
-
 #include <Poco/Util/Application.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNFINISHED;
+extern const int UNFINISHED;
 }
 
 void EmbeddedDictionaries::handleException(const bool throw_on_error) const
@@ -76,32 +73,14 @@ bool EmbeddedDictionaries::reloadImpl(const bool throw_on_error, const bool forc
 
     bool was_exception = false;
 
-#if USE_MYSQL
-    DictionaryReloader<TechDataHierarchy> reload_tech_data = [=] (const Poco::Util::AbstractConfiguration & config)
-        -> std::unique_ptr<TechDataHierarchy>
-    {
-        if (!TechDataHierarchy::isConfigured(config))
-            return {};
-
-        auto dictionary = std::make_unique<TechDataHierarchy>();
-        dictionary->reload();
-        return dictionary;
-    };
-
-    if (!reloadDictionary<TechDataHierarchy>(tech_data_hierarchy, reload_tech_data, throw_on_error, force_reload))
-        was_exception = true;
-#endif
-
-    DictionaryReloader<RegionsHierarchies> reload_regions_hierarchies = [=] (const Poco::Util::AbstractConfiguration & config)
-    {
+    DictionaryReloader<RegionsHierarchies> reload_regions_hierarchies = [=](const Poco::Util::AbstractConfiguration & config) {
         return geo_dictionaries_loader->reloadRegionsHierarchies(config);
     };
 
     if (!reloadDictionary<RegionsHierarchies>(regions_hierarchies, std::move(reload_regions_hierarchies), throw_on_error, force_reload))
         was_exception = true;
 
-    DictionaryReloader<RegionsNames> reload_regions_names = [=] (const Poco::Util::AbstractConfiguration & config)
-    {
+    DictionaryReloader<RegionsNames> reload_regions_names = [=](const Poco::Util::AbstractConfiguration & config) {
         return geo_dictionaries_loader->reloadRegionsNames(config);
     };
 
@@ -144,7 +123,7 @@ EmbeddedDictionaries::EmbeddedDictionaries(
     std::unique_ptr<IGeoDictionariesLoader> geo_dictionaries_loader_,
     Context & context_,
     const bool throw_on_error)
-    : log(&Logger::get("EmbeddedDictionaries"))
+    : log(&Poco::Logger::get("EmbeddedDictionaries"))
     , context(context_)
     , geo_dictionaries_loader(std::move(geo_dictionaries_loader_))
     , reload_period(context_.getConfigRef().getInt("builtin_dictionaries_reload_interval", 3600))
@@ -167,4 +146,4 @@ void EmbeddedDictionaries::reload()
 }
 
 
-}
+} // namespace DB

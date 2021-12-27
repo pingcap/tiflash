@@ -1,15 +1,13 @@
 
 #pragma once
 
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
 
 
 namespace DB
 {
-
-
 /** Not an aggregate function, but an adapter of aggregate functions,
   * Aggregate functions with the `State` suffix differ from the corresponding ones in that their states are not finalized.
   * Return type - DataTypeAggregateFunction.
@@ -24,7 +22,10 @@ private:
 
 public:
     AggregateFunctionState(AggregateFunctionPtr nested, const DataTypes & arguments, const Array & params)
-        : nested_func(nested), arguments(arguments), params(params) {}
+        : nested_func(nested)
+        , arguments(arguments)
+        , params(params)
+    {}
 
     String getName() const override
     {
@@ -33,12 +34,12 @@ public:
 
     DataTypePtr getReturnType() const override;
 
-    void create(AggregateDataPtr place) const override
+    void create(AggregateDataPtr __restrict place) const override
     {
         nested_func->create(place);
     }
 
-    void destroy(AggregateDataPtr place) const noexcept override
+    void destroy(AggregateDataPtr __restrict place) const noexcept override
     {
         nested_func->destroy(place);
     }
@@ -58,27 +59,27 @@ public:
         return nested_func->alignOfData();
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         nested_func->add(place, columns, row_num, arena);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         nested_func->serialize(place, buf);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         nested_func->deserialize(place, buf, arena);
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnAggregateFunction &>(to).getData().push_back(const_cast<AggregateDataPtr>(place));
     }
@@ -96,4 +97,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

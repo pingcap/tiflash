@@ -1,23 +1,23 @@
 #pragma once
 
 #include <Core/QueryProcessingStage.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/IInterpreter.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/IInterpreter.h>
 #include <Storages/Transaction/Types.h>
 
-
-namespace Poco { class Logger; }
+#include <memory>
 
 namespace DB
 {
-
 class ExpressionAnalyzer;
 class ASTSelectQuery;
 struct SubqueryForSet;
 
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -104,7 +104,9 @@ private:
         }
     };
 
-    struct OnlyAnalyzeTag {};
+    struct OnlyAnalyzeTag
+    {
+    };
     InterpreterSelectQuery(
         OnlyAnalyzeTag,
         const ASTPtr & query_ptr_,
@@ -119,14 +121,14 @@ private:
 
     struct AnalysisResult
     {
-        bool has_join       = false;
-        bool has_where      = false;
+        bool has_join = false;
+        bool has_where = false;
         bool need_aggregate = false;
-        bool has_having     = false;
-        bool has_order_by   = false;
-        bool has_limit_by   = false;
+        bool has_having = false;
+        bool has_order_by = false;
+        bool has_limit_by = false;
 
-        ExpressionActionsPtr before_join;   /// including JOIN
+        ExpressionActionsPtr before_join; /// including JOIN
         ExpressionActionsPtr before_where;
         ExpressionActionsPtr before_aggregation;
         ExpressionActionsPtr before_having;
@@ -161,7 +163,7 @@ private:
     QueryProcessingStage::Enum executeFetchColumns(Pipeline & pipeline, bool dry_run);
 
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression);
-    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool overflow_row, bool final);
+    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool overflow_row, bool final);
     void executeMergeAggregated(Pipeline & pipeline, bool overflow_row, bool final);
     void executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression, bool overflow_row);
     void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression);
@@ -200,12 +202,12 @@ private:
 
     /// Table from where to read data, if not subquery.
     StoragePtr storage;
-    TableStructureReadLockPtr table_lock;
+    TableLockHolder table_lock;
 
     /// Used when we read from prepared input, not table or subquery.
     BlockInputStreamPtr input;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

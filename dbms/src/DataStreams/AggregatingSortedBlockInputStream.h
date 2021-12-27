@@ -34,7 +34,7 @@ protected:
     Block readImpl() override;
 
 private:
-    Logger * log = &Logger::get("AggregatingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("AggregatingSortedBlockInputStream");
 
     /// Read finished.
     bool finished = false;

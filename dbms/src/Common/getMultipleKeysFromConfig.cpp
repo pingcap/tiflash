@@ -1,7 +1,6 @@
-#include <Common/getMultipleKeysFromConfig.h>
-
-#include <Poco/Util/AbstractConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/getMultipleKeysFromConfig.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
 {
@@ -12,7 +11,7 @@ std::vector<std::string> getMultipleKeysFromConfig(const Poco::Util::AbstractCon
     config.keys(root, config_keys);
     for (const auto & key : config_keys)
     {
-        if (key != name && !(startsWith(key.data(), name + "[") && endsWith(key.data(), "]")))
+        if (key != name && !(startsWith(key, name + "[") && endsWith(key, "]")))
             continue;
         values.emplace_back(key);
     }
@@ -28,4 +27,4 @@ std::vector<std::string> getMultipleValuesFromConfig(const Poco::Util::AbstractC
     return values;
 }
 
-}
+} // namespace DB

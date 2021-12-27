@@ -9,33 +9,38 @@ namespace DB
 class RegionException : public Exception
 {
 public:
-    enum RegionReadStatus : UInt8
+    // - region not found : This region does not exist or has been removed.
+    // - region epoch not match : This region may has executed split/merge/change-peer command.
+    enum class RegionReadStatus : UInt8
     {
         OK,
         NOT_FOUND,
-        VERSION_ERROR,
+        EPOCH_NOT_MATCH,
     };
 
     static const char * RegionReadStatusString(RegionReadStatus s)
     {
         switch (s)
         {
-            case OK:
+            case RegionReadStatus::OK:
                 return "OK";
-            case NOT_FOUND:
+            case RegionReadStatus::NOT_FOUND:
                 return "NOT_FOUND";
-            case VERSION_ERROR:
-                return "VERSION_ERROR";
+            case RegionReadStatus::EPOCH_NOT_MATCH:
+                return "EPOCH_NOT_MATCH";
         }
         return "Unknown";
     };
 
+    using UnavailableRegions = std::unordered_set<RegionID>;
+
 public:
-    RegionException(std::vector<RegionID> && region_ids_, RegionReadStatus status_)
-        : Exception(RegionReadStatusString(status_)), region_ids(region_ids_), status(status_)
+    RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)
+        : Exception(RegionReadStatusString(status_)), unavailable_region(std::move(unavailable_region_)), status(status_)
     {}
 
-    std::vector<RegionID> region_ids;
+    /// Region could be found with correct epoch, but unavailable (e.g. its lease in proxy has not been built with leader).
+    UnavailableRegions unavailable_region;
     RegionReadStatus status;
 };
 

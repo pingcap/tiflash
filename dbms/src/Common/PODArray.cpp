@@ -5,4 +5,4 @@ namespace DB
 /// Used for left padding of PODArray when empty
 const char EmptyPODArray[EmptyPODArraySize]{};
 
-}
+} // namespace DB

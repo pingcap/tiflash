@@ -1,17 +1,15 @@
-#include <iostream>
-#include <iomanip>
-
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnsNumber.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnString.h>
-
+#include <Columns/ColumnsNumber.h>
 #include <DataStreams/OneBlockInputStream.h>
-
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Aggregator.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <iomanip>
+#include <iostream>
 
 
 int main(int argc, char ** argv)
@@ -77,9 +75,7 @@ int main(int argc, char ** argv)
         DataTypes empty_list_of_types;
         aggregate_descriptions[0].function = factory.get("count", empty_list_of_types);
 
-        Aggregator::Params params(
-            stream->getHeader(), {0, 1}, aggregate_descriptions,
-            false, 0, OverflowMode::THROW, nullptr, 0, 0, 0, 0, false, "");
+        Aggregator::Params params(stream->getHeader(), {0, 1}, aggregate_descriptions, false);
 
         Aggregator aggregator(params);
 
@@ -87,13 +83,15 @@ int main(int argc, char ** argv)
             Stopwatch stopwatch;
             stopwatch.start();
 
-            aggregator.execute(stream, aggregated_data_variants);
+            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+            FileProviderPtr file_provider = std::make_shared<FileProvider>(key_manager, false);
+            aggregator.execute(stream, aggregated_data_variants, file_provider);
 
             stopwatch.stop();
             std::cout << std::fixed << std::setprecision(2)
-                << "Elapsed " << stopwatch.elapsedSeconds() << " sec."
-                << ", " << n / stopwatch.elapsedSeconds() << " rows/sec."
-                << std::endl;
+                      << "Elapsed " << stopwatch.elapsedSeconds() << " sec."
+                      << ", " << n / stopwatch.elapsedSeconds() << " rows/sec."
+                      << std::endl;
         }
     }
     catch (const Exception & e)

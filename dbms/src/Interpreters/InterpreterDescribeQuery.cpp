@@ -1,26 +1,23 @@
-#include <Storages/IStorage.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <DataStreams/BlockIO.h>
-#include <DataTypes/DataTypeString.h>
-#include <Parsers/queryToString.h>
 #include <Common/typeid_cast.h>
-#include <TableFunctions/ITableFunction.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
-#include <Parsers/ASTIdentifier.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
-
-#include <Storages/StorageMergeTree.h>
+#include <Parsers/queryToString.h>
+#include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
+#include <TableFunctions/ITableFunction.h>
+#include <TableFunctions/TableFunctionFactory.h>
 
 
 namespace DB
 {
-
 BlockIO InterpreterDescribeQuery::execute()
 {
     BlockIO res;
@@ -101,7 +98,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
             table = context.getTable(database_name, table_name);
         }
 
-        auto table_lock = table->lockStructure(false, __PRETTY_FUNCTION__);
+        auto table_lock = table->lockStructureForShare(context.getCurrentQueryId());
         columns = table->getColumns().getAll();
         column_defaults = table->getColumns().defaults;
     }
@@ -135,4 +132,4 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));
 }
 
-}
+} // namespace DB

@@ -5,6 +5,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ThreadFactory.h>
 #include <common/ThreadPool.h>
 #include <Common/MemoryTracker.h>
 
@@ -97,7 +98,7 @@ protected:
         /// If there were no calculations yet, calculate the first block synchronously
         if (!started)
         {
-            calculate(current_memory_tracker);
+            calculate();
             started = true;
         }
         else    /// If the calculations are already in progress - wait for the result
@@ -121,12 +122,12 @@ protected:
     void next()
     {
         ready.reset();
-        pool.schedule(std::bind(&AsynchronousBlockInputStream::calculate, this, current_memory_tracker));
+        pool.schedule(ThreadFactory(false, "AsyncBlockInput").newJob([this] { calculate(); }));
     }
 
 
     /// Calculations that can be performed in a separate thread
-    void calculate(MemoryTracker * memory_tracker)
+    void calculate()
     {
         CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
@@ -135,8 +136,6 @@ protected:
             if (first)
             {
                 first = false;
-                setThreadName("AsyncBlockInput");
-                current_memory_tracker = memory_tracker;
                 children.back()->readPrefix();
             }
 

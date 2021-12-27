@@ -3,17 +3,18 @@
 #include <AggregateFunctions/AggregateFunctionNothing.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTuple.h>
 
+#include <unordered_set>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-extern const String UniqRawResName;
+extern const std::unordered_set<String> hacking_return_non_null_agg_func_names;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
@@ -30,8 +31,15 @@ public:
     }
 
     AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array &) const override
     {
+        /// group_concat reuses groupArray and groupUniqArray with the special warp function `AggregateFunctionGroupConcat` to process,
+        /// the warp function needs more complex arguments, including collators, sort descriptions and others, which are hard to deliver via Array type,
+        /// so it is specially added outside, instead of being added here, so directly return in this function.
+        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
+            return nested_function;
         bool has_nullable_types = false;
         bool has_null_types = false;
         for (const auto & arg_type : arguments)
@@ -46,7 +54,6 @@ public:
                 }
             }
         }
-
 
         /// Special case for 'count' function. It could be called with Nullable arguments
         /// - that means - count number of calls, when all arguments are not NULL.
@@ -66,15 +73,31 @@ public:
         }
 
         bool can_output_be_null = true;
-        if (nested_function && nested_function->getName() == UniqRawResName)
-        {
+        if (nested_function && hacking_return_non_null_agg_func_names.count(nested_function->getName()))
             can_output_be_null = false;
-        }
 
         if (has_null_types && can_output_be_null)
             return std::make_shared<AggregateFunctionNothing>();
 
         bool return_type_is_nullable = can_output_be_null && nested_function->getReturnType()->canBeInsideNullable();
+
+        if (nested_function && nested_function->getName() == "first_row")
+        {
+            if (return_type_is_nullable)
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionFirstRowNull<true, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionFirstRowNull<true, false>>(nested_function);
+            }
+            else
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionFirstRowNull<false, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionFirstRowNull<false, false>>(nested_function);
+            }
+        }
 
         if (arguments.size() == 1)
         {

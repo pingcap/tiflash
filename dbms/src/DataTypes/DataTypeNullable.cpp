@@ -37,7 +37,7 @@ bool DataTypeNullable::onlyNull() const
 }
 
 
-void DataTypeNullable::enumerateStreams(StreamCallback callback, SubstreamPath path) const
+void DataTypeNullable::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
     path.push_back(Substream::NullMap);
     callback(path);
@@ -48,11 +48,11 @@ void DataTypeNullable::enumerateStreams(StreamCallback callback, SubstreamPath p
 
 void DataTypeNullable::serializeBinaryBulkWithMultipleStreams(
     const IColumn & column,
-    OutputStreamGetter getter,
+    const OutputStreamGetter & getter,
     size_t offset,
     size_t limit,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
     col.checkConsistency();
@@ -70,11 +70,11 @@ void DataTypeNullable::serializeBinaryBulkWithMultipleStreams(
 
 void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
     IColumn & column,
-    InputStreamGetter getter,
+    const InputStreamGetter & getter,
     size_t limit,
     double avg_value_size_hint,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     ColumnNullable & col = static_cast<ColumnNullable &>(column);
 
@@ -89,11 +89,11 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
 
 void DataTypeNullable::serializeWidenBinaryBulkWithMultipleStreams(
     const IColumn & column,
-    OutputStreamGetter getter,
+    const OutputStreamGetter & getter,
     size_t offset,
     size_t limit,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
     col.checkConsistency();
@@ -111,11 +111,11 @@ void DataTypeNullable::serializeWidenBinaryBulkWithMultipleStreams(
 
 void DataTypeNullable::deserializeWidenBinaryBulkWithMultipleStreams(
     IColumn & column,
-    InputStreamGetter getter,
+    const InputStreamGetter & getter,
     size_t limit,
     double avg_value_size_hint,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     ColumnNullable &col = static_cast<ColumnNullable &>(column);
 

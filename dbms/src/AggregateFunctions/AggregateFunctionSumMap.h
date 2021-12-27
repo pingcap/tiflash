@@ -1,28 +1,25 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
-
 #include <Common/FieldVisitors.h>
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 #include <map>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 template <typename T>
 struct AggregateFunctionSumMapData
@@ -49,8 +46,7 @@ struct AggregateFunctionSumMapData
   */
 
 template <typename T>
-class AggregateFunctionSumMap final : public IAggregateFunctionDataHelper<
-    AggregateFunctionSumMapData<typename NearestFieldType<T>::Type>, AggregateFunctionSumMap<T>>
+class AggregateFunctionSumMap final : public IAggregateFunctionDataHelper<AggregateFunctionSumMapData<typename NearestFieldType<T>::Type>, AggregateFunctionSumMap<T>>
 {
 private:
     DataTypePtr keys_type;
@@ -58,7 +54,9 @@ private:
 
 public:
     AggregateFunctionSumMap(const DataTypePtr & keys_type, const DataTypes & values_types)
-        : keys_type(keys_type), values_types(values_types) {}
+        : keys_type(keys_type)
+        , values_types(values_types)
+    {}
 
     String getName() const override { return "sumMap"; }
 
@@ -73,7 +71,7 @@ public:
         return std::make_shared<DataTypeTuple>(types);
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, const size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, const size_t row_num, Arena *) const override
     {
         // Column 0 contains array of keys of known type
         const ColumnArray & array_column = static_cast<const ColumnArray &>(*columns[0]);
@@ -119,7 +117,7 @@ public:
         }
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & merged_maps = this->data(place).merged_maps;
         const auto & rhs_maps = this->data(rhs).merged_maps;
@@ -137,7 +135,7 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         const auto & merged_maps = this->data(place).merged_maps;
         size_t size = merged_maps.size();
@@ -151,7 +149,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         auto & merged_maps = this->data(place).merged_maps;
         size_t size = 0;
@@ -171,7 +169,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         // Final step does compaction of keys that have zero values, this mutates the state
         auto & merged_maps = this->data(const_cast<AggregateDataPtr>(place)).merged_maps;
@@ -231,4 +229,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

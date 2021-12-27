@@ -1,26 +1,22 @@
 #pragma once
 
-#include <type_traits>
-
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeArray.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/QuantilesCommon.h>
-
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
+#include <type_traits>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 
@@ -45,10 +41,8 @@ template <
     typename FloatReturnType,
     /// If true, the function will accept multiple parameters with quantile levels
     ///  and return an Array filled with many values of that quantiles.
-    bool returns_many
->
-class AggregateFunctionQuantile final : public IAggregateFunctionDataHelper<Data,
-    AggregateFunctionQuantile<Value, Data, Name, have_second_arg, FloatReturnType, returns_many>>
+    bool returns_many>
+class AggregateFunctionQuantile final : public IAggregateFunctionDataHelper<Data, AggregateFunctionQuantile<Value, Data, Name, have_second_arg, FloatReturnType, returns_many>>
 {
 private:
     static constexpr bool returns_float = !std::is_same_v<FloatReturnType, void>;
@@ -62,7 +56,9 @@ private:
 
 public:
     AggregateFunctionQuantile(const DataTypePtr & argument_type, const Array & params)
-        : levels(params, returns_many), level(levels.levels[0]), argument_type(argument_type)
+        : levels(params, returns_many)
+        , level(levels.levels[0])
+        , argument_type(argument_type)
     {
         if (!returns_many && levels.size() > 1)
             throw Exception("Aggregate function " + getName() + " require one parameter or less", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -85,7 +81,7 @@ public:
             return res;
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (have_second_arg)
             this->data(place).add(
@@ -96,23 +92,23 @@ public:
                 static_cast<const ColumnVector<Value> &>(*columns[0]).getData()[row_num]);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).merge(this->data(rhs));
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         /// const_cast is required because some data structures apply finalizaton (like compactization) before serializing.
         this->data(const_cast<AggregateDataPtr>(place)).serialize(buf);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         this->data(place).deserialize(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         /// const_cast is required because some data structures apply finalizaton (like sorting) for obtain a result.
         auto & data = this->data(const_cast<AggregateDataPtr>(place));
@@ -157,38 +153,85 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB
 
 
 /// These must be exposed in header for the purpose of dynamic compilation.
-#include <AggregateFunctions/QuantileReservoirSampler.h>
-#include <AggregateFunctions/QuantileReservoirSamplerDeterministic.h>
 #include <AggregateFunctions/QuantileExact.h>
 #include <AggregateFunctions/QuantileExactWeighted.h>
-#include <AggregateFunctions/QuantileTiming.h>
+#include <AggregateFunctions/QuantileReservoirSampler.h>
+#include <AggregateFunctions/QuantileReservoirSamplerDeterministic.h>
 #include <AggregateFunctions/QuantileTDigest.h>
+#include <AggregateFunctions/QuantileTiming.h>
 
 namespace DB
 {
+struct NameQuantile
+{
+    static constexpr auto name = "quantile";
+};
+struct NameQuantiles
+{
+    static constexpr auto name = "quantiles";
+};
+struct NameQuantileDeterministic
+{
+    static constexpr auto name = "quantileDeterministic";
+};
+struct NameQuantilesDeterministic
+{
+    static constexpr auto name = "quantilesDeterministic";
+};
 
-struct NameQuantile { static constexpr auto name = "quantile"; };
-struct NameQuantiles { static constexpr auto name = "quantiles"; };
-struct NameQuantileDeterministic { static constexpr auto name = "quantileDeterministic"; };
-struct NameQuantilesDeterministic { static constexpr auto name = "quantilesDeterministic"; };
+struct NameQuantileExact
+{
+    static constexpr auto name = "quantileExact";
+};
+struct NameQuantileExactWeighted
+{
+    static constexpr auto name = "quantileExactWeighted";
+};
+struct NameQuantilesExact
+{
+    static constexpr auto name = "quantilesExact";
+};
+struct NameQuantilesExactWeighted
+{
+    static constexpr auto name = "quantilesExactWeighted";
+};
 
-struct NameQuantileExact { static constexpr auto name = "quantileExact"; };
-struct NameQuantileExactWeighted { static constexpr auto name = "quantileExactWeighted"; };
-struct NameQuantilesExact { static constexpr auto name = "quantilesExact"; };
-struct NameQuantilesExactWeighted { static constexpr auto name = "quantilesExactWeighted"; };
+struct NameQuantileTiming
+{
+    static constexpr auto name = "quantileTiming";
+};
+struct NameQuantileTimingWeighted
+{
+    static constexpr auto name = "quantileTimingWeighted";
+};
+struct NameQuantilesTiming
+{
+    static constexpr auto name = "quantilesTiming";
+};
+struct NameQuantilesTimingWeighted
+{
+    static constexpr auto name = "quantilesTimingWeighted";
+};
 
-struct NameQuantileTiming { static constexpr auto name = "quantileTiming"; };
-struct NameQuantileTimingWeighted { static constexpr auto name = "quantileTimingWeighted"; };
-struct NameQuantilesTiming { static constexpr auto name = "quantilesTiming"; };
-struct NameQuantilesTimingWeighted { static constexpr auto name = "quantilesTimingWeighted"; };
+struct NameQuantileTDigest
+{
+    static constexpr auto name = "quantileTDigest";
+};
+struct NameQuantileTDigestWeighted
+{
+    static constexpr auto name = "quantileTDigestWeighted";
+};
+struct NameQuantilesTDigest
+{
+    static constexpr auto name = "quantilesTDigest";
+};
+struct NameQuantilesTDigestWeighted
+{
+    static constexpr auto name = "quantilesTDigestWeighted";
+};
 
-struct NameQuantileTDigest { static constexpr auto name = "quantileTDigest"; };
-struct NameQuantileTDigestWeighted { static constexpr auto name = "quantileTDigestWeighted"; };
-struct NameQuantilesTDigest { static constexpr auto name = "quantilesTDigest"; };
-struct NameQuantilesTDigestWeighted { static constexpr auto name = "quantilesTDigestWeighted"; };
-
-}
+} // namespace DB

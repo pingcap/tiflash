@@ -1,14 +1,13 @@
 #pragma once
 
-#include <string>
+#include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
 #include <fcntl.h>
 
-#include <IO/WriteBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <string>
 
 namespace DB
 {
-
 class WriteBufferFromFileBase : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
@@ -21,10 +20,11 @@ public:
     virtual void sync() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;
+    virtual void close() = 0;
 
 protected:
     virtual off_t doSeek(off_t off, int whence) = 0;
     virtual void doTruncate(off_t length) = 0;
 };
 
-}
+} // namespace DB

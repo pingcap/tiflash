@@ -1,21 +1,17 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnVector.h>
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnString.h>
-
+#include <Columns/ColumnVector.h>
 #include <Common/ArenaAllocator.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
-
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <common/likely.h>
+
 #include <type_traits>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_MAX_ARRAY_SIZE 0xFFFFFF
@@ -23,12 +19,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_ARRAY_SIZE;
-    extern const int LOGICAL_ERROR;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 /// A particular case is an implementation for numeric types.
@@ -53,7 +48,9 @@ class GroupArrayNumericImpl final
 
 public:
     explicit GroupArrayNumericImpl(const DataTypePtr & data_type_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : data_type(data_type_), max_elems(max_elems_) {}
+        : data_type(data_type_)
+        , max_elems(max_elems_)
+    {}
 
     String getName() const override { return "groupArray"; }
 
@@ -62,7 +59,7 @@ public:
         return std::make_shared<DataTypeArray>(data_type);
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         if (limit_num_elems && this->data(place).value.size() >= max_elems)
             return;
@@ -70,7 +67,7 @@ public:
         this->data(place).value.push_back(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], arena);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         auto & cur_elems = this->data(place);
         auto & rhs_elems = this->data(rhs);
@@ -86,7 +83,7 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         const auto & value = this->data(place).value;
         size_t size = value.size();
@@ -94,7 +91,7 @@ public:
         buf.write(reinterpret_cast<const char *>(&value[0]), size * sizeof(value[0]));
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         size_t size = 0;
         readVarUInt(size, buf);
@@ -111,7 +108,7 @@ public:
         buf.read(reinterpret_cast<char *>(&value[0]), size * sizeof(value[0]));
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         const auto & value = this->data(place).value;
         size_t size = value.size();
@@ -240,21 +237,23 @@ class GroupArrayGeneralListImpl final
     : public IAggregateFunctionDataHelper<GroupArrayGeneralListData<Node>, GroupArrayGeneralListImpl<Node, limit_num_elems>>
 {
     using Data = GroupArrayGeneralListData<Node>;
-    static Data & data(AggregateDataPtr place)            { return *reinterpret_cast<Data*>(place); }
-    static const Data & data(ConstAggregateDataPtr place) { return *reinterpret_cast<const Data*>(place); }
+    static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
+    static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
     DataTypePtr data_type;
     UInt64 max_elems;
 
 public:
     GroupArrayGeneralListImpl(const DataTypePtr & data_type, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : data_type(data_type), max_elems(max_elems_) {}
+        : data_type(data_type)
+        , max_elems(max_elems_)
+    {}
 
     String getName() const override { return "groupArray"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(data_type); }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         if (limit_num_elems && data(place).elems >= max_elems)
             return;
@@ -275,7 +274,7 @@ public:
         ++data(place).elems;
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         /// It is sadly, but rhs's Arena could be destroyed
 
@@ -324,7 +323,7 @@ public:
         data(place).elems = new_elems;
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         writeVarUInt(data(place).elems, buf);
 
@@ -336,7 +335,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         UInt64 elems;
         readVarUInt(elems, buf);
@@ -365,7 +364,7 @@ public:
         data(place).last = prev;
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         auto & column_array = static_cast<ColumnArray &>(to);
 
@@ -398,4 +397,4 @@ public:
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_MAX_ARRAY_SIZE
 
-}
+} // namespace DB

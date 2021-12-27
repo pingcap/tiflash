@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/defines.h>
+
 #define DBMS_NAME "ClickHouse"
 #define DBMS_VERSION_MAJOR 1
 #define DBMS_VERSION_MINOR 1
@@ -27,9 +29,13 @@
 #define DEFAULT_MAX_COMPRESS_BLOCK_SIZE 1048576
 
 #define DEFAULT_MAX_READ_TSO 0xFFFFFFFFFFFFFFFF
-#define DEFAULT_UNSPECIFIED_SCHEMA_VERSION -1
+#define DEFAULT_UNSPECIFIED_SCHEMA_VERSION (-1)
+#define DEFAULT_MPP_TASK_TIMEOUT 10
+#define DEFAULT_MPP_TASK_RUNNING_TIMEOUT (DEFAULT_MPP_TASK_TIMEOUT + 30)
+#define DEFAULT_MPP_TASK_WAITING_TIMEOUT 36000
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L
+#define DEFAULT_BATCH_SEND_MIN_LIMIT (-1)
 
 /** Which blocks by default read the data (by number of rows).
   * Smaller values give better cache locality, less consumption of RAM, but more overhead to process the query.
@@ -70,8 +76,6 @@
 /// Version of ClickHouse TCP protocol. Set to git tag with latest protocol change.
 #define DBMS_TCP_PROTOCOL_VERSION 54226
 
-#define DBMS_DISTRIBUTED_DIRECTORY_MONITOR_SLEEP_TIME_MS 100
-
 /// The boundary on which the blocks for asynchronous file operations should be aligned.
 #define DEFAULT_AIO_FILE_BLOCK_SIZE 4096
 
@@ -80,38 +84,14 @@
 #define DEFAULT_HTTP_READ_BUFFER_TIMEOUT 1800
 #define DEFAULT_HTTP_READ_BUFFER_CONNECTION_TIMEOUT 1
 
-// more aliases: https://mailman.videolan.org/pipermail/x264-devel/2014-May/010660.html
-
-#if defined(_MSC_VER)
-    #define ALWAYS_INLINE __forceinline
-    #define NO_INLINE static __declspec(noinline)
-    #define MAY_ALIAS
-#else
-    #define ALWAYS_INLINE __attribute__((__always_inline__))
-    #define NO_INLINE __attribute__((__noinline__))
-    #define MAY_ALIAS __attribute__((__may_alias__))
-#endif
-
-
 #define PLATFORM_NOT_SUPPORTED "The only supported platforms are x86_64 and AArch64 (work in progress)"
+
+#define DEFAULT_MARK_CACHE_SIZE (5ULL * 1024 * 1024 * 1024)
+
+#define DEFAULT_METRICS_PORT 8234
+
+#define DEFAULT_HTTP_PORT 8123
 
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
-#endif
-
-/// Check for presence of address sanitizer
-#if defined(__has_feature)
-    #if __has_feature(address_sanitizer)
-        #define ADDRESS_SANITIZER 1
-    #endif
-#elif defined(__SANITIZE_ADDRESS__)
-    #define ADDRESS_SANITIZER 1
-#endif
-
-#if defined(__has_feature)
-    #if __has_feature(thread_sanitizer)
-        #define THREAD_SANITIZER 1
-    #endif
-#elif defined(__SANITIZE_THREAD__)
-    #define THREAD_SANITIZER 1
 #endif

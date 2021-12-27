@@ -1,21 +1,17 @@
-#include <iostream>
-#include <iomanip>
-
-#include <common/DateLUT.h>
-
-#include <Poco/ConsoleChannel.h>
-
+#include <Databases/DatabaseOrdinary.h>
+#include <Databases/IDatabase.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-
+#include <Interpreters/Context.h>
+#include <Interpreters/executeQuery.h>
+#include <Interpreters/loadMetadata.h>
+#include <Poco/ConsoleChannel.h>
 #include <Storages/StorageLog.h>
 #include <Storages/System/attachSystemTables.h>
+#include <common/DateLUT.h>
 
-#include <Interpreters/Context.h>
-#include <Interpreters/loadMetadata.h>
-#include <Interpreters/executeQuery.h>
-#include <Databases/IDatabase.h>
-#include <Databases/DatabaseOrdinary.h>
+#include <iomanip>
+#include <iostream>
 
 
 using namespace DB;
@@ -24,8 +20,8 @@ int main(int, char **)
 try
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Logger::root().setChannel(channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(channel);
+    Poco::Logger::root().setLevel("trace");
 
     /// Pre-initialize the `DateLUT` so that the first initialization does not affect the measured execution speed.
     DateLUT::instance();
@@ -52,8 +48,8 @@ try
 catch (const Exception & e)
 {
     std::cerr << e.what() << ", " << e.displayText() << std::endl
-        << std::endl
-        << "Stack trace:" << std::endl
-        << e.getStackTrace().toString();
+              << std::endl
+              << "Stack trace:" << std::endl
+              << e.getStackTrace().toString();
     return 1;
 }

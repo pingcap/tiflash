@@ -4,28 +4,40 @@
 
 namespace DB
 {
-
-void encodeDAGInt64(Int64 i, std::stringstream & ss)
+void encodeDAGInt64(Int64 i, WriteBuffer & ss)
 {
-    auto u = RecordKVFormat::encodeInt64(i);
-    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+    RecordKVFormat::encodeInt64(i, ss);
 }
 
-void encodeDAGUInt64(UInt64 i, std::stringstream & ss)
+void encodeDAGUInt64(UInt64 i, WriteBuffer & ss)
 {
-    auto u = RecordKVFormat::encodeUInt64(i);
-    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+    RecordKVFormat::encodeUInt64(i, ss);
 }
 
-void encodeDAGFloat32(Float32 f, std::stringstream & ss) { EncodeFloat64(f, ss); }
+void encodeDAGFloat32(Float32 f, WriteBuffer & ss)
+{
+    EncodeFloat64(f, ss);
+}
 
-void encodeDAGFloat64(Float64 f, std::stringstream & ss) { EncodeFloat64(f, ss); }
+void encodeDAGFloat64(Float64 f, WriteBuffer & ss)
+{
+    EncodeFloat64(f, ss);
+}
 
-void encodeDAGString(const String & s, std::stringstream & ss) { ss << s; }
+void encodeDAGString(const String & s, WriteBuffer & ss)
+{
+    writeString(s, ss);
+}
 
-void encodeDAGBytes(const String & bytes, std::stringstream & ss) { ss << bytes; }
+void encodeDAGBytes(const String & bytes, WriteBuffer & ss)
+{
+    writeString(bytes, ss);
+}
 
-void encodeDAGDecimal(const Field & field, std::stringstream & ss) { EncodeDecimal(field, ss); }
+void encodeDAGDecimal(const Field & field, WriteBuffer & ss)
+{
+    EncodeDecimal(field, ss);
+}
 
 Int64 decodeDAGInt64(const String & s)
 {
@@ -51,9 +63,15 @@ Float64 decodeDAGFloat64(const String & s)
     return DecodeFloat64(cursor, s);
 }
 
-String decodeDAGString(const String & s) { return s; }
+String decodeDAGString(const String & s)
+{
+    return s;
+}
 
-String decodeDAGBytes(const String & s) { return s; }
+String decodeDAGBytes(const String & s)
+{
+    return s;
+}
 
 Field decodeDAGDecimal(const String & s)
 {

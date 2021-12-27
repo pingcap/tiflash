@@ -1,25 +1,24 @@
-#include <iomanip>
-
-#include <Poco/Net/NetException.h>
-#include <Core/Defines.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
-#include <DataStreams/NativeBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
 #include <Client/Connection.h>
 #include <Client/TimeoutSetter.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/NetException.h>
-#include <Common/CurrentMetrics.h>
-#include <Interpreters/ClientInfo.h>
-
 #include <Common/config.h>
+#include <Core/Defines.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromPocoSocket.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromPocoSocket.h>
+#include <IO/WriteHelpers.h>
+#include <IO/copyData.h>
+#include <Interpreters/ClientInfo.h>
+#include <Poco/Net/NetException.h>
+
+#include <iomanip>
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/SecureStreamSocket.h>
 #endif
@@ -27,21 +26,20 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric SendExternalTables;
+extern const Metric SendExternalTables;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NETWORK_ERROR;
-    extern const int SOCKET_TIMEOUT;
-    extern const int SERVER_REVISION_IS_TOO_OLD;
-    extern const int UNEXPECTED_PACKET_FROM_SERVER;
-    extern const int UNKNOWN_PACKET_FROM_SERVER;
-    extern const int SUPPORT_IS_DISABLED;
-}
+extern const int NETWORK_ERROR;
+extern const int SOCKET_TIMEOUT;
+extern const int SERVER_REVISION_IS_TOO_OLD;
+extern const int UNEXPECTED_PACKET_FROM_SERVER;
+extern const int UNKNOWN_PACKET_FROM_SERVER;
+extern const int SUPPORT_IS_DISABLED;
+} // namespace ErrorCodes
 
 
 void Connection::connect()
@@ -51,8 +49,7 @@ void Connection::connect()
         if (connected)
             disconnect();
 
-        LOG_TRACE(log_wrapper.get(), "Connecting. Database: " << (default_database.empty() ? "(not specified)" : default_database) << ". User: " << user
-        << (static_cast<bool>(secure) ? ". Secure" : "") << (static_cast<bool>(compression) ? "" : ". Uncompressed") );
+        LOG_TRACE(log_wrapper.get(), "Connecting. Database: " << (default_database.empty() ? "(not specified)" : default_database) << ". User: " << user << (static_cast<bool>(secure) ? ". Secure" : "") << (static_cast<bool>(compression) ? "" : ". Uncompressed"));
 
         if (static_cast<bool>(secure))
         {
@@ -79,11 +76,7 @@ void Connection::connect()
         sendHello();
         receiveHello();
 
-        LOG_TRACE(log_wrapper.get(), "Connected to " << server_name
-            << " server version " << server_version_major
-            << "." << server_version_minor
-            << "." << server_revision
-            << ".");
+        LOG_TRACE(log_wrapper.get(), "Connected to " << server_name << " server version " << server_version_major << "." << server_version_minor << "." << server_revision << ".");
     }
     catch (Poco::Net::NetException & e)
     {
@@ -377,7 +370,7 @@ void Connection::sendData(const Block & block, const String & name)
     if (!block_out)
     {
         if (compression == Protocol::Compression::Enable)
-            maybe_compressed_out = std::make_shared<CompressedWriteBuffer>(*out, compression_settings);
+            maybe_compressed_out = std::make_shared<CompressedWriteBuffer<>>(*out, compression_settings);
         else
             maybe_compressed_out = out;
 
@@ -486,41 +479,42 @@ Connection::Packet Connection::receivePacket()
 
         switch (res.type)
         {
-            case Protocol::Server::Data:
-                res.block = receiveData();
-                return res;
+        case Protocol::Server::Data:
+            res.block = receiveData();
+            return res;
 
-            case Protocol::Server::Exception:
-                res.exception = receiveException();
-                return res;
+        case Protocol::Server::Exception:
+            res.exception = receiveException();
+            return res;
 
-            case Protocol::Server::Progress:
-                res.progress = receiveProgress();
-                return res;
+        case Protocol::Server::Progress:
+            res.progress = receiveProgress();
+            return res;
 
-            case Protocol::Server::ProfileInfo:
-                res.profile_info = receiveProfileInfo();
-                return res;
+        case Protocol::Server::ProfileInfo:
+            res.profile_info = receiveProfileInfo();
+            return res;
 
-            case Protocol::Server::Totals:
-                /// Block with total values is passed in same form as ordinary block. The only difference is packed id.
-                res.block = receiveData();
-                return res;
+        case Protocol::Server::Totals:
+            /// Block with total values is passed in same form as ordinary block. The only difference is packed id.
+            res.block = receiveData();
+            return res;
 
-            case Protocol::Server::Extremes:
-                /// Same as above.
-                res.block = receiveData();
-                return res;
+        case Protocol::Server::Extremes:
+            /// Same as above.
+            res.block = receiveData();
+            return res;
 
-            case Protocol::Server::EndOfStream:
-                return res;
+        case Protocol::Server::EndOfStream:
+            return res;
 
-            default:
-                /// In unknown state, disconnect - to not leave unsynchronised connection.
-                disconnect();
-                throw Exception("Unknown packet "
-                    + toString(res.type)
-                    + " from server " + getDescription(), ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+        default:
+            /// In unknown state, disconnect - to not leave unsynchronised connection.
+            disconnect();
+            throw Exception("Unknown packet "
+                                + toString(res.type)
+                                + " from server " + getDescription(),
+                            ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
         }
     }
     catch (Exception & e)
@@ -560,7 +554,7 @@ void Connection::initBlockInput()
     if (!block_in)
     {
         if (compression == Protocol::Compression::Enable)
-            maybe_compressed_in = std::make_shared<CompressedReadBuffer>(*in);
+            maybe_compressed_in = std::make_shared<CompressedReadBuffer<>>(*in);
         else
             maybe_compressed_in = in;
 
@@ -572,7 +566,7 @@ void Connection::initBlockInput()
 void Connection::setDescription()
 {
     description = host + ":" + toString(resolved_address.port());
-    auto ip_address =  resolved_address.host().toString();
+    auto ip_address = resolved_address.host().toString();
 
     if (host != ip_address)
         description += ", " + ip_address;
@@ -585,7 +579,7 @@ std::unique_ptr<Exception> Connection::receiveException()
 
     Exception e;
     readException(e, *in, "Received from " + getDescription());
-    return std::unique_ptr<Exception>{ e.clone() };
+    return std::unique_ptr<Exception>{e.clone()};
 }
 
 
@@ -618,9 +612,9 @@ void Connection::fillBlockExtraInfo(BlockExtraInfo & info) const
 void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected) const
 {
     throw NetException(
-            "Unexpected packet from server " + getDescription() + " (expected " + expected
+        "Unexpected packet from server " + getDescription() + " (expected " + expected
             + ", got " + String(Protocol::Server::toString(packet_type)) + ")",
-            ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
+        ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
 }
 
-}
+} // namespace DB

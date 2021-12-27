@@ -1,17 +1,14 @@
 #pragma once
 
-#include <math.h>
-
-#include <common/Types.h>
-
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <Common/HashTable/Hash.h>
+#include <Common/HashTable/HashTableAllocator.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
-
-#include <Common/HashTable/HashTableAllocator.h>
-#include <Common/HashTable/Hash.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <common/types.h>
+#include <math.h>
 
 
 /** Approximate calculation of anything, as usual, is constructed according to the following scheme:
@@ -63,7 +60,7 @@
   */
 struct UniquesHashSetDefaultHash
 {
-    size_t operator() (UInt64 x) const
+    size_t operator()(UInt64 x) const
     {
         return intHash32<0>(x);
     }
@@ -78,10 +75,10 @@ private:
     using HashValue_t = UInt32;
     using Allocator = HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>;
 
-    UInt32 m_size;          /// Number of elements
-    UInt8 size_degree;      /// The size of the table as a power of 2
-    UInt8 skip_degree;      /// Skip elements not divisible by 2 ^ skip_degree
-    bool has_zero;          /// The hash table contains an element with a hash value of 0.
+    UInt32 m_size; /// Number of elements
+    UInt8 size_degree; /// The size of the table as a power of 2
+    UInt8 skip_degree; /// Skip elements not divisible by 2 ^ skip_degree
+    bool has_zero; /// The hash table contains an element with a hash value of 0.
 
     HashValue_t * buf;
 
@@ -105,9 +102,9 @@ private:
         }
     }
 
-    inline size_t buf_size() const           { return 1ULL << size_degree; }
-    inline size_t max_fill() const           { return 1ULL << (size_degree - 1); }
-    inline size_t mask() const               { return buf_size() - 1; }
+    inline size_t buf_size() const { return 1ULL << size_degree; }
+    inline size_t max_fill() const { return 1ULL << (size_degree - 1); }
+    inline size_t mask() const { return buf_size() - 1; }
     inline size_t place(HashValue_t x) const { return (x >> UNIQUES_HASH_BITS_FOR_SKIP) & mask(); }
 
     /// The value is divided by 2 ^ skip_degree
@@ -272,10 +269,10 @@ private:
 
 
 public:
-    UniquesHashSet() :
-        m_size(0),
-        skip_degree(0),
-        has_zero(false)
+    UniquesHashSet()
+        : m_size(0)
+        , skip_degree(0)
+        , has_zero(false)
     {
         alloc(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE);
 #ifdef UNIQUES_HASH_SET_COUNT_COLLISIONS
@@ -284,13 +281,15 @@ public:
     }
 
     UniquesHashSet(const UniquesHashSet & rhs)
-        : m_size(rhs.m_size), skip_degree(rhs.skip_degree), has_zero(rhs.has_zero)
+        : m_size(rhs.m_size)
+        , skip_degree(rhs.skip_degree)
+        , has_zero(rhs.has_zero)
     {
         alloc(rhs.size_degree);
         memcpy(buf, rhs.buf, buf_size() * sizeof(buf[0]));
     }
 
-    UniquesHashSet & operator= (const UniquesHashSet & rhs)
+    UniquesHashSet & operator=(const UniquesHashSet & rhs)
     {
         if (size_degree != rhs.size_degree)
         {
@@ -403,8 +402,8 @@ public:
         free();
 
         UInt8 new_size_degree = m_size <= 1
-             ? UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE
-             : std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(m_size - 1)) + 2);
+            ? UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE
+            : std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(m_size - 1)) + 2);
 
         alloc(new_size_degree);
 
@@ -499,8 +498,8 @@ public:
         free();
 
         UInt8 new_size_degree = m_size <= 1
-             ? UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE
-             : std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(m_size - 1)) + 2);
+            ? UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE
+            : std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(m_size - 1)) + 2);
 
         alloc(new_size_degree);
 

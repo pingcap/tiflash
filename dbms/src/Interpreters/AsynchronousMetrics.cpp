@@ -1,3 +1,4 @@
+#include <Common/Allocator.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
@@ -5,12 +6,12 @@
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/MarkCache.h>
-#include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-#include <chrono>
-
+#include <Storages/StorageDeltaMerge.h>
 #include <common/config_common.h>
+
+#include <chrono>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -26,9 +27,12 @@ struct MallocExtensionInitializer
 #include <jemalloc/jemalloc.h>
 #endif
 
+#if USE_MIMALLOC
+#include <mimalloc.h>
+#endif
+
 namespace DB
 {
-
 AsynchronousMetrics::~AsynchronousMetrics()
 {
     try
@@ -131,73 +135,32 @@ void AsynchronousMetrics::update()
     {
         auto databases = context.getDatabases();
 
-        size_t max_queue_size = 0;
-        size_t max_inserts_in_queue = 0;
-        size_t max_merges_in_queue = 0;
-
-        size_t sum_queue_size = 0;
-        size_t sum_inserts_in_queue = 0;
-        size_t sum_merges_in_queue = 0;
-
-        size_t max_absolute_delay = 0;
-        size_t max_relative_delay = 0;
-
-        size_t max_part_count_for_partition = 0;
+        double max_dt_stable_oldest_snapshot_lifetime = 0.0;
+        double max_dt_delta_oldest_snapshot_lifetime = 0.0;
+        double max_dt_meta_oldest_snapshot_lifetime = 0.0;
+        size_t max_dt_background_tasks_length = 0;
 
         for (const auto & db : databases)
         {
             for (auto iterator = db.second->getIterator(context); iterator->isValid(); iterator->next())
             {
                 auto & table = iterator->table();
-                StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get());
-                StorageReplicatedMergeTree * table_replicated_merge_tree = dynamic_cast<StorageReplicatedMergeTree *>(table.get());
 
-                if (table_replicated_merge_tree)
+                if (auto dt_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(table); dt_storage)
                 {
-                    StorageReplicatedMergeTree::Status status;
-                    table_replicated_merge_tree->getStatus(status, false);
-
-                    calculateMaxAndSum(max_queue_size, sum_queue_size, status.queue.queue_size);
-                    calculateMaxAndSum(max_inserts_in_queue, sum_inserts_in_queue, status.queue.inserts_in_queue);
-                    calculateMaxAndSum(max_merges_in_queue, sum_merges_in_queue, status.queue.merges_in_queue);
-
-                    try
-                    {
-                        time_t absolute_delay = 0;
-                        time_t relative_delay = 0;
-                        table_replicated_merge_tree->getReplicaDelays(absolute_delay, relative_delay);
-
-                        calculateMax(max_absolute_delay, absolute_delay);
-                        calculateMax(max_relative_delay, relative_delay);
-                    }
-                    catch (...)
-                    {
-                        tryLogCurrentException(__PRETTY_FUNCTION__,
-                            "Cannot get replica delay for table: " + backQuoteIfNeed(db.first) + "." + backQuoteIfNeed(iterator->name()));
-                    }
-
-                    calculateMax(max_part_count_for_partition, table_replicated_merge_tree->getData().getMaxPartsCountForPartition());
-                }
-
-                if (table_merge_tree)
-                {
-                    calculateMax(max_part_count_for_partition, table_merge_tree->getData().getMaxPartsCountForPartition());
+                    auto stat = dt_storage->getStore()->getStat();
+                    calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                 }
             }
         }
 
-        set("ReplicasMaxQueueSize", max_queue_size);
-        set("ReplicasMaxInsertsInQueue", max_inserts_in_queue);
-        set("ReplicasMaxMergesInQueue", max_merges_in_queue);
-
-        set("ReplicasSumQueueSize", sum_queue_size);
-        set("ReplicasSumInsertsInQueue", sum_inserts_in_queue);
-        set("ReplicasSumMergesInQueue", sum_merges_in_queue);
-
-        set("ReplicasMaxAbsoluteDelay", max_absolute_delay);
-        set("ReplicasMaxRelativeDelay", max_relative_delay);
-
-        set("MaxPartCountForPartition", max_part_count_for_partition);
+        set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
+        set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
+        set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+        set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
 #if USE_TCMALLOC
@@ -224,6 +187,31 @@ void AsynchronousMetrics::update()
                 set(malloc_metric, value);
         }
     }
+#endif
+
+#if USE_MIMALLOC
+#define MI_STATS_SET(X) set("mimalloc." #X, X)
+
+    {
+        size_t elapsed_msecs;
+        size_t user_msecs;
+        size_t system_msecs;
+        size_t current_rss;
+        size_t peak_rss;
+        size_t current_commit;
+        size_t peak_commit;
+        size_t page_faults;
+        mi_process_info(&elapsed_msecs, &user_msecs, &system_msecs, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
+        MI_STATS_SET(elapsed_msecs);
+        MI_STATS_SET(user_msecs);
+        MI_STATS_SET(system_msecs);
+        MI_STATS_SET(current_rss);
+        MI_STATS_SET(peak_rss);
+        MI_STATS_SET(current_commit);
+        MI_STATS_SET(peak_commit);
+        MI_STATS_SET(page_faults);
+    };
+#undef MI_STATS_SET
 #endif
 
 #if USE_JEMALLOC
@@ -258,6 +246,7 @@ void AsynchronousMetrics::update()
 
 
     /// Add more metrics as you wish.
+    set("mmap.alive", DB::allocator_mmap_counter.load(std::memory_order_relaxed));
 }
 
 

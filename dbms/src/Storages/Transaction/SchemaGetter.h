@@ -10,52 +10,51 @@
 
 namespace DB
 {
-
-enum SchemaActionType : Int8
+enum class SchemaActionType : Int8
 {
-    SchemaActionNone = 0,
-    SchemaActionCreateSchema = 1,
-    SchemaActionDropSchema = 2,
-    SchemaActionCreateTable = 3,
-    SchemaActionDropTable = 4,
-    SchemaActionAddColumn = 5,
-    SchemaActionDropColumn = 6,
-    SchemaActionAddIndex = 7,
-    SchemaActionDropIndex = 8,
-    SchemaActionAddForeignKey = 9,
-    SchemaActionDropForeignKey = 10,
-    SchemaActionTruncateTable = 11,
-    SchemaActionModifyColumn = 12,
-    SchemaActionRebaseAutoID = 13,
-    SchemaActionRenameTable = 14,
-    SchemaActionSetDefaultValue = 15,
-    SchemaActionShardRowID = 16,
-    SchemaActionModifyTableComment = 17,
-    SchemaActionRenameIndex = 18,
-    SchemaActionAddTablePartition = 19,
-    SchemaActionDropTablePartition = 20,
-    SchemaActionCreateView = 21,
-    SchemaActionModifyTableCharsetAndCollate = 22,
-    SchemaActionTruncateTablePartition = 23,
-    SchemaActionDropView = 24,
-    SchemaActionRecoverTable = 25,
-    SchemaActionModifySchemaCharsetAndCollate = 26,
-    SchemaActionLockTable = 27,
-    SchemaActionUnlockTable = 28,
-    SchemaActionRepairTable = 29,
-    SchemaActionSetTiFlashReplica = 30,
-    SchemaActionUpdateTiFlashReplicaStatus = 31,
-    SchemaActionAddPrimaryKey = 32,
-    SchemaActionDropPrimaryKey = 33,
-    SchemaActionCreateSequence = 34,
-    SchemaActionAlterSequence = 35,
-    SchemaActionDropSequence = 36,
-    SchemaActionAddColumns = 37,
-    SchemaActionDropColumns = 38,
-    SchemaActionModifyTableAutoIdCache = 39,
-    SchemaActionRebaseAutoRandomBase = 40,
-    SchemaActionAlterIndexVisibility = 41,
-    SchemaActionExchangeTablePartition = 42,
+    None = 0,
+    CreateSchema = 1,
+    DropSchema = 2,
+    CreateTable = 3,
+    DropTable = 4,
+    AddColumn = 5,
+    DropColumn = 6,
+    AddIndex = 7,
+    DropIndex = 8,
+    AddForeignKey = 9,
+    DropForeignKey = 10,
+    TruncateTable = 11,
+    ModifyColumn = 12,
+    RebaseAutoID = 13,
+    RenameTable = 14,
+    SetDefaultValue = 15,
+    ShardRowID = 16,
+    ModifyTableComment = 17,
+    RenameIndex = 18,
+    AddTablePartition = 19,
+    DropTablePartition = 20,
+    CreateView = 21,
+    ModifyTableCharsetAndCollate = 22,
+    TruncateTablePartition = 23,
+    DropView = 24,
+    RecoverTable = 25,
+    ModifySchemaCharsetAndCollate = 26,
+    LockTable = 27,
+    UnlockTable = 28,
+    RepairTable = 29,
+    SetTiFlashReplica = 30,
+    UpdateTiFlashReplicaStatus = 31,
+    AddPrimaryKey = 32,
+    DropPrimaryKey = 33,
+    CreateSequence = 34,
+    AlterSequence = 35,
+    DropSequence = 36,
+    AddColumns = 37,
+    DropColumns = 38,
+    ModifyTableAutoIdCache = 39,
+    RebaseAutoRandomBase = 40,
+    AlterIndexVisibility = 41,
+    ExchangeTablePartition = 42,
 };
 
 struct AffectedOption
@@ -88,9 +87,12 @@ struct SchemaGetter
 {
     pingcap::kv::Snapshot snap;
 
-    Logger * log;
+    Poco::Logger * log;
 
-    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_) : snap(cluster_, tso_), log(&Logger::get("SchemaGetter")) {}
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_)
+        : snap(cluster_, tso_)
+        , log(&Poco::Logger::get("SchemaGetter"))
+    {}
 
     Int64 getVersion();
 

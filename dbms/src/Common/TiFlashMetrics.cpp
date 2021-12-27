@@ -4,6 +4,11 @@
 
 namespace DB
 {
+TiFlashMetrics & TiFlashMetrics::instance()
+{
+    static TiFlashMetrics inst; // Instantiated on first use.
+    return inst;
+}
 
 TiFlashMetrics::TiFlashMetrics()
 {

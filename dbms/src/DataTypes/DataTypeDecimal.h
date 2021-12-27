@@ -5,17 +5,18 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/core.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
-// Implements Decimal(P, S), where P is precision, S is scale.
+// Implements Decimal(P, S), where P is precision (significant digits), and S is scale (digits following the decimal point).
+// For example, Decimal(5, 2) can represent numbers from -999.99 to 999.99
 // Maximum precisions for underlying types are:
 // Int32 9
 // Int64 18
@@ -23,7 +24,7 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 // Int256 65
 
 template <typename T>
-class DataTypeDecimal : public IDataType
+class DataTypeDecimal final : public IDataType
 {
     static_assert(IsDecimal<T>);
 
@@ -38,16 +39,36 @@ public:
 
     static constexpr bool is_parametric = true;
 
+    static constexpr bool is_Decimal256 = std::is_same_v<T, Decimal256>;
+
     static constexpr size_t maxPrecision() { return maxDecimalPrecision<T>(); }
 
-    // If scale is omitted, the default is 0. If precision is omitted, the default is 10.
-    DataTypeDecimal() : DataTypeDecimal(10, 0) {}
+    // default values
+    DataTypeDecimal()
+        : precision(10)
+        , scale(0)
+    {}
 
-    DataTypeDecimal(size_t precision_, size_t scale_) : precision(precision_), scale(scale_)
+    DataTypeDecimal(size_t precision_, size_t scale_)
+        : precision(precision_)
+        , scale(scale_)
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
-            throw Exception(getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            std::string msg = getName() + "is out of bound";
+            if (precision > decimal_max_prec)
+            {
+                msg = fmt::format("{}, precision {} is greater than maximum value {}", msg, precision, decimal_max_prec);
+            }
+            else if (scale > precision)
+            {
+                msg = fmt::format("{}, scale {} is greater than precision {}", msg, scale, precision);
+            }
+            else
+            {
+                msg = fmt::format("{}, scale {} is greater than maximum value {}", msg, scale, decimal_max_scale);
+            }
+            throw Exception(msg, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
 
@@ -114,7 +135,7 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
+    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
 
     void readText(T & x, ReadBuffer & istr) const;
 
@@ -127,7 +148,7 @@ public:
     template <typename U>
     typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const
     {
-        if (scale < x.getScale())
+        if (getScale() < x.getScale())
         {
             return 1;
         }
@@ -142,7 +163,7 @@ public:
     bool isComparable() const override { return true; };
     bool isValueRepresentedByNumber() const override { return true; }
     bool isValueRepresentedByInteger() const override { return scale == 0; }
-    bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return true; }
+    bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return !is_Decimal256; }
     bool haveMaximumSizeOfValue() const override { return true; }
     size_t getSizeOfValueInMemory() const override { return sizeof(T); }
     bool isCategorial() const override { return true; }
@@ -162,8 +183,8 @@ inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
 
     if (static_cast<UInt64>(scale) > prec)
         throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec)
-                + ", scale:" + DB::toString(scale),
-            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                            + ", scale:" + DB::toString(scale),
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (prec <= maxDecimalPrecision<Decimal32>())
     {
@@ -193,7 +214,8 @@ inline bool IsDecimalDataType(const DataTypePtr & type)
 }
 template <typename T, typename U>
 typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>> decimalResultType(
-    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+    const DataTypeDecimal<T> & tx,
+    const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<T>(maxDecimalPrecision<T>(), scale);
@@ -201,21 +223,35 @@ typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>> de
 
 template <typename T, typename U>
 typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> decimalResultType(
-    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+    const DataTypeDecimal<T> & tx,
+    const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<U>(maxDecimalPrecision<U>(), scale);
 }
 
-inline UInt32 getDecimalScale(const IDataType & data_type, UInt32 default_value = std::numeric_limits<UInt32>::max())
+inline PrecType getDecimalPrecision(const IDataType & data_type, PrecType default_value)
 {
-    if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal32>(data_type))
+        return decimal_type->getPrec();
+    if (const auto * decimal_type = checkDecimal<Decimal64>(data_type))
+        return decimal_type->getPrec();
+    if (const auto * decimal_type = checkDecimal<Decimal128>(data_type))
+        return decimal_type->getPrec();
+    if (const auto * decimal_type = checkDecimal<Decimal256>(data_type))
+        return decimal_type->getPrec();
+    return default_value;
+}
+
+inline ScaleType getDecimalScale(const IDataType & data_type, ScaleType default_value)
+{
+    if (const auto * decimal_type = checkDecimal<Decimal32>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal64>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal64>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal128>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal128>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal256>(data_type))
         return decimal_type->getScale();
     return default_value;
 }
@@ -224,24 +260,24 @@ inline UInt32 leastDecimalPrecisionFor(TypeIndex int_type)
 {
     switch (int_type)
     {
-        case TypeIndex::Int8:
-            [[fallthrough]];
-        case TypeIndex::UInt8:
-            return 3;
-        case TypeIndex::Int16:
-            [[fallthrough]];
-        case TypeIndex::UInt16:
-            return 5;
-        case TypeIndex::Int32:
-            [[fallthrough]];
-        case TypeIndex::UInt32:
-            return 10;
-        case TypeIndex::Int64:
-            return 19;
-        case TypeIndex::UInt64:
-            return 20;
-        default:
-            break;
+    case TypeIndex::Int8:
+        [[fallthrough]];
+    case TypeIndex::UInt8:
+        return 3;
+    case TypeIndex::Int16:
+        [[fallthrough]];
+    case TypeIndex::UInt16:
+        return 5;
+    case TypeIndex::Int32:
+        [[fallthrough]];
+    case TypeIndex::UInt32:
+        return 10;
+    case TypeIndex::Int64:
+        return 19;
+    case TypeIndex::UInt64:
+        return 20;
+    default:
+        break;
     }
     return 0;
 }

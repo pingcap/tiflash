@@ -2,10 +2,17 @@ add_library (pocoext ${SPLIT_SHARED}
     src/LevelFilterChannel.cpp
     src/ThreadNumber.cpp
     src/SessionPoolHelpers.cpp
+    src/SourceFilterChannel.cpp
+    src/ReloadableSplitterChannel.cpp
+    src/TiFlashLogFileChannel.cpp
 
     include/Poco/Ext/LevelFilterChannel.h
     include/Poco/Ext/ThreadNumber.h
-    include/Poco/Ext/SessionPoolHelpers.h)
+    include/Poco/Ext/SessionPoolHelpers.h
+    include/Poco/Ext/SourceFilterChannel.h
+    include/Poco/Ext/ReloadableSplitterChannel.h
+    include/Poco/Ext/TiFlashLogFileChannel.h
+    include/Poco/Ext/TiFlashArchiveByTimestampsStrategy.h)
 
 if (Poco_Data_FOUND)
     target_include_directories (pocoext PRIVATE ${Poco_Data_INCLUDE_DIRS})

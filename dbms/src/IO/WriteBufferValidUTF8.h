@@ -1,12 +1,11 @@
 #pragma once
 
-#include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
 
 
 namespace DB
 {
-
 /** Writes the data to another buffer, replacing the invalid UTF-8 sequences with the specified sequence.
     * If the valid UTF-8 is already written, it works faster.
     * Note: before using the resulting string, destroy this object.
@@ -41,4 +40,4 @@ public:
     }
 };
 
-}
+} // namespace DB

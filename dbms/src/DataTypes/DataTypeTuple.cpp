@@ -98,8 +98,8 @@ static inline const IColumn & extractElementColumn(const IColumn & column, size_
 
 void DataTypeTuple::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const auto & tuple = get<const Tuple &>(field).t;
-    for (const auto & idx_elem : ext::enumerate(elems))
+    const auto & tuple = get<const Tuple &>(field).toUnderType();
+    for (const auto idx_elem : ext::enumerate(elems))
         idx_elem.second->serializeBinary(tuple[idx_elem.first], ostr);
 }
 
@@ -107,14 +107,14 @@ void DataTypeTuple::deserializeBinary(Field & field, ReadBuffer & istr) const
 {
     const size_t size = elems.size();
     field = Tuple(TupleBackend(size));
-    TupleBackend & tuple = get<Tuple &>(field).t;
+    TupleBackend & tuple = get<Tuple &>(field).toUnderType();
     for (const auto i : ext::range(0, size))
         elems[i]->deserializeBinary(tuple[i], istr);
 }
 
 void DataTypeTuple::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    for (const auto & idx_elem : ext::enumerate(elems))
+    for (const auto idx_elem : ext::enumerate(elems))
         idx_elem.second->serializeBinary(extractElementColumn(column, idx_elem.first), row_num, ostr);
 }
 
@@ -282,7 +282,7 @@ void DataTypeTuple::deserializeTextCSV(IColumn & column, ReadBuffer & istr, cons
     });
 }
 
-void DataTypeTuple::enumerateStreams(StreamCallback callback, SubstreamPath path) const
+void DataTypeTuple::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
     path.push_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
@@ -294,11 +294,11 @@ void DataTypeTuple::enumerateStreams(StreamCallback callback, SubstreamPath path
 
 void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
     const IColumn & column,
-    OutputStreamGetter getter,
+    const OutputStreamGetter & getter,
     size_t offset,
     size_t limit,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     path.push_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
@@ -311,11 +311,11 @@ void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
 
 void DataTypeTuple::deserializeBinaryBulkWithMultipleStreams(
     IColumn & column,
-    InputStreamGetter getter,
+    const InputStreamGetter & getter,
     size_t limit,
     double avg_value_size_hint,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     path.push_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))

@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Databases/DatabaseTiFlash.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -10,11 +11,13 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <common/ThreadPool.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <optional>
 
@@ -25,28 +28,51 @@ namespace ErrorCodes
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_before_rename_table_old_meta_removed[];
+extern const char force_context_path[];
+} // namespace FailPoints
+
+extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info, const SchemaNameMapper & name_mapper);
+
 namespace tests
 {
-
-class DatabaseTiFlash_test : public ::testing::Test
+class DatabaseTiFlashTest : public ::testing::Test
 {
 public:
-    constexpr static const char * TEST_DB_NAME = "test";
-
     static void SetUpTestCase()
     {
-        registerStorages();
-        fiu_init(0);
+        try
+        {
+            registerStorages();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
+
+        FailPointHelper::enableFailPoint(FailPoints::force_context_path);
     }
 
-    DatabaseTiFlash_test() {}
+    static void TearDownTestCase()
+    {
+        FailPointHelper::disableFailPoint(FailPoints::force_context_path);
+    }
 
-    void SetUp() override { recreateMetadataPath(); }
+    DatabaseTiFlashTest()
+        : log(&Poco::Logger::get("DatabaseTiFlashTest"))
+    {}
+
+    void SetUp() override
+    {
+        recreateMetadataPath();
+    }
 
     void TearDown() override
     {
         // Clean all database from context.
-        auto & ctx = TiFlashTestEnv::getContext();
+        auto ctx = TiFlashTestEnv::getContext();
         for (const auto & [name, db] : ctx.getDatabases())
         {
             ctx.detachDatabase(name);
@@ -59,16 +85,18 @@ public:
         String path = TiFlashTestEnv::getContext().getPath();
 
         auto p = path + "/metadata/";
-
         if (Poco::File file(p); file.exists())
             file.remove(true);
-        Poco::File{p}.createDirectory();
+        Poco::File{p}.createDirectories();
 
         p = path + "/data/";
         if (Poco::File file(p); file.exists())
             file.remove(true);
-        Poco::File{p}.createDirectory();
+        Poco::File{p}.createDirectories();
     }
+
+protected:
+    Poco::Logger * log;
 };
 
 namespace
@@ -79,24 +107,22 @@ ASTPtr parseCreateStatement(const String & statement)
     const char * pos = statement.data();
     std::string error_msg;
     auto ast = tryParseQuery(parser,
-        pos,
-        pos + statement.size(),
-        error_msg,
-        /*hilite=*/false,
-        String("in ") + __PRETTY_FUNCTION__,
-        /*allow_multi_statements=*/false,
-        0);
+                             pos,
+                             pos + statement.size(),
+                             error_msg,
+                             /*hilite=*/false,
+                             String("in ") + __PRETTY_FUNCTION__,
+                             /*allow_multi_statements=*/false,
+                             0);
     if (!ast)
         throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
     return ast;
 }
 } // namespace
 
-TEST_F(DatabaseTiFlash_test, CreateDBAndTable)
+TEST_F(DatabaseTiFlashTest, CreateDBAndTable)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -178,11 +204,9 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTable)
+TEST_F(DatabaseTiFlashTest, RenameTable)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -281,11 +305,9 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTableBetweenDatabase)
+TEST_F(DatabaseTiFlashTest, RenameTableBetweenDatabase)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     const String db2_name = "db_2";
     auto ctx = TiFlashTestEnv::getContext();
@@ -415,11 +437,9 @@ try
 CATCH
 
 
-TEST_F(DatabaseTiFlash_test, AtomicRenameTableBetweenDatabase)
+TEST_F(DatabaseTiFlashTest, AtomicRenameTableBetweenDatabase)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     const String db2_name = "db_2";
     auto ctx = TiFlashTestEnv::getContext();
@@ -469,9 +489,10 @@ try
 
     const String to_tbl_name = "t_112";
     // Rename table to another database, and mock crash by failed point
-    FailPointHelper::enableFailPoint("exception_before_rename_table_old_meta_removed");
+    FailPointHelper::enableFailPoint(FailPoints::exception_before_rename_table_old_meta_removed);
     ASSERT_THROW(
-        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name), DB::Exception);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name),
+        DB::Exception);
 
     {
         // After fail point triggled we should have both meta file in disk
@@ -515,11 +536,9 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTableOnlyUpdateDisplayName)
+TEST_F(DatabaseTiFlashTest, RenameTableOnlyUpdateDisplayName)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -615,6 +634,241 @@ try
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
         EXPECT_EQ(managed_storage->getTableInfo().name, new_display_tbl_name);
+    }
+}
+CATCH
+
+TEST_F(DatabaseTiFlashTest, ISSUE1055)
+try
+{
+    CHECK_TESTS_WITH_DATA_ENABLED;
+
+    // Generated by running these SQL on cluster version v4.0.0~v4.0.3
+    // > create table test.t(a int primary key);
+    // > alter table test.t change a a2 int;
+
+    const String db_name = "db_1";
+    auto ctx = TiFlashTestEnv::getContext();
+
+    {
+        // Create database
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
+        ASTPtr ast = parseCreateStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    auto db = ctx.tryGetDatabase(db_name);
+    ASSERT_NE(db, nullptr);
+
+    String meta_path;
+    {
+        auto paths = TiFlashTestEnv::findTestDataPath("issue-1055");
+        ASSERT_EQ(paths.size(), 1UL);
+        meta_path = paths[0];
+    }
+    auto db_data_path = TiFlashTestEnv::getContext().getPath() + "/data/";
+    DatabaseLoading::loadTable(ctx, *db, meta_path, db_name, db_data_path, "TiFlash", "t_45.sql", false);
+
+    // Get storage from database
+    const auto tbl_name = "t_45";
+    auto storage = db->tryGetTable(ctx, tbl_name);
+    ASSERT_NE(storage, nullptr);
+    EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+    EXPECT_EQ(storage->getTableName(), tbl_name);
+
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    auto sd = managed_storage->getPrimarySortDescription();
+    ASSERT_EQ(sd.size(), 1UL);
+    EXPECT_EQ(sd[0].column_name, "a2");
+}
+CATCH
+
+TEST_F(DatabaseTiFlashTest, ISSUE1093)
+try
+{
+    // The json info get by `curl http://{tidb-ip}:{tidb-status-port}/schema`
+    const std::vector<std::pair<String, String>> cases = {
+        //
+        {R"raw(x`f"n)raw", R"r({
+  "id": 49,
+  "db_name": {
+   "O": "x`f\"n",
+   "L": "x`f\"n"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+        {R"raw(x'x)raw", R"r({
+  "id": 72,
+  "db_name": {
+   "O": "x'x",
+   "L": "x'x"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+        {R"raw(x"x)raw", R"r({
+  "id": 70,
+  "db_name": {
+   "O": "x\"x",
+   "L": "x\"x"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+        {R"raw(a~!@#$%^&*()_+-=[]{}\|'",./<>?)raw", R"r({
+  "id": 76,
+  "db_name": {
+   "O": "a~!@#$%^\u0026*()_+-=[]{}\\|'\",./\u003c\u003e?",
+   "L": "a~!@#$%^\u0026*()_+-=[]{}\\|'\",./\u003c\u003e?"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+    };
+
+    for (const auto & [expect_name, json_str] : cases)
+    {
+        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
+        ASSERT_NE(db_info, nullptr);
+        ASSERT_EQ(db_info->name, expect_name);
+
+        const auto seri = db_info->serialize();
+
+        {
+            auto deseri = std::make_shared<TiDB::DBInfo>(seri);
+            ASSERT_NE(deseri, nullptr);
+            ASSERT_EQ(deseri->name, expect_name);
+        }
+
+        auto ctx = TiFlashTestEnv::getContext();
+        auto name_mapper = SchemaNameMapper();
+        const String statement = createDatabaseStmt(ctx, *db_info, name_mapper);
+        ASTPtr ast = parseCreateStatement(statement);
+
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+
+        auto db = ctx.getDatabase(name_mapper.mapDatabaseName(*db_info));
+        ASSERT_NE(db, nullptr);
+        EXPECT_EQ(db->getEngineName(), "TiFlash");
+        auto flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
+        auto & db_info_get = flash_db->getDatabaseInfo();
+        ASSERT_EQ(db_info_get.name, expect_name);
+    }
+}
+CATCH
+
+// metadata/${db_name}.sql
+String getDatabaseMetadataPath(const String & base_path)
+{
+    return (endsWith(base_path, "/") ? base_path.substr(0, base_path.size() - 1) : base_path) + ".sql";
+}
+
+String readFile(Context & ctx, const String & file)
+{
+    String res;
+    ReadBufferFromFileProvider in(ctx.getFileProvider(), file, EncryptionPath(file, ""));
+    readStringUntilEOF(res, in);
+    return res;
+}
+
+DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr && db, Poco::Logger * log)
+{
+    auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
+    LOG_DEBUG(log, "After tombstone [meta=" << meta << "]");
+    {
+        // Detach and load again
+        auto detach_query = std::make_shared<ASTDropQuery>();
+        detach_query->detach = true;
+        detach_query->database = db_name;
+        detach_query->if_exists = false;
+        ASTPtr ast_detach_query = detach_query;
+        InterpreterDropQuery detach_interpreter(ast_detach_query, ctx);
+        detach_interpreter.execute();
+    }
+    {
+        ASTPtr ast = parseCreateStatement(meta);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    db = ctx.getDatabase(db_name);
+    return std::move(db);
+}
+
+TEST_F(DatabaseTiFlashTest, Tombstone)
+try
+{
+    const String db_name = "db_1";
+    auto ctx = TiFlashTestEnv::getContext();
+
+    const Strings statements = {
+        // test case for reading old format metadata without tombstone
+        "CREATE DATABASE " + db_name + " ENGINE = TiFlash",
+        "CREATE DATABASE " + db_name + R"(
+ ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1)
+)",
+        // test case for reading metadata with tombstone
+        "CREATE DATABASE " + db_name + R"(
+ ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1, 12345)
+)",
+    };
+
+    for (auto & statement : statements)
+    {
+        {
+            // Cleanup: Drop database if exists
+            auto drop_query = std::make_shared<ASTDropQuery>();
+            drop_query->database = db_name;
+            drop_query->if_exists = true;
+            ASTPtr ast_drop_query = drop_query;
+            InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
+            drop_interpreter.execute();
+        }
+
+        {
+            // Create database
+            ASTPtr ast = parseCreateStatement(statement);
+            InterpreterCreateQuery interpreter(ast, ctx);
+            interpreter.setInternal(true);
+            interpreter.setForceRestoreData(false);
+            interpreter.execute();
+        }
+
+        auto db = ctx.getDatabase(db_name);
+        auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
+        LOG_DEBUG(log, "After create [meta=" << meta << "]");
+
+        DB::Timestamp tso = 1000;
+        db->alterTombstone(ctx, tso);
+        EXPECT_TRUE(db->isTombstone());
+        EXPECT_EQ(db->getTombstone(), tso);
+
+        // Try restore from disk
+        db = detachThenAttach(ctx, db_name, std::move(db), log);
+        EXPECT_TRUE(db->isTombstone());
+        EXPECT_EQ(db->getTombstone(), tso);
+
+        // Recover
+        db->alterTombstone(ctx, 0);
+        EXPECT_FALSE(db->isTombstone());
+
+        // Try restore from disk
+        db = detachThenAttach(ctx, db_name, std::move(db), log);
+        EXPECT_FALSE(db->isTombstone());
     }
 }
 CATCH

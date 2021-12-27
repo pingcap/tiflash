@@ -2,5 +2,8 @@
 
 namespace ClickHouseRevision
 {
-    unsigned get() { return VERSION_REVISION; }
+unsigned get()
+{
+    return VERSION_REVISION;
 }
+} // namespace ClickHouseRevision

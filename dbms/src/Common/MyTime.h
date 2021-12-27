@@ -1,14 +1,14 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <Interpreters/TimezoneInfo.h>
 #include <common/DateLUTImpl.h>
 
+struct StringRef;
 namespace DB
 {
-
 struct MyTimeBase
 {
-
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
     static const UInt64 YEAR_BIT_FIELD_OFFSET = 50, YEAR_BIT_FIELD_WIDTH = 14;
@@ -62,7 +62,7 @@ struct MyTimeBase
 
     UInt16 year; // year <= 9999
     UInt8 month; // month <= 12
-    UInt8 day;   // day <= 31
+    UInt8 day; // day <= 31
     // When it's type is Time, HH:MM:SS may be 839:59:59 to -839:59:59, so use int16 to avoid overflow
     Int16 hour;
     UInt8 minute;
@@ -70,7 +70,7 @@ struct MyTimeBase
     UInt32 micro_second; // ms second <= 999999
 
     MyTimeBase() = default;
-    MyTimeBase(UInt64 packed);
+    explicit MyTimeBase(UInt64 packed);
     MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
 
     UInt64 toPackedUInt() const;
@@ -79,7 +79,7 @@ struct MyTimeBase
     // DateFormat returns a textual representation of the time value formatted
     // according to layout
     // See http://dev.mysql.com/doc/refman/5.7/en/date-and-time-functions.html#function_date-format
-    String dateFormat(const String & layout) const;
+    void dateFormat(const String & layout, String & result) const;
 
     // returns the week day of current date(0 as sunday)
     int weekDay() const;
@@ -90,39 +90,103 @@ struct MyTimeBase
 
     std::tuple<int, int> calcWeek(UInt32 mode) const;
 
-protected:
-    void convertDateFormat(char c, String & result) const;
+    // Check validity of time under specified SQL_MODE.
+    // May throw exception.
+    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
 {
-    MyDateTime(UInt64 packed) : MyTimeBase(packed) {}
+    explicit MyDateTime(UInt64 packed)
+        : MyTimeBase(packed)
+    {}
 
     MyDateTime(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
         : MyTimeBase(year_, month_, day_, hour_, minute_, second_, micro_second_)
     {}
 
     String toString(int fsp) const;
+
+    static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
 
 struct MyDate : public MyTimeBase
 {
-    MyDate(UInt64 packed) : MyTimeBase(packed) {}
+    explicit MyDate(UInt64 packed)
+        : MyTimeBase(packed)
+    {}
 
-    MyDate(UInt16 year_, UInt8 month_, UInt8 day_) : MyTimeBase(year_, month_, day_, 0, 0, 0, 0) {}
+    MyDate(UInt16 year_, UInt8 month_, UInt8 day_)
+        : MyTimeBase(year_, month_, day_, 0, 0, 0, 0)
+    {}
 
-    String toString() const { return dateFormat("%Y-%m-%d"); }
+    String toString() const
+    {
+        String result;
+        dateFormat("%Y-%m-%d", result);
+        return result;
+    }
 };
 
-Field parseMyDateTime(const String & str);
+struct MyDateTimeFormatter
+{
+    std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
+    explicit MyDateTimeFormatter(const String & layout_);
+    void format(const MyTimeBase & datetime, String & result)
+    {
+        for (auto & f : formatters)
+        {
+            f(datetime, result);
+        }
+    }
+};
 
-void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
+struct MyDateTimeParser
+{
+    explicit MyDateTimeParser(String format_);
 
-void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone);
+    std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
+
+    struct Context;
+
+private:
+    const String format;
+
+    // Parsing method. Parse from ctx.view[ctx.pos].
+    // If success, update `datetime`, `ctx` and return true.
+    // If fail, return false.
+    using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
+    std::vector<ParserCallback> parsers;
+};
+
+Field parseMyDateTime(const String & str, int8_t fsp = 6);
+
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
+
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, Int64 offset, bool throw_exception = false);
+
+MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to);
+
+MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset);
+
+std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
+/// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
+inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+}
+
+bool isPunctuation(char c);
+
+bool isValidSeperator(char c, int previous_parts);
+
+// Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
+// Note that this function will not check if the input is logically a valid datetime value.
+bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB

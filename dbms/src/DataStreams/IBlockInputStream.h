@@ -1,37 +1,31 @@
 #pragma once
 
-#include <vector>
+#include <Core/Block.h>
+#include <Core/SortDescription.h>
+#include <Storages/TableLockHolder.h>
+
+#include <boost/noncopyable.hpp>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <functional>
-#include <boost/noncopyable.hpp>
-#include <Core/Block.h>
-#include <Core/SortDescription.h>
+#include <vector>
 
 
 namespace DB
 {
-
-
 class IBlockInputStream;
 
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 
-class TableStructureReadLock;
-
-using TableStructureReadLockPtr = std::shared_ptr<TableStructureReadLock>;
-using TableStructureReadLocks = std::vector<TableStructureReadLockPtr>;
-using TableStructureReadLocksList = std::list<TableStructureReadLockPtr>;
-
 struct Progress;
 
 namespace ErrorCodes
 {
-    extern const int OUTPUT_IS_NOT_SORTED;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int OUTPUT_IS_NOT_SORTED;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 
 /** Callback to track the progress of the query.
@@ -49,7 +43,7 @@ using FilterPtr = IColumn::Filter *;
 class IBlockInputStream : private boost::noncopyable
 {
 public:
-    IBlockInputStream() {}
+    IBlockInputStream() = default;
 
     /** Get data structure of the stream in a form of "header" block (it is also called "sample block").
       * Header block contains column names, data types, columns of size 0. Constant columns must have corresponding values.
@@ -85,7 +79,7 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
-    virtual ~IBlockInputStream() {}
+    virtual ~IBlockInputStream() = default;
 
     /** To output the data stream transformation tree (query execution plan).
       */
@@ -108,9 +102,9 @@ public:
       */
     size_t checkDepth(size_t max_depth) const;
 
-    /** Do not allow to change the table while the blocks stream is alive.
+    /** Do not allow to drop the table while the blocks stream is alive.
       */
-    void addTableLock(const TableStructureReadLockPtr & lock) { table_locks.push_back(lock); }
+    void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
 
     template <typename F>
@@ -126,10 +120,10 @@ public:
 
 protected:
     BlockInputStreams children;
-    std::shared_mutex children_mutex;
+    mutable std::shared_mutex children_mutex;
 
 private:
-    TableStructureReadLocks table_locks;
+    TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
 
@@ -138,5 +132,4 @@ private:
 };
 
 
-}
-
+} // namespace DB

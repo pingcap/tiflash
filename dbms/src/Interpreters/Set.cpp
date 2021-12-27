@@ -1,44 +1,34 @@
-#include <Core/Field.h>
-#include <Common/FieldVisitors.h>
-#include <Core/Row.h>
-
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnTuple.h>
-
+#include <Columns/ColumnsNumber.h>
+#include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
-
+#include <Core/Field.h>
+#include <Core/Row.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNullable.h>
-
+#include <DataTypes/DataTypeTuple.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
-
+#include <Interpreters/NullableUtils.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
-#include <Interpreters/NullableUtils.h>
-
-#include <Storages/MergeTree/KeyCondition.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int SET_SIZE_LIMIT_EXCEEDED;
-    extern const int TYPE_MISMATCH;
-    extern const int INCORRECT_ELEMENT_OF_SET;
-    extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
-    extern const int COP_BAD_DAG_REQUEST;
-}
+extern const int LOGICAL_ERROR;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int TYPE_MISMATCH;
+extern const int INCORRECT_ELEMENT_OF_SET;
+extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
+extern const int COP_BAD_DAG_REQUEST;
+} // namespace ErrorCodes
 
 
 template <typename Method>
@@ -64,8 +54,9 @@ void NO_INLINE Set::insertFromBlockImplCase(
     SetVariants & variants,
     ConstNullMapPtr null_map)
 {
-    typename Method::State state;
-    state.init(key_columns, collator);
+    typename Method::State state(key_columns, key_sizes, collators);
+    std::vector<String> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
 
     /// For all rows
     for (size_t i = 0; i < rows; ++i)
@@ -73,7 +64,7 @@ void NO_INLINE Set::insertFromBlockImplCase(
         if (has_null_map && (*null_map)[i])
             continue;
 
-        state.insertKey(key_columns, keys_size, i, key_sizes, method.data, variants.string_pool);
+        state.emplaceKey(method.data, i, variants.string_pool, sort_key_containers);
     }
 }
 
@@ -150,12 +141,12 @@ bool Set::insertFromBlock(const Block & block, bool fill_set_elements)
 
     switch (data.type)
     {
-        case SetVariants::Type::EMPTY:
-            break;
-#define M(NAME) \
-        case SetVariants::Type::NAME: \
-            insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map); \
-            break;
+    case SetVariants::Type::EMPTY:
+        break;
+#define M(NAME)                                                             \
+    case SetVariants::Type::NAME:                                           \
+        insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map); \
+        break;
         APPLY_FOR_SET_VARIANTS(M)
 #undef M
     }
@@ -225,7 +216,7 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
             size_t tuple_size = func->arguments->children.size();
             if (tuple_size != num_columns)
                 throw Exception("Incorrect size of tuple in set: " + toString(tuple_size) + " instead of " + toString(num_columns),
-                    ErrorCodes::INCORRECT_ELEMENT_OF_SET);
+                                ErrorCodes::INCORRECT_ELEMENT_OF_SET);
 
             if (tuple_values.empty())
                 tuple_values.resize(tuple_size);
@@ -285,7 +276,7 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
             continue;
         }
         Field value = decodeLiteral(child);
-        DataTypePtr type = child.has_field_type() ? getDataTypeByFieldType(child.field_type()) : types[0];
+        DataTypePtr type = types[0];
         value = convertFieldToType(value, *type);
 
         if (!value.isNull())
@@ -319,14 +310,14 @@ ColumnPtr Set::execute(const Block & block, bool negative) const
             memset(&vec_res[0], 1, vec_res.size());
         else
             memset(&vec_res[0], 0, vec_res.size());
-        return std::move(res);
+        return res;
     }
 
     if (data_types.size() != num_key_columns)
     {
         std::stringstream message;
         message << "Number of columns in section IN doesn't match. "
-            << num_key_columns << " at left, " << data_types.size() << " at right.";
+                << num_key_columns << " at left, " << data_types.size() << " at right.";
         throw Exception(message.str(), ErrorCodes::NUMBER_OF_COLUMNS_DOESNT_MATCH);
     }
 
@@ -343,8 +334,8 @@ ColumnPtr Set::execute(const Block & block, bool negative) const
 
         if (!removeNullable(data_types[i])->equals(*removeNullable(block.safeGetByPosition(i).type)))
             throw Exception("Types of column " + toString(i + 1) + " in section IN don't match: "
-                + data_types[i]->getName() + " on the right, " + block.safeGetByPosition(i).type->getName() +
-                " on the left.", ErrorCodes::TYPE_MISMATCH);
+                                + data_types[i]->getName() + " on the right, " + block.safeGetByPosition(i).type->getName() + " on the left.",
+                            ErrorCodes::TYPE_MISMATCH);
 
         if (ColumnPtr converted = key_columns.back()->convertToFullColumnIfConst())
         {
@@ -360,7 +351,7 @@ ColumnPtr Set::execute(const Block & block, bool negative) const
 
     executeOrdinary(key_columns, vec_res, negative, null_map);
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -389,8 +380,10 @@ void NO_INLINE Set::executeImplCase(
     size_t rows,
     ConstNullMapPtr null_map) const
 {
-    typename Method::State state;
-    state.init(key_columns, collator);
+    Arena pool;
+    typename Method::State state(key_columns, key_sizes, collators);
+    std::vector<String> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
 
     /// NOTE Optimization is not used for consecutive identical values.
 
@@ -401,8 +394,8 @@ void NO_INLINE Set::executeImplCase(
             vec_res[i] = negative;
         else
         {
-            /// Build the key
-            vec_res[i] = negative ^ state.exists(key_columns, keys_size, i, key_sizes, method.data);
+            auto find_result = state.findKey(method.data, i, pool, sort_key_containers);
+            vec_res[i] = negative ^ find_result.isFound();
         }
     }
 }
@@ -418,116 +411,16 @@ void Set::executeOrdinary(
 
     switch (data.type)
     {
-        case SetVariants::Type::EMPTY:
-            break;
-#define M(NAME) \
-        case SetVariants::Type::NAME: \
-            executeImpl(*data.NAME, key_columns, vec_res, negative, rows, null_map); \
-            break;
-    APPLY_FOR_SET_VARIANTS(M)
+    case SetVariants::Type::EMPTY:
+        break;
+#define M(NAME)                                                                  \
+    case SetVariants::Type::NAME:                                                \
+        executeImpl(*data.NAME, key_columns, vec_res, negative, rows, null_map); \
+        break;
+        APPLY_FOR_SET_VARIANTS(M)
 #undef M
     }
 }
 
 
-MergeTreeSetIndex::MergeTreeSetIndex(const SetElements & set_elements, std::vector<KeyTuplePositionMapping> && index_mapping_)
-    : ordered_set(),
-    indexes_mapping(std::move(index_mapping_))
-{
-    std::sort(indexes_mapping.begin(), indexes_mapping.end(),
-        [](const KeyTuplePositionMapping & l, const KeyTuplePositionMapping & r)
-        {
-            return std::forward_as_tuple(l.key_index, l.tuple_index) < std::forward_as_tuple(r.key_index, r.tuple_index);
-        });
-
-    indexes_mapping.erase(std::unique(
-        indexes_mapping.begin(), indexes_mapping.end(),
-        [](const KeyTuplePositionMapping & l, const KeyTuplePositionMapping & r)
-        {
-            return l.key_index == r.key_index;
-        }), indexes_mapping.end());
-
-    for (size_t i = 0; i < set_elements.size(); ++i)
-    {
-        std::vector<FieldWithInfinity> new_set_values;
-        for (size_t j = 0; j < indexes_mapping.size(); ++j)
-            new_set_values.emplace_back(set_elements[i][indexes_mapping[j].tuple_index]);
-
-        ordered_set.emplace_back(std::move(new_set_values));
-    }
-
-    std::sort(ordered_set.begin(), ordered_set.end());
-}
-
-
-/** Return the BoolMask where:
-  * 1: the intersection of the set and the range is non-empty
-  * 2: the range contains elements not in the set
-  */
-BoolMask MergeTreeSetIndex::mayBeTrueInRange(const std::vector<Range> & key_ranges, const DataTypes & data_types)
-{
-    std::vector<FieldWithInfinity> left_point;
-    std::vector<FieldWithInfinity> right_point;
-    left_point.reserve(indexes_mapping.size());
-    right_point.reserve(indexes_mapping.size());
-
-    bool invert_left_infinities = false;
-    bool invert_right_infinities = false;
-
-    for (size_t i = 0; i < indexes_mapping.size(); ++i)
-    {
-        std::optional<Range> new_range = KeyCondition::applyMonotonicFunctionsChainToRange(
-            key_ranges[indexes_mapping[i].key_index],
-            indexes_mapping[i].functions,
-            data_types[indexes_mapping[i].key_index]);
-
-        if (!new_range)
-            return {true, true};
-
-        /** A range that ends in (x, y, ..., +inf) exclusive is the same as a range
-          * that ends in (x, y, ..., -inf) inclusive and vice versa for the left bound.
-          */
-        if (new_range->left_bounded)
-        {
-            if (!new_range->left_included)
-                invert_left_infinities = true;
-
-            left_point.push_back(FieldWithInfinity(new_range->left));
-        }
-        else
-        {
-            if (invert_left_infinities)
-                left_point.push_back(FieldWithInfinity::getPlusinfinity());
-            else
-                left_point.push_back(FieldWithInfinity::getMinusInfinity());
-        }
-
-        if (new_range->right_bounded)
-        {
-            if (!new_range->right_included)
-                invert_right_infinities = true;
-
-            right_point.push_back(FieldWithInfinity(new_range->right));
-        }
-        else
-        {
-            if (invert_right_infinities)
-                right_point.push_back(FieldWithInfinity::getMinusInfinity());
-            else
-                right_point.push_back(FieldWithInfinity::getPlusinfinity());
-        }
-    }
-
-    /** Because each parallelogram maps to a contiguous sequence of elements
-      * layed out in the lexicographically increasing order, the set intersects the range
-      * if and only if either bound coincides with an element or at least one element
-      * is between the lower bounds
-      */
-    auto left_lower = std::lower_bound(ordered_set.begin(), ordered_set.end(), left_point);
-    auto right_lower = std::lower_bound(ordered_set.begin(), ordered_set.end(), right_point);
-    return {left_lower != right_lower
-        || (left_lower != ordered_set.end() && *left_lower == left_point)
-        || (right_lower != ordered_set.end() && *right_lower == right_point), true};
-}
-
-}
+} // namespace DB

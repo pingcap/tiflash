@@ -1,24 +1,23 @@
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <DataStreams/UnionBlockInputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/ConvertingBlockInputStream.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Columns/ColumnConst.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/ConvertingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
+#include <DataTypes/getLeastSupertype.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int UNION_ALL_RESULT_STRUCTURES_MISMATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int UNION_ALL_RESULT_STRUCTURES_MISMATCH;
+} // namespace ErrorCodes
 
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
@@ -27,10 +26,10 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
     const Names & required_result_column_names,
     QueryProcessingStage::Enum to_stage_,
     size_t subquery_depth_)
-    : query_ptr(query_ptr_),
-    context(context_),
-    to_stage(to_stage_),
-    subquery_depth(subquery_depth_)
+    : query_ptr(query_ptr_)
+    , context(context_)
+    , to_stage(to_stage_)
+    , subquery_depth(subquery_depth_)
 {
     if (!context.hasQueryContext())
         context.setQueryContext(context);
@@ -56,7 +55,12 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         /// We use it to determine positions of 'required_result_column_names' in SELECT clause.
 
         Block full_result_header = InterpreterSelectQuery(
-            ast.list_of_selects->children.at(0), context, Names(), to_stage, subquery_depth).getSampleBlock();
+                                       ast.list_of_selects->children.at(0),
+                                       context,
+                                       Names(),
+                                       to_stage,
+                                       subquery_depth)
+                                       .getSampleBlock();
 
         std::vector<size_t> positions_of_required_result_columns(required_result_column_names.size());
         for (size_t required_result_num = 0, size = required_result_column_names.size(); required_result_num < size; ++required_result_num)
@@ -65,7 +69,12 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         for (size_t query_num = 1; query_num < num_selects; ++query_num)
         {
             Block full_result_header_for_current_select = InterpreterSelectQuery(
-                ast.list_of_selects->children.at(query_num), context, Names(), to_stage, subquery_depth).getSampleBlock();
+                                                              ast.list_of_selects->children.at(query_num),
+                                                              context,
+                                                              Names(),
+                                                              to_stage,
+                                                              subquery_depth)
+                                                              .getSampleBlock();
 
             if (full_result_header_for_current_select.columns() != full_result_header.columns())
                 throw Exception("Different number of columns in UNION ALL elements", ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
@@ -83,7 +92,11 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
             : required_result_column_names_for_other_selects[query_num];
 
         nested_interpreters.emplace_back(std::make_unique<InterpreterSelectQuery>(
-            ast.list_of_selects->children.at(query_num), context, current_required_result_column_names, to_stage, subquery_depth));
+            ast.list_of_selects->children.at(query_num),
+            context,
+            current_required_result_column_names,
+            to_stage,
+            subquery_depth));
     }
 
     /// Determine structure of result.
@@ -198,7 +211,7 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     }
     else
     {
-        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, nullptr, settings.max_threads);
+        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, nullptr, settings.max_threads, nullptr);
         nested_streams.clear();
     }
 
@@ -214,4 +227,4 @@ void InterpreterSelectWithUnionQuery::ignoreWithTotals()
         interpreter->ignoreWithTotals();
 }
 
-}
+} // namespace DB

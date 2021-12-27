@@ -1,43 +1,54 @@
 #pragma once
 
-#include <queue>
+#include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
-#include <Storages/DeltaMerge/Segment.h>
+#include <queue>
 
 namespace DB
 {
 namespace DM
 {
+struct DMContext;
+struct SegmentReadTask;
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+struct SegmentSnapshot;
+using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
+
+using DMContextPtr = std::shared_ptr<DMContext>;
+using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
+using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
+using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 struct SegmentReadTask
 {
-    SegmentPtr         segment;
+    SegmentPtr segment;
     SegmentSnapshotPtr read_snapshot;
-    HandleRanges       ranges;
+    RowKeyRanges ranges;
 
-    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
-        : segment(segment_), read_snapshot(read_snapshot_)
-    {
-    }
-
-    SegmentReadTask(const SegmentPtr &         segment_, //
+    SegmentReadTask(const SegmentPtr & segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
-                    const HandleRanges &       ranges_)
-        : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
-    {
-    }
+                    const RowKeyRanges & ranges_);
 
-    void addRange(const HandleRange & range) { ranges.push_back(range); }
+    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
+
+    ~SegmentReadTask();
+
+    std::pair<size_t, size_t> getRowsAndBytes() const;
+
+    void addRange(const RowKeyRange & range) { ranges.push_back(range); }
+
+    void mergeRanges() { ranges = DM::tryMergeRanges(std::move(ranges), 1); }
+
+    static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
 };
-
-using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks   = std::queue<SegmentReadTaskPtr>;
-using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    SegmentReadTaskPool(SegmentReadTasks && tasks_) : tasks(std::move(tasks_)) {}
+    SegmentReadTaskPool(SegmentReadTasks && tasks_)
+        : tasks(std::move(tasks_))
+    {}
 
     SegmentReadTaskPtr nextTask()
     {
@@ -45,7 +56,7 @@ public:
         if (tasks.empty())
             return {};
         auto task = tasks.front();
-        tasks.pop();
+        tasks.pop_front();
         return task;
     }
 

@@ -1,14 +1,13 @@
 #pragma once
 
-#include <fstream>
-
+//#include <Poco/File.h>
 #include <Server/IServer.h>
-
-#include <Poco/File.h>
 #include <common/logger_useful.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+
+//#include <boost/algorithm/string.hpp>
+//#include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
+//#include <fstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -17,23 +16,29 @@
 
 namespace DB
 {
-
-
-class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service,
-                                 public std::enable_shared_from_this<DiagnosticsService>,
-                                 private boost::noncopyable
+class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service
+    , public std::enable_shared_from_this<DiagnosticsService>
+    , private boost::noncopyable
 {
 public:
-    DiagnosticsService(IServer & _server) : log(&Logger::get("DiagnosticsService")), server(_server) {}
+    DiagnosticsService(IServer & _server)
+        : log(&Poco::Logger::get("DiagnosticsService"))
+        , server(_server)
+    {}
     ~DiagnosticsService() override {}
 
 public:
-    ::grpc::Status search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
+    ::grpc::Status search_log(
+        ::grpc::ServerContext * grpc_context,
+        const ::diagnosticspb::SearchLogRequest * request,
         ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream) override;
 
-    ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request,
+    ::grpc::Status server_info(
+        ::grpc::ServerContext * grpc_context,
+        const ::diagnosticspb::ServerInfoRequest * request,
         ::diagnosticspb::ServerInfoResponse * response) override;
 
+    /*
 public:
     struct AvgLoad
     {
@@ -73,7 +78,7 @@ public:
             {
                 std::vector<std::string> values;
                 boost::split(values, line, boost::is_any_of(" \t"), boost::token_compress_on);
-                if (values.size() == 0 || values[0] != "cpu")
+                if (values.size() == 0 || values[0] != "cpu" || values.size() < 11)
                 {
                     return {};
                 }
@@ -190,8 +195,7 @@ public:
     void memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void nicLoadInfo(const NICInfo & prev_nic, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void ioLoadInfo(const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    void loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io,
-        std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void diskHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
@@ -199,7 +203,7 @@ public:
     void hardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-
+    */
 private:
     Poco::Logger * log;
 

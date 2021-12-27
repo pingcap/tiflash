@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class GreaterEqual : public ColCmpVal
 {
 public:
-    GreaterEqual(const Attr & attr_, const Field & value_, int null_direction) : ColCmpVal(attr_, value_, null_direction) {}
+    GreaterEqual(const Attr & attr_, const Field & value_, int null_direction)
+        : ColCmpVal(attr_, value_, null_direction)
+    {}
 
     String name() override { return "greater_equal"; }
 
@@ -21,7 +21,6 @@ public:
         return rsindex.minmax->checkGreaterEqual(pack_id, value, rsindex.type, null_direction);
     }
 
-    RSOperatorPtr applyNot() override { return createLess(attr, value, null_direction); };
     RSOperatorPtr switchDirection() override { return createLessEqual(attr, value, null_direction); }
 };
 

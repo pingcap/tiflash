@@ -4,14 +4,13 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Or : public LogicalOp
 {
 public:
-    explicit Or(const RSOperators & children_) : LogicalOp(children_)
+    explicit Or(const RSOperators & children_)
+        : LogicalOp(children_)
     {
         if (children.empty())
             throw Exception("Unexpected empty children");
@@ -26,14 +25,6 @@ public:
             res = res || children[i]->roughCheck(pack_id, param);
         return res;
     }
-
-    RSOperatorPtr applyNot() override
-    {
-        RSOperators new_children;
-        for (auto & child : children)
-            new_children.push_back(child->applyNot());
-        return createAnd(new_children);
-    };
 
     // TODO: override applyOptimize()
 };

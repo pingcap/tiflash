@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 class Context;
 
 class DAGStringConverter
@@ -35,6 +34,7 @@ protected:
     void buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
     void buildSelString(const tipb::Selection & sel, std::stringstream & ss);
     void buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
+    void buildProjString(const tipb::Projection & proj, std::stringstream & ss);
     void buildAggString(const tipb::Aggregation & agg, std::stringstream & ss);
     void buildTopNString(const tipb::TopN & topN, std::stringstream & ss);
     void buildString(const tipb::Executor & executor, std::stringstream & ss);

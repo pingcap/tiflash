@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 template <typename T>
 inline T toLittleEndian(const T & x)
 {

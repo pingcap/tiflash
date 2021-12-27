@@ -1,15 +1,14 @@
 #pragma once
 
-#include <iostream>
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 
+#include <iostream>
+
 
 namespace DB
 {
-
-
 /** Write UInt64 in variable length format (base128) NOTE Only up to 2^63 - 1 are supported. */
 void writeVarUInt(UInt64 x, std::ostream & ostr);
 void writeVarUInt(UInt64 x, WriteBuffer & ostr);
@@ -46,31 +45,67 @@ inline char * writeVarInt(Int64 x, char * ostr)
 template <typename IN>
 inline void readVarInt(Int64 & x, IN & istr)
 {
-    readVarUInt(*reinterpret_cast<UInt64*>(&x), istr);
+    readVarUInt(*reinterpret_cast<UInt64 *>(&x), istr);
     x = (static_cast<UInt64>(x) >> 1) ^ -(x & 1);
 }
 
 inline const char * readVarInt(Int64 & x, const char * istr, size_t size)
 {
-    const char * res = readVarUInt(*reinterpret_cast<UInt64*>(&x), istr, size);
+    const char * res = readVarUInt(*reinterpret_cast<UInt64 *>(&x), istr, size);
     x = (static_cast<UInt64>(x) >> 1) ^ -(x & 1);
     return res;
 }
 
 
-inline void writeVarT(UInt64 x, std::ostream & ostr) { writeVarUInt(x, ostr); }
-inline void writeVarT(Int64 x, std::ostream & ostr) { writeVarInt(x, ostr); }
-inline void writeVarT(UInt64 x, WriteBuffer & ostr) { writeVarUInt(x, ostr); }
-inline void writeVarT(Int64 x, WriteBuffer & ostr) { writeVarInt(x, ostr); }
-inline char * writeVarT(UInt64 x, char * & ostr) { return writeVarUInt(x, ostr); }
-inline char * writeVarT(Int64 x, char * & ostr) { return writeVarInt(x, ostr); }
+inline void writeVarT(UInt64 x, std::ostream & ostr)
+{
+    writeVarUInt(x, ostr);
+}
+inline void writeVarT(Int64 x, std::ostream & ostr)
+{
+    writeVarInt(x, ostr);
+}
+inline void writeVarT(UInt64 x, WriteBuffer & ostr)
+{
+    writeVarUInt(x, ostr);
+}
+inline void writeVarT(Int64 x, WriteBuffer & ostr)
+{
+    writeVarInt(x, ostr);
+}
+inline char * writeVarT(UInt64 x, char *& ostr)
+{
+    return writeVarUInt(x, ostr);
+}
+inline char * writeVarT(Int64 x, char *& ostr)
+{
+    return writeVarInt(x, ostr);
+}
 
-inline void readVarT(UInt64 & x, std::istream & istr) { readVarUInt(x, istr); }
-inline void readVarT(Int64 & x, std::istream & istr) { readVarInt(x, istr); }
-inline void readVarT(UInt64 & x, ReadBuffer & istr) { readVarUInt(x, istr); }
-inline void readVarT(Int64 & x, ReadBuffer & istr) { readVarInt(x, istr); }
-inline const char * readVarT(UInt64 & x, const char * istr, size_t size) { return readVarUInt(x, istr, size); }
-inline const char * readVarT(Int64 & x, const char * istr, size_t size) { return readVarInt(x, istr, size); }
+inline void readVarT(UInt64 & x, std::istream & istr)
+{
+    readVarUInt(x, istr);
+}
+inline void readVarT(Int64 & x, std::istream & istr)
+{
+    readVarInt(x, istr);
+}
+inline void readVarT(UInt64 & x, ReadBuffer & istr)
+{
+    readVarUInt(x, istr);
+}
+inline void readVarT(Int64 & x, ReadBuffer & istr)
+{
+    readVarInt(x, istr);
+}
+inline const char * readVarT(UInt64 & x, const char * istr, size_t size)
+{
+    return readVarUInt(x, istr, size);
+}
+inline const char * readVarT(Int64 & x, const char * istr, size_t size)
+{
+    return readVarInt(x, istr, size);
+}
 
 
 /// For [U]Int32, [U]Int16, size_t.
@@ -229,6 +264,7 @@ inline char * writeVarUInt(UInt64 x, char * ostr)
 
 inline size_t getLengthOfVarUInt(UInt64 x)
 {
+    // clang-format off
     return x < (1ULL << 7) ? 1
         : (x < (1ULL << 14) ? 2
         : (x < (1ULL << 21) ? 3
@@ -238,6 +274,7 @@ inline size_t getLengthOfVarUInt(UInt64 x)
         : (x < (1ULL << 49) ? 7
         : (x < (1ULL << 56) ? 8
         : 9)))))));
+    // clang-format on
 }
 
 
@@ -246,4 +283,4 @@ inline size_t getLengthOfVarInt(Int64 x)
     return getLengthOfVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)));
 }
 
-}
+} // namespace DB

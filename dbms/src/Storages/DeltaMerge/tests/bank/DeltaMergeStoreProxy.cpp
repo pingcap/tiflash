@@ -1,3 +1,4 @@
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
 
 namespace DB
@@ -6,13 +7,12 @@ namespace DM
 {
 namespace tests
 {
-
 template <typename T>
 void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, T value)
 {
     ColumnWithTypeAndName col({}, type, name, col_id);
-    IColumn::MutablePtr   m_col = col.type->createColumn();
-    Field                 field = value;
+    IColumn::MutablePtr m_col = col.type->createColumn();
+    Field field = value;
     m_col->insert(field);
     col.column = std::move(m_col);
     block.insert(std::move(col));
@@ -21,40 +21,40 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
 void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
     std::lock_guard<std::mutex> guard{mutex};
-    Block                       block;
+    Block block;
 
     insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, id);
     insertColumn<UInt64>(block, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID, tso);
     insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, 0);
     insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, balance);
 
-    store->write(*context, context->getSettingsRef(), block);
+    store->write(*context, context->getSettingsRef(), std::move(block));
 }
 
 UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
 {
     std::lock_guard<std::mutex> guard{mutex};
     // read all columns from store
-    const auto &        columns = store->getTableColumns();
-    BlockInputStreamPtr in      = store->read(*context,
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*context,
                                          context->getSettingsRef(),
                                          columns,
-                                         {HandleRange::newAll()},
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso,
                                          EMPTY_FILTER,
                                          /* expected_block_size= */ 1024)[0];
 
-    bool   found         = false;
-    size_t result        = 0;
+    bool found = false;
+    size_t result = 0;
     size_t num_rows_read = 0;
     in->readPrefix();
     while (Block block = in->read())
     {
         num_rows_read += block.rows();
-        ColumnWithTypeAndName col1        = block.getByName(pk_name);
+        ColumnWithTypeAndName col1 = block.getByName(pk_name);
         ColumnWithTypeAndName version_col = block.getByName(VERSION_COLUMN_NAME);
-        ColumnWithTypeAndName tag_col     = block.getByName(TAG_COLUMN_NAME);
+        ColumnWithTypeAndName tag_col = block.getByName(TAG_COLUMN_NAME);
         ColumnWithTypeAndName balance_col = block.getByName("balance");
         for (Int64 i = 0; i < Int64(col1.column->size()); ++i)
         {
@@ -66,7 +66,7 @@ UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
             {
                 if (!found)
                 {
-                    found  = true;
+                    found = true;
                     result = balance_col.column->getUInt(i);
                 }
             }
@@ -87,17 +87,17 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
 {
     std::lock_guard<std::mutex> guard{mutex};
     // read all columns from store
-    const auto &        columns = store->getTableColumns();
-    BlockInputStreamPtr in      = store->read(*context,
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*context,
                                          context->getSettingsRef(),
                                          columns,
-                                         {HandleRange::newAll()},
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso,
                                          EMPTY_FILTER,
                                          /* expected_block_size= */ 1024)[0];
 
-    std::vector<bool>   found_status;
+    BoolVec found_status;
     std::vector<UInt64> result;
     found_status.resize(end - begin, false);
     result.resize(end - begin, 0);
@@ -106,9 +106,9 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
     while (Block block = in->read())
     {
         num_rows_read += block.rows();
-        ColumnWithTypeAndName col1        = block.getByName(pk_name);
+        ColumnWithTypeAndName col1 = block.getByName(pk_name);
         ColumnWithTypeAndName version_col = block.getByName(VERSION_COLUMN_NAME);
-        ColumnWithTypeAndName tag_col     = block.getByName(TAG_COLUMN_NAME);
+        ColumnWithTypeAndName tag_col = block.getByName(TAG_COLUMN_NAME);
         ColumnWithTypeAndName balance_col = block.getByName("balance");
         for (Int64 i = 0; i < Int64(col1.column->size()); ++i)
         {
@@ -124,7 +124,7 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
                     if (!found_status[id])
                     {
                         found_status[id] = true;
-                        result[id]       = balance_col.column->getUInt(i);
+                        result[id] = balance_col.column->getUInt(i);
                     }
                 }
             }

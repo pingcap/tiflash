@@ -1,12 +1,12 @@
 #pragma once
 
-#include <Poco/Util/Timer.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Common/Timer.h>
 #include <common/logger_useful.h>
+
+#include <boost/noncopyable.hpp>
 
 namespace DB
 {
-
 class Context;
 class BackgroundProcessingPool;
 
@@ -17,10 +17,9 @@ public:
     ~ClusterManagerService();
 
 private:
-    static void run(const std::string & command, const std::vector<std::string> & args);
     Context & context;
-    Poco::Util::Timer timer;
-    Logger * log;
+    Timer timer;
+    Poco::Logger * log;
 };
 
 

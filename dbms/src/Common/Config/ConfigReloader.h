@@ -1,22 +1,25 @@
 #pragma once
 
-#include "ConfigProcessor.h"
-#include <Common/ZooKeeper/Common.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <time.h>
+
+#include <condition_variable>
+#include <functional>
+#include <list>
+#include <mutex>
+#include <set>
 #include <string>
 #include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <list>
-#include <set>
+
+#include "ConfigProcessor.h"
 
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-
 class Context;
 
 /** Every two seconds checks configuration files for update.
@@ -31,23 +34,22 @@ public:
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
-    ConfigReloader(
-            const std::string & path,
-            Updater && updater,
-            bool already_loaded);
+    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, const char * name = "CfgReloader");
 
-    ~ConfigReloader();
+    virtual ~ConfigReloader();
 
     /// Call this method to run the backround thread.
-    void start();
+    virtual void start();
 
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
+protected:
+    void reloadIfNewer(bool force, bool throw_on_error);
+    Updater & getUpdater() { return updater; }
+
 private:
     void run();
-
-    void reloadIfNewer(bool force, bool throw_on_error);
 
     struct FileWithTimestamp;
 
@@ -56,16 +58,18 @@ private:
         std::set<FileWithTimestamp> files;
 
         void addIfExists(const std::string & path);
-        bool isDifferOrNewerThan(const FilesChangesTracker & rhs);
+        bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
     };
 
     FilesChangesTracker getNewFileList() const;
 
-private:
+protected:
+    const char * name;
 
+private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Logger::get("ConfigReloader");
+    Poco::Logger * log = &Poco::Logger::get(name);
 
     std::string path;
     FilesChangesTracker files;
@@ -79,4 +83,4 @@ private:
     std::mutex reload_mutex;
 };
 
-}
+} // namespace DB

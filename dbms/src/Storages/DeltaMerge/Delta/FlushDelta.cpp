@@ -3,9 +3,8 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Delta/Pack.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 
 namespace ProfileEvents
@@ -16,25 +15,21 @@ extern const Event WriteBufferFromFileDescriptorWriteBytes;
 extern const Event WriteBufferAIOWriteBytes;
 } // namespace ProfileEvents
 
-namespace CurrentMetrics
-{
-extern const Metric DT_WriteAmplification;
-}
-
 namespace DB::DM
 {
-
 struct FlushPackTask
 {
-    FlushPackTask(const PackPtr & pack_) : pack(pack_) {}
+    FlushPackTask(const DeltaPackPtr & pack_)
+        : pack(pack_)
+    {}
 
-    ConstPackPtr pack;
+    DeltaPackPtr pack;
 
-    Block  block_data;
+    Block block_data;
     PageId data_page = 0;
 
-    bool   sorted         = false;
-    size_t rows_offset    = 0;
+    bool sorted = false;
+    size_t rows_offset = 0;
     size_t deletes_offset = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
@@ -43,11 +38,15 @@ bool DeltaValueSpace::flush(DMContext & context)
 {
     LOG_DEBUG(log, info() << ", Flush start");
 
-    FlushPackTasks tasks;
-    WriteBatches   wbs(context.storage_pool);
+    /// We have two types of data needed to flush to disk:
+    ///  1. The cache data in DeltaPackBlock
+    ///  2. The serialized metadata of packs in DeltaValueSpace
 
-    size_t flush_rows    = 0;
-    size_t flush_bytes   = 0;
+    FlushPackTasks tasks;
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+
+    size_t flush_rows = 0;
+    size_t flush_bytes = 0;
     size_t flush_deletes = 0;
 
     DeltaIndexPtr cur_delta_index;
@@ -60,7 +59,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             return false;
         }
 
-        size_t total_rows    = 0;
+        size_t total_rows = 0;
         size_t total_deletes = 0;
         for (auto & pack : packs)
         {
@@ -72,28 +71,35 @@ bool DeltaValueSpace::flush(DMContext & context)
                 throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
             }
 
+
             if (!pack->isSaved())
             {
                 auto & task = tasks.emplace_back(pack);
-                // We only write the pack's data if it is not a delete range, and it's data haven't been saved.
-                // Otherwise, simply save it's metadata is enough.
-                if (pack->dataFlushable())
+
+                if (auto dpb = pack->tryToBlock(); dpb)
                 {
-                    if (unlikely(!pack->cache))
-                        throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
-                    task.rows_offset    = total_rows;
-                    task.deletes_offset = total_deletes;
-                    task.block_data     = readPackFromCache(pack);
+                    // Stop other threads appending to this pack.
+                    dpb->disableAppend();
+
+                    if (!dpb->getDataPageId())
+                    {
+                        if (unlikely(!dpb->getCache()))
+                            throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
+
+
+                        task.rows_offset = total_rows;
+                        task.deletes_offset = total_deletes;
+                        task.block_data = dpb->readFromCache();
+                    }
                 }
-                flush_rows += pack->rows;
-                flush_bytes += pack->bytes;
+
+                flush_rows += pack->getRows();
+                flush_bytes += pack->getBytes();
                 flush_deletes += pack->isDeleteRange();
             }
-            total_rows += pack->rows;
-            total_deletes += pack->isDeleteRange();
 
-            // Stop other threads appending to this pack.
-            pack->appendable = false;
+            total_rows += pack->getRows();
+            total_deletes += pack->isDeleteRange();
         }
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
@@ -110,7 +116,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     }
 
     DeltaIndex::Updates delta_index_updates;
-    DeltaIndexPtr       new_delta_index;
+    DeltaIndexPtr new_delta_index;
     {
         /// Write prepared data to disk.
         for (auto & task : tasks)
@@ -118,10 +124,11 @@ bool DeltaValueSpace::flush(DMContext & context)
             if (!task.block_data)
                 continue;
             IColumn::Permutation perm;
-            task.sorted = sortBlockByPk(getExtraHandleColumnDefine(), task.block_data, perm);
+            task.sorted = sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), task.block_data, perm);
             if (task.sorted)
                 delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
-            task.data_page = writePackData(context, task.block_data, 0, task.block_data.rows(), wbs);
+
+            task.data_page = DeltaPackBlock::writePackData(context, task.block_data, 0, task.block_data.rows(), wbs);
         }
 
         wbs.writeLogAndData();
@@ -146,8 +153,8 @@ bool DeltaValueSpace::flush(DMContext & context)
             return false;
         }
 
-        Packs::iterator flush_start_point;
-        Packs::iterator flush_end_point;
+        DeltaPacks::iterator flush_start_point;
+        DeltaPacks::iterator flush_end_point;
 
         {
             /// Do some checks before continue, in case other threads do some modifications during current operation,
@@ -182,19 +189,36 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         // Create a temporary packs copy, used to generate serialized data.
         // Save the previous saved packs, and the packs we are saving, and the later packs appended during the period we did not held the lock.
-        Packs packs_copy(packs.begin(), flush_start_point);
+        DeltaPacks packs_copy(packs.begin(), flush_start_point);
         for (auto & task : tasks)
         {
             // Use a new pack instance to do the serializing.
-            auto new_pack = std::make_shared<Pack>(*task.pack);
-            // Set saved to true, otherwise it cannot be serialized.
-            new_pack->saved = true;
-            // If it's data have been updated, use the new pages info.
-            if (task.data_page != 0)
-                new_pack->data_page = task.data_page;
-            // Task pack was sorted, update it's cache data.
-            if (task.sorted)
-                new_pack->cache = std::make_shared<Cache>(std::move(task.block_data));
+            DeltaPackPtr new_pack;
+            if (auto dp_block = task.pack->tryToBlock(); dp_block)
+            {
+                auto new_dpb = std::make_shared<DeltaPackBlock>(*dp_block);
+                // If it's data have been updated, use the new pages info.
+                if (task.data_page != 0)
+                    new_dpb->setDataPageId(task.data_page);
+                if (task.sorted)
+                    new_dpb->setCache(std::make_shared<DeltaPackBlock::Cache>(std::move(task.block_data)));
+
+                new_pack = new_dpb;
+            }
+            else if (auto dp_file = task.pack->tryToFile(); dp_file)
+            {
+                new_pack = std::make_shared<DeltaPackFile>(*dp_file);
+            }
+            else if (auto dp_delete = task.pack->tryToDeleteRange(); dp_delete)
+            {
+                new_pack = std::make_shared<DeltaPackDeleteRange>(*dp_delete);
+            }
+            else
+            {
+                throw Exception("Unexpected delta pack type", ErrorCodes::LOGICAL_ERROR);
+            }
+
+            new_pack->setSaved();
 
             packs_copy.push_back(new_pack);
         }
@@ -202,23 +226,23 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         if constexpr (DM_RUN_CHECK)
         {
-            size_t check_unsaved_rows    = 0;
+            size_t check_unsaved_rows = 0;
             size_t check_unsaved_deletes = 0;
-            size_t total_rows            = 0;
-            size_t total_deletes         = 0;
+            size_t total_rows = 0;
+            size_t total_deletes = 0;
             for (auto & pack : packs_copy)
             {
                 if (!pack->isSaved())
                 {
-                    check_unsaved_rows += pack->rows;
+                    check_unsaved_rows += pack->getRows();
                     check_unsaved_deletes += pack->isDeleteRange();
                 }
-                total_rows += pack->rows;
+                total_rows += pack->getRows();
                 total_deletes += pack->isDeleteRange();
             }
-            if (unlikely(check_unsaved_rows + flush_rows != unsaved_rows             //
+            if (unlikely(check_unsaved_rows + flush_rows != unsaved_rows //
                          || check_unsaved_deletes + flush_deletes != unsaved_deletes //
-                         || total_rows != rows                                       //
+                         || total_rows != rows //
                          || total_deletes != deletes))
                 throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
         }
@@ -240,14 +264,16 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         for (auto & pack : packs)
         {
-            if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
+            if (auto dp_block = pack->tryToBlock(); dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0
+                && (pack->getRows() >= context.delta_small_pack_rows || pack->getBytes() >= context.delta_small_pack_bytes))
             {
                 // This pack is too large to use cache.
-                pack->cache = {};
+                dp_block->clearCache();
             }
         }
 
         unsaved_rows -= flush_rows;
+        unsaved_bytes -= flush_bytes;
         unsaved_deletes -= flush_deletes;
 
         LOG_DEBUG(log,
@@ -259,11 +285,11 @@ bool DeltaValueSpace::flush(DMContext & context)
     ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
 
     // Also update the write amplification
-    auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
+    auto total_write = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
     auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
-    GET_METRIC(context.metrics, tiflash_storage_write_amplification)
+    GET_METRIC(tiflash_storage_write_amplification)
         .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
 
     return true;

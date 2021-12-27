@@ -121,7 +121,7 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
             continue;
         }
 
-        size_t index = it->second;
+        size_t index = it->getMapped();
 
         if (read_columns[index])
             throw Exception("Duplicate field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);

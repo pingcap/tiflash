@@ -5,9 +5,10 @@
 #include <Core/Types.h>
 #include <Poco/UTF8Encoding.h>
 #include <Poco/Unicode.h>
-#include <ext/range.h>
 #include <stdint.h>
 #include <string.h>
+
+#include <ext/range.h>
 
 
 /** Search for a substring in a string by Volnitsky's algorithm
@@ -33,15 +34,13 @@
 
 namespace DB
 {
-
-
 /// @todo store lowercase needle to speed up in case there are numerous occurrences of bigrams from needle in haystack
 template <typename CRTP>
 class VolnitskyBase
 {
 protected:
-    using Offset = UInt8;    /// Offset in the needle. For the basic algorithm, the length of the needle must not be greater than 255.
-    using Ngram = UInt16;    /// n-gram (2 bytes).
+    using Offset = UInt8; /// Offset in the needle. For the basic algorithm, the length of the needle must not be greater than 255.
+    using Ngram = UInt16; /// n-gram (2 bytes).
 
     const UInt8 * const needle;
     const size_t needle_size;
@@ -51,8 +50,8 @@ protected:
 
     /** max needle length is 255, max distinct ngrams for case-sensitive is (255 - 1), case-insensitive is 4 * (255 - 1)
       *  storage of 64K ngrams (n = 2, 128 KB) should be large enough for both cases */
-    static const size_t hash_size = 64 * 1024;    /// Fits into the L2 cache (of common Intel CPUs).
-    Offset hash[hash_size];    /// Hash table.
+    static const size_t hash_size = 64 * 1024; /// Fits into the L2 cache (of common Intel CPUs).
+    Offset hash[hash_size]; /// Hash table.
 
     /// min haystack size to use main algorithm instead of fallback
     static constexpr auto min_haystack_size_for_algorithm = 20000;
@@ -64,11 +63,12 @@ public:
       *  since it is considered that it's useless to waste time initializing the hash table.
       */
     VolnitskyBase(const char * const needle, const size_t needle_size, size_t haystack_size_hint = 0)
-    : needle{reinterpret_cast<const UInt8 *>(needle)}, needle_size{needle_size},
-      fallback{
-          needle_size < 2 * sizeof(Ngram)
-          || needle_size >= std::numeric_limits<Offset>::max()
-          || (haystack_size_hint && haystack_size_hint < min_haystack_size_for_algorithm)}
+        : needle{reinterpret_cast<const UInt8 *>(needle)}
+        , needle_size{needle_size}
+        , fallback{
+              needle_size < 2 * sizeof(Ngram)
+              || needle_size >= std::numeric_limits<Offset>::max()
+              || (haystack_size_hint && haystack_size_hint < min_haystack_size_for_algorithm)}
     {
         if (fallback)
             return;
@@ -188,14 +188,16 @@ protected:
 };
 
 
-template <bool CaseSensitive, bool ASCII> struct VolnitskyImpl;
+template <bool CaseSensitive, bool ASCII>
+struct VolnitskyImpl;
 
 /// Case sensitive comparison
-template <bool ASCII> struct VolnitskyImpl<true, ASCII> : VolnitskyBase<VolnitskyImpl<true, ASCII>>
+template <bool ASCII>
+struct VolnitskyImpl<true, ASCII> : VolnitskyBase<VolnitskyImpl<true, ASCII>>
 {
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
-        : VolnitskyBase<VolnitskyImpl<true, ASCII>>{needle, needle_size, haystack_size_hint},
-          fallback_searcher{needle, needle_size}
+        : VolnitskyBase<VolnitskyImpl<true, ASCII>>{needle, needle_size, haystack_size_hint}
+        , fallback_searcher{needle, needle_size}
     {
     }
 
@@ -219,10 +221,12 @@ template <bool ASCII> struct VolnitskyImpl<true, ASCII> : VolnitskyBase<Volnitsk
 };
 
 /// Case-insensitive ASCII
-template <> struct VolnitskyImpl<false, true> : VolnitskyBase<VolnitskyImpl<false, true>>
+template <>
+struct VolnitskyImpl<false, true> : VolnitskyBase<VolnitskyImpl<false, true>>
 {
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
-        : VolnitskyBase{needle, needle_size, haystack_size_hint}, fallback_searcher{needle, needle_size}
+        : VolnitskyBase{needle, needle_size, haystack_size_hint}
+        , fallback_searcher{needle, needle_size}
     {
     }
 
@@ -245,10 +249,12 @@ template <> struct VolnitskyImpl<false, true> : VolnitskyBase<VolnitskyImpl<fals
 };
 
 /// Case-sensitive UTF-8
-template <> struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<false, false>>
+template <>
+struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<false, false>>
 {
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
-        : VolnitskyBase{needle, needle_size, haystack_size_hint}, fallback_searcher{needle, needle_size}
+        : VolnitskyBase{needle, needle_size, haystack_size_hint}
+        , fallback_searcher{needle, needle_size}
     {
     }
 
@@ -340,7 +346,7 @@ template <> struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<fal
                 /// second sequence always start immediately after u_pos
                 auto second_seq_pos = pos + 1;
 
-                const auto second_u32 = utf8.convert(second_seq_pos);    /// TODO This assumes valid UTF-8 or zero byte after needle.
+                const auto second_u32 = utf8.convert(second_seq_pos); /// TODO This assumes valid UTF-8 or zero byte after needle.
                 const auto second_l_u32 = Poco::Unicode::toLower(second_u32);
                 const auto second_u_u32 = Poco::Unicode::toUpper(second_u32);
 
@@ -450,9 +456,9 @@ template <> struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<fal
 
 
 using Volnitsky = VolnitskyImpl<true, true>;
-using VolnitskyUTF8 = VolnitskyImpl<true, false>;    /// exactly same as Volnitsky
-using VolnitskyCaseInsensitive = VolnitskyImpl<false, true>;    /// ignores non-ASCII bytes
+using VolnitskyUTF8 = VolnitskyImpl<true, false>; /// exactly same as Volnitsky
+using VolnitskyCaseInsensitive = VolnitskyImpl<false, true>; /// ignores non-ASCII bytes
 using VolnitskyCaseInsensitiveUTF8 = VolnitskyImpl<false, false>;
 
 
-}
+} // namespace DB

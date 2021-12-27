@@ -5,21 +5,20 @@
 #include <tipb/expression.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Common/MyTime.h>
+#include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <IO/Endian.h>
 #include <common/StringRef.h>
 
 namespace DB
 {
-
 class TiDBBit
 {
 public:
     TiDBBit(UInt64 value, Int8 byte_size)
     {
         if (byte_size != -1 && (byte_size < 1 || byte_size > 8))
-            throw Exception("Invalid byte size for bit encode", ErrorCodes::LOGICAL_ERROR);
+            throw TiFlashException("Invalid byte size for bit encode", Errors::Coprocessor::Internal);
 
         raw_val = toBigEndian(value);
         const char * start = (const char *)&raw_val;

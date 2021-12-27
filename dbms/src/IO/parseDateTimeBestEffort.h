@@ -5,7 +5,6 @@ class DateLUTImpl;
 
 namespace DB
 {
-
 class ReadBuffer;
 
 /** https://xkcd.com/1179/
@@ -56,4 +55,4 @@ class ReadBuffer;
 void parseDateTimeBestEffort(time_t & res, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone);
 bool tryParseDateTimeBestEffort(time_t & res, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone);
 
-}
+} // namespace DB

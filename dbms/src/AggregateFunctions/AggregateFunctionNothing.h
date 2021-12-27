@@ -1,15 +1,13 @@
 #pragma once
 
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <Columns/IColumn.h>
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
 {
-
-
 /** Aggregate function that takes arbitary number of arbitary arguments and does nothing.
   */
 class AggregateFunctionNothing final : public IAggregateFunctionHelper<AggregateFunctionNothing>
@@ -64,7 +62,7 @@ public:
     {
     }
 
-    void insertResultInto(ConstAggregateDataPtr, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr, IColumn & to, Arena *) const override
     {
         to.insertDefault();
     }
@@ -72,4 +70,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

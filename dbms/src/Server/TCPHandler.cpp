@@ -1,73 +1,52 @@
-#include <iomanip>
-
-#include <Poco/Net/NetException.h>
+#include "TCPHandler.h"
 
 #include <Common/ClickHouseRevision.h>
-
-#include <Common/Stopwatch.h>
+#include <Common/ExternalTable.h>
+#include <Common/NetException.h>
 #include <Common/ProfileEvents.h>
-
-#include <IO/Progress.h>
-
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/CompressionSettings.h>
-
-#include <IO/copyData.h>
-
+#include <Common/Stopwatch.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <Interpreters/executeQuery.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/CompressionSettings.h>
+#include <IO/Progress.h>
+#include <IO/ReadBufferFromPocoSocket.h>
+#include <IO/WriteBufferFromPocoSocket.h>
+#include <IO/copyData.h>
 #include <Interpreters/Quota.h>
-#include <Interpreters/TablesStatus.h>
-
-#include <Storages/StorageMemory.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-
-#include <Common/ExternalTable.h>
-
-#include "TCPHandler.h"
-
-#include <Common/NetException.h>
-#include <ext/scope_guard.h>
-
-#include <Storages/Transaction/LockException.h>
 #include <Interpreters/SharedQueries.h>
+#include <Interpreters/TablesStatus.h>
+#include <Interpreters/executeQuery.h>
+#include <Poco/Net/NetException.h>
+#include <Storages/StorageMemory.h>
+#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
+#include <fmt/format.h>
+
+#include <ext/scope_guard.h>
+#include <iomanip>
 
 namespace ProfileEvents
 {
-    extern const Event PersistedMarksFileHits;
-    extern const Event PersistedMarksFileMisses;
-    extern const Event PersistedMarksFileBusy;
-    extern const Event PersistedMarksFileUpdate;
-    extern const Event PersistedCacheFileHits;
-    extern const Event PersistedCacheFileMisses;
-    extern const Event PersistedCacheFileExpectedMisses;
-    extern const Event PersistedCacheFileBusy;
-    extern const Event PersistedCacheFileUpdate;
-    extern const Event PersistedCachePartBusy;
-}
+} // namespace ProfileEvents
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CLIENT_HAS_CONNECTED_TO_WRONG_PORT;
-    extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int UNKNOWN_PACKET_FROM_CLIENT;
-    extern const int POCO_EXCEPTION;
-    extern const int STD_EXCEPTION;
-    extern const int SOCKET_TIMEOUT;
-    extern const int UNEXPECTED_PACKET_FROM_CLIENT;
-    extern const int LOCK_EXCEPTION;
-}
+extern const int CLIENT_HAS_CONNECTED_TO_WRONG_PORT;
+extern const int UNKNOWN_DATABASE;
+extern const int UNKNOWN_EXCEPTION;
+extern const int UNKNOWN_PACKET_FROM_CLIENT;
+extern const int POCO_EXCEPTION;
+extern const int STD_EXCEPTION;
+extern const int SOCKET_TIMEOUT;
+extern const int UNEXPECTED_PACKET_FROM_CLIENT;
+extern const int LOCK_EXCEPTION;
+} // namespace ErrorCodes
 
 
 void TCPHandler::runImpl()
@@ -113,7 +92,9 @@ void TCPHandler::runImpl()
             /// We try to send error information to the client.
             sendException(e);
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
 
         throw;
     }
@@ -124,8 +105,8 @@ void TCPHandler::runImpl()
         if (!connection_context.isDatabaseExist(default_database))
         {
             Exception e("Database " + default_database + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
-            LOG_WARNING(log, "Code: " << e.code() << ", e.displayText() = " << e.displayText()
-                << ", Stack trace:\n\n" << e.getStackTrace().toString());
+            LOG_WARNING(log, "Code: " << e.code() << ", e.displayText() = " << e.displayText() << ", Stack trace:\n\n"
+                                      << e.getStackTrace().toString());
             default_database = "test";
         }
 
@@ -134,7 +115,7 @@ void TCPHandler::runImpl()
 
     sendHello();
 
-    connection_context.setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
+    connection_context.setProgressCallback([this](const Progress & value) { return this->updateProgress(value); });
 
     while (1)
     {
@@ -153,7 +134,7 @@ void TCPHandler::runImpl()
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
          */
         std::unique_ptr<Exception> exception;
-        LockInfos lock_infos;
+        LockInfoPtr lock_info;
         std::vector<UInt64> region_ids;
         bool network_error = false;
 
@@ -165,7 +146,7 @@ void TCPHandler::runImpl()
             query_context = connection_context;
 
             /// If a user passed query-local timeouts, reset socket to initial state at the end of the query
-            SCOPE_EXIT({state.timeout_setter.reset();});
+            SCOPE_EXIT({ state.timeout_setter.reset(); });
 
             /** If Query - process it. If Ping or Cancel - go back to the beginning.
              *  There may come settings for a separate query that modify `query_context`.
@@ -179,7 +160,7 @@ void TCPHandler::runImpl()
             /// Reset the input stream, as we received an empty block while receiving external table data.
             /// So, the stream has been marked as cancelled and we can't read from it anymore.
             state.block_in.reset();
-            state.maybe_compressed_in.reset();  /// For more accurate accounting by MemoryTracker.
+            state.maybe_compressed_in.reset(); /// For more accurate accounting by MemoryTracker.
 
             /// Processing Query
             const Settings & settings = query_context.getSettingsRef();
@@ -190,8 +171,7 @@ void TCPHandler::runImpl()
                 state.io = query_context.getSharedQueries()->getOrCreateBlockIO(
                     state.query_id,
                     settings.shared_query_clients,
-                    [&]()
-                    {
+                    [&]() {
                         return executeQuery(state.query, query_context, false, state.stage);
                     });
 
@@ -227,11 +207,11 @@ void TCPHandler::runImpl()
         catch (LockException & e)
         {
             state.io.onException();
-            lock_infos = std::move(e.lock_infos);
+            lock_info = std::move(e.lock_info);
         }
         catch (RegionException & e)
         {
-            sendRegionException(e.region_ids);
+            sendRegionException({e.unavailable_region.begin(), e.unavailable_region.end()});
         }
         catch (const Exception & e)
         {
@@ -281,8 +261,8 @@ void TCPHandler::runImpl()
         {
             if (exception)
                 sendException(*exception);
-            else if (!lock_infos.empty())
-                sendLockInfos(lock_infos);
+            else if (lock_info)
+                sendLockInfos(lock_info);
         }
         catch (...)
         {
@@ -313,20 +293,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_INFO(log, std::fixed << std::setprecision(3)
-            << "Processed in " << watch.elapsedSeconds() << " sec. "
-            << "Global persisted cache hit|miss|busy|update|miss(ok): mark index files = "
-            << ProfileEvents::counters[ProfileEvents::PersistedMarksFileHits].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileMisses].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load()
-            << "+" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileBusy].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileUpdate].load()
-            << ", mark ranges = " << ProfileEvents::counters[ProfileEvents::PersistedCacheFileHits].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileMisses].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load()
-            << "+" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileBusy].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileUpdate].load()
-            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileExpectedMisses].load());
+        LOG_INFO(log, fmt::format("Processed in {:.3} sec.", watch.elapsedSeconds()));
 
         if (network_error)
             break;
@@ -336,10 +303,10 @@ void TCPHandler::runImpl()
 
 void TCPHandler::readData(const Settings & global_settings)
 {
-    auto receive_timeout = query_context.getSettingsRef().receive_timeout.value;
+    auto receive_timeout = query_context.getSettingsRef().receive_timeout.get();
 
     /// Poll interval should not be greater than receive_timeout
-    size_t default_poll_interval = global_settings.poll_interval.value * 1000000;
+    size_t default_poll_interval = global_settings.poll_interval * 1000000;
     size_t current_poll_interval = static_cast<size_t>(receive_timeout.totalMicroseconds());
     constexpr size_t min_poll_interval = 5000; // 5 ms
     size_t poll_interval = std::max(min_poll_interval, std::min(default_poll_interval, current_poll_interval));
@@ -480,20 +447,14 @@ void TCPHandler::processTablesStatusRequest()
     request.read(*in, client_revision);
 
     TablesStatusResponse response;
-    for (const QualifiedTableName & table_name: request.tables)
+    for (const QualifiedTableName & table_name : request.tables)
     {
         StoragePtr table = connection_context.tryGetTable(table_name.database, table_name.table);
         if (!table)
             continue;
 
         TableStatus status;
-        if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
-        {
-            status.is_replicated = true;
-            status.absolute_delay = replicated_table->getAbsoluteDelay();
-        }
-        else
-            status.is_replicated = false;
+        status.is_replicated = false;
 
         response.table_states_by_id.emplace(table_name, std::move(status));
     }
@@ -572,9 +533,11 @@ void TCPHandler::receiveHello()
         if (packet_type == 'G' || packet_type == 'P')
         {
             writeString("HTTP/1.0 400 Bad Request\r\n\r\n"
-                "Port " + server.config().getString("tcp_port") + " is for clickhouse-client program.\r\n"
-                "You must use port " + server.config().getString("http_port") + " for HTTP.\r\n",
-                *out);
+                        "Port "
+                            + server.config().getString("tcp_port") + " is for clickhouse-client program.\r\n"
+                                                                      "You must use port "
+                            + server.config().getString("http_port") + " for HTTP.\r\n",
+                        *out);
 
             throw Exception("Client has connected to wrong port", ErrorCodes::CLIENT_HAS_CONNECTED_TO_WRONG_PORT);
         }
@@ -590,13 +553,7 @@ void TCPHandler::receiveHello()
     readStringBinary(user, *in);
     readStringBinary(password, *in);
 
-    LOG_DEBUG(log, "Connected " << client_name
-        << " version " << client_version_major
-        << "." << client_version_minor
-        << "." << client_revision
-        << (!default_database.empty() ? ", database: " + default_database : "")
-        << (!user.empty() ? ", user: " + user : "")
-        << ".");
+    LOG_DEBUG(log, "Connected " << client_name << " version " << client_version_major << "." << client_version_minor << "." << client_revision << (!default_database.empty() ? ", database: " + default_database : "") << (!user.empty() ? ", user: " + user : "") << ".");
 
     connection_context.setUser(user, password, socket().peerAddress(), "");
 }
@@ -626,42 +583,42 @@ bool TCPHandler::receivePacket()
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
 
-//    std::cerr << "Packet: " << packet_type << std::endl;
+    //    std::cerr << "Packet: " << packet_type << std::endl;
 
     switch (packet_type)
     {
-        case Protocol::Client::Query:
-            if (!state.empty())
-                throw NetException("Unexpected packet Query received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-            receiveQuery();
-            return true;
+    case Protocol::Client::Query:
+        if (!state.empty())
+            throw NetException("Unexpected packet Query received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        receiveQuery();
+        return true;
 
-        case Protocol::Client::Data:
-            if (state.empty())
-                throw NetException("Unexpected packet Data received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-            return receiveData();
+    case Protocol::Client::Data:
+        if (state.empty())
+            throw NetException("Unexpected packet Data received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        return receiveData();
 
-        case Protocol::Client::Ping:
-            writeVarUInt(Protocol::Server::Pong, *out);
-            out->next();
-            return false;
+    case Protocol::Client::Ping:
+        writeVarUInt(Protocol::Server::Pong, *out);
+        out->next();
+        return false;
 
-        case Protocol::Client::Cancel:
-            return false;
+    case Protocol::Client::Cancel:
+        return false;
 
-        case Protocol::Client::Hello:
-            throw Exception("Unexpected packet " + String(Protocol::Client::toString(packet_type)) + " received from client",
-                ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    case Protocol::Client::Hello:
+        throw Exception("Unexpected packet " + String(Protocol::Client::toString(packet_type)) + " received from client",
+                        ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
-        case Protocol::Client::TablesStatusRequest:
-            if (!state.empty())
-                throw NetException("Unexpected packet TablesStatusRequest received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-            processTablesStatusRequest();
-            out->next();
-            return false;
+    case Protocol::Client::TablesStatusRequest:
+        if (!state.empty())
+            throw NetException("Unexpected packet TablesStatusRequest received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        processTablesStatusRequest();
+        out->next();
+        return false;
 
-        default:
-            throw Exception("Unknown packet " + toString(packet_type) + " from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
+    default:
+        throw Exception("Unknown packet " + toString(packet_type) + " from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
     }
 }
 
@@ -747,7 +704,7 @@ bool TCPHandler::receiveData()
             {
                 NamesAndTypesList columns = block.getNamesAndTypesList();
                 storage = StorageMemory::create(external_table_name,
-                    ColumnsDescription{columns, NamesAndTypesList{}, NamesAndTypesList{}, ColumnDefaults{}});
+                                                ColumnsDescription{columns, NamesAndTypesList{}, NamesAndTypesList{}, ColumnDefaults{}});
                 storage->startup();
                 query_context.addExternalTable(external_table_name, storage);
             }
@@ -768,7 +725,7 @@ void TCPHandler::initBlockInput()
     if (!state.block_in)
     {
         if (state.compression == Protocol::Compression::Enable)
-            state.maybe_compressed_in = std::make_shared<CompressedReadBuffer>(*in);
+            state.maybe_compressed_in = std::make_shared<CompressedReadBuffer<>>(*in);
         else
             state.maybe_compressed_in = in;
 
@@ -784,8 +741,9 @@ void TCPHandler::initBlockOutput(const Block & block)
     if (!state.block_out)
     {
         if (state.compression == Protocol::Compression::Enable)
-            state.maybe_compressed_out = std::make_shared<CompressedWriteBuffer>(
-                *out, CompressionSettings(query_context.getSettingsRef()));
+            state.maybe_compressed_out = std::make_shared<CompressedWriteBuffer<>>(
+                *out,
+                CompressionSettings(query_context.getSettingsRef()));
         else
             state.maybe_compressed_out = out;
 
@@ -815,15 +773,15 @@ bool TCPHandler::isQueryCancelled()
 
         switch (packet_type)
         {
-            case Protocol::Client::Cancel:
-                if (state.empty())
-                    throw NetException("Unexpected packet Cancel received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-                LOG_INFO(log, "Query was cancelled.");
-                state.is_cancelled = true;
-                return true;
+        case Protocol::Client::Cancel:
+            if (state.empty())
+                throw NetException("Unexpected packet Cancel received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+            LOG_INFO(log, "Query was cancelled.");
+            state.is_cancelled = true;
+            return true;
 
-            default:
-                throw NetException("Unknown packet from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
+        default:
+            throw NetException("Unknown packet from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
         }
     }
 
@@ -851,7 +809,8 @@ void TCPHandler::sendException(const Exception & e)
     out->next();
 }
 
-void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
+void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids)
+{
     writeVarUInt(Protocol::Server::RegionException, *out);
     writeVarUInt(region_ids.size(), *out);
     for (size_t i = 0; i < region_ids.size(); i++)
@@ -859,16 +818,15 @@ void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
     out->next();
 }
 
-void TCPHandler::sendLockInfos(const LockInfos & lock_infos)
+void TCPHandler::sendLockInfos(const LockInfoPtr & lock_info)
 {
     writeVarUInt(Protocol::Server::LockInfos, *out);
-    writeVarUInt(lock_infos.size(), *out);
-    for (auto & lock_info : lock_infos)
+    writeVarUInt(1, *out);
     {
-        writeStringBinary(lock_info->primary_lock, *out);
-        writeVarUInt(lock_info->lock_version, *out);
-        writeStringBinary(lock_info->key, *out);
-        writeVarUInt(lock_info->lock_ttl, *out);
+        writeStringBinary(lock_info->primary_lock(), *out);
+        writeVarUInt(lock_info->lock_version(), *out);
+        writeStringBinary(lock_info->key(), *out);
+        writeVarUInt(lock_info->lock_ttl(), *out);
     }
     out->next();
 }
@@ -908,8 +866,7 @@ void TCPHandler::run()
         /// Timeout - not an error.
         if (!strcmp(e.what(), "Timeout"))
         {
-            LOG_DEBUG(log, "Poco::Exception. Code: " << ErrorCodes::POCO_EXCEPTION << ", e.code() = " << e.code()
-                << ", e.displayText() = " << e.displayText() << ", e.what() = " << e.what());
+            LOG_DEBUG(log, "Poco::Exception. Code: " << ErrorCodes::POCO_EXCEPTION << ", e.code() = " << e.code() << ", e.displayText() = " << e.displayText() << ", e.what() = " << e.what());
         }
         else
             throw;
@@ -950,4 +907,4 @@ void TCPHandler::processSharedQuery()
     state.io.onFinish();
 }
 
-}
+} // namespace DB

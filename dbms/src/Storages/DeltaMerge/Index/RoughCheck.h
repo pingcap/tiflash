@@ -8,12 +8,9 @@ namespace DB
 {
 namespace DM
 {
-
-
 namespace RoughCheck
 {
-
-static constexpr int TRUE   = 1;
+static constexpr int TRUE = 1;
 static constexpr int FAILED = 0;
 
 template <template <typename, typename> class Op>

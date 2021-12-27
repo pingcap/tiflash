@@ -1,10 +1,10 @@
-#include <time.h>
+#include <Common/Exception.h>
+#include <Common/SipHash.h>
+#include <Common/randomSeed.h>
+#include <Core/Types.h>
 #include <port/unistd.h>
 #include <sys/types.h>
-#include <Common/Exception.h>
-#include <Common/randomSeed.h>
-#include <Common/SipHash.h>
-#include <Core/Types.h>
+#include <time.h>
 #ifdef __APPLE__
 #include <common/apple_rt.h>
 #endif
@@ -12,11 +12,11 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int CANNOT_CLOCK_GETTIME;
-    }
+namespace ErrorCodes
+{
+extern const int CANNOT_CLOCK_GETTIME;
 }
+} // namespace DB
 
 
 DB::UInt64 randomSeed()

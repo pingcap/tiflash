@@ -1,20 +1,18 @@
-#include <IO/WriteBufferFromHTTPServerResponse.h>
-
-#include <Poco/Version.h>
-#include <Poco/Net/HTTPServerResponse.h>
 #include <Common/Exception.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/HTTPCommon.h>
 #include <Common/NetException.h>
 #include <Common/Stopwatch.h>
+#include <IO/HTTPCommon.h>
 #include <IO/Progress.h>
+#include <IO/WriteBufferFromHTTPServerResponse.h>
+#include <IO/WriteBufferFromString.h>
+#include <Poco/Net/HTTPServerResponse.h>
+#include <Poco/Version.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -48,7 +46,8 @@ void WriteBufferFromHTTPServerResponse::finishSendHeaders()
 #if POCO_CLICKHOUSE_PATCH
             /// Send end of headers delimiter.
             if (response_header_ostr)
-                *response_header_ostr << "\r\n" << std::flush;
+                *response_header_ostr << "\r\n"
+                                      << std::flush;
 #else
             /// Newline autosent by response.send()
             /// if nothing to send in body:
@@ -95,7 +94,7 @@ void WriteBufferFromHTTPServerResponse::nextImpl()
                 else
                     throw Exception("Logical error: unknown compression method passed to WriteBufferFromHTTPServerResponse",
                                     ErrorCodes::LOGICAL_ERROR);
-                /// Use memory allocated for the outer buffer in the buffer pointed to by out. This avoids extra allocation and copy.
+                    /// Use memory allocated for the outer buffer in the buffer pointed to by out. This avoids extra allocation and copy.
 
 #if !POCO_CLICKHOUSE_PATCH
                 response_body_ostr = &(response.send());
@@ -117,7 +116,6 @@ void WriteBufferFromHTTPServerResponse::nextImpl()
         }
 
         finishSendHeaders();
-
     }
 
     if (out)
@@ -166,7 +164,8 @@ void WriteBufferFromHTTPServerResponse::onProgress(const Progress & progress)
         accumulated_progress.writeJSON(progress_string_writer);
 
 #if POCO_CLICKHOUSE_PATCH
-        *response_header_ostr << "X-ClickHouse-Progress: " << progress_string_writer.str() << "\r\n" << std::flush;
+        *response_header_ostr << "X-ClickHouse-Progress: " << progress_string_writer.str() << "\r\n"
+                              << std::flush;
 #endif
     }
 }
@@ -200,4 +199,4 @@ WriteBufferFromHTTPServerResponse::~WriteBufferFromHTTPServerResponse()
     }
 }
 
-}
+} // namespace DB

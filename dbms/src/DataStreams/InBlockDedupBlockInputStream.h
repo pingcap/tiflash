@@ -11,7 +11,7 @@ public:
     InBlockDedupBlockInputStream(BlockInputStreamPtr & input_, const SortDescription & description_, size_t stream_position_)
         : input(input_), description(description_), stream_position(stream_position_)
     {
-        log = &Logger::get("InBlockDedupInput");
+        log = &Poco::Logger::get("InBlockDedupInput");
         children.emplace_back(input_);
     }
 
@@ -47,7 +47,7 @@ private:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr input;
     const SortDescription description;
     size_t stream_position;

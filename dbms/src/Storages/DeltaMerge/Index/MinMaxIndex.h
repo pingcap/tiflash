@@ -8,14 +8,12 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/DeltaMerge/Index/MinMax.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 
 namespace DB
 {
-
 namespace DM
 {
-
 class MinMaxIndex;
 using MinMaxIndexPtr = std::shared_ptr<MinMaxIndex>;
 
@@ -23,23 +21,25 @@ class MinMaxIndex
 {
 private:
     using HasValueMarkPtr = std::shared_ptr<PaddedPODArray<UInt8>>;
-    using HasNullMarkPtr  = std::shared_ptr<PaddedPODArray<UInt8>>;
+    using HasNullMarkPtr = std::shared_ptr<PaddedPODArray<UInt8>>;
 
-    HasNullMarkPtr   has_null_marks;
-    HasValueMarkPtr  has_value_marks;
+    HasNullMarkPtr has_null_marks;
+    HasValueMarkPtr has_value_marks;
     MutableColumnPtr minmaxes;
 
 private:
     MinMaxIndex(HasNullMarkPtr has_null_marks_, HasValueMarkPtr has_value_marks_, MutableColumnPtr && minmaxes_)
-        : has_null_marks(has_null_marks_), has_value_marks(has_value_marks_), minmaxes(std::move(minmaxes_))
+        : has_null_marks(has_null_marks_)
+        , has_value_marks(has_value_marks_)
+        , minmaxes(std::move(minmaxes_))
     {
     }
 
 public:
     MinMaxIndex(const IDataType & type)
-        : has_null_marks(std::make_shared<PaddedPODArray<UInt8>>()),
-          has_value_marks(std::make_shared<PaddedPODArray<UInt8>>()),
-          minmaxes(type.createColumn())
+        : has_null_marks(std::make_shared<PaddedPODArray<UInt8>>())
+        , has_value_marks(std::make_shared<PaddedPODArray<UInt8>>())
+        , minmaxes(type.createColumn())
     {
     }
 
@@ -50,10 +50,12 @@ public:
 
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
-    void                  write(const IDataType & type, WriteBuffer & buf);
-    static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf);
+    void write(const IDataType & type, WriteBuffer & buf);
+    static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit);
 
     std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
+
+    std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index);
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
@@ -73,27 +75,15 @@ struct MinMaxIndexWeightFunction
 };
 
 
-class MinMaxIndexCache : public LRUCache<UInt128, MinMaxIndex, UInt128TrivialHash, MinMaxIndexWeightFunction>
+class MinMaxIndexCache : public LRUCache<String, MinMaxIndex, std::hash<String>, MinMaxIndexWeightFunction>
 {
 private:
-    using Base = LRUCache<UInt128, MinMaxIndex, UInt128TrivialHash, MinMaxIndexWeightFunction>;
+    using Base = LRUCache<String, MinMaxIndex, std::hash<String>, MinMaxIndexWeightFunction>;
 
 public:
-    MinMaxIndexCache(size_t max_size_in_bytes, const Delay & expiration_delay) : Base(max_size_in_bytes, expiration_delay) {}
-
-    static UInt128 hash(const String & path_to_file, UInt64 salt = 0)
-    {
-        UInt128 key;
-
-        SipHash hash;
-        hash.update(path_to_file.data(), path_to_file.size() + 1);
-        hash.get128(key.low, key.high);
-
-        key.low ^= salt;
-        key.high ^= salt;
-
-        return key;
-    }
+    MinMaxIndexCache(size_t max_size_in_bytes, const Delay & expiration_delay)
+        : Base(max_size_in_bytes, expiration_delay)
+    {}
 
     template <typename LoadFunc>
     MappedPtr getOrSet(const Key & key, LoadFunc && load)

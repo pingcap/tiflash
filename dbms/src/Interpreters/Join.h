@@ -1,165 +1,24 @@
 #pragma once
 
-#include <shared_mutex>
-
-#include <Parsers/ASTTablesInSelectQuery.h>
-
-#include <Interpreters/AggregationCommon.h>
-#include <Interpreters/SettingsCommon.h>
-
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
-
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-
-#include <DataStreams/SizeLimits.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/SizeLimits.h>
+#include <Interpreters/AggregationCommon.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/SettingsCommon.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <common/ThreadPool.h>
+
+#include <shared_mutex>
 
 
 namespace DB
 {
-
-/// Helpers to obtain keys (to use in a hash table or similar data structure) for various equi-JOINs.
-
-/// UInt8/16/32/64 or another types with same number of bits.
-template <typename FieldType>
-struct JoinKeyGetterOneNumber
-{
-    using Key = FieldType;
-
-    const FieldType * vec;
-
-    /** Created before processing of each block.
-      * Initialize some members, used in another methods, called in inner loops.
-      */
-    JoinKeyGetterOneNumber(const ColumnRawPtrs & key_columns)
-    {
-        vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & /*key_columns*/,
-        size_t /*keys_size*/,                 /// number of key columns.
-        size_t i,                             /// row number to get key from.
-        const Sizes & /*key_sizes*/) const    /// If keys are of fixed size - their sizes. Not used for methods with variable-length keys.
-    {
-        return unionCastToUInt64(vec[i]);
-    }
-
-    /// Place additional data into memory pool, if needed, when new key was inserted into hash table.
-    static void onNewKey(Key & /*key*/, Arena & /*pool*/) {}
-};
-
-/// For single String key.
-struct JoinKeyGetterString
-{
-    using Key = StringRef;
-
-    const ColumnString::Offsets * offsets;
-    const ColumnString::Chars_t * chars;
-
-    JoinKeyGetterString(const ColumnRawPtrs & key_columns)
-    {
-        const IColumn & column = *key_columns[0];
-        const ColumnString & column_string = static_cast<const ColumnString &>(column);
-        offsets = &column_string.getOffsets();
-        chars = &column_string.getChars();
-    }
-
-    Key getKey(
-        const ColumnRawPtrs &,
-        size_t,
-        size_t i,
-        const Sizes &) const
-    {
-        return StringRef(
-            &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-            (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-    }
-
-    static void onNewKey(Key & key, Arena & pool)
-    {
-        key.data = pool.insert(key.data, key.size);
-    }
-};
-
-/// For single FixedString key.
-struct JoinKeyGetterFixedString
-{
-    using Key = StringRef;
-
-    size_t n;
-    const ColumnFixedString::Chars_t * chars;
-
-    JoinKeyGetterFixedString(const ColumnRawPtrs & key_columns)
-    {
-        const IColumn & column = *key_columns[0];
-        const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
-        n = column_string.getN();
-        chars = &column_string.getChars();
-    }
-
-    Key getKey(
-        const ColumnRawPtrs &,
-        size_t,
-        size_t i,
-        const Sizes &) const
-    {
-        return StringRef(&(*chars)[i * n], n);
-    }
-
-    static void onNewKey(Key & key, Arena & pool)
-    {
-        key.data = pool.insert(key.data, key.size);
-    }
-};
-
-/// For keys of fixed size, that could be packed in sizeof TKey width.
-template <typename TKey>
-struct JoinKeyGetterFixed
-{
-    using Key = TKey;
-
-    JoinKeyGetterFixed(const ColumnRawPtrs &)
-    {
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & key_columns,
-        size_t keys_size,
-        size_t i,
-        const Sizes & key_sizes) const
-    {
-        return packFixed<Key>(i, keys_size, key_columns, key_sizes);
-    }
-
-    static void onNewKey(Key &, Arena &) {}
-};
-
-/// Generic method, use crypto hash function.
-struct JoinKeyGetterHashed
-{
-    using Key = UInt128;
-
-    JoinKeyGetterHashed(const ColumnRawPtrs &)
-    {
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & key_columns,
-        size_t keys_size,
-        size_t i,
-        const Sizes &) const
-    {
-        return hash128(i, keys_size, key_columns);
-    }
-
-    static void onNewKey(Key &, Arena &) {}
-};
-
-
-
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -219,8 +78,21 @@ struct JoinKeyGetterHashed
 class Join
 {
 public:
-    Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_);
+    Join(const Names & key_names_left_,
+         const Names & key_names_right_,
+         bool use_nulls_,
+         const SizeLimits & limits,
+         ASTTableJoin::Kind kind_,
+         ASTTableJoin::Strictness strictness_,
+         size_t build_concurrency = 1,
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
+         const String & left_filter_column = "",
+         const String & right_filter_column = "",
+         const String & other_filter_column = "",
+         const String & other_eq_filter_from_in_column = "",
+         ExpressionActionsPtr other_condition_ptr = nullptr,
+         size_t max_block_size = 0,
+         const LogWithPrefixPtr & log_ = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -232,7 +104,11 @@ public:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
+    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
+
     bool insertFromBlock(const Block & block);
+
+    void insertFromBlock(const Block & block, size_t stream_index);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -242,7 +118,7 @@ public:
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
     void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return totals; };
+    bool hasTotals() const { return static_cast<bool>(totals); };
 
     void joinTotals(Block & block) const;
 
@@ -251,7 +127,7 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -260,6 +136,13 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
+    bool useNulls() const { return use_nulls; }
+    const Names & getLeftJoinKeys() const { return key_names_left; }
+    size_t getBuildConcurrency() const { return build_concurrency; }
+    bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
+    size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
+
+    void setFinishBuildTable(bool);
 
     /// Reference to the row in block.
     struct RowRef
@@ -268,7 +151,10 @@ public:
         size_t row_num;
 
         RowRef() {}
-        RowRef(const Block * block_, size_t row_num_) : block(block_), row_num(row_num_) {}
+        RowRef(const Block * block_, size_t row_num_)
+            : block(block_)
+            , row_num(row_num_)
+        {}
     };
 
     /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
@@ -277,7 +163,9 @@ public:
         RowRefList * next = nullptr;
 
         RowRefList() {}
-        RowRefList(const Block * block_, size_t row_num_) : RowRef(block_, row_num_) {}
+        RowRefList(const Block * block_, size_t row_num_)
+            : RowRef(block_, row_num_)
+        {}
     };
 
 
@@ -291,10 +179,10 @@ public:
     template <typename Base>
     struct WithUsedFlag<true, Base> : Base
     {
-        mutable std::atomic<bool> used {};
+        mutable std::atomic<bool> used{};
         using Base::Base;
         using Base_t = Base;
-        void setUsed() const { used.store(true, std::memory_order_relaxed); }    /// Could be set simultaneously from different threads.
+        void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
         bool getUsed() const { return used; }
     };
 
@@ -308,25 +196,25 @@ public:
     };
 
 
-    /// Different types of keys for maps.
-    #define APPLY_FOR_JOIN_VARIANTS(M) \
-        M(key8)                        \
-        M(key16)                       \
-        M(key32)                       \
-        M(key64)                       \
-        M(key_string)                  \
-        M(key_fixed_string)            \
-        M(keys128)                     \
-        M(keys256)                     \
-        M(hashed)
+/// Different types of keys for maps.
+#define APPLY_FOR_JOIN_VARIANTS(M) \
+    M(key8)                        \
+    M(key16)                       \
+    M(key32)                       \
+    M(key64)                       \
+    M(key_string)                  \
+    M(key_fixed_string)            \
+    M(keys128)                     \
+    M(keys256)                     \
+    M(serialized)
 
     enum class Type
     {
         EMPTY,
         CROSS,
-        #define M(NAME) NAME,
-            APPLY_FOR_JOIN_VARIANTS(M)
-        #undef M
+#define M(NAME) NAME,
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
     };
 
 
@@ -335,15 +223,15 @@ public:
     template <typename Mapped>
     struct MapsTemplate
     {
-        std::unique_ptr<HashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>>   key8;
-        std::unique_ptr<HashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
-        std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>>>                     key32;
-        std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>>                        key_string;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32>>                     keys128;
-        std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32>>                     keys256;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash>>                   hashed;
+        std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>> key8;
+        std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
+        std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
+        std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
+        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
@@ -365,17 +253,38 @@ private:
     /// Substitute NULLs for non-JOINed rows.
     bool use_nulls;
 
+    size_t build_concurrency;
+    std::atomic_bool build_set_exceeded;
+    /// collators for the join key
+    const TiDB::TiDBCollators collators;
+
+    String left_filter_column;
+    String right_filter_column;
+    String other_filter_column;
+    String other_eq_filter_from_in_column;
+    ExpressionActionsPtr other_condition_ptr;
+    ASTTableJoin::Strictness original_strictness;
+    size_t max_block_size_for_cross_join;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
+    /// mutex to protect concurrent insert to blocks
+    std::mutex blocks_lock;
+    /// keep original block for concurrent build
+    Blocks original_blocks;
 
-    MapsAny maps_any;            /// For ANY LEFT|INNER JOIN
-    MapsAll maps_all;            /// For ALL LEFT|INNER JOIN
-    MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
-    MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
+    MapsAny maps_any; /// For ANY LEFT|INNER JOIN
+    MapsAll maps_all; /// For ALL LEFT|INNER JOIN
+    MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
+    MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
+
+    /// For right/full join, including
+    /// 1. Rows with NULL join keys
+    /// 2. Rows that are filtered by right join conditions
+    std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arena pool;
+    Arenas pools;
 
 private:
     Type type = Type::EMPTY;
@@ -389,13 +298,16 @@ private:
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
 
-    Poco::Logger * log;
+    mutable std::mutex build_table_mutex;
+    mutable std::condition_variable build_table_cv;
+    bool have_finish_build;
+
+    const LogWithPrefixPtr log;
 
     /// Limits for maximum map size.
     SizeLimits limits;
 
     Block totals;
-
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
@@ -411,11 +323,22 @@ private:
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;
 
+    /** Handle non-equal join conditions
+      *
+      * @param block
+      */
+    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     void joinBlockImplCross(Block & block) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
 using Joins = std::vector<JoinPtr>;
 
 
-}
+} // namespace DB

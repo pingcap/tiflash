@@ -1,12 +1,12 @@
 #pragma once
 
-#include <cstddef>
 #include <IO/ReadBuffer.h>
+
+#include <cstddef>
 
 
 namespace DB
 {
-
 /** Allows to read from another ReadBuffer no more than the specified number of bytes.
   */
 class LimitReadBuffer : public ReadBuffer
@@ -22,4 +22,4 @@ public:
     ~LimitReadBuffer() override;
 };
 
-}
+} // namespace DB

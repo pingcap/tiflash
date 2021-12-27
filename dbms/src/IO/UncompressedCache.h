@@ -1,23 +1,20 @@
 #pragma once
 
+#include <Common/HashTable/Hash.h>
 #include <Common/LRUCache.h>
-#include <Common/SipHash.h>
-#include <Common/UInt128.h>
 #include <Common/ProfileEvents.h>
+#include <Common/SipHash.h>
 #include <IO/BufferWithOwnMemory.h>
-
 
 namespace ProfileEvents
 {
-    extern const Event UncompressedCacheHits;
-    extern const Event UncompressedCacheMisses;
-    extern const Event UncompressedCacheWeightLost;
-}
+extern const Event UncompressedCacheHits;
+extern const Event UncompressedCacheMisses;
+extern const Event UncompressedCacheWeightLost;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
-
 struct UncompressedCacheCell
 {
     Memory data;
@@ -35,14 +32,15 @@ struct UncompressedSizeWeightFunction
 
 /** Cache of decompressed blocks for implementation of CachedCompressedReadBuffer. thread-safe.
   */
-class UncompressedCache : public LRUCache<UInt128, UncompressedCacheCell, UInt128TrivialHash, UncompressedSizeWeightFunction>
+class UncompressedCache : public LRUCache<UInt128, UncompressedCacheCell, TrivialHash, UncompressedSizeWeightFunction>
 {
 private:
-    using Base = LRUCache<UInt128, UncompressedCacheCell, UInt128TrivialHash, UncompressedSizeWeightFunction>;
+    using Base = LRUCache<UInt128, UncompressedCacheCell, TrivialHash, UncompressedSizeWeightFunction>;
 
 public:
     UncompressedCache(size_t max_size_in_bytes)
-        : Base(max_size_in_bytes) {}
+        : Base(max_size_in_bytes)
+    {}
 
     /// Calculate key from path to file and offset.
     static UInt128 hash(const String & path_to_file, size_t offset)
@@ -52,7 +50,7 @@ public:
         SipHash hash;
         hash.update(path_to_file.data(), path_to_file.size() + 1);
         hash.update(offset);
-        hash.get128(key.low, key.high);
+        hash.get128(key);
 
         return key;
     }
@@ -78,4 +76,4 @@ private:
 
 using UncompressedCachePtr = std::shared_ptr<UncompressedCache>;
 
-}
+} // namespace DB

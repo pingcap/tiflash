@@ -1,0 +1,61 @@
+#pragma once
+
+#include <Common/CurrentMetrics.h>
+#include <Encryption/RateLimiter.h>
+#include <Encryption/WritableFile.h>
+
+#include <string>
+
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForWrite;
+}
+
+#ifndef O_DIRECT
+#define O_DIRECT 00040000
+#endif
+
+namespace DB
+{
+class PosixWritableFile : public WritableFile
+{
+public:
+    PosixWritableFile(
+        const std::string & file_name_,
+        bool truncate_when_exists_,
+        int flags,
+        mode_t mode,
+        const WriteLimiterPtr & write_limiter_ = nullptr);
+
+    ~PosixWritableFile() override;
+
+    ssize_t write(char * buf, size_t size) override;
+
+    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+
+    std::string getFileName() const override { return file_name; }
+
+    int getFd() const override { return fd; }
+
+    void open() override;
+
+    void close() override;
+
+    bool isClosed() const override { return fd == -1; }
+
+    int fsync() override;
+
+    void hardLink(const std::string & existing_file) override;
+
+private:
+    void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);
+
+private:
+    // Only add metrics when file is actually added in `doOpenFile`.
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
+    std::string file_name;
+    int fd;
+    WriteLimiterPtr write_limiter;
+};
+
+} // namespace DB

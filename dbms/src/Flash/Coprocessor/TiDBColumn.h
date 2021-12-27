@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 class TiDBColumn
 {
 public:
@@ -28,7 +27,7 @@ public:
     void append(const TiDBDecimal & decimal);
     void append(const TiDBBit & bit);
     void append(const TiDBEnum & ti_enum);
-    void encodeColumn(std::stringstream & ss);
+    void encodeColumn(WriteBuffer & ss);
     void clear();
 
 private:
@@ -41,7 +40,8 @@ private:
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
-    std::stringstream data;
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
     std::string default_value;
     UInt64 current_data_size;
     Int8 fixed_size;

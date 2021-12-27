@@ -15,12 +15,11 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
-
 class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -34,29 +33,19 @@ public:
 
     ~InterpreterDAG() = default;
 
-    BlockIO execute();
+    BlockIO execute() override;
 
 private:
-    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
-    void executeUnion(Pipeline & pipeline);
-    RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
+    void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
 
-private:
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+
     Context & context;
-
     const DAGQuerySource & dag;
-
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
-    TableStructureReadLockPtr table_lock;
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-
-    const bool keep_session_timezone_info;
-
-    Poco::Logger * log;
+    // key: source_name of ExchangeReceiver nodes in dag.
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_maps;
 };
 } // namespace DB

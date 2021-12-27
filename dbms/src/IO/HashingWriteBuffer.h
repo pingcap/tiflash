@@ -1,8 +1,8 @@
 #pragma once
 
-#include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <city.h>
 
 #define DBMS_DEFAULT_HASHING_BLOCK_SIZE 2048ULL
@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 template <typename Buffer>
 class IHashingBuffer : public BufferWithOwnMemory<Buffer>
 {
@@ -18,7 +17,10 @@ public:
     using uint128 = CityHash_v1_0_2::uint128;
 
     IHashingBuffer<Buffer>(size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : BufferWithOwnMemory<Buffer>(block_size_), block_pos(0), block_size(block_size_), state(0, 0)
+        : BufferWithOwnMemory<Buffer>(block_size_)
+        , block_pos(0)
+        , block_size(block_size_)
+        , state(0, 0)
     {
     }
 
@@ -69,7 +71,8 @@ public:
     HashingWriteBuffer(
         WriteBuffer & out_,
         size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : IHashingBuffer<DB::WriteBuffer>(block_size_), out(out_)
+        : IHashingBuffer<DB::WriteBuffer>(block_size_)
+        , out(out_)
     {
         out.next(); /// If something has already been written to `out` before us, we will not let the remains of this data affect the hash.
         working_buffer = out.buffer();
@@ -83,4 +86,4 @@ public:
         return IHashingBuffer<WriteBuffer>::getHash();
     }
 };
-}
+} // namespace DB

@@ -1,14 +1,12 @@
 #pragma once
 
-#include <Poco/Net/Socket.h>
-
-#include <IO/ReadBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/ReadBuffer.h>
+#include <Poco/Net/Socket.h>
 
 
 namespace DB
 {
-
 /** Works with the ready Poco::Net::Socket. Blocking operations.
   */
 class ReadBufferFromPocoSocket : public BufferWithOwnMemory<ReadBuffer>
@@ -30,4 +28,4 @@ public:
     bool poll(size_t timeout_microseconds);
 };
 
-}
+} // namespace DB

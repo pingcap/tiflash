@@ -1,0 +1,161 @@
+mysql> drop table if exists test.t
+mysql> create table if not exists test.t(col_date date, col_string char(10), col_real double, unit char(10))
+
+mysql> insert into test.t values('2006-10-11', '2006-10-10', 1.2, 'DAY'),('2019-03-27', '2019-03-26', 1.6, 'DAY'),('2006-10-09', '2006-10-10', -1.2, 'DAY'),('2019-03-25', '2019-03-26', -1.6, 'DAY');
+mysql> insert into test.t values('2000-03-01', '2000-02-28', 1.2, 'DAYLEAP'),('2000-03-01', '2000-02-28', 1.6, 'DAYLEAP'),('2000-03-01', '2000-03-02', -1.2, 'DAYLEAP'),('2000-03-01', '2000-03-02', -1.6, 'DAYLEAP');
+mysql> insert into test.t values('2006-10-17', '2006-10-10', 1.2, 'WEEK'),('2019-04-02', '2019-03-26', 1.6, 'WEEK'),('2006-10-03', '2006-10-10', -1.2, 'WEEK'),('2019-03-19', '2019-03-26', -1.6, 'WEEK');
+mysql> insert into test.t values('2006-11-10', '2006-10-10', 1.2, 'MONTH'),('2019-04-26', '2019-03-26', 1.6, 'MONTH'),('2006-09-10', '2006-10-10', -1.2, 'MONTH'),('2019-02-26', '2019-03-26', -1.6, 'MONTH');
+mysql> insert into test.t values('2007-10-10', '2006-10-10', 1.2, 'YEAR'),('2020-03-26', '2019-03-26', 1.6, 'YEAR'),('2005-10-10', '2006-10-10', -1.2, 'YEAR'),('2018-03-26', '2019-03-26', -1.6, 'YEAR');
+mysql> insert into test.t values('2006-10-11', '2006-10-10', 1.2, 'HOUR'),('2019-03-27', '2019-03-26', 1.6, 'HOUR'),('2006-10-09', '2006-10-10', -1.2, 'HOUR'),('2019-03-25', '2019-03-26', -1.6, 'HOUR');
+mysql> insert into test.t values('2006-10-11', '2006-10-10', 1.2, 'MINUTE'),('2019-03-27', '2019-03-26', 1.6, 'MINUTE'),('2006-10-09', '2006-10-10', -1.2, 'MINUTE'),('2019-03-25', '2019-03-26', -1.6, 'MINUTE');
+
+mysql> alter table test.t set tiflash replica 1
+
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > ADDDATE(col_string, col_real) and unit = 'DAYLEAP'
++------------+------------+----------+---------+
+| col_date   | col_string | col_real | unit    |
++------------+------------+----------+---------+
+| 2000-03-01 | 2000-02-28 |      1.2 | DAYLEAP |
+| 2000-03-01 | 2000-03-02 |     -1.6 | DAYLEAP |
++------------+------------+----------+---------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = ADDDATE(col_string, col_real) and unit = 'DAYLEAP'
++------------+------------+----------+---------+
+| col_date   | col_string | col_real | unit    |
++------------+------------+----------+---------+
+| 2000-03-01 | 2000-02-28 |      1.6 | DAYLEAP |
+| 2000-03-01 | 2000-03-02 |     -1.2 | DAYLEAP |
++------------+------------+----------+---------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date < ADDDATE(col_string, col_real) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-03-27 | 2019-03-26 |      1.6 | DAY  |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = ADDDATE(col_string, col_real) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2006-10-11 | 2006-10-10 |      1.2 | DAY  |
+| 2006-10-09 | 2006-10-10 |     -1.2 | DAY  |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > ADDDATE(col_string, col_real) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-03-25 | 2019-03-26 |     -1.6 | DAY  |
++------------+------------+----------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date < DATE_ADD(col_string, INTERVAL col_real DAY) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-03-27 | 2019-03-26 |      1.6 | DAY  |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL col_real DAY) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2006-10-11 | 2006-10-10 |      1.2 | DAY  |
+| 2006-10-09 | 2006-10-10 |     -1.2 | DAY  |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > DATE_ADD(col_string, INTERVAL col_real DAY) and unit = 'DAY'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-03-25 | 2019-03-26 |     -1.6 | DAY  |
++------------+------------+----------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date < DATE_ADD(col_string, INTERVAL col_real week) and unit = 'WEEK'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-04-02 | 2019-03-26 |      1.6 | WEEK |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL col_real week) and unit = 'WEEK'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2006-10-17 | 2006-10-10 |      1.2 | WEEK |
+| 2006-10-03 | 2006-10-10 |     -1.2 | WEEK |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > DATE_ADD(col_string, INTERVAL col_real week) and unit = 'WEEK'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2019-03-19 | 2019-03-26 |     -1.6 | WEEK |
++------------+------------+----------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date < DATE_ADD(col_string, INTERVAL col_real month) and unit = 'MONTH'
++------------+------------+----------+-------+
+| col_date   | col_string | col_real | unit  |
++------------+------------+----------+-------+
+| 2019-04-26 | 2019-03-26 |      1.6 | MONTH |
++------------+------------+----------+-------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL col_real month) and unit = 'MONTH'
++------------+------------+----------+-------+
+| col_date   | col_string | col_real | unit  |
++------------+------------+----------+-------+
+| 2006-11-10 | 2006-10-10 |      1.2 | MONTH |
+| 2006-09-10 | 2006-10-10 |     -1.2 | MONTH |
++------------+------------+----------+-------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > DATE_ADD(col_string, INTERVAL col_real month) and unit = 'MONTH'
++------------+------------+----------+-------+
+| col_date   | col_string | col_real | unit  |
++------------+------------+----------+-------+
+| 2019-02-26 | 2019-03-26 |     -1.6 | MONTH |
++------------+------------+----------+-------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date < DATE_ADD(col_string, INTERVAL col_real year) and unit = 'YEAR'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2020-03-26 | 2019-03-26 |      1.6 | YEAR |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL col_real year) and unit = 'YEAR'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2007-10-10 | 2006-10-10 |      1.2 | YEAR |
+| 2005-10-10 | 2006-10-10 |     -1.2 | YEAR |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date > DATE_ADD(col_string, INTERVAL col_real year) and unit = 'YEAR'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2018-03-26 | 2019-03-26 |     -1.6 | YEAR |
++------------+------------+----------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL cast(23.6 as double) hour) and unit = 'HOUR'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2006-10-11 | 2006-10-10 |      1.2 | HOUR |
+| 2019-03-27 | 2019-03-26 |      1.6 | HOUR |
++------------+------------+----------+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL cast(-23.6 as double) hour) and unit = 'HOUR'
++------------+------------+----------+------+
+| col_date   | col_string | col_real | unit |
++------------+------------+----------+------+
+| 2006-10-09 | 2006-10-10 |     -1.2 | HOUR |
+| 2019-03-25 | 2019-03-26 |     -1.6 | HOUR |
++------------+------------+----------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL cast(1439.6 as double) minute) and unit = 'MINUTE'
++------------+------------+----------+--------+
+| col_date   | col_string | col_real | unit   |
++------------+------------+----------+--------+
+| 2006-10-11 | 2006-10-10 |      1.2 | MINUTE |
+| 2019-03-27 | 2019-03-26 |      1.6 | MINUTE |
++------------+------------+----------+--------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where col_date = DATE_ADD(col_string, INTERVAL cast(-1439.6 as double) minute) and unit = 'MINUTE'
++------------+------------+----------+--------+
+| col_date   | col_string | col_real | unit   |
++------------+------------+----------+--------+
+| 2006-10-09 | 2006-10-10 |     -1.2 | MINUTE |
+| 2019-03-25 | 2019-03-26 |     -1.6 | MINUTE |
++------------+------------+----------+--------+
+
+mysql> drop table if exists test.t

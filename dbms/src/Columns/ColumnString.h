@@ -1,12 +1,11 @@
 #pragma once
 
-#include <string.h>
-
 #include <Columns/IColumn.h>
-#include <Common/PODArray.h>
 #include <Common/Arena.h>
+#include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
+#include <string.h>
 
 
 class ICollator;
@@ -14,7 +13,6 @@ class ICollator;
 
 namespace DB
 {
-
 /** Column for String values.
   */
 class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
@@ -46,8 +44,9 @@ private:
     ColumnString() = default;
 
     ColumnString(const ColumnString & src)
-        : offsets(src.offsets.begin(), src.offsets.end()),
-        chars(src.chars.begin(), src.chars.end()) {};
+        : COWPtrHelper<IColumn, ColumnString>(src)
+        , offsets(src.offsets.begin(), src.offsets.end())
+        , chars(src.chars.begin(), src.chars.end()){};
 
 public:
     const char * getFamilyName() const override { return "String"; }
@@ -60,6 +59,14 @@ public:
     size_t byteSize() const override
     {
         return chars.size() + offsets.size() * sizeof(offsets[0]);
+    }
+
+    size_t byteSize(size_t offset, size_t limit) const override
+    {
+        if (limit == 0)
+            return 0;
+        auto char_size = offsets[offset + limit - 1] - (offset == 0 ? 0 : offsets[offset - 1]);
+        return char_size + limit * sizeof(offsets[0]);
     }
 
     size_t allocatedBytes() const override
@@ -111,7 +118,7 @@ public:
 #pragma GCC diagnostic pop
 #endif
 
-        void insertFrom(const IColumn & src_, size_t n) override
+    void insertFrom(const IColumn & src_, size_t n) override
     {
         const ColumnString & src = static_cast<const ColumnString &>(src_);
 
@@ -159,6 +166,12 @@ public:
         offsets.push_back(new_size);
     }
 
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
+    {
+        insertData(raw_value.c_str() + cursor, length);
+        return true;
+    }
+
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
         const size_t old_size = chars.size();
@@ -176,22 +189,30 @@ public:
         offsets.resize_assume_reserved(offsets.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
+        const void * src = &chars[offset];
 
         StringRef res;
+
+        if (collator != nullptr)
+        {
+            /// Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
+            string_size = sort_key.size;
+            src = sort_key.data;
+        }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
         memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), &chars[offset], string_size);
+        memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
-
         return res;
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos) override
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
@@ -205,14 +226,53 @@ public:
         return pos + string_size;
     }
 
-    void updateHashWithValue(size_t n, SipHash & hash) const override
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-
-        hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-        hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+        if (collator != nullptr)
+        {
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+            string_size = sort_key.size;
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(sort_key.data, sort_key.size);
+        }
+        else
+        {
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+        }
     }
+
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    {
+        if (collator != nullptr)
+        {
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                size_t string_size = sizeAt(i);
+                size_t offset = offsetAt(i);
+
+                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+                string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                size_t string_size = sizeAt(i);
+                size_t offset = offsetAt(i);
+
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+            }
+        }
+    }
+
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
@@ -223,7 +283,7 @@ public:
     void insertDefault() override
     {
         chars.push_back(0);
-        offsets.push_back(offsets.size() == 0 ? 1 : (offsets.back() + 1));
+        offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
@@ -241,7 +301,7 @@ public:
             return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
     }
 
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int , const ICollator & collator) const override
+    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
     {
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }
@@ -250,7 +310,7 @@ public:
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int , Permutation & res) const override
+    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
     {
         getPermutationWithCollationImpl(collator, reverse, limit, res);
     }
@@ -283,4 +343,4 @@ public:
 };
 
 
-}
+} // namespace DB

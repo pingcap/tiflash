@@ -14,6 +14,7 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
 
         const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
         null_map = &column_nullable.getNullMapData();
+        null_map_holder = column_nullable.getNullMapColumnPtr();
         column = &column_nullable.getNestedColumn();
     }
     else

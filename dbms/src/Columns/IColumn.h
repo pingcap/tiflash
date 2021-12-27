@@ -1,25 +1,24 @@
 #pragma once
 
 #include <Columns/Collator.h>
-#include <Core/Field.h>
 #include <Common/COWPtr.h>
-#include <Common/PODArray.h>
 #include <Common/Exception.h>
+#include <Common/PODArray.h>
+#include <Common/SipHash.h>
+#include <Common/WeakHash.h>
+#include <Core/Field.h>
+#include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
-
-
-class SipHash;
-
+#include <fmt/core.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_GET_SIZE_OF_FIELD;
-    extern const int NOT_IMPLEMENTED;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int CANNOT_GET_SIZE_OF_FIELD;
+extern const int NOT_IMPLEMENTED;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 class Arena;
 class ColumnGathererStream;
@@ -109,7 +108,7 @@ public:
     {
         MutablePtr res = cloneEmpty();
         res->insertRangeFrom(*this, start, length);
-        return std::move(res);
+        return res;
     }
 
     /// Appends new value at the end of column (column's size is increased by 1).
@@ -128,6 +127,16 @@ public:
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
     virtual void insertData(const char * pos, size_t length) = 0;
+
+    /// decode row data synced from tikv
+    /// only support v2 format row: https://github.com/pingcap/tidb/blob/master/docs/design/2018-07-19-row-format.md
+    /// when the column failed to decoding value from `data`, it will either
+    ///   1) return false if `force_decode` is false
+    ///   2) throw exception to describe why the decoding fails if `force_decode` is true
+    virtual bool decodeTiDBRowV2Datum(size_t /* cursor */, const String & /* raw_value */, size_t /* length */, bool /* force_decode */)
+    {
+        throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
@@ -154,16 +163,40 @@ public:
       *  For example, to obtain unambiguous representation of Array of strings, strings data should be interleaved with their sizes.
       * Parameter begin should be used with Arena::allocContinue.
       */
-    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const = 0;
+    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const { return serializeValueIntoArena(n, arena, begin, nullptr, TiDB::dummy_sort_key_contaner); }
 
-    /// Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
-    /// Returns pointer to the position after the read data.
-    virtual const char * deserializeAndInsertFromArena(const char * pos) = 0;
+    /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
+      * Returns pointer to the position after the read data.
+      * Note:
+      * 1. For string columns with collation it is actually impossible to restore the value.
+      *     In this case, the column restored by this function is discarded, the compiler will add a
+      *     special aggregate function(any) as the group by column's output. For example:
+      *         select string_column, count(*) from table group by string_column
+      *     if string_column has collation information, the query will be rewrite to
+      *         select any(string_column), count(*) from table group by string_column
+      * 2. The input parameter `collator` does not work well for complex columns(column tuple),
+      *     but it is only used by TiDB , which does not support complex columns, so just ignore
+      *     the complex column will be ok.
+      */
+    virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
+    const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
-    virtual void updateHashWithValue(size_t n, SipHash & hash) const = 0;
+    virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateHashWithValue(size_t n, SipHash & hash) const { updateHashWithValue(n, hash, nullptr, TiDB::dummy_sort_key_contaner); }
+
+    using HashValues = PaddedPODArray<SipHash>;
+    virtual void updateHashWithValues(HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateHashWithValues(HashValues & hash_values) const { updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner); }
+
+    /// Update hash function value. Hash is calculated for each element.
+    /// It's a fast weak hash function. Mainly need to scatter data between threads.
+    /// WeakHash32 must have the same size as column.
+    virtual void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.
@@ -192,7 +225,7 @@ public:
       */
     virtual int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const = 0;
 
-    virtual int compareAtWithCollation(size_t , size_t , const IColumn & , int , const ICollator &) const
+    virtual int compareAtWithCollation(size_t, size_t, const IColumn &, int, const ICollator &) const
     {
         throw Exception("Method compareAtWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -205,7 +238,7 @@ public:
       */
     virtual void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const = 0;
 
-    virtual void getPermutationWithCollation(const ICollator & , bool , size_t , int , Permutation & ) const
+    virtual void getPermutationWithCollation(const ICollator &, bool, size_t, int, Permutation &) const
     {
         throw Exception("Method getPermutationWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -242,10 +275,17 @@ public:
 
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
-    virtual void reserve(size_t /*n*/) {};
+    virtual void reserve(size_t /*n*/){};
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
+
+    /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
+    /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.
+    virtual size_t byteSize(size_t /*offset*/, size_t /*limit*/) const
+    {
+        throw Exception("Method byteSize(size_t, size_t) is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Size of memory, allocated for column.
     /// This is greater or equals to byteSize due to memory reservation in containers.
@@ -254,7 +294,7 @@ public:
 
     /// If the column contains subcolumns (such as Array, Nullable, etc), do callback on them.
     /// Shallow: doesn't do recursive calls; don't do call for itself.
-    using ColumnCallback = std::function<void(Ptr&)>;
+    using ColumnCallback = std::function<void(Ptr &)>;
     virtual void forEachSubcolumn(ColumnCallback) {}
 
 
@@ -309,6 +349,9 @@ public:
     /// Values in column are represented as continuous memory segment of fixed size. Implies valuesHaveFixedSize.
     virtual bool isFixedAndContiguous() const { return false; }
 
+    /// If isFixedAndContiguous, returns the underlying data array, otherwise throws an exception.
+    virtual StringRef getRawData() const { throw Exception("Column " + getName() + " is not a contiguous block of memory", ErrorCodes::NOT_IMPLEMENTED); }
+
     /// If valuesHaveFixedSize, returns size of value, otherwise throw an exception.
     virtual size_t sizeOfValueIfFixed() const { throw Exception("Values of column " + getName() + " are not fixed size.", ErrorCodes::CANNOT_GET_SIZE_OF_FIELD); }
 
@@ -324,14 +367,13 @@ public:
     virtual bool canBeInsideNullable() const { return false; }
 
 
-    virtual ~IColumn() {}
+    virtual ~IColumn() = default;
 
     /** Print column name, size, and recursively print all subcolumns.
       */
     String dumpStructure() const;
 
 protected:
-
     /// Template is to devirtualize calls to insertFrom method.
     /// In derived classes (that use final keyword), implement scatter method as call to scatterImpl.
     template <typename Derived>
@@ -341,15 +383,15 @@ protected:
 
         if (num_rows != selector.size())
             throw Exception(
-                    "Size of selector: " + std::to_string(selector.size()) + " doesn't match size of column: " + std::to_string(num_rows),
-                    ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         std::vector<MutablePtr> columns(num_columns);
         for (auto & column : columns)
             column = cloneEmpty();
 
         {
-            size_t reserve_size = num_rows * 1.1 / num_columns;    /// 1.1 is just a guess. Better to use n-sigma rule.
+            size_t reserve_size = num_rows * 1.1 / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
 
             if (reserve_size > 1)
                 for (auto & column : columns)
@@ -364,23 +406,26 @@ protected:
 };
 
 using ColumnPtr = IColumn::Ptr;
-using MutableColumnPtr  = IColumn::MutablePtr;
+using MutableColumnPtr = IColumn::MutablePtr;
 using Columns = std::vector<ColumnPtr>;
 using MutableColumns = std::vector<MutableColumnPtr>;
 
 using ColumnRawPtrs = std::vector<const IColumn *>;
 //using MutableColumnRawPtrs = std::vector<IColumn *>;
 
-template <typename ... Args>
+template <typename... Args>
 struct IsMutableColumns;
 
-template <typename Arg, typename ... Args>
-struct IsMutableColumns<Arg, Args ...>
+template <typename Arg, typename... Args>
+struct IsMutableColumns<Arg, Args...>
 {
-    static const bool value = std::is_assignable<MutableColumnPtr &&, Arg>::value && IsMutableColumns<Args ...>::value;
+    static const bool value = std::is_assignable<MutableColumnPtr &&, Arg>::value && IsMutableColumns<Args...>::value;
 };
 
 template <>
-struct IsMutableColumns<> { static const bool value = true; };
+struct IsMutableColumns<>
+{
+    static const bool value = true;
+};
 
-}
+} // namespace DB

@@ -1,14 +1,17 @@
 #include <Common/typeid_cast.h>
+#include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 #include <random>
@@ -19,7 +22,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 namespace RegionBench
 {
@@ -27,7 +31,7 @@ namespace RegionBench
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
 
-RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end)
+RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end, std::optional<uint64_t> index_)
 {
     metapb::Region region;
     metapb::Peer peer;
@@ -40,7 +44,10 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
     region.set_end_key(end_key.getStr());
 
     RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
-    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
+    uint64_t index = MockTiKV::instance().getRaftIndex(region_id);
+    if (index_)
+        index = *index_;
+    region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
     return std::make_shared<Region>(std::move(region_meta));
 }
 
@@ -54,6 +61,24 @@ Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_r
         regions.push_back(ptr);
     }
     return regions;
+}
+
+RegionPtr createRegion(
+    const TiDB::TableInfo & table_info, RegionID region_id, std::vector<Field> & start_keys, std::vector<Field> & end_keys)
+{
+    metapb::Region region;
+    metapb::Peer peer;
+    region.set_id(region_id);
+
+    TiKVKey start_key = RecordKVFormat::genKey(table_info, start_keys);
+    TiKVKey end_key = RecordKVFormat::genKey(table_info, end_keys);
+
+    region.set_start_key(start_key.getStr());
+    region.set_end_key(end_key.getStr());
+
+    RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
+    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
+    return std::make_shared<Region>(std::move(region_meta));
 }
 
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)
@@ -92,7 +117,7 @@ void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & 
 
     if (value.dataSize() <= RecordKVFormat::SHORT_VALUE_MAX_LEN)
     {
-        TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, pk, prewrite_ts, 0, value.toString());
+        TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, pk, prewrite_ts, 0);
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value.toString());
 
@@ -226,15 +251,29 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
     }
 }
 
-void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
+void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
-    if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
-        throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
+    if (table_info.columns.size() < fields.size() + table_info.pk_is_handle)
+        throw Exception("Encoding row has less columns than encode values [num_columns=" + DB::toString(table_info.columns.size())
+                + "] [num_fields=" + DB::toString(fields.size()) + "] . ",
+            ErrorCodes::LOGICAL_ERROR);
 
     std::vector<Field> flatten_fields;
+    std::unordered_set<String> pk_column_names;
+    if (table_info.is_common_handle)
+    {
+        for (auto & idx_col : table_info.getPrimaryIndexInfo().idx_cols)
+        {
+            // todo support prefix index
+            pk_column_names.insert(idx_col.name);
+        }
+    }
     for (size_t i = 0; i < fields.size(); i++)
     {
         const auto & column_info = table_info.columns[i];
+        /// skip the columns encoded in the key
+        if (pk_column_names.find(column_info.name) != pk_column_names.end())
+            continue;
         Field field = convertField(column_info, fields[i]);
         TiDB::DatumBumpy datum = TiDB::DatumBumpy(field, column_info.tp);
         flatten_fields.emplace_back(datum.field());
@@ -245,33 +284,49 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
     (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
 }
 
-void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
-    ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
+void insert(                                                                    //
+    const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, //
+    ASTs::const_iterator values_begin, ASTs::const_iterator values_end,         //
+    Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
 {
+    // Parse the fields in the inserted row
     std::vector<Field> fields;
-    ASTs::const_iterator it;
-    int idx = 0;
-    while ((it = begin++) != end)
     {
-        auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
-        fields.emplace_back(field);
-        idx++;
+        for (ASTs::const_iterator it = values_begin; it != values_end; ++it)
+        {
+            auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
+            fields.emplace_back(field);
+        }
+        if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
+            throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
     }
-    if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
-        throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
-
     TMTContext & tmt = context.getTMTContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
 
     // Using the region meta's table ID rather than table_info's, as this could be a partition table so that the table ID should be partition ID.
     const auto range = region->getRange();
-    TableID table_id = RecordKVFormat::getTableId(range->rawKeys().first);
+    TableID table_id = RecordKVFormat::getTableId(*range->rawKeys().first);
 
-    TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-    std::stringstream ss;
+    TiKVKey key;
+    if (table_info.is_common_handle)
+    {
+        std::vector<Field> keys;
+        for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
+        {
+            auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
+            auto & column_info = table_info.columns[idx_col.offset];
+            auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
+            TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
+            keys.emplace_back(start_datum.field());
+        }
+        key = RecordKVFormat::genKey(table_info, keys);
+    }
+    else
+        key = RecordKVFormat::genKey(table_id, handle_id);
+    WriteBufferFromOwnString ss;
     encodeRow(table_info, fields, ss);
-    TiKVValue value(ss.str());
+    TiKVValue value(ss.releaseStr());
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
@@ -341,10 +396,10 @@ struct BatchCtrl
         default_str = String(str_len, '_');
     }
 
-    void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
+    void EncodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        ss << UInt8(flag);
+        EncodeUInt(UInt8(flag), ss);
         switch (flag)
         {
             case TiDB::CodecFlagJson:
@@ -380,7 +435,7 @@ struct BatchCtrl
 
     TiKVValue EncodeRow(const TiDB::TableInfo & table_info, Int64 magic_num)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
@@ -388,7 +443,7 @@ struct BatchCtrl
             // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
-        return TiKVValue(ss.str());
+        return TiKVValue(ss.releaseStr());
     }
 };
 
@@ -430,7 +485,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
         const auto range = region->getRange();
-        curr_max_handle_id = std::max(RecordKVFormat::getHandle(range->rawKeys().second), curr_max_handle_id);
+        curr_max_handle_id = std::max(RecordKVFormat::getHandle(*range->rawKeys().second), curr_max_handle_id);
     });
 
     Int64 key_num_each_region = flush_num * batch_num;
@@ -438,7 +493,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
+        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
@@ -476,7 +531,7 @@ Int64 concurrentRangeOperate(
     for (auto region : regions)
     {
         const auto range = region->getRange();
-        const auto & [ss, ee] = range->getHandleRangeByTable(table_info.id);
+        const auto & [ss, ee] = getHandleRangeByTable(range->rawKeys(), table_info.id);
         TiKVRange::Handle handle_begin = std::max<TiKVRange::Handle>(ss, start_handle);
         TiKVRange::Handle handle_end = std::min<TiKVRange::Handle>(ee, end_handle);
         if (handle_end <= handle_begin)
@@ -494,6 +549,50 @@ Int64 concurrentRangeOperate(
         thread.join();
     }
     return tol;
+}
+
+TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id)
+{
+    try
+    {
+        using TablePtr = MockTiDB::TablePtr;
+        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        if (table->isPartitionTable())
+            return std::atoi(partition_id.c_str());
+
+        return table->id();
+    }
+    catch (Exception & e)
+    {
+        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
+            throw;
+    }
+
+    auto storage = context.getTable(database_name, table_name);
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
+    return table_info.id;
+}
+
+const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name)
+{
+    try
+    {
+        using TablePtr = MockTiDB::TablePtr;
+        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        return table->table_info;
+    }
+    catch (Exception & e)
+    {
+        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
+            throw;
+    }
+
+    auto storage = context.getTable(database_name, table_name);
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    return managed_storage->getTableInfo();
 }
 
 

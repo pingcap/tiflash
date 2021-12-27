@@ -1,25 +1,30 @@
 #pragma once
 
-#include <string>
-#include <cstring>
 #include <cstddef>
+#include <cstring>
+#include <string>
+#include <string_view>
 
 
 namespace detail
 {
-    bool startsWith(const std::string & s, const char * prefix, size_t prefix_size);
-    bool endsWith(const std::string & s, const char * suffix, size_t suffix_size);
-}
+bool startsWith(const char * s, size_t size, const char * prefix, size_t prefix_size);
+bool endsWith(const char * s, size_t size, const char * suffix, size_t suffix_size);
+
+// case insensitive version
+bool startsWithCI(const char * s, size_t size, const char * prefix, size_t prefix_size);
+bool endsWithCI(const char * s, size_t size, const char * suffix, size_t suffix_size);
+} // namespace detail
 
 
 inline bool startsWith(const std::string & s, const std::string & prefix)
 {
-    return detail::startsWith(s, prefix.data(), prefix.size());
+    return detail::startsWith(s.data(), s.size(), prefix.data(), prefix.size());
 }
 
 inline bool endsWith(const std::string & s, const std::string & suffix)
 {
-    return detail::endsWith(s, suffix.data(), suffix.size());
+    return detail::endsWith(s.data(), s.size(), suffix.data(), suffix.size());
 }
 
 
@@ -27,12 +32,12 @@ inline bool endsWith(const std::string & s, const std::string & suffix)
 /// string that is known at compile time.
 inline bool startsWith(const std::string & s, const char * prefix)
 {
-    return detail::startsWith(s, prefix, strlen(prefix));
+    return detail::startsWith(s.data(), s.size(), prefix, strlen(prefix));
 }
 
 inline bool endsWith(const std::string & s, const char * suffix)
 {
-    return detail::endsWith(s, suffix, strlen(suffix));
+    return detail::endsWith(s.data(), s.size(), suffix, strlen(suffix)); //
 }
 
 /// Given an integer, return the adequate suffix for
@@ -41,7 +46,7 @@ template <typename T>
 std::string getOrdinalSuffix(T n)
 {
     static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>,
-        "Unsigned integer value required");
+                  "Unsigned integer value required");
 
     const auto last_digit = n % 10;
 
@@ -51,10 +56,14 @@ std::string getOrdinalSuffix(T n)
 
     switch (last_digit)
     {
-        case 1: return "st";
-        case 2: return "nd";
-        case 3: return "rd";
-        default: return "th";
+    case 1:
+        return "st";
+    case 2:
+        return "nd";
+    case 3:
+        return "rd";
+    default:
+        return "th";
     };
 }
 
@@ -126,4 +135,3 @@ inline bool equalsCaseInsensitive(char a, char b)
 {
     return a == b || (isAlphaASCII(a) && alternateCaseIfAlphaASCII(a) == b);
 }
-

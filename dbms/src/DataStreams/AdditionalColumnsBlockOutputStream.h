@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <pingcap/pd/IClient.h>
 

@@ -3,23 +3,22 @@
 
 namespace DB
 {
-
 ZlibInflatingReadBuffer::ZlibInflatingReadBuffer(
-        ReadBuffer & in_,
-        ZlibCompressionMethod compression_method,
-        size_t buf_size,
-        char * existing_memory,
-        size_t alignment)
+    ReadBuffer & in_,
+    ZlibCompressionMethod compression_method,
+    size_t buf_size,
+    char * existing_memory,
+    size_t alignment)
     : BufferWithOwnMemory<ReadBuffer>(buf_size, existing_memory, alignment)
     , in(in_)
     , eof(false)
 {
-    zstr.zalloc    = Z_NULL;
-    zstr.zfree     = Z_NULL;
-    zstr.opaque    = Z_NULL;
-    zstr.next_in   = 0;
-    zstr.avail_in  = 0;
-    zstr.next_out  = 0;
+    zstr.zalloc = Z_NULL;
+    zstr.zfree = Z_NULL;
+    zstr.opaque = Z_NULL;
+    zstr.next_in = 0;
+    zstr.avail_in = 0;
+    zstr.next_out = 0;
     zstr.avail_out = 0;
 
     int window_bits = 15;
@@ -82,4 +81,4 @@ bool ZlibInflatingReadBuffer::nextImpl()
     return true;
 }
 
-}
+} // namespace DB

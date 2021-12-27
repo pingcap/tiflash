@@ -148,7 +148,7 @@ void NO_INLINE Aggregator::executeSpecializedCase(
         if (!no_more_keys)    /// Insert.
         {
             /// Optimization for frequently repeating keys.
-            if (!Method::no_consecutive_keys_optimization)
+            if (!Method::no_consecutive_keys_optimization(params.collators))
             {
                 if (i != 0 && key == prev_key)
                 {

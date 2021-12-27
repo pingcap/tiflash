@@ -1,20 +1,21 @@
-#include <sys/stat.h>
-#include <string>
-#include <iostream>
+#include <Common/Exception.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
-#include <Common/Exception.h>
 #include <port/unistd.h>
+#include <sys/stat.h>
+
+#include <iostream>
+#include <string>
 
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TOO_DEEP_RECURSION;
-    extern const int DIRECTORY_ALREADY_EXISTS;
-}
-}
+extern const int TOO_DEEP_RECURSION;
+extern const int DIRECTORY_ALREADY_EXISTS;
+} // namespace ErrorCodes
+} // namespace DB
 
 
 static void localBackupImpl(const Poco::Path & source_path, const Poco::Path & destination_path, size_t level)

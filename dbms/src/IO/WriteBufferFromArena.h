@@ -1,13 +1,12 @@
 #pragma once
 
 #include <Common/Arena.h>
-#include <common/StringRef.h>
 #include <IO/WriteBuffer.h>
+#include <common/StringRef.h>
 
 
 namespace DB
 {
-
 /** Writes data contiguously into Arena.
   * As it will be located in contiguous memory segment, it can be read back with ReadBufferFromMemory.
   *
@@ -38,7 +37,9 @@ private:
 public:
     /// begin_ - start of previously used contiguous memory segment or nullptr (see Arena::allocContinue method).
     WriteBufferFromArena(Arena & arena_, const char *& begin_)
-        : WriteBuffer(nullptr, 0), arena(arena_), begin(begin_)
+        : WriteBuffer(nullptr, 0)
+        , arena(arena_)
+        , begin(begin_)
     {
         nextImpl();
         pos = working_buffer.begin();
@@ -49,9 +50,8 @@ public:
         /// Return over-allocated memory back into arena.
         arena.rollback(buffer().end() - position());
         /// Reference to written data.
-        return { position() - count(), count() };
+        return {position() - count(), count()};
     }
 };
 
-}
-
+} // namespace DB
