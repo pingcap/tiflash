@@ -392,7 +392,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftAnti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
@@ -411,9 +412,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
 
+    /// (cartesian) (anti) left semi join.
+    const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin ||
+            join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+
     ASTTableJoin::Kind kind = join_type_it->second;
-    bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin ||
-            join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+    const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin ||
+            join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
@@ -496,10 +501,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
-    if (kind == ASTTableJoin::Kind::LeftSemi)
+    if (is_left_semi_family)
     {
-        columns_added_by_join.emplace_back("matched", makeNullable(std::make_shared<DataTypeInt8>()));
-        join_output_columns.emplace_back("matched", makeNullable(std::make_shared<DataTypeInt8>()));
+        columns_added_by_join.emplace_back("match-helper", makeNullable(std::make_shared<DataTypeInt8>()));
+        join_output_columns.emplace_back("match-helper", makeNullable(std::make_shared<DataTypeInt8>()));
     }
 
     DataTypes join_key_types;
@@ -590,8 +595,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     right_query.join = join_ptr;
 
     auto sample_block = right_query.source->getHeader();
-    if (kind == ASTTableJoin::Kind::LeftSemi)
-        sample_block.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), "matched"));
+    if (is_left_semi_family)
+        sample_block.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), "match-helper"));
     right_query.join->setSampleBlock(sample_block);
     dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
