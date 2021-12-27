@@ -173,6 +173,15 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     return edit;
 }
 
+void BlobStore::remove(std::list<PageEntryV3> del_entries)
+{
+    for (const auto & entry : del_entries)
+    {
+        const auto & stat = blob_stats.fileIdToStat(entry.file_id);
+        stat->removePosFromStat(entry.offset, entry.size);
+    }
+}
+
 std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
     BlobStatPtr stat;

@@ -44,10 +44,18 @@ public:
     bool gc();
 
     // FIXME : just for test.
-    bool gcBlobStore();
     BlobStorePtr blobstore;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
+    void snapshotsGC();
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+
     struct EntryOrDelete
     {
         bool is_delete;
@@ -87,16 +95,19 @@ private:
 
         PageSize getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids);
 
-        std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq);
-
+        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(UInt64 lowest_seq);
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#endif
         mutable std::mutex m;
         // Entries sorted by version
         std::map<PageVersionType, EntryOrDelete> entries;
     };
     using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
     using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;

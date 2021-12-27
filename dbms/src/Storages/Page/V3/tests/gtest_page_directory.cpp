@@ -3,13 +3,13 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -627,5 +627,90 @@ try
     // TODO: restore, invalid ref page is filtered
 }
 CATCH
+
+class PageDirectoryGCTest : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    void SetUp() override
+    {
+        path = getTemporaryPath();
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
+
+        Poco::File file(path);
+        if (!file.exists())
+        {
+            file.createDirectories();
+        }
+
+        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+        dir.blobstore = std::make_shared<BlobStore>(file_provider, path, config);
+    }
+
+    BlobStorePtr getBlobStore()
+    {
+        return dir.blobstore;
+    }
+
+protected:
+    BlobStore::Config config;
+    FileProviderPtr file_provider;
+    String path{};
+    PageDirectory dir;
+};
+
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGC)
+try
+{
+    /**
+     * case 1
+     * entries: [v2,v5,v10]
+     * lowest_seq: >=1 && <5
+     * after GC => 
+     * entries: [v2,v5,v10]
+     * ===
+     * case 2
+     * entries: [v2,v5,v10]
+     * lowest_seq: >=5 && <10
+     * after GC => 
+     * entries: [v5,v10]
+     * ===
+     * case 3
+     * entries: [v2,v5,v10]
+     * lowest_seq: >=10
+     * after GC => 
+     * entries: [v10]
+     */
+
+    PageId page_id = 50;
+    size_t buff_nums = 10;
+    size_t buff_size = 123;
+    char c_buff[buff_size * buff_nums];
+
+    // generator
+    WriteBatch wb;
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+    }
+
+    auto blob_store = getBlobStore();
+    auto edit = blob_store->write(wb, nullptr);
+
+    auto snap0 = dir.createSnapshot();
+    EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
+
+    dir.apply(std::move(edit));
+
+    std::cout << dir.mvcc_table_directory.size() << std::endl;
+}
+CATCH
+
+
 } // namespace PS::V3::tests
 } // namespace DB
