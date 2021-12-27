@@ -385,7 +385,7 @@ bool appendRowV2ToBlockImpl(
         {
             // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
-            if (column_ids_iter->first == pk_handle_id)
+            if (unlikely(column_ids_iter->first == pk_handle_id))
             {
                 column_ids_iter++;
                 block_column_pos++;
@@ -500,7 +500,7 @@ bool appendRowV1ToBlock(
         {
             // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
-            if (column_ids_iter->first == pk_handle_id)
+            if (unlikely(column_ids_iter->first == pk_handle_id))
             {
                 decoded_field_iter++;
                 column_ids_iter++;
