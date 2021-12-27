@@ -87,7 +87,7 @@ private:
 
         PageSize getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids);
 
-        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(const std::map<UInt64, short> & alive_seq, UInt64 lowest_seq);
+        std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq);
 
     private:
         mutable std::mutex m;

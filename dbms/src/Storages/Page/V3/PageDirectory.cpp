@@ -204,13 +204,19 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 }
 
 
-std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(const std::map<UInt64, short> & alive_seq, UInt64 lowest_seq)
+std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
 {
     std::list<PageEntryV3> del_entries;
-    bool all_deleted = true;
 
     auto page_lock = acquireLock();
-    for (auto iter = entries.begin(); iter != entries.end(); iter++)
+
+    auto iter = MapUtils::findLess(entries, PageVersionType(lowest_seq));
+    if (iter == entries.begin())
+    {
+        return;
+    }
+
+    for (--iter; iter != entries.begin(); iter--)
     {
         // Already deleted, no need put in `del_entries`
         if (iter->second.is_delete)
@@ -218,26 +224,15 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
             continue;
         }
 
-        // TBD : use findless replace
-        if (iter->first.sequence < lowest_seq)
+        if (!iter->second.is_delete)
         {
-            iter->second.is_delete = true;
-            del_entries.emplace_back(std::move(iter->second.entry));
-            continue;
+            del_entries.emplace_back(iter->second.entry);
         }
 
-        if (auto seq_it = alive_seq.find(iter->first.sequence); seq_it == alive_seq.end())
-        {
-            iter->second.is_delete = true;
-            del_entries.emplace_back(std::move(iter->second.entry));
-        }
-        else
-        {
-            all_deleted = false;
-        }
+        iter = entries.erase(iter);
     }
 
-    return std::make_pair(del_entries, all_deleted);
+    return std::make_pair(del_entries, ((iter == entries.begin()) && iter->second.is_delete));
 }
 
 PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids)
@@ -264,7 +259,6 @@ PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFile
 
 bool PageDirectory::gc()
 {
-    std::map<UInt64, short> alive_seq;
     UInt64 lowest_seq = UINT64_MAX;
 
     // Cleanup released snapshots
@@ -278,14 +272,13 @@ bool PageDirectory::gc()
             {
                 lowest_seq = iter->lock()->sequence;
             }
-            alive_seq.insert({iter->lock()->sequence, 1});
             ++iter;
         }
     }
 
     for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
     {
-        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(alive_seq, lowest_seq);
+        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
         if (!del_entries.empty())
         {
             // TBD : delete entry in BlobStore
