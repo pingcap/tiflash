@@ -171,7 +171,7 @@ MetricsPrometheus::MetricsPrometheus(
             std::string job_name = service_addr;
             std::replace(job_name.begin(), job_name.end(), ':', '_');
             std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = fmt::format("tiflash_{}", job_name);
+            job_name = "tiflash_" + job_name;
 
             char hostname[1024];
             ::gethostname(hostname, sizeof(hostname));
