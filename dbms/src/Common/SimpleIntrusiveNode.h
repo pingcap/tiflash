@@ -1,6 +1,7 @@
 #pragma once
 
 #include <common/defines.h>
+
 #include <boost/noncopyable.hpp>
 
 namespace DB
@@ -63,4 +64,4 @@ protected:
     }
 };
 
-} // namespace
+} // namespace DB

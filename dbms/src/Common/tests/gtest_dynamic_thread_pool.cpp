@@ -54,8 +54,8 @@ try
     // wait for thread pool ready
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    auto f0 = pool.schedule([] { return 0;});
-    pool.schedule([] { return 0;});
+    auto f0 = pool.schedule([] { return 0; });
+    pool.schedule([] { return 0; });
 
     auto cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 0);
@@ -75,7 +75,6 @@ try
     cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 0);
     ASSERT_EQ(cnt.dynamic, 0);
-
 }
 CATCH
 
@@ -127,9 +126,13 @@ try
 
     MemoryTracker t0, t1, t2;
 
-    auto getter = [] { return current_memory_tracker; };
+    auto getter = [] {
+        return current_memory_tracker;
+    };
 
-    auto setter = [](MemoryTracker * p) { current_memory_tracker = p; };
+    auto setter = [](MemoryTracker * p) {
+        current_memory_tracker = p;
+    };
 
     auto f0 = pool.schedule(setter, &t0);
     f0.wait();

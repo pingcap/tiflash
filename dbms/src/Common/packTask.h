@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/MemoryTrackerSetter.h>
+
 #include <future>
 
 namespace DB

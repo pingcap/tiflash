@@ -5,7 +5,6 @@ namespace DB::tests
 {
 namespace
 {
-
 template <typename T, typename F>
 auto getElems(T * head, F && getter)
 {
@@ -19,8 +18,11 @@ auto getElems(T * head, F && getter)
 struct IntNode : public SimpleIntrusiveNode<IntNode>
 {
     int v;
-    
-    explicit IntNode(int x) : SimpleIntrusiveNode<IntNode>(), v(x) {}
+
+    explicit IntNode(int x)
+        : SimpleIntrusiveNode<IntNode>()
+        , v(x)
+    {}
 };
 
 int getValue(const IntNode * node)
@@ -76,4 +78,3 @@ TEST(SimpleIntrusiveNode, testPrependTo)
 }
 } // namespace
 } // namespace DB::tests
-
