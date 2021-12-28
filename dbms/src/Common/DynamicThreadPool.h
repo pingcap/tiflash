@@ -53,6 +53,7 @@ public:
     ThreadCount threadCount() const;
 
     static std::unique_ptr<DynamicThreadPool> global_instance;
+
 private:
     void init(size_t initial_size);
     void scheduleTask(TaskPtr task);

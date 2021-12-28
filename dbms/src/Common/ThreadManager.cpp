@@ -14,7 +14,8 @@ void waitTasks(std::vector<std::future<void>> & futures)
         future.get();
 }
 
-class DynamicThreadManager : public ThreadManager, public ThreadPoolManager
+class DynamicThreadManager : public ThreadManager
+    , public ThreadPoolManager
 {
 public:
     void scheduleThenDetach(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
@@ -36,6 +37,7 @@ public:
     {
         waitTasks(futures);
     }
+
 protected:
     std::vector<std::future<void>> futures;
 };
@@ -85,7 +87,7 @@ public:
 protected:
     ThreadPool pool;
 };
-}
+} // namespace
 
 std::shared_ptr<ThreadManager> newThreadManager()
 {
