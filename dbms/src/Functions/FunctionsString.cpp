@@ -779,10 +779,11 @@ struct SubstringUTF8Impl
   */
 struct RightUTF8Impl
 {
+    template <typename FF>
     static void vector(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        size_t length,
+        FF && get_length_func,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -821,6 +822,7 @@ struct RightUTF8Impl
             {
                 // not null
                 // if(string_length > length, string_length - length, 0)
+                size_t length = get_length_func(i);
                 auto start_index = start_offsets.size() > length ? start_offsets.size() - length : 0;
                 // copy data from start to end of this string
                 size_t bytes_to_copy = offsets[i] - start_offsets[start_index];
@@ -1586,7 +1588,6 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1605,42 +1606,87 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
-
         const ColumnPtr column_length = block.getByPosition(arguments[1]).column;
-        if (!column_length->isColumnConst())
-            throw Exception(fmt::format("2nd arguments of function {} must be constants.", getName()));
 
-        Field length_field = (*block.getByPosition(arguments[1]).column)[0];
-        if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
+        bool is_length_type_valid = getLengthType(block.getByPosition(arguments[1]).type, [&](const auto & length_type, bool) {
+            using LengthType = std::decay_t<decltype(length_type)>;
+            // Int64 / UInt64
+            using LengthFieldType = typename LengthType::FieldType;
+
+            std::function<size_t(size_t)> get_length_func;
+            if (column_length->isColumnConst())
+            {
+                get_length_func = getLengthFunc<LengthFieldType, true>(column_length);
+
+                // for const 0, return const blank string.
+                if (0 == get_length_func(0))
+                {
+                    block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+                    return;
+                }
+            }
+            else
+            {
+                get_length_func = getLengthFunc<LengthFieldType, false>(column_length);
+            }
+
+            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+            {
+                auto col_res = ColumnString::create();
+                RightUTF8Impl::vector(col->getChars(), col->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        });
+
+        if (!is_length_type_valid)
             throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
+    }
 
-        UInt64 length;
-        if (length_field.getType() == Field::Types::Int64)
+private:
+    template <typename F>
+    static bool getLengthType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt64,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename Integer, bool is_const>
+    std::function<size_t(size_t)> getLengthFunc(const ColumnPtr & column_length) const
+    {
+        auto get_value_from_length_field = [](const Field & length_field) {
+            if constexpr (std::is_same_v<Integer, Int64>)
+            {
+                Int64 signed_length = length_field.get<Int64>();
+                return signed_length < 0 ? 0 : signed_length;
+            }
+            else
+            {
+                static_assert(std::is_same_v<Integer, UInt64>);
+                return length_field.get<UInt64>();
+            }
+        };
+
+        if constexpr (is_const)
         {
-            Int64 signed_length = length_field.get<Int64>();
-            length = signed_length < 0 ? 0 : signed_length;
+            Field length_field = (*column_length)[0];
+            UInt64 length = get_value_from_length_field(length_field);
+            return [length](size_t) {
+                return length;
+            };
         }
         else
         {
-            length = length_field.get<UInt64>();
+            return [&column_length, get_value_from_length_field](size_t i) {
+                static Field length_field;
+                column_length->get(i, length_field);
+                return get_value_from_length_field(length_field);
+            };
         }
-
-        if (0 == length)
-        {
-            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-            return;
-        }
-
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-        {
-            auto col_res = ColumnString::create();
-            RightUTF8Impl::vector(col->getChars(), col->getOffsets(), length, col_res->getChars(), col_res->getOffsets());
-            block.getByPosition(result).column = std::move(col_res);
-        }
-        else
-            throw Exception(
-                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 

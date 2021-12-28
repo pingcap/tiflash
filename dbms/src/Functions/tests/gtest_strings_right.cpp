@@ -14,6 +14,8 @@ class StringRight : public DB::tests::FunctionTest
 public:
     static constexpr auto func_name = "rightUTF8";
 
+    std::vector<std::optional<String>> strings = {};
+
     template <typename Integer>
     void test()
     {
@@ -29,6 +31,7 @@ public:
             if constexpr (std::is_signed_v<Integer>)
             {
                 test<Integer>(std::numeric_limits<Integer>::min(), str, "");
+                test<Integer>(-1, str, "");
             }
         }
     }
