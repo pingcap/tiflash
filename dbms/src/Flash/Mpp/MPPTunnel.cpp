@@ -203,12 +203,6 @@ void MPPTunnelBase<Writer>::writeDone()
 }
 
 template <typename Writer>
-static void tunnelSendLoop(MPPTunnelBase<Writer> * tunnel)
-{
-    tunnel->sendLoop();
-}
-
-template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
     assert(is_local);
