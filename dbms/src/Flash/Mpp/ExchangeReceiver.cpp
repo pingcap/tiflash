@@ -190,10 +190,12 @@ struct AsyncRequestStat
             {
                 LOG_FMT_TRACE(log, "Received {} packets.", getPacketCount());
                 has_data = true;
-                if (sendPackets())
+                if (auto packet = firstErrorPacket())
+                    setDone("Exchange receiver meet error : " + packet->error().msg());
+                else if (sendPackets())
                     getReader()->batchRead(getPackets(), &batch_read_callback);
                 else
-                    setDone("Exchange receiver state abnormal : push packets fail");
+                    setDone("Exchange receiver meet error : push packets fail");
             }
             else
             {
@@ -241,6 +243,16 @@ struct AsyncRequestStat
         return batch_read_callback.packets;
     }
 
+    MPPDataPacketPtr firstErrorPacket() const
+    {
+        for (const auto & packet : batch_read_callback.packets)
+        {
+            if (packet->has_error())
+                return packet;
+        }
+        return nullptr;
+    }
+
     size_t getPacketCount() const
     {
         return batch_read_callback.packet_cnt;
@@ -266,7 +278,7 @@ struct AsyncRequestStat
         if (!msg.empty())
         {
             meet_error = true;
-            err_msg = msg;
+            err_msg = std::move(msg);
         }
         stage = AsyncRequestStage::FINISHED;
     }
