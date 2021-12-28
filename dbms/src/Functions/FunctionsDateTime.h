@@ -1724,11 +1724,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0])->isMyDateOrMyDateTime())
+        if (!removeNullable(arguments[0])->isMyDateOrMyDateTime() && !arguments[0]->onlyNull())
             throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime())
+        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1778,11 +1778,11 @@ public:
             || block.getByPosition(arguments[1]).type->isNullable())
         {
             ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
-            ColumnPtr x_p = block.getByPosition(arguments[0]).column;
-            ColumnPtr y_p = block.getByPosition(arguments[1]).column;
+            ColumnPtr _x_p = block.getByPosition(arguments[0]).column;
+            ColumnPtr _y_p = block.getByPosition(arguments[1]).column;
             for (size_t i = 0; i < rows; i++)
             {
-                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+                vec_result_null_map[i] |= (_x_p->isNullAt(i) || _y_p->isNullAt(i));
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
