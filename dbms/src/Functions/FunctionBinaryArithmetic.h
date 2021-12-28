@@ -30,6 +30,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
 #include <common/types.h>
+#include <fmt/core.h>
 
 #include <boost/integer/common_factor.hpp>
 #include <type_traits>
@@ -716,6 +717,7 @@ inline constexpr bool IsDateOrDateTime<DataTypeDate> = true;
 template <>
 inline constexpr bool IsDateOrDateTime<DataTypeDateTime> = true;
 
+// ywq todo check if undefined
 /** Returns appropriate result type for binary operator on dates (or datetimes):
  *  Date + Integral -> Date
  *  Integral + Date -> Date
@@ -854,6 +856,7 @@ private:
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>)
             {
+                std::cout << "left here" << std::endl;
                 PrecType leftPrec = IntPrec<LeftFieldType>::prec;
                 auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
                 Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, 0, rightPrec, rightScale, result_prec, result_scale);
@@ -861,6 +864,7 @@ private:
             }
             else if constexpr (std::is_integral_v<RightFieldType>)
             {
+                std::cout << "right here" << std::endl;
                 ScaleType rightPrec = IntPrec<RightFieldType>::prec;
                 auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
                 Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, 0, result_prec, result_scale);
@@ -868,6 +872,8 @@ private:
             }
             auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
             auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
+            std::cout << "leftPrec: "<< DB::toString(leftPrec) << "---rightScale:" << DB::toString(leftScale) << std::endl;
+            std::cout << "rightPrec: "<< DB::toString(rightPrec) << "---rightScale:" << DB::toString(rightScale) << std::endl;
             Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, rightScale, result_prec, result_scale);
             return createDecimal(result_prec, result_scale);
         }
@@ -1116,6 +1122,7 @@ public:
         using RightDataType = std::decay_t<decltype(right)>;
         using ResultDataType = std::decay_t<decltype(result_type)>;
         constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
+        std::cout << "result is Decimal: " << result_is_decimal << std::endl;
         constexpr bool is_multiply [[maybe_unused]] = IsOperation<Op>::multiply;
         constexpr bool is_division [[maybe_unused]] = IsOperation<Op>::div_floating || IsOperation<Op>::div_int;
 

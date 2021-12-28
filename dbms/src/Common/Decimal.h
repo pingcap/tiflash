@@ -84,6 +84,16 @@ struct PlusDecimalInferer
     }
 };
 
+struct CompareDecimalInferer
+{
+    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)
+    {
+        result_scale = std::max(left_scale, right_scale);
+        PrecType result_int = std::max(left_prec - left_scale, right_prec - right_scale);
+        result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
+    }
+};
+
 struct MulDecimalInferer
 {
     static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)

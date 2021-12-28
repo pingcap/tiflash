@@ -366,15 +366,18 @@ constexpr bool TiDBLeastGreatestSpecialCase
 template <typename A, typename B>
 struct ResultOfTiDBLeast
 {
+    static constexpr auto result_size = std::max(actual_size_v<A>, actual_size_v<B>);
+
+    using IntegerType = typename ConstructIntegerBySize<result_size>::Type;
     /**
      * in TiDB:
      * * if A or B is floating-point, least(A, B) evalutes to Float64.
-     * * if A or B is Integer, least(A, B) evalutes to Int64.
+     * * the precision of least(A, B) is the maximum precision of A and B.
      */
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<TiDBLeastGreatestSpecialCase<A, B>, UInt64, Int64>>;
+        std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 } // namespace NumberTraits
 

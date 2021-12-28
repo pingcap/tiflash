@@ -1,6 +1,12 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatestGeneric.h>
+#include <fmt/core.h>
+
+#include <cstddef>
+
+#include "Common/Exception.h"
+#include "common/types.h"
 
 namespace DB
 {
@@ -22,6 +28,22 @@ struct LeastBaseImpl<A, B, false>
     }
 
 
+    static int compareDate(String left, String right)
+    {
+        UInt64 left_value = 0;
+        UInt64 right_value = 0;
+        try
+        {
+            left_value = get<UInt64>(parseMyDateTime(left, 6));
+        }
+        catch (...)
+        {
+        }
+        right_value = get<UInt64>(parseMyDateTime(right, 6));
+
+        return left_value > right_value;
+    }
+
     // string_string
     static void process(
         const TiDB::TiDBCollatorPtr & collator,
@@ -33,6 +55,7 @@ struct LeastBaseImpl<A, B, false>
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
+        std::cout << "string string with collator" << std::endl;
         size_t a_size;
         size_t b_size;
         int res;
@@ -40,8 +63,19 @@ struct LeastBaseImpl<A, B, false>
         {
             a_size = a_offsets[0] - 1;
             b_size = b_offsets[0] - 1;
-            res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
-            if (res < 0)
+            StringRef s_ra(&a_data[0], a_size);
+            StringRef s_rb(&b_data[0], b_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+            }
+            std::cout << "res: " << compareDate(s_ra.toString(), s_rb.toString()) << std::endl;
+
+            if (res <= 0)
             {
                 memcpy(&c_data[0], &a_data[0], a_size);
                 c_offsets.push_back(a_size + 1);
@@ -56,8 +90,17 @@ struct LeastBaseImpl<A, B, false>
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
             b_size = b_offsets[i] - b_offsets[i - 1] - 1;
-            res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, reinterpret_cast<const char *>(&b_data[b_offsets[i - 1]]), b_size);
-            if (res < 0)
+            StringRef s_ra(&a_data[a_offsets[i - 1]], a_size);
+            StringRef s_rb(&b_data[b_offsets[i - 1]], b_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, reinterpret_cast<const char *>(&b_data[b_offsets[i - 1]]), b_size);
+            }
+            if (res <= 0)
             {
                 memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
                 c_offsets.push_back(c_offsets.back() + a_size + 1);
@@ -83,12 +126,23 @@ struct LeastBaseImpl<A, B, false>
         const char * b_data = reinterpret_cast<const char *>(b.data());
         ColumnString::Offset b_size = b.size();
         size_t a_size;
+        StringRef s_rb(&b_data[0], b_size);
+        int res;
+        std::cout << "string constant with collator" << std::endl;
         if (i == 0)
         {
             a_size = a_offsets[0] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, b_data, b_size);
+            StringRef s_ra(&a_data[0], a_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, b_data, b_size);
+            }
 
-            if (res < 0)
+            if (res <= 0)
             {
                 memcpy(&c_data[0], &a_data[0], a_size);
                 c_offsets.push_back(a_size + 1);
@@ -102,9 +156,17 @@ struct LeastBaseImpl<A, B, false>
         else
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, b_data, b_size);
+            StringRef s_ra(&a_data[a_offsets[i-1]], a_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, b_data, b_size);
+            }
 
-            if (res < 0)
+            if (res <= 0)
             {
                 memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
                 c_offsets.push_back(c_offsets.back() + a_size + 1);
@@ -124,8 +186,17 @@ struct LeastBaseImpl<A, B, false>
         const std::string & b,
         std::string & c)
     {
-        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
-        if (res < 0)
+        std::cout << "constant constant with collator" << std::endl;
+        int res;
+        try
+        {
+            res = compareDate(a, b);
+        }
+        catch (...)
+        {
+            res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
+        }
+        if (res <= 0)
             c = a;
         else
             c = b;
@@ -141,6 +212,7 @@ struct LeastBaseImpl<A, B, false>
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
+        std::cout << "string string without collator" << std::endl;
         size_t a_size;
         size_t b_size;
         int res;
@@ -148,8 +220,18 @@ struct LeastBaseImpl<A, B, false>
         {
             a_size = a_offsets[0] - 1;
             b_size = b_offsets[0] - 1;
-            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
-            if (res < 0)
+            StringRef s_ra(&a_data[0], a_size);
+            StringRef s_rb(&b_data[0], b_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
+            }
+            
+            if (res <= 0)
             {
                 memcpy(&c_data[0], &a_data[0], a_size);
                 c_offsets.push_back(a_size + 1);
@@ -164,9 +246,18 @@ struct LeastBaseImpl<A, B, false>
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
             b_size = b_offsets[i] - b_offsets[i - 1] - 1;
-            res = memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], std::min(a_size, b_size));
+            StringRef s_ra(&a_data[a_offsets[i - 1]], a_size);
+            StringRef s_rb(&b_data[b_offsets[i - 1]], b_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], std::min(a_size, b_size));
+            }
 
-            if (res < 0)
+            if (res <= 0)
             {
                 memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
                 c_offsets.push_back(c_offsets.back() + a_size + 1);
@@ -188,14 +279,27 @@ struct LeastBaseImpl<A, B, false>
         ColumnString::Offsets & c_offsets,
         size_t i)
     {
+        std::cout << "string constant without collator" << std::endl;
         const char * b_data = reinterpret_cast<const char *>(b.data());
         ColumnString::Offset b_size = b.size();
+        StringRef s_rb(&b_data[0], b_size);
         size_t a_size;
+        int res;
         if (i == 0)
         {
             a_size = a_offsets[0] - 1;
-            int res = memcmp(&a_data[0], b_data, std::min(a_offsets[0], b_size));
-            if (res < 0)
+            StringRef s_ra(&a_data[0], a_size);
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = memcmp(&a_data[0], b_data, std::min(a_offsets[0], b_size));
+            }
+            
+            
+            if (res <= 0)
             {
                 memcpy(&c_data[0], &a_data[0], a_size);
                 c_offsets.push_back(a_size + 1);
@@ -209,9 +313,18 @@ struct LeastBaseImpl<A, B, false>
         else
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            int res = memcmp(&a_data[a_offsets[i - 1]], b_data, std::min(a_offsets[i] - a_offsets[i - 1], b_size));
+            StringRef s_ra(&a_data[a_offsets[i - 1]], a_size);
 
-            if (res < 0)
+            try
+            {
+                res = compareDate(s_ra.toString(), s_rb.toString());
+            }
+            catch (...)
+            {
+                res = memcmp(&a_data[a_offsets[i - 1]], b_data, std::min(a_offsets[i] - a_offsets[i - 1], b_size));
+            }
+    
+            if (res <= 0)
             {
                 memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
                 c_offsets.push_back(c_offsets.back() + a_size + 1);
@@ -230,9 +343,18 @@ struct LeastBaseImpl<A, B, false>
         const std::string & b,
         std::string & c)
     {
-        int res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
+        std::cout << "constant constant without collator" << std::endl;
+        int res;
+        try
+        {
+            res = compareDate(a, b);
+        }
+        catch (...)
+        {
+            res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
+        }
 
-        if (res < 0)
+        if (res <= 0)
             c = a;
         else
             c = b;
@@ -243,12 +365,13 @@ template <typename A, typename B>
 struct LeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
-    using ResultPrecInferer = PlusDecimalInferer;
+    using ResultPrecInferer = ModDecimalInferer; // todo ywq
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
         Result x, y;
+        std::cout << "fuck here...." << std::endl;
         if constexpr (IsDecimal<A>)
         {
             x = static_cast<Result>(a.value);
@@ -293,7 +416,7 @@ namespace
 struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
 
-using FunctionLeast = FunctionBinaryArithmetic<LeastImpl, NameLeast>;
+using FunctionLeast = FunctionBinaryArithmetic<LeastBaseImpl_t, NameLeast>;
 using FunctionTiDBLeast = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Least, FunctionLeast>;
 
 } // namespace
