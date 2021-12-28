@@ -31,7 +31,7 @@ private:
         : queues(count)
     {
         for (size_t i = 0; i < count; ++i)
-            workers.emplace_back(ThreadFactory(true, "GRPCComp").newThread(&GRPCCompletionQueuePool::thread, this, i));
+            workers.emplace_back(ThreadFactory::newThread("GRPCComp", &GRPCCompletionQueuePool::thread, this, i));
     }
 
     void thread(size_t index)
