@@ -1,58 +1,106 @@
-#include <Common/ElasticThreadPool.h>
+#include <Common/DynamicThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
+#include <Common/wrapInvocable.h>
 
 namespace DB
 {
-std::shared_ptr<ThreadManager> ThreadManager::createElasticOrRawThreadManager(bool detach_if_possible)
+namespace
 {
-    if (ElasticThreadPool::glb_instance)
-        return std::make_shared<ElasticThreadManager>();
+// may throw
+void waitTasks(std::vector<std::future<void>> & futures)
+{
+    for (auto & future : futures)
+        future.get();
+}
+
+class DynamicThreadManager : public ThreadManager, public ThreadPoolManager
+{
+public:
+    void scheduleThenDetach(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
+    {
+        DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job);
+    }
+
+    void schedule(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
+    {
+        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job));
+    }
+
+    void schedule(bool propagate_memory_tracker, ThreadPoolManager::Job job) override
+    {
+        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job));
+    }
+
+    void wait() override
+    {
+        waitTasks(futures);
+    }
+protected:
+    std::vector<std::future<void>> futures;
+};
+
+class RawThreadManager : public ThreadManager
+{
+public:
+    void schedule(bool propagate_memory_tracker, String thread_name, Job job) override
+    {
+        auto t = ThreadFactory::newThread(propagate_memory_tracker, std::move(thread_name), std::move(job));
+        workers.push_back(std::move(t));
+    }
+
+    void scheduleThenDetach(bool propagate_memory_tracker, String thread_name, Job job) override
+    {
+        auto t = ThreadFactory::newThread(propagate_memory_tracker, std::move(thread_name), std::move(job));
+        t.detach();
+    }
+
+    void wait() override
+    {
+        for (auto & worker : workers)
+            worker.join();
+    }
+
+protected:
+    std::vector<std::thread> workers;
+};
+
+class FixedThreadPoolManager : public ThreadPoolManager
+{
+public:
+    explicit FixedThreadPoolManager(size_t size)
+        : pool(size)
+    {}
+
+    void schedule(bool propagate_memory_tracker, Job job) override
+    {
+        pool.schedule(wrapInvocable(propagate_memory_tracker, std::move(job)));
+    }
+
+    void wait() override
+    {
+        pool.wait();
+    }
+
+protected:
+    ThreadPool pool;
+};
+}
+
+std::shared_ptr<ThreadManager> newThreadManager()
+{
+    if (DynamicThreadPool::global_instance)
+        return std::make_shared<DynamicThreadManager>();
     else
-        return std::make_shared<RawThreadManager>(detach_if_possible);
+        return std::make_shared<RawThreadManager>();
 }
 
-std::shared_ptr<ThreadManager> ThreadManager::createElasticOrFixedThreadManager(size_t fixed_thread_pool_size)
+std::shared_ptr<ThreadPoolManager> newThreadManager(size_t capacity)
 {
-    if (ElasticThreadPool::glb_instance)
-        return std::make_shared<ElasticThreadManager>();
+    if (DynamicThreadPool::global_instance)
+        return std::make_shared<DynamicThreadManager>();
     else
-        return std::make_shared<FixedPoolThreadManager>(fixed_thread_pool_size);
-}
-
-void ElasticThreadManager::schedule(Job job)
-{
-    futures.emplace_back(ElasticThreadPool::glb_instance->schedule(job));
-}
-
-void ElasticThreadManager::wait()
-{
-    waitTasks(futures);
-}
-
-void RawThreadManager::schedule(Job job)
-{
-    workers.emplace_back(ThreadFactory::newThread("tmp-raw-thd", job));
-    if (detach_if_possible)
-        workers.back().detach();
-}
-
-void RawThreadManager::wait()
-{
-    if (detach_if_possible)
-        return;
-    for (auto & worker : workers)
-        worker.join();
-}
-
-void FixedPoolThreadManager::schedule(Job job)
-{
-    pool.schedule(ThreadFactory::newJob(job));
-}
-
-void FixedPoolThreadManager::wait()
-{
-    pool.wait();
+        return std::make_shared<FixedThreadPoolManager>(capacity);
 }
 
 } // namespace DB

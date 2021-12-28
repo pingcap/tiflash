@@ -106,11 +106,11 @@ public:
     /// Start background threads, start work.
     void process()
     {
-        if (thread_manager == nullptr)
-            thread_manager = ThreadManager::createElasticOrRawThreadManager();
+        if (!thread_manager)
+            thread_manager = newThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
-            thread_manager->schedule(true, [this, i] { this->thread(i); });
+            thread_manager->schedule(true, handler.getName(), [this, i] { this->thread(i); });
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -306,9 +306,6 @@ private:
 
     Handler & handler;
 
-    /// Streams.
-    using ThreadsData = std::vector<std::thread>;
-    ThreadsData threads;
     std::shared_ptr<ThreadManager> thread_manager;
 
     /** A set of available sources that are not currently processed by any thread.

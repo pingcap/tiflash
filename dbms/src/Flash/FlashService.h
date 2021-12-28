@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/ElasticThreadPool.h>
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>

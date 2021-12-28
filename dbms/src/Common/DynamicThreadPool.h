@@ -52,6 +52,7 @@ public:
 
     ThreadCount threadCount() const;
 
+    static std::unique_ptr<DynamicThreadPool> global_instance;
 private:
     void init(size_t initial_size);
     void scheduleTask(TaskPtr task);
@@ -75,4 +76,5 @@ private:
 
     std::atomic<Int64> alive_dynamic_threads = 0;
 };
+
 } // namespace DB

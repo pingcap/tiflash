@@ -1,11 +1,8 @@
 #pragma once
 
-
-#include <common/ThreadPool.h>
-
-#include <future>
-#include <vector>
-
+#include <functional>
+#include <string>
+#include <memory>
 
 namespace DB
 {
@@ -14,55 +11,23 @@ class ThreadManager
 public:
     using Job = std::function<void()>;
     virtual ~ThreadManager() = default;
+    // only wait non-detached tasks
     virtual void wait() = 0;
-    virtual void schedule(Job job) = 0;
-    static std::shared_ptr<ThreadManager> createElasticOrRawThreadManager(bool detach_if_possible = false);
-    static std::shared_ptr<ThreadManager> createElasticOrFixedThreadManager(size_t fixed_thread_pool_size);
+    virtual void schedule(bool propagate_memory_tracker, String thread_name, Job job) = 0;
+    virtual void scheduleThenDetach(bool propagate_memory_tracker, String thread_name, Job job) = 0;
 };
 
-class ElasticThreadManager : public ThreadManager
+std::shared_ptr<ThreadManager> newThreadManager();
+
+class ThreadPoolManager
 {
 public:
-    ~ElasticThreadManager() {}
-
-    void schedule(Job job) override;
-
-    void wait() override;
-
-protected:
-    std::vector<std::future<void>> futures;
+    using Job = std::function<void()>;
+    virtual ~ThreadPoolManager() = default;
+    virtual void wait() = 0;
+    virtual void schedule(bool propagate_memory_tracker, Job job) = 0;
 };
 
-class RawThreadManager : public ThreadManager
-{
-public:
-    RawThreadManager(bool detach_if_possible_)
-        : detach_if_possible(detach_if_possible_)
-    {}
-    ~RawThreadManager() {}
-
-    void schedule(Job job) override;
-
-    void wait() override;
-
-protected:
-    std::vector<std::thread> workers;
-    bool detach_if_possible;
-};
-
-class FixedPoolThreadManager : public ThreadManager
-{
-public:
-    FixedPoolThreadManager(size_t size)
-        : pool(size)
-    {}
-    ~FixedPoolThreadManager() {}
-    void schedule(Job job) override;
-
-    void wait() override;
-
-protected:
-    ThreadPool pool;
-};
+std::shared_ptr<ThreadPoolManager> newThreadPoolManager(size_t capacity);
 
 } // namespace DB

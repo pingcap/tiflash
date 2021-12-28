@@ -198,7 +198,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            parallel_merge_data->thread_manager->schedule(true, [this] { mergeThread(); });
+            parallel_merge_data->thread_pool->schedule(true, [this] { mergeThread(); });
     }
 }
 
@@ -286,8 +286,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
 
     LOG_TRACE(log, "Waiting for threads to finish");
 
-    if (parallel_merge_data && parallel_merge_data->thread_manager)
-        parallel_merge_data->thread_manager->wait();
+    if (parallel_merge_data)
+        parallel_merge_data->thread_pool->wait();
 
     LOG_TRACE(log, "Waited for threads to finish");
 }

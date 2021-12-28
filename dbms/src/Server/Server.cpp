@@ -5,6 +5,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DynamicThreadPool.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -1192,13 +1193,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// setting up elastic thread pool
     if (settings.enable_elastic_threadpool)
-        ElasticThreadPool::glb_instance = std::make_unique<ElasticThreadPool>(
+        DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
-            std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms),
-            50,
-            [] { setThreadName("glb-thd-pool"); });
-    else
-        ElasticThreadPool::glb_instance = nullptr;
+            std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);

@@ -1456,8 +1456,8 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data && parallel_merge_data->thread_manager)
-            parallel_merge_data->thread_manager->wait();
+        if (parallel_merge_data && parallel_merge_data->thread_pool)
+            parallel_merge_data->thread_pool->wait();
     }
 
 protected:
@@ -1564,10 +1564,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        std::shared_ptr<ThreadManager> thread_manager;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
 
         explicit ParallelMergeData(size_t threads)
-            : thread_manager(ThreadManager::createElasticOrFixedThreadManager(threads))
+            : thread_pool(newThreadPoolManager(threads))
         {}
     };
 
@@ -1579,7 +1579,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->thread_manager->schedule(true, [this, num] { thread(num); });
+        parallel_merge_data->thread_pool->schedule(true, [this, num] { thread(num); });
     }
 
     void thread(Int32 bucket_num)

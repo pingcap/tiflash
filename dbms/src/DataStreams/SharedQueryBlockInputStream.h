@@ -50,7 +50,7 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        thread_manager = ThreadManager::createElasticOrRawThreadManager();
+        thread_manager = newThreadManager();
         thread_manager->schedule(true, "SharedQuery", [this] { fetchBlocks(); });
     }
 
