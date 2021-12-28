@@ -195,7 +195,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
     if (!updating_locks.empty())
     {
-        LOG_FMT_WARNING(log, "`updating_locks` must be cleared. But there are some locks not been erased. [remain sizes={}]", updating_locks.size());
+        throw Exception(fmt::format("`updating_locks` must be cleared. But there are some locks not been erased. [remain sizes={}]", updating_locks.size()),
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
     // The edit committed, incr the sequence number to publish changes for `createSnapshot`

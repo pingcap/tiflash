@@ -294,6 +294,7 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyPutWithIdenticalPages)
 try
 {
+    // Put identical page in different `edit`
     PageId page_id = 50;
 
     auto snap0 = dir.createSnapshot();
@@ -325,6 +326,7 @@ try
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
+    // Put identical page within one `edit`
     page_id++;
     PageEntryV3 entry3{.file_id = 1, .size = 1024, .offset = 0x12345, .checksum = 0x4567};
     {
