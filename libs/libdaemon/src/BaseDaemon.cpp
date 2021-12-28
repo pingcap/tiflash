@@ -312,7 +312,9 @@ public:
             {
                 siginfo_t info;
                 ucontext_t context;
+#if USE_UNWIND
                 unw_context_t unw_context;
+#endif
                 ThreadNumber thread_num;
 
                 DB::readPODBinary(info, in);
