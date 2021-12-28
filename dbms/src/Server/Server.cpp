@@ -61,6 +61,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <memory>
+#include <limits>
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
@@ -488,7 +489,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_, UInt64 max_rpc_poller)
         : log(log_)
     {
         grpc::ServerBuilder builder;
@@ -512,6 +513,9 @@ public:
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
+        // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
+        if (max_rpc_poller > 0 && max_rpc_poller <= std::numeric_limits<int>::max())
+            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_rpc_poller);
         builder.RegisterService(flash_service.get());
         LOG_FMT_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());
