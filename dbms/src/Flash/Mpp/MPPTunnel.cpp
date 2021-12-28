@@ -18,7 +18,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
-    TaskCancelledCallback callback,
     int input_steams_num_,
     bool is_local_,
     const LogWithPrefixPtr & log_)
@@ -26,7 +25,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , finished(false)
     , is_local(is_local_)
     , timeout(timeout_)
-    , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
@@ -44,7 +42,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             if (finished)
                 return;
             /// make sure to finish the tunnel after it is connected
-            waitUntilConnectedOrCancelled(lock);
+            waitUntilConnectedOrFinished(lock);
             send_queue.finish();
         }
         waitForConsumerFinish(/*allow_throw=*/false);
@@ -82,17 +80,11 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         else
         {
             finished = true;
-            cv_for_connected.notify_all();
+            cv_for_connected_or_finished.notify_all();
             return;
         }
     }
     waitForConsumerFinish(/*allow_throw=*/false);
-}
-
-template <typename Writer>
-bool MPPTunnelBase<Writer>::isTaskCancelled()
-{
-    return task_cancelled_callback();
 }
 
 // TODO: consider to hold a buffer
@@ -102,7 +94,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
     LOG_TRACE(log, "ready to write");
     {
         std::unique_lock<std::mutex> lk(mu);
-        waitUntilConnectedOrCancelled(lk);
+        waitUntilConnectedOrFinished(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
 
@@ -169,7 +161,7 @@ void MPPTunnelBase<Writer>::writeDone()
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
         /// make sure to finish the tunnel after it is connected
-        waitUntilConnectedOrCancelled(lk);
+        waitUntilConnectedOrFinished(lk);
 
         send_queue.finish();
     }
@@ -227,25 +219,25 @@ void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
+void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
 {
-    auto connected_or_cancelled = [&] {
-        return connected || isTaskCancelled();
+    auto connected_or_finished = [&] {
+        return connected || finished;
     };
     if (timeout.count() > 0)
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrCancelled");
-        auto res = cv_for_connected.wait_for(lk, timeout, connected_or_cancelled);
-        LOG_TRACE(log, "end waitUntilConnectedOrCancelled");
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        auto res = cv_for_connected.wait_for(lk, timeout, connected_or_finished);
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
 
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
     else
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrCancelled");
-        cv_for_connected.wait(lk, connected_or_cancelled);
-        LOG_TRACE(log, "end waitUntilConnectedOrCancelled");
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        cv_for_connected.wait(lk, connected_or_finished);
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (!connected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
@@ -261,6 +253,7 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
     finished = true;
     // must call setError in the critical area to keep consistent with `finished` from outside.
     consumer_state.setError(err_msg);
+    cv_for_connected_or_finished.notify_all();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

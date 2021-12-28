@@ -50,13 +50,10 @@ template <typename Writer>
 class MPPTunnelBase : private boost::noncopyable
 {
 public:
-    using TaskCancelledCallback = std::function<bool()>;
-
     MPPTunnelBase(
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
-        TaskCancelledCallback callback,
         int input_steams_num_,
         bool is_local_,
         const LogWithPrefixPtr & log_ = nullptr);
@@ -64,8 +61,6 @@ public:
     ~MPPTunnelBase();
 
     const String & id() const { return tunnel_id; }
-
-    bool isTaskCancelled();
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
@@ -94,14 +89,14 @@ public:
     void consumerFinish(const String & err_msg);
 
 private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void sendLoop();
 
     void waitForConsumerFinish(bool allow_throw);
 
     std::mutex mu;
-    std::condition_variable cv_for_connected;
+    std::condition_variable cv_for_connected_or_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
@@ -112,8 +107,6 @@ private:
     Writer * writer;
 
     std::chrono::seconds timeout;
-
-    TaskCancelledCallback task_cancelled_callback;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
