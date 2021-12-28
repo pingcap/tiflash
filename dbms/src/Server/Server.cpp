@@ -1222,7 +1222,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log, settings.max_rpc_poller);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
