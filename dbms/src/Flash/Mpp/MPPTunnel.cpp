@@ -105,6 +105,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
@@ -229,7 +231,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+        send_thread = std::make_unique<std::thread>(ThreadFactory::newThread(true, "MPPTunnel", [this] { sendLoop(); }));
     }
     connected = true;
     cv_for_connected.notify_all();

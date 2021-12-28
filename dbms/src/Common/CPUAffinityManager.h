@@ -80,19 +80,20 @@ private:
     int getCPUCores() const;
     int getQueryCPUCores() const;
     int getOtherCPUCores() const;
-    void initCPUSet(cpu_set_t & cpu_set, int start, int count);
+    static void initCPUSet(cpu_set_t & cpu_set, int start, int count);
     void checkThreadCPUAffinity() const;
     // Bind thread t on cpu_set.
     void setAffinity(pid_t tid, const cpu_set_t & cpu_set) const;
     bool enable() const;
 
-    std::string cpuSetToString(const cpu_set_t & cpu_set) const;
-    std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set) const;
+    static std::string cpuSetToString(const cpu_set_t & cpu_set);
+    static std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set);
+
 
     std::unordered_map<pid_t, std::string> getThreads(pid_t pid) const;
     std::vector<pid_t> getThreadIDs(const std::string & dir) const;
-    std::string getThreadName(const std::string & fname) const;
-    std::string getShortFilename(const std::string & path) const;
+    static std::string getThreadName(const std::string & fname);
+    static std::string getShortFilename(const std::string & path);
     bool isQueryThread(const std::string & name) const;
 
     cpu_set_t query_cpu_set;
@@ -106,6 +107,7 @@ private:
 
     CPUAffinityManager();
     // Disable copy and move
+public:
     CPUAffinityManager(const CPUAffinityManager &) = delete;
     CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
     CPUAffinityManager(CPUAffinityManager &&) = delete;

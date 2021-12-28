@@ -98,6 +98,16 @@ std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAlias
     return qb_id_to_join_alias_map;
 }
 
+std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
+{
+    return join_execute_info_map;
+}
+
+std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+{
+    return inbound_io_input_streams_map;
+}
+
 void DAGContext::handleTruncateError(const String & msg)
 {
     if (!(flags & Flag::IGNORE_TRUNCATE || flags & Flag::TRUNCATE_AS_WARNING))

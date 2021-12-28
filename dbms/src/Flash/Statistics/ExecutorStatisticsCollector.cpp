@@ -4,10 +4,18 @@
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
+#include <Flash/Statistics/JoinImpl.h>
+#include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
 
 namespace DB
 {
+DAGContext & ExecutorStatisticsCollector::getDAGContext() const
+{
+    assert(dag_context);
+    return *dag_context;
+}
+
 String ExecutorStatisticsCollector::resToJson() const
 {
     FmtBuffer buffer;
@@ -52,7 +60,6 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
     assert(dag_context);
-    assert(res.size() == dag_context->getProfileStreamsMap().size());
     for (const auto & entry : res)
     {
         entry.second->collectRuntimeDetail();
