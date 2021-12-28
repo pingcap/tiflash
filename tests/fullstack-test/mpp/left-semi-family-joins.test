@@ -1,0 +1,263 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t(a int not null, b int null);
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values(1,1), (1,2), (2,1), (1,3), (2,3), (1,null), (2,null);
+
+func> wait_table test t
+
+# simple left semi
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+
+# left semi with other condition
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.a in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+
+# simple left anti
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+
+# left anti with other condition
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.a not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+
+
+# cartesian left semi
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.b in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.b in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.b in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 1 |    2 |
+| 2 |    1 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+
+# left semi with other condition
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a in (select b from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.a in (select b from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.a in (select b from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    2 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+
+# simple left anti
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t);
++---+------+
+| a | b    |
++---+------+
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 2 | NULL |
++---+------+
+
+# left anti with other condition
+mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t where b<t1.b);
++---+------+
+| a | b    |
++---+------+
+| 1 |    1 |
+| 2 |    1 |
+| 1 |    3 |
+| 2 |    3 |
+| 1 | NULL |
+| 2 | NULL |
++---+------+

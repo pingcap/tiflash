@@ -1246,7 +1246,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
                 if (has_row_kept && !(*anti_filter)[i])
                     /// anti_filter=false means equal condition is matched,
                     /// has_row_kept=true means other condition is matched,
-                    /// for anti join, we should not return any rows.
+                    /// for anti join, we should not return any rows when the both conditions are matched.
                     for (size_t index = prev_offset; index < current_offset; index++)
                         row_filter[index] = 0;
                 else
