@@ -1091,6 +1091,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
     size_t delta_saved_bytes = delta->getBytes(/* use_unsaved */ false);
+    size_t delta_check_rows = std::max(delta->updatesInDeltaTree(), delta_saved_rows);
     size_t delta_check_bytes = delta_saved_bytes;
 
     size_t delta_deletes = delta->getDeletes();
@@ -1100,6 +1101,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     size_t delta_rows = delta_saved_rows + unsaved_rows;
     size_t delta_bytes = delta_saved_bytes + unsaved_bytes;
+    size_t segment_rows = segment->getEstimatedRows();
     size_t segment_bytes = segment->getEstimatedBytes();
     size_t pack_count = delta->getPackCount();
 
@@ -1114,7 +1116,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto & delta_last_try_split_bytes = delta->getLastTrySplitBytes();
     auto & delta_last_try_place_delta_index_rows = delta->getLastTryPlaceDeltaIndexRows();
 
+    auto segment_limit_rows = dm_context->segment_limit_rows;
     auto segment_limit_bytes = dm_context->segment_limit_bytes;
+    auto delta_limit_rows = dm_context->delta_limit_rows;
     auto delta_limit_bytes = dm_context->delta_limit_bytes;
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
@@ -1123,7 +1127,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         && delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes;
     bool should_foreground_flush = unsaved_bytes >= delta_cache_limit_bytes * 3;
 
-    bool should_background_merge_delta = (delta_check_bytes >= delta_limit_bytes
+    bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes)
                                           && (delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes));
     bool should_foreground_merge_delta_by_rows_or_bytes
         = delta_check_bytes >= forceMergeDeltaBytes(dm_context);
@@ -1131,10 +1135,10 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     // Note that, we must use || to combine rows and bytes checks in split check, and use && in merge check.
     // Otherwise, segments could be split and merged over and over again.
-    bool should_split = (segment_bytes >= segment_limit_bytes * 2)
+    bool should_split = (segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
         && (delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
 
-    bool should_merge = segment_bytes < segment_limit_bytes / 3;
+    bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
     // Don't do compact on starting up.
     bool should_compact = (thread_type != ThreadType::Init) && std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
@@ -1207,6 +1211,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             if (it == segments.end())
                 return {};
             next_segment = it->second;
+            auto limit = dm_context->segment_limit_rows / 5;
+            if (next_segment->getEstimatedRows() >= limit)
+                return {};
         }
         return next_segment;
     };
@@ -1250,9 +1257,11 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
+        auto my_segment_rows = my_segment->getEstimatedRows();
+        auto my_row_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
         size_t my_segment_bytes = my_segment->getEstimatedBytes();
-        auto my_should_split = my_segment_bytes >= dm_context->segment_force_split_bytes;
-        if (my_should_split && !my_segment->isSplitForbidden())
+        auto my_bytes_should_split = my_segment_bytes >= dm_context->segment_force_split_bytes;
+        if ((my_row_should_split || my_bytes_should_split) && !my_segment->isSplitForbidden())
         {
             if (segmentSplit(*dm_context, my_segment, true).first)
                 return true;
