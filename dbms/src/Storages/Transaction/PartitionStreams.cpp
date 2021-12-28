@@ -105,6 +105,8 @@ static void writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
+            LOG_TRACE(log,
+                      FUNCTION_NAME << " begin to decode table " << table_id << ", region " << region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(true);
             block_schema_version = decoding_schema_snapshot->schema_version;
