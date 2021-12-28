@@ -106,7 +106,6 @@ try
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f0 = pool.schedule(true, [] { throw Exception("test"); });
-    f0.wait();
     ASSERT_THROW(f0.get(), Exception);
 
     auto cnt = pool.threadCount();
@@ -114,7 +113,6 @@ try
     ASSERT_EQ(cnt.dynamic, 0);
 
     auto f1 = pool.schedule(true, [] { return 1; });
-    f1.wait();
     ASSERT_EQ(f1.get(), 1);
 }
 CATCH
@@ -139,26 +137,22 @@ try
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f = pool.schedule(false, getter);
-    f.wait();
     ASSERT_EQ(f.get(), nullptr);
 
     auto f0 = pool.schedule(false, setter, &t0);
     f0.wait();
 
     auto f1 = pool.schedule(false, getter);
-    f1.wait();
     // f0 didn't pollute memory_tracker
     ASSERT_EQ(f1.get(), nullptr);
 
     current_memory_tracker = &t1;
 
     auto f2 = pool.schedule(true, getter);
-    f2.wait();
     // set propagate = true and it did propagate
     ASSERT_EQ(f2.get(), &t1);
 
     auto f3 = pool.schedule(false, getter);
-    f3.wait();
     // set propagate = false and it didn't propagate
     ASSERT_EQ(f3.get(), nullptr);
 }
