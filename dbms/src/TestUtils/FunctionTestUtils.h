@@ -27,17 +27,10 @@ struct Nullable
 };
 
 template <typename T>
-struct Constant
-{
-    using ConstantType = T;
-};
-
-template <typename T>
 struct TypeTraits
 {
     static constexpr bool is_nullable = false;
     static constexpr bool is_decimal = false;
-    static constexpr bool is_constant = false;
     using FieldType = typename NearestFieldType<T>::Type;
 };
 
@@ -46,7 +39,6 @@ struct TypeTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
     static constexpr bool is_decimal = false;
-    static constexpr bool is_constant = false;
     using FieldType = std::optional<typename NearestFieldType<T>::Type>;
 };
 
@@ -55,7 +47,6 @@ struct TypeTraits<Decimal<T>>
 {
     static constexpr bool is_nullable = false;
     static constexpr bool is_decimal = true;
-    static constexpr bool is_constant = false;
     using DecimalType = Decimal<T>;
     using FieldType = DecimalField<DecimalType>;
 };
@@ -65,35 +56,6 @@ struct TypeTraits<Nullable<Decimal<T>>>
 {
     static constexpr bool is_nullable = true;
     static constexpr bool is_decimal = true;
-    static constexpr bool is_constant = false;
-    using DecimalType = Decimal<T>;
-    using FieldType = std::optional<DecimalField<DecimalType>>;
-};
-
-template <typename T>
-struct TypeTraits<Constant<T>>
-{
-    static constexpr bool is_nullable = false;
-    static constexpr bool is_decimal = false;
-    static constexpr bool is_constant = true;
-    using FieldType = std::optional<typename NearestFieldType<T>::Type>;
-};
-
-template <typename T>
-struct TypeTraits<Constant<Nullable<T>>>
-{
-    static constexpr bool is_nullable = true;
-    static constexpr bool is_decimal = false;
-    static constexpr bool is_constant = true;
-    using FieldType = std::optional<typename NearestFieldType<T>::Type>;
-};
-
-template <typename T>
-struct TypeTraits<Constant<Nullable<Decimal<T>>>>
-{
-    static constexpr bool is_nullable = true;
-    static constexpr bool is_decimal = true;
-    static constexpr bool is_constant = true;
     using DecimalType = Decimal<T>;
     using FieldType = std::optional<DecimalField<DecimalType>>;
 };
@@ -407,80 +369,6 @@ ColumnWithTypeAndName createConstColumn(
 {
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
-
-/**
- * {
- *  {1, {2, 3}},
- *  {1, {2, 3}},
- *  {1, {2, 3}},
- * }
- */
-
-template <typename R, typename... Args>
-struct Case
-{
-    R result;
-    std::tuple<Args...> row;
-};
-
-template <typename R, typename... Args>
-class TestCasesConstructor
-{
-private:
-    ColumnWithTypeAndName result;
-    std::vector<ColumnWithTypeAndName> columns;
-    std::initializer_list<Case<R, Args...>> cases;
-    bool is_const[sizeof...(Args)] = {false};
-
-public:
-    TestCasesConstructor(std::vector<size_t> const_columns, std::initializer_list<Case<R, Args...>> cases)
-        : cases(cases)
-    {
-        for (auto col : const_columns)
-        {
-            is_const[col] = true;
-        }
-
-        InferredDataVector<R> vec;
-        vec.reserve(cases.size());
-        for (auto & cas : cases)
-        {
-            vec.push_back(cas.result);
-        }
-        result = createColumn<R>(vec);
-        addColumn<0, Args...>();
-    }
-
-    std::pair<ColumnWithTypeAndName, ColumnsWithTypeAndName> getResultAndInput()
-    {
-        return std::make_pair(result, ColumnsWithTypeAndName(columns));
-    }
-
-private:
-    template <size_t>
-    void addColumn()
-    {
-    }
-    template <size_t index, typename T, typename... ColArgs>
-    void addColumn()
-    {
-        if (is_const[index])
-        {
-            columns.push_back(createConstColumn<T>(1, std::get<index>((*cases.begin()).row)));
-        }
-        else
-        {
-            InferredDataVector<T> vec;
-            vec.reserve(cases.size());
-            for (auto & cas : cases)
-            {
-                vec.push_back(std::get<index>(cas.row));
-            }
-            columns.push_back(createColumn<T>(vec));
-        }
-        addColumn<index + 1, ColArgs...>();
-    }
-};
 
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
