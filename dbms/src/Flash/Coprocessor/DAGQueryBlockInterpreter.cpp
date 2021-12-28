@@ -414,12 +414,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
 
     /// (cartesian) (anti) left semi join.
-    const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin ||
-            join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+    const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
 
     ASTTableJoin::Kind kind = join_type_it->second;
-    const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin ||
-            join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
+    const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
