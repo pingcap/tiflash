@@ -16,7 +16,7 @@ try
 
     std::atomic<int> a = 0;
 
-    auto f0 = pool.schedule([&] {
+    auto f0 = pool.schedule(true, [&] {
         while (true)
         {
             if (a.load())
@@ -31,7 +31,7 @@ try
 
     std::atomic<int> b = 0;
 
-    auto f1 = pool.schedule([&] {
+    auto f1 = pool.schedule(true, [&] {
         while (!b.load())
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         a.store(1);
@@ -54,8 +54,8 @@ try
     // wait for thread pool ready
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    auto f0 = pool.schedule([] { return 0; });
-    pool.schedule([] { return 0; });
+    auto f0 = pool.schedule(true, [] { return 0; });
+    pool.schedule(true, [] { return 0; });
 
     auto cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 0);
@@ -65,7 +65,7 @@ try
     {
         f0.wait();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        f0 = pool.schedule([] { return 0; });
+        f0 = pool.schedule(true, [] { return 0; });
     }
     cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 0);
@@ -103,7 +103,7 @@ try
     // wait for thread pool ready
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    auto f0 = pool.schedule([] { throw Exception("test"); });
+    auto f0 = pool.schedule(true, [] { throw Exception("test"); });
     f0.wait();
     ASSERT_THROW(f0.get(), Exception);
 
@@ -111,7 +111,7 @@ try
     ASSERT_EQ(cnt.fixed, 1);
     ASSERT_EQ(cnt.dynamic, 0);
 
-    auto f1 = pool.schedule([] { return 1; });
+    auto f1 = pool.schedule(true, [] { return 1; });
     f1.wait();
     ASSERT_EQ(f1.get(), 1);
 }
@@ -134,24 +134,25 @@ try
         current_memory_tracker = p;
     };
 
-    auto f0 = pool.schedule(setter, &t0);
+    auto f0 = pool.schedule(false, setter, &t0);
     f0.wait();
 
-    auto f1 = pool.schedule(getter);
+    auto f1 = pool.schedule(false, getter);
     f1.wait();
+    // f0 didn't pollute memory_tracker
     ASSERT_EQ(f1.get(), nullptr);
 
     current_memory_tracker = &t1;
 
-    auto f2 = pool.schedule(getter);
+    auto f2 = pool.schedule(true, getter);
     f2.wait();
+    // set propagate = true and it did propagate
     ASSERT_EQ(f2.get(), &t1);
 
-    current_memory_tracker = &t2;
-
-    auto f3 = pool.schedule(getter);
+    auto f3 = pool.schedule(false, getter);
     f3.wait();
-    ASSERT_EQ(f3.get(), &t2);
+    // set propagate = false and it didn't propagate
+    ASSERT_EQ(f3.get(), nullptr);
 }
 CATCH
 

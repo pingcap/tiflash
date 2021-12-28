@@ -36,9 +36,9 @@ public:
     ~DynamicThreadPool();
 
     template <typename Func, typename... Args>
-    auto schedule(Func && func, Args &&... args)
+    auto schedule(bool propagate_memory_tracker, Func && func, Args &&... args)
     {
-        auto task = packTask(std::forward<Func>(func), std::forward<Args>(args)...);
+        auto task = packTask(propagate_memory_tracker, std::forward<Func>(func), std::forward<Args>(args)...);
         auto future = task.get_future();
         scheduleTask(std::make_unique<ExecutableTask<decltype(task)>>(std::move(task)));
         return std::move(future);

@@ -2,7 +2,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
-#include <Common/ThreadFactory.h>
+#include <Common/wrapInvocable.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Poco/Event.h>
@@ -120,7 +120,7 @@ protected:
     void next()
     {
         ready.reset();
-        pool.schedule(ThreadFactory::newJob([this] { calculate(); }));
+        pool.schedule(wrapInvocable(true, [this] { calculate(); }));
     }
 
 

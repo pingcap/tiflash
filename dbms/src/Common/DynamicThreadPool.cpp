@@ -37,7 +37,7 @@ void DynamicThreadPool::init(size_t initial_size)
         fixed_queues.emplace_back(std::make_unique<Queue>(2));
 
     for (size_t i = 0; i < initial_size; ++i)
-        fixed_threads.emplace_back(ThreadFactory::newThread("FixedThread", &DynamicThreadPool::fixedWork, this, i));
+        fixed_threads.emplace_back(ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
 }
 
 void DynamicThreadPool::scheduleTask(TaskPtr task)
@@ -73,7 +73,7 @@ bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 {
     alive_dynamic_threads.fetch_add(1);
-    std::thread t = ThreadFactory::newThread("DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
+    std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     t.detach();
 }
 
