@@ -51,7 +51,7 @@ public:
         read_prefixed = true;
         /// Start reading thread.
         thread_manager = ThreadManager::createElasticOrRawThreadManager();
-        thread_manager->schedule([this] { this->fetchBlocks(); });
+        thread_manager->schedule(true, "SharedQuery", [this] { fetchBlocks(); });
     }
 
     void readSuffix() override

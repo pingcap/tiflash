@@ -61,8 +61,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     thread_manager = ThreadManager::createElasticOrRawThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
-        thread_manager->schedule([this, index] {
-            this->readLoop(index);
+        thread_manager->schedule(true, "Receiver", [this, index] {
+            readLoop(index);
         });
     }
 }

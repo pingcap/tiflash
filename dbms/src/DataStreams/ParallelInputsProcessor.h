@@ -110,9 +110,7 @@ public:
             thread_manager = ThreadManager::createElasticOrRawThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
-        {
-            thread_manager->schedule(([this, i] { this->thread(i); }));
-        }
+            thread_manager->schedule(true, [this, i] { this->thread(i); });
     }
 
     /// Ask all sources to stop earlier than they run out.

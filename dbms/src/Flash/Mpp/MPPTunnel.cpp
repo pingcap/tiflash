@@ -238,8 +238,8 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        thread_manager->schedule([this] {
-            this->sendLoop();
+        thread_manager->schedule(true, "MPPTunnel", [this] {
+            sendLoop();
         });
     }
     connected = true;

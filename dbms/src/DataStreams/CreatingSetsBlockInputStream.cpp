@@ -120,7 +120,7 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    thread_manager->schedule(([this, &item = elem.second] { this->createOne(item); }));
+                    thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
