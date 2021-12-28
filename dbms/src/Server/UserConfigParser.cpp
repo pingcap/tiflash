@@ -12,7 +12,6 @@ namespace DB
 {
 namespace UserConfig
 {
-
 static std::string tryGetAbsolutePath(const std::string & config_path, std::string && users_config_path)
 {
     if (users_config_path[0] != '/')
@@ -33,8 +32,11 @@ static std::string tryGetAbsolutePath(const std::string & config_path, std::stri
     return std::move(users_config_path);
 }
 
-ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const std::string & config_path,
-    std::unique_ptr<Context> & global_context, Poco::Logger * log)
+ConfigReloaderPtr parseSettings(
+    Poco::Util::LayeredConfiguration & config,
+    const std::string & config_path,
+    std::unique_ptr<Context> & global_context,
+    Poco::Logger * log)
 {
     std::string users_config_path = config.getString("users_config", String(1, '\0'));
     bool load_from_main_config_path = true;
@@ -51,12 +53,13 @@ ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const
     if (load_from_main_config_path)
         users_config_path = config_path;
 
-    LOG_INFO(log, "Set users config file to: " << users_config_path);
+    LOG_FMT_INFO(log, "Set users config file to: {}", users_config_path);
 
     return std::make_unique<ConfigReloader>(
         users_config_path, //
         /*updater=*/[&global_context](ConfigurationPtr cfg) { global_context->setUsersConfig(cfg); },
-        /*already_loaded=*/false, /*name=*/"UserCfgReloader");
+        /*already_loaded=*/false,
+        /*name=*/"UserCfgReloader");
 }
 
 } // namespace UserConfig
