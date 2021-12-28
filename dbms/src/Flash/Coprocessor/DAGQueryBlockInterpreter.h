@@ -81,7 +81,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr);
+    void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
