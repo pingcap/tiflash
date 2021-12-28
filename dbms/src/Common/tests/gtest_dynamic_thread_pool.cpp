@@ -122,11 +122,9 @@ CATCH
 TEST_F(DynamicThreadPoolTest, testMemoryTracker)
 try
 {
-    DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
     MemoryTracker t0, t1, t2;
+
+    current_memory_tracker = &t2;
 
     auto getter = [] {
         return current_memory_tracker;
@@ -135,6 +133,14 @@ try
     auto setter = [](MemoryTracker * p) {
         current_memory_tracker = p;
     };
+
+    DynamicThreadPool pool(1, std::chrono::milliseconds(10));
+    // wait for thread pool ready
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    auto f = pool.schedule(false, getter);
+    f.wait();
+    ASSERT_EQ(f.get(), nullptr);
 
     auto f0 = pool.schedule(false, setter, &t0);
     f0.wait();
