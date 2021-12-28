@@ -47,6 +47,8 @@ echo '### Coverage summary' >> /tiflash/profile/diff-coverage
 echo '```' >> /tiflash/profile/diff-coverage
 llvm-cov report \
     --summary-only \
+    --show-region-summary=false \
+    --show-branch-summary=false \
     --ignore-filename-regex "/usr/include/.*" \
     --ignore-filename-regex "/usr/local/.*" \
     --ignore-filename-regex "/usr/lib/.*" \
