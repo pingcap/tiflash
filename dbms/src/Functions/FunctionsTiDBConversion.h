@@ -658,6 +658,8 @@ struct TiDBConvertToFloat
             context.getDAGContext()->handleTruncateError("cast str as real");
             return 0.0;
         }
+        if (float_string.size < trim_string.size())
+            trim_string[float_string.size] = '\0';
         Float64 f = strtod(float_string.data, nullptr);
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
