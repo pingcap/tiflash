@@ -1,7 +1,11 @@
 #pragma once
 
 #include <Common/LogWithPrefix.h>
+<<<<<<< HEAD
 #include <Common/MPMCQueue.h>
+=======
+#include <Flash/Statistics/ConnectionProfileInfo.h>
+>>>>>>> master
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -84,6 +88,8 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
+    const ConnectionProfileInfo & getConnectionProfileInfo() const { return connection_profile_info; }
+
     bool isLocal() const { return is_local; }
 
     const LogWithPrefixPtr & getLogger() const { return log; }
@@ -146,6 +152,8 @@ private:
         std::shared_future<String> future;
     };
     ConsumerState consumer_state;
+
+    ConnectionProfileInfo connection_profile_info;
 
     const LogWithPrefixPtr log;
 };

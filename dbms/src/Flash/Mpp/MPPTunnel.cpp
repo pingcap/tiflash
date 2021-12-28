@@ -108,6 +108,9 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 
         if (send_queue.push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
+            connection_profile_info.bytes += data.ByteSizeLong();
+            connection_profile_info.packets += 1;
+
             if (close_after_write)
             {
                 send_queue.finish();
@@ -200,7 +203,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         else
         {
             writer = writer_;
-            auto send_thread = ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); });
+            auto send_thread = ThreadFactory::newThread("MPPTunnel", [this] { sendLoop(); });
             send_thread.detach(); // communicate send_thread through `consumer_state`
         }
         connected = true;

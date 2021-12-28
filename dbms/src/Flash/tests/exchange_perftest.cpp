@@ -509,7 +509,6 @@ struct SenderHelper
         *dag_request.mutable_root_executor() = root_executor;
 
         dag_context = std::make_unique<DAGContext>(dag_request);
-        dag_context->final_concurrency = concurrency; // just for execution_summary
         dag_context->is_mpp_task = true;
         dag_context->is_root_mpp_task = false;
         dag_context->encode_type = tipb::EncodeType::TypeCHBlock;

@@ -2,7 +2,7 @@
 
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
-#include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 #include <fcntl.h>
 
 #include <memory>
