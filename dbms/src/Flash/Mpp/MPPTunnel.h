@@ -1,11 +1,8 @@
 #pragma once
 
 #include <Common/LogWithPrefix.h>
-<<<<<<< HEAD
 #include <Common/MPMCQueue.h>
-=======
 #include <Flash/Statistics/ConnectionProfileInfo.h>
->>>>>>> master
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
