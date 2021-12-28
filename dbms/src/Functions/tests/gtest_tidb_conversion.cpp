@@ -6,15 +6,12 @@
 #include "DataTypes/DataTypeMyDuration.h"
 #include "DataTypes/DataTypeNullable.h"
 #include "DataTypes/DataTypesNumber.h"
-#include "Functions/FunctionFactory.h"
 #include "Functions/FunctionHelpers.h"
 #include "TestUtils/FunctionTestUtils.h"
 #include "common/types.h"
 #include "gtest/gtest.h"
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 namespace
 {
@@ -680,12 +677,12 @@ TEST_F(TestTidbConversion, castIntAsTime)
 try
 {
     ASSERT_COLUMN_EQ(
-        createNullableDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, 20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
-        createNullableDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({{}, 20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
@@ -705,7 +702,7 @@ try
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
         TiFlashException);
     ASSERT_COLUMN_EQ(
-        createNullableDateTimeColumn({{}}, 6),
+        createDateTimeColumnNullable({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
@@ -944,5 +941,4 @@ try
 CATCH
 
 } // namespace
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
