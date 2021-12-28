@@ -10,6 +10,12 @@
 
 namespace DB
 {
+DAGContext & ExecutorStatisticsCollector::getDAGContext() const
+{
+    assert(dag_context);
+    return *dag_context;
+}
+
 String ExecutorStatisticsCollector::resToJson() const
 {
     FmtBuffer buffer;
