@@ -198,7 +198,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             send_thread.detach(); // communicate send_thread through `consumer_state`
         }
         connected = true;
-        cv_for_connected.notify_all();
+        cv_for_connected_or_finished.notify_all();
     }
     LOG_DEBUG(log, "connected");
 }
@@ -226,7 +226,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
     if (timeout.count() > 0)
     {
         LOG_TRACE(log, "start waitUntilConnectedOrFinished");
-        auto res = cv_for_connected.wait_for(lk, timeout, connected_or_finished);
+        auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
         LOG_TRACE(log, "end waitUntilConnectedOrFinished");
 
         if (!res)
@@ -235,7 +235,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
     else
     {
         LOG_TRACE(log, "start waitUntilConnectedOrFinished");
-        cv_for_connected.wait(lk, connected_or_finished);
+        cv_for_connected_or_finished.wait(lk, connected_or_finished);
         LOG_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (!connected)
