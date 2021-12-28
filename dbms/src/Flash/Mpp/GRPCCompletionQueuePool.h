@@ -24,6 +24,15 @@ public:
         return queues[next.fetch_add(1, std::memory_order_acq_rel) % queues.size()];
     }
 
+    ~GRPCCompletionQueuePool()
+    {
+        for (auto & queue : queues)
+            queue.shutdown();
+
+        for (auto & t : workers)
+            t.join();
+    }
+
     using Callback = UnaryCallback<bool>;
 
 private:
