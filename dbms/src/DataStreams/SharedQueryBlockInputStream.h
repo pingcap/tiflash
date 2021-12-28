@@ -50,7 +50,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = ThreadFactory::newThread("SharedQuery", [this] { fetchBlocks(); });
+        thread = ThreadFactory::newThread(true, "SharedQuery", [this] { fetchBlocks(); });
     }
 
     void readSuffix() override

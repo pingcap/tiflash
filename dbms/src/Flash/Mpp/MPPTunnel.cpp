@@ -202,7 +202,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         else
         {
             writer = writer_;
-            auto send_thread = ThreadFactory::newThread("MPPTunnel", [this] { sendLoop(); });
+            auto send_thread = ThreadFactory::newThread(true, "MPPTunnel", [this] { sendLoop(); });
             send_thread.detach(); // communicate send_thread through `consumer_state`
         }
         connected = true;
