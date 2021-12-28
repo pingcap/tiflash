@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
@@ -36,7 +37,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    Int64 rows;
+    DecodeDetail decode_detail;
 
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -51,7 +52,6 @@ struct ExchangeReceiverResult
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , rows(0)
     {}
 
     ExchangeReceiverResult()
@@ -95,7 +95,7 @@ public:
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
 
-    Int64 decodeChunks(
+    DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header);
