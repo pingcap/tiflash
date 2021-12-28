@@ -2680,6 +2680,7 @@ public:
         }
 
         // Compute byte length of result so we can reserve enough memory.
+        // It's just a hint, because length UTF8 chars vary from 1 to 4.
         size_t res_byte_len = 0;
         const ColumnVector<IntType> * column_length = nullptr;
         IntType target_len = 0;
@@ -2707,7 +2708,6 @@ public:
                 {
                     len = 0;
                 }
-                // It's just a hint, because length UTF8 chars vary from 1 to 4.
                 res_byte_len += len;
             }
             res_byte_len += size;
@@ -2724,15 +2724,14 @@ public:
         const ColumnString::Chars_t * padding_data = nullptr;
         size_t padding_size = 0;
         const UInt8 * padding = nullptr;
-        Field padding_res_field;
         // prepare objects related to padding_str to avoid duplicated code.
         if (is_padding_const)
         {
+            Field padding_res_field;
             const ColumnConst * column_padding = checkAndGetColumnConst<ColumnString>(column_padding_ptr.get());
-            column_padding->get(0, padding_res_field);
-            String padding_str = padding_res_field.get<String>();
-            padding_size = padding_str.size() + 1;
-            padding = reinterpret_cast<const UInt8 *>(padding_str.c_str());
+            StringRef padding_str = column_padding->getDataAt(0);
+            padding_size = padding_str.size + 1;
+            padding = reinterpret_cast<const UInt8 *>(padding_str.data);
         }
         else
         {
@@ -2748,13 +2747,21 @@ public:
             column_string->get(0, res_field);
             String str_val = res_field.get<String>();
 
-            if (is_padding_const)
+            if (is_padding_const && is_length_const)
             {
-                const_const<IntType, IsUTF8, IsLeft>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                const_const<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
-            else
+            else if (is_padding_const && !is_length_const)
             {
-                const_column<IntType, IsUTF8, IsLeft>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                const_const<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && is_length_const)
+            {
+                const_column<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && !is_length_const)
+            {
+                const_column<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         else
@@ -2763,21 +2770,30 @@ public:
             const ColumnString::Offsets & string_offsets = column_string->getOffsets();
             const ColumnString::Chars_t & string_data = column_string->getChars();
 
-            if (is_padding_const)
+            if (is_padding_const && is_length_const)
             {
-                column_const<IntType, IsUTF8, IsLeft>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                column_const<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
-            else
+            else if (is_padding_const && !is_length_const)
             {
-                column_column<IntType, IsUTF8, IsLeft>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                column_const<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && is_length_const)
+            {
+                column_column<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && !is_length_const)
+            {
+                column_column<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(column_result), std::move(result_null_map));
     }
 
-    template <typename IntType, bool IsUTF8, bool IsLeft>
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
     static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length, IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
+        (void)column_length;
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2787,11 +2803,11 @@ public:
         {
             if (!vec_result_null_map[i])
             {
-                if (column_length != nullptr)
+                if constexpr (!IsLengthConst)
                 {
                     target_len = column_length->getElement(i);
                 }
-                if (IsUTF8)
+                if constexpr (IsUTF8)
                 {
                     vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
@@ -2807,9 +2823,10 @@ public:
         }
     }
 
-    template <typename IntType, bool IsUTF8, bool IsLeft>
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
     static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length, IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
+        (void)column_length;
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
 
@@ -2818,11 +2835,11 @@ public:
         {
             if (!vec_result_null_map[i])
             {
-                if (column_length != nullptr)
+                if constexpr (!IsLengthConst)
                 {
                     target_len = column_length->getElement(i);
                 }
-                if (IsUTF8)
+                if constexpr (IsUTF8)
                 {
                     vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
@@ -2837,9 +2854,10 @@ public:
         }
     }
 
-    template <typename IntType, bool IsUTF8, bool IsLeft>
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
     static void const_column(const String & str_val, const ColumnVector<IntType> * column_length, IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
+        (void)column_length;
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
 
@@ -2848,11 +2866,11 @@ public:
         {
             if (!vec_result_null_map[i])
             {
-                if (column_length != nullptr)
+                if constexpr (!IsLengthConst)
                 {
                     target_len = column_length->getElement(i);
                 }
-                if (IsUTF8)
+                if constexpr (IsUTF8)
                 {
                     vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
@@ -2867,9 +2885,10 @@ public:
         }
     }
 
-    template <typename IntType, bool IsUTF8, bool IsLeft>
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
     static void const_const(const String & str_val, const ColumnVector<IntType> * column_length, IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
+        (void)column_length;
         ColumnString::Offset res_prev_offset = 0;
 
         // pad(const_str, length, const_pad)
@@ -2877,11 +2896,11 @@ public:
         {
             if (!vec_result_null_map[i])
             {
-                if (column_length != nullptr)
+                if constexpr (!IsLengthConst)
                 {
                     target_len = column_length->getElement(i);
                 }
-                if (IsUTF8)
+                if constexpr (IsUTF8)
                 {
                     vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
@@ -2916,7 +2935,7 @@ public:
         if (data_len < tmp_target_len)
         {
             left = tmp_target_len - data_len;
-            if (IsLeft)
+            if constexpr (IsLeft)
             {
                 while (left > 0 && pad_len != 0)
                 {
