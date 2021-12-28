@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -11,7 +12,6 @@
 #include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
 
-#include <cstring>
 #include <thread>
 
 namespace DB
@@ -26,9 +26,7 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     const Int64 t = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     std::this_thread::sleep_for(std::chrono::milliseconds(t));
-    std::stringstream res;
-    res << "sleep " << t << " ms.";
-    output(res.str());
+    output(fmt::format("sleep {} ms.", t));
 }
 
 DBGInvoker::DBGInvoker()
@@ -158,16 +156,19 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     const SchemalessDBGFunc & func,
     const ASTs & args)
 {
-    std::stringstream col_name;
-    col_name << name << "(";
-    for (size_t i = 0; i < args.size(); ++i)
-    {
-        std::string arg = args[i]->getColumnName();
-        col_name << normalizeArg(arg) << ((i + 1 == args.size()) ? "" : ", ");
-    }
-    col_name << ")";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{}(", name);
+    fmt_buf.joinStr(
+        args.cbegin(),
+        args.cend(),
+        [](const auto & arg, FmtBuffer & fb) {
+            std::string column_name = arg->getColumnName();
+            fb.append(normalizeArg(column_name));
+        },
+        ", ");
+    fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
+    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
     Printer printer = [&](const std::string & s) {
         res->append(s);
     };

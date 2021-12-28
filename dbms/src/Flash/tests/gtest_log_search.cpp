@@ -8,13 +8,13 @@ namespace DB
 {
 namespace tests
 {
-class LogSearch_Test : public ::testing::Test
+class LogSearchTest : public ::testing::Test
 {
 public:
     void SetUp() override {}
 };
 
-TEST_F(LogSearch_Test, LogSearch)
+TEST_F(LogSearchTest, LogSearch)
 {
     std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
     std::string s_bad1 = "[2020/4/4 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
@@ -72,17 +72,19 @@ TEST_F(LogSearch_Test, LogSearch)
     }
 }
 
-TEST_F(LogSearch_Test, SearchDir)
+TEST_F(LogSearchTest, SearchDir)
 {
-    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", "/1/test-err.log", 0));
-    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", "", 0));
-    ASSERT_TRUE(FilterFileByDatetime("/1/test-err.log", "/1/test-err.log", 0));
-    ASSERT_FALSE(FilterFileByDatetime("/1/2.log.123.gz", "/1/test-err.log", 0));
-    ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.....gz", "/1/test-err.log", 0));
-    ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.481.gz", "/1/test-err.log", 1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
-    ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-10-16:43:57.123.gz", "/1/test-err.log", 1633855377000));
+    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"/1/test-err.log"}, 0));
+    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"", ""}, 0));
+    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {""}, 0));
+    ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {}, 0));
+    ASSERT_TRUE(FilterFileByDatetime("/1/test-err.log", {"/1/test-err.log"}, 0));
+    ASSERT_FALSE(FilterFileByDatetime("/1/2.log.123.gz", {"/1/test-err.log"}, 0));
+    ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.....gz", {"/1/test-err.log"}, 0));
+    ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.481.gz", {"/1/test-err.log"}, 1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
+    ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-10-16:43:57.123.gz", {"/1/test-err.log"}, 1633855377000));
 
-    ASSERT_TRUE(FilterFileByDatetime("/1/proxy.log.2021-10-09-14:50:55.123456789", "/1/test-err.log", 1633855377000));
+    ASSERT_TRUE(FilterFileByDatetime("/1/proxy.log.2021-10-09-14:50:55.123456789", {"/1/test-err.log"}, 1633855377000));
 
     {
         const std::string example_data = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";

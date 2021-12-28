@@ -6,6 +6,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
@@ -76,11 +77,8 @@ private:
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
-    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    /// BlockIO contains some information stored in Context, so need deconstruct it before Context
-    BlockIO io;
-    /// The inputStreams should be released in the destructor of BlockIO, since DAGContext contains
-    /// some reference to inputStreams, so it need to be destructed before BlockIO
+    // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
+    // before `context`.
     std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
 
@@ -98,6 +96,8 @@ private:
     MPPTaskManager * manager = nullptr;
 
     const LogWithPrefixPtr log;
+
+    MPPTaskStatistics mpp_task_statistics;
 
     Exception err;
 

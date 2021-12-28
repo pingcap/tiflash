@@ -3,7 +3,6 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/formatReadable.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <common/logger_fmt_useful.h>
 #include <common/logger_useful.h>
 namespace tests
 {
