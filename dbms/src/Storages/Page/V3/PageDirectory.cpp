@@ -210,9 +210,21 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
 
     auto page_lock = acquireLock();
 
+    if (entries.size() == 0)
+    {
+        return std::make_pair(del_entries, true);
+    }
+
     auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
 
     if (iter == entries.begin())
+    {
+        return std::make_pair(del_entries, false);
+    }
+
+    // If we can't find any seq lower than `lowest_seq`
+    // It means all seq in this entry no need gc.
+    if (iter == entries.end())
     {
         return std::make_pair(del_entries, false);
     }

@@ -628,6 +628,9 @@ try
 }
 CATCH
 
+using PageSeqAndEntryV3 = std::pair<UInt64, PageEntryV3>;
+using PageSeqAndEntriesV3 = std::vector<PageIDAndEntryV3>;
+
 class PageDirectoryGCTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -651,14 +654,52 @@ public:
         return dir.blobstore;
     }
 
-    void pushMvccSeqForword(size_t seq_nums)
+    void pushMvccSeqForword(size_t seq_nums, UInt64 get_snapshot = UINT64_MAX)
     {
         PageId page_id = UINT64_MAX - 100;
+        [[maybe_unused]] PageSeqAndEntriesV3 meanless_seq_entries;
 
         for (size_t idx = 0; idx < seq_nums; idx++)
         {
-            pushMvcc(page_id);
+            putInMvccAndBlobStore(page_id, 1024, 1, meanless_seq_entries, 0, true);
+            if (get_snapshot != UINT64_MAX && idx == get_snapshot)
+            {
+                snapshots_holder.emplace_back(dir.createSnapshot());
+            }
         }
+    }
+
+    void putInMvccAndBlobStore(PageId page_id, size_t buff_size, size_t buff_nums, PageSeqAndEntriesV3 & seq_entries, UInt64 seq_start, bool no_need_add = false)
+    {
+        char c_buff[buff_size * buff_nums];
+        WriteBatch wb;
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            for (size_t j = 0; j < buff_size; ++j)
+            {
+                c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            }
+
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+
+            auto edit = getBlobStore()->write(wb, nullptr);
+            const auto & record_last = edit.getRecords().rbegin();
+
+            if (!no_need_add)
+                seq_entries.emplace_back(std::make_pair(seq_start++, record_last->entry));
+
+            dir.apply(std::move(edit));
+            wb.clear();
+        }
+    }
+
+    void delInMvccAndBlobStore(PageId page_id)
+    {
+        WriteBatch wb;
+        wb.delPage(page_id);
+        auto edit = getBlobStore()->write(wb, nullptr);
+        dir.apply(std::move(edit));
     }
 
 protected:
@@ -666,10 +707,10 @@ protected:
     FileProviderPtr file_provider;
     String path{};
     PageDirectory dir;
-};
 
-using PageSeqAndEntryV3 = std::pair<UInt64, PageEntryV3>;
-using PageSeqAndEntriesV3 = std::vector<PageIDAndEntryV3>;
+    std::list<PageDirectorySnapshotPtr> snapshots_holder;
+    const BlobFileId fixed_test_blobfile_id = 0;
+};
 
 ::testing::AssertionResult getEntriesSeqCompare(
     const char * expected_entries_expr,
@@ -692,16 +733,33 @@ using PageSeqAndEntriesV3 = std::vector<PageIDAndEntryV3>;
                 .c_str()));
     }
 
-    auto & entries_seq = mvcc_it->second;
+    auto & entries_seq = mvcc_it->second->entries;
+
+    if (entries_seq.size() != expected_entries.size())
+    {
+        auto expect_expr = fmt::format("Entries with seq [page_id={}]",
+                                       page_id);
+        auto actual_expr = fmt::format("Get entries {} from {} with [page_id={}]",
+                                       expected_entries_expr,
+                                       dir_expr,
+                                       page_ids_expr);
+        return testing::internal::EqFailure(
+            expect_expr.c_str(),
+            actual_expr.c_str(),
+            DB::toString(expected_entries.size()),
+            DB::toString(entries_seq.size()),
+            false);
+    }
+
     size_t idx = 0;
-    for (auto & [version_type, entry_del] : entries_seq->entries)
+    for (auto & [version_type, entry_del] : entries_seq)
     {
         auto & expected_seq_entry = expected_entries[idx++];
 
         if (entry_del.is_delete)
         {
             auto expect_expr = fmt::format("Entry at {} [page_id={}, seq={}] ", idx - 1, page_id, version_type.sequence);
-            auto actual_expr = fmt::format("Get entries {} from {} with [page_id={}] failed. It already been deleted",
+            auto actual_expr = fmt::format("Get entries {} from {} with [page_id={}].",
                                            expected_entries_expr,
                                            dir_expr,
                                            page_ids_expr);
@@ -786,6 +844,7 @@ try
         if (i + 1 >= lowest_seq)
         {
             const auto & record_last = edit.getRecords().rbegin();
+
             // (i + 1) eq. current apply seq
             seq_entries.emplace_back(std::make_pair(i + 1, record_last->entry));
         }
@@ -797,61 +856,248 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq)
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq1)
 try
 {
     /**
      * case 1
      * before GC => 
+     *   pageid : 50
      *   entries: [v3, v5, v10]
-     *   lowest_seq: < 3
-     *   hold_seq: [lowest_seq, v3, v5, v10]
+     *   lowest_seq: 1
+     *   hold_seq: [v1, v3, v5, v10]
      * after GC => 
+     *   pageid : 50
      *   entries: [v3, v5, v10]
      *   snapshot remain: [v3, v5, v10]
      */
-    UInt64 lowest_seq = 3;
-    PageId page_id = 0;
-    std::vector<UInt64> version_keep = {lowest_seq, 5};
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    std::list<PageDirectorySnapshotPtr> snapshots;
 
-    pushMvccSeqForword(lowest_seq);
-    // TBD
+    PageSeqAndEntriesV3 exp_seq_entries;
 
-    /**
-     * case 2
-     * before GC => 
-     *   entries: [v2, v5, v10]
-     *   lowest_seq: >=2 && <5
-     *   hold_seq: [lowest_seq, v5, v10]
-     * after GC => 
-     *   entries: [v5, v10]
-     *   snapshot remain: [v2, v5, v10]
-     */
+    // push v1 - v2
+    pushMvccSeqForword(2, 1);
 
-    /**
-     * case 3
-     * before GC => 
-     *   entries: [v2, v5, v10]
-     *   lowest_seq: >=5 && <10
-     *   hold_seq: [lowest_seq, v10]
-     * after GC => 
-     *   entries remain: [v5, v10]
-     *   snapshot remain : [v5, v10]
-     */
+    // put v3
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 3);
+    dir.createSnapshot();
 
-    /**
-     * case 4
-     * before GC => 
-     *   entries: [v2, v5, v10]
-     *   lowest_seq: >=10
-     *   hold_seq: [lowest_seq]
-     * after GC => 
-     *   entries remain: [v10]
-     *   snapshot remain : [v10]
-     */
+    // push v4
+    pushMvccSeqForword(1);
+
+    // put v5
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+    dir.createSnapshot();
+
+    // push v6-v9
+    pushMvccSeqForword(4);
+
+    // put v10
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    dir.createSnapshot();
+
+    dir.snapshotsGC();
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
 
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq2)
+try
+{
+    /**
+     * case 2
+     * before GC => 
+     *   pageid : 50
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: 3
+     *   hold_seq: [v3, v5, v10]
+     * after GC => 
+     *   pageid : 50
+     *   entries: [v5, v10]
+     *   snapshot remain: [v2, v5, v10]
+     */
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    std::list<PageDirectorySnapshotPtr> snapshots;
+
+    PageSeqAndEntriesV3 exp_seq_entries;
+
+    // push v1 with anonymous entry
+    pushMvccSeqForword(1);
+
+    // put v2 without hold the snapshot.
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2);
+
+    // push v3, v4 with anonymous entry
+    // Also hold v3 snapshot
+    pushMvccSeqForword(2, 0);
+
+    // put v5
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+    dir.createSnapshot();
+
+    // push v6-v9 with anonymous entry
+    pushMvccSeqForword(4);
+
+    // put v10
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    dir.createSnapshot();
+
+    dir.snapshotsGC();
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq3)
+try
+{
+    /**
+     * case 3
+     * before GC => 
+     *   pageid : 50
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: 7
+     *   hold_seq: [v7, v10]
+     * after GC => 
+     *   pageid : 50
+     *   entries remain: [v5, v10]
+     *   snapshot remain : [v5, v10]
+     */
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    std::list<PageDirectorySnapshotPtr> snapshots;
+
+    PageSeqAndEntriesV3 exp_seq_entries;
+
+    // push v1 with anonymous entry
+    pushMvccSeqForword(1);
+
+    // put v2 without hold the snapshot.
+    // No need add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2, true);
+
+    // push v3, v4 with anonymous entry
+    pushMvccSeqForword(2);
+
+    // put v5 without hold the snapshot.
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+
+    // push v6-v9 with anonymous entry
+    // Also hold v7 snapshot
+    pushMvccSeqForword(4, 1);
+
+    // put v10
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    dir.createSnapshot();
+
+    dir.snapshotsGC();
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq4)
+try
+{
+    /**
+     * case 4
+     * before GC => 
+     *   pageid : 50
+     *   entries: [v2, v5, v10]
+     *   lowest_seq: 11
+     *   hold_seq: [11]
+     * after GC => 
+     *   pageid : 50
+     *   entries remain: [v10]
+     *   snapshot remain : [v10]
+     */
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    std::list<PageDirectorySnapshotPtr> snapshots;
+
+    PageSeqAndEntriesV3 exp_seq_entries;
+
+    // push v1 with anonymous entry
+    pushMvccSeqForword(1);
+
+    // put v2 without hold the snapshot.
+    // No need add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2, true);
+
+    // push v3, v4 with anonymous entry
+    pushMvccSeqForword(2);
+
+    // put v5 without hold the snapshot.
+    // No need add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5, true);
+
+    // push v6-v9 with anonymous entry
+    pushMvccSeqForword(4);
+
+    // put v10 without hold the snapshot.
+    // add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+
+    // push v11 with anonymous entry
+    // Also hold v11 snapshot
+    pushMvccSeqForword(1, 0);
+
+    dir.snapshotsGC();
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithDel)
+try
+{
+    /**
+     * before GC => 
+     *   pageid : 50
+     *   entries: [v2, v5, v10(del)]
+     *   lowest_seq: 11
+     *   hold_seq: [11]
+     * after GC => 
+     *   pageid : 50
+     *   entries remain: [none]
+     *   snapshot remain : [none]
+     */
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    std::list<PageDirectorySnapshotPtr> snapshots;
+
+    [[maybe_unused]] PageSeqAndEntriesV3 meanless_seq_entries;
+
+    // push v1 with anonymous entry
+    pushMvccSeqForword(1);
+
+    // put v2 without hold the snapshot.
+    // No need add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, meanless_seq_entries, 2, true);
+
+    // push v3, v4 with anonymous entry
+    pushMvccSeqForword(2);
+
+    // put v5 without hold the snapshot.
+    // No need add v2 into `exp_seq_entries`
+    putInMvccAndBlobStore(page_id, buf_size, 1, meanless_seq_entries, 5, true);
+
+    // push v6-v9 with anonymous entry
+    pushMvccSeqForword(4);
+
+    // put a writebatch with [type=del].
+    // Then mvcc will push seq into v10
+    delInMvccAndBlobStore(page_id);
+
+    // push v11 with anonymous entry
+    // Also hold v11 snapshot
+    pushMvccSeqForword(1, 0);
+
+    dir.snapshotsGC();
+    auto snapshot = dir.createSnapshot();
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);
+}
+CATCH
 
 } // namespace PS::V3::tests
 } // namespace DB

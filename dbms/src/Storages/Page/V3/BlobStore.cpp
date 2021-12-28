@@ -178,6 +178,12 @@ void BlobStore::remove(std::list<PageEntryV3> del_entries)
     for (const auto & entry : del_entries)
     {
         const auto & stat = blob_stats.fileIdToStat(entry.file_id);
+        if (entry.size == 0)
+        {
+            throw Exception(fmt::format("Invaild entry. entry size 0. [id={},offset={}]",
+                                        entry.file_id,
+                                        entry.offset));
+        }
         stat->removePosFromStat(entry.offset, entry.size);
     }
 }
