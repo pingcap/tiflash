@@ -23,37 +23,34 @@ struct SimpleIntrusiveNode : private boost::noncopyable
     /// Attach self to the next of head.
     void appendTo(Node * head)
     {
-        if (isSingle())
-        {
-            next = head->next;
-            prev = head;
-            head->next->prev = getThis();
-            head->next = getThis();
-        }
+        assert(isSingle());
+
+        next = head->next;
+        prev = head;
+        head->next->prev = getThis();
+        head->next = getThis();
     }
 
     /// Attach self to the prev of head.
     void prependTo(Node * head)
     {
-        if (isSingle())
-        {
-            prev = head->prev;
-            next = head;
-            head->prev->next = getThis();
-            head->prev = getThis();
-        }
+        assert(isSingle());
+
+        prev = head->prev;
+        next = head;
+        head->prev->next = getThis();
+        head->prev = getThis();
     }
 
     /// Detach self from a list and be a single node.
     void detach()
     {
-        if (!isSingle())
-        {
-            prev->next = next;
-            next->prev = prev;
-            next = getThis();
-            prev = getThis();
-        }
+        assert(isSingle());
+
+        prev->next = next;
+        next->prev = prev;
+        next = getThis();
+        prev = getThis();
     }
 
     bool isSingle() const
