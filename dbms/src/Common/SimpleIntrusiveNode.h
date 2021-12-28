@@ -46,8 +46,6 @@ struct SimpleIntrusiveNode : private boost::noncopyable
     /// Detach self from a list and be a single node.
     void detach()
     {
-        assert(isSingle());
-
         prev->next = next;
         next->prev = prev;
         next = getThis();
