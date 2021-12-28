@@ -27,7 +27,7 @@ public:
     ~GRPCCompletionQueuePool()
     {
         for (auto & queue : queues)
-            queue.shutdown();
+            queue.Shutdown();
 
         for (auto & t : workers)
             t.join();
