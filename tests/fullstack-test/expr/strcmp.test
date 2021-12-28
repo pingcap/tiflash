@@ -1,5 +1,5 @@
 mysql> drop table if exists test.cmp
-mysql> create table test.cmp (a varchar(30), b varchar(30)); insert into test.t values ('aaaa', 'bbbb'), ('aaaa', '%a%'), ('a', 'a'), ('a', 'b'), ('b', 'a'), ('', ''), ('', NULL), (NULL, ''), (NULL, NULL)
+mysql> create table test.cmp (a varchar(30), b varchar(30)); insert into test.cmp values ('aaaa', 'bbbb'), ('aaaa', '%a%'), ('a', 'a'), ('a', 'b'), ('b', 'a'), ('', ''), ('', NULL), (NULL, ''), (NULL, NULL)
 mysql> alter table test.cmp set tiflash replica 1
 mysql> set @@tidb_enforce_mpp = 1
 

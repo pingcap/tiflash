@@ -1536,7 +1536,7 @@ public:
     size_t getNumberOfArguments() const override { return 2; }
 
     /// Get result types by argument types. If the function does not apply to these arguments, throw an exception.
-    virtual DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         bool left_is_date = false;
         bool left_is_date_time = false;
