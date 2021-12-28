@@ -1593,11 +1593,11 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[1]->isNumber())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
+                fmt::format("Illegal type {} of second  argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -1622,7 +1622,7 @@ public:
                 if (0 == get_length_func(0))
                 {
                     block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-                    return;
+                    return true;
                 }
             }
             else
@@ -1630,16 +1630,24 @@ public:
                 get_length_func = getLengthFunc<LengthFieldType, false>(column_length);
             }
 
+            auto col_res = ColumnString::create();
             if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
             {
-                auto col_res = ColumnString::create();
                 RightUTF8Impl::vector(col->getChars(), col->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
-                block.getByPosition(result).column = std::move(col_res);
+            }
+            else if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
+            {
+                const auto * col_string = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
+                RightUTF8Impl::vector(col_string->getChars(), col_string->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
             }
             else
+            {
                 throw Exception(
                     fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
+            }
+            block.getByPosition(result).column = std::move(col_res);
+            return true;
         });
 
         if (!is_length_type_valid)
@@ -1658,34 +1666,33 @@ private:
     template <typename Integer, bool is_const>
     std::function<size_t(size_t)> getLengthFunc(const ColumnPtr & column_length) const
     {
-        auto get_value_from_length_field = [](const Field & length_field) {
-            if constexpr (std::is_same_v<Integer, Int64>)
-            {
-                Int64 signed_length = length_field.get<Int64>();
-                return signed_length < 0 ? 0 : signed_length;
-            }
-            else
-            {
-                static_assert(std::is_same_v<Integer, UInt64>);
-                return length_field.get<UInt64>();
-            }
-        };
-
         if constexpr (is_const)
         {
-            Field length_field = (*column_length)[0];
-            UInt64 length = get_value_from_length_field(length_field);
+            UInt64 length = getValueFromLengthField<Integer>((*column_length)[0]);
             return [length](size_t) {
                 return length;
             };
         }
         else
         {
-            return [&column_length, get_value_from_length_field](size_t i) {
-                static Field length_field;
-                column_length->get(i, length_field);
-                return get_value_from_length_field(length_field);
+            return [&column_length](size_t i) {
+                return getValueFromLengthField<Integer>((*column_length)[i]);
             };
+        }
+    }
+
+    template <typename Integer>
+    static size_t getValueFromLengthField(const Field & length_field)
+    {
+        if constexpr (std::is_same_v<Integer, Int64>)
+        {
+            Int64 signed_length = length_field.get<Int64>();
+            return signed_length < 0 ? 0 : signed_length;
+        }
+        else
+        {
+            static_assert(std::is_same_v<Integer, UInt64>);
+            return length_field.get<UInt64>();
         }
     }
 };

@@ -38,6 +38,9 @@ public:
     void test(const std::optional<String> & str, std::optional<Integer> length, const std::optional<String> & result)
     {
         auto inner_test = [&](bool is_str_const, bool is_length_const) {
+            // for const length <= 0 and not null str, return const blank string.
+//            bool is_const_zero_length = str.has_value() && length.has_value() && length.value_or(0) <= 0;
+//            bool is_result_const = is_length_const && (is_str_const || is_const_zero_length);
             bool is_result_const = is_length_const && is_str_const;
             ASSERT_COLUMN_EQ(
                 is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result}),
@@ -63,17 +66,17 @@ try
     // big_string.size() > length
     String big_string;
     String unit_string = "big string is 我!!!!!!!";
-    for (size_t i = 0; i < 100000; ++i)
+    for (size_t i = 0; i < 1000; ++i)
         big_string += unit_string;
-    test<Int64>(big_string, unit_string.size(), unit_string);
-    test<UInt64>(big_string, unit_string.size(), unit_string);
+    test<Int64>(big_string, 22, unit_string);
+    test<UInt64>(big_string, 22, unit_string);
 
     // test origin_str.size() == length
     String origin_str = "我的 size = 12";
     test<Int64>(origin_str, origin_str.size(), origin_str);
     test<UInt64>(origin_str, origin_str.size(), origin_str);
 
-    // test origin_str.size() < length
+//    // test origin_str.size() < length
     test<Int64>(origin_str, origin_str.size() + 10, origin_str);
     test<UInt64>(origin_str, origin_str.size() + 10, origin_str);
 }
