@@ -406,6 +406,8 @@ extern const int DIVIDED_BY_ZERO = 10011;
 extern const int INVALID_TIME = 10012;
 extern const int DEADLOCK_AVOIDED = 10013;
 extern const int PTHREAD_ERROR = 10014;
+extern const int PS_ENTRY_NOT_EXISTS = 10015;
+extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 } // namespace ErrorCodes
 
 } // namespace DB
