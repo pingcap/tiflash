@@ -1150,7 +1150,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
                 [thread_id, &converter] { return converter(thread_id); });
 
             if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob([thread_id, &tasks] { tasks[thread_id](); }));
+                thread_pool->schedule(ThreadFactory::newJob([thread_id, &tasks] { tasks[thread_id](); }));
             else
                 tasks[thread_id]();
         }
@@ -1579,7 +1579,7 @@ private:
             return;
 
         parallel_merge_data->pool.schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
+            ThreadFactory::newJob([this, num] { thread(num); }));
     }
 
     void thread(Int32 bucket_num)
@@ -1985,7 +1985,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             auto task = std::bind(merge_bucket, bucket, aggregates_pool);
 
             if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob(task));
+                thread_pool->schedule(ThreadFactory::newJob(task));
             else
                 task();
         }
