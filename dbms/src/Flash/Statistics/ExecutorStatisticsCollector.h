@@ -20,6 +20,8 @@ public:
 
     String resToJson() const;
 
+    DAGContext & getDAGContext() const;
+
 private:
     DAGContext * dag_context = nullptr;
 
