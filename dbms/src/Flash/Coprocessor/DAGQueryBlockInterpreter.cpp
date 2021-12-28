@@ -573,7 +573,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_condition_expr,
         max_block_size_for_cross_join);
 
-    recordBuildSideInfo(swap_join_side ? 0 : 1, join_ptr);
+    recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
@@ -596,12 +596,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     /// add join input stream
     if (is_tiflash_right_join)
     {
+        auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         for (size_t i = 0; i < join_build_concurrency; i++)
-            pipeline.streams_with_non_joined_data.push_back(chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
+        {
+            auto non_joined_stream = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
                 pipeline.firstStream()->getHeader(),
                 i,
                 join_build_concurrency,
-                settings.max_block_size));
+                settings.max_block_size);
+            pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
+            join_execute_info.non_joined_streams.push_back(non_joined_stream);
+        }
     }
     for (auto & stream : pipeline.streams)
         stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger());
@@ -618,13 +623,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr)
+void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr)
 {
     const auto * build_side_root_executor = query_block.children[build_side_index]->root;
-    JoinBuildSideInfo join_build_side_info;
-    join_build_side_info.build_side_root_executor_id = build_side_root_executor->executor_id();
-    join_build_side_info.join_ptr = join_ptr;
-    dagContext().getJoinBuildSideInfoMap()[query_block.source_name] = std::move(join_build_side_info);
+    JoinExecuteInfo join_execute_info;
+    join_execute_info.build_side_root_executor_id = build_side_root_executor->executor_id();
+    join_execute_info.join_ptr = join_ptr;
+    dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
 void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
@@ -1099,6 +1104,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
+    dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
 
     if (res.before_aggregation)
     {
@@ -1220,7 +1226,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
-    restoreConcurrency(pipeline, max_streams, taskLogger());
+    restoreConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()
