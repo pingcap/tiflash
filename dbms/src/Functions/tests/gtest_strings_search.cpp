@@ -184,9 +184,9 @@ CATCH
 
 TEST_F(StringMatch, LikeVectorWithVector)
 {
-    std::vector<std::optional<String>> haystack = {"", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
-    std::vector<std::optional<String>> needle = {"", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_"};
-    std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0};
+    std::vector<std::optional<String>> haystack = {"我爱tiflash", "我爱tiflash","", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
+    std::vector<std::optional<String>> needle = {"我_tif%", "%爱ti%", "", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_"};
+    std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
         executeFunction(
@@ -223,8 +223,10 @@ TEST_F(StringMatch, LikeConstWithVector)
 
 TEST_F(StringMatch, LikeVectorWithConst)
 {
-    std::vector<std::optional<String>> haystack = {"", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
-    std::vector<std::optional<UInt64>> expect = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0};
+    std::vector<std::optional<String>> haystack = {"我爱tiflash", "", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
+    std::vector<std::optional<UInt64>> expect = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0};
+    std::vector<std::optional<UInt64>> expect1 = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<std::optional<UInt64>> expect2 = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
         executeFunction(
@@ -238,12 +240,24 @@ TEST_F(StringMatch, LikeVectorWithConst)
             "like",
             toVec(haystack),
             toConst("%aa%")));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expect1),
+        executeFunction(
+            "like",
+            toVec(haystack),
+            toConst("%爱tif%")));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expect2),
+        executeFunction(
+            "like",
+            toVec(haystack),
+            toConst("%不爱tif%")));
 }
 
 TEST_F(StringMatch, LikeConstWithConst)
 {
-    std::vector<std::optional<UInt64>> expectFalse = {0};
-    std::vector<std::optional<UInt64>> expectTrue = {1};
     ASSERT_COLUMN_EQ(
         toConst(1),
         executeFunction(
@@ -257,6 +271,20 @@ TEST_F(StringMatch, LikeConstWithConst)
             "like",
             toConst("abcde"),
             toConst("%aa%")));
+
+    ASSERT_COLUMN_EQ(
+        toConst(1),
+        executeFunction(
+            "like",
+            toConst("我爱tiflash"),
+            toConst("%爱tif%")));
+
+    ASSERT_COLUMN_EQ(
+        toConst(0),
+        executeFunction(
+            "like",
+            toConst("我爱tiflash"),
+            toConst("%不爱tif%")));
 }
 
 } // namespace tests
