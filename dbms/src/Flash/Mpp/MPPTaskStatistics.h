@@ -40,6 +40,8 @@ public:
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
 private:
+    void recordInputBytes(DAGContext & dag_context);
+
     const LogWithPrefixPtr logger;
 
     /// common
@@ -54,6 +56,10 @@ private:
     Timestamp read_wait_index_end_timestamp{Clock::duration::zero()};
     TaskStatus status;
     String error_message;
+
+    Int64 local_input_bytes = 0;
+    Int64 remote_input_bytes = 0;
+    Int64 output_bytes = 0;
 
     /// executor dag
     String sender_executor_id;
