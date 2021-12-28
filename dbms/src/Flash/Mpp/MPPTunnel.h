@@ -35,7 +35,7 @@ public:
         bool is_local_,
         const LogWithPrefixPtr & log_ = nullptr);
 
-    virtual ~MPPTunnelBase();
+    ~MPPTunnelBase();
 
     const String & id() const { return tunnel_id; }
 
