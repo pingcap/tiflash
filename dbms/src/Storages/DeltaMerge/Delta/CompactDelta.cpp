@@ -93,7 +93,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                     throw Exception("Saved DeltaPackBlock does not have data_page_id", ErrorCodes::LOGICAL_ERROR);
 
                 bool cur_task_full = cur_task.total_bytes >= context.delta_limit_bytes;
-                bool small_pack = pack->getBytes() < context.delta_small_pack_bytes;
+                bool small_pack = pack->getRows() < context.delta_small_pack_rows && pack->getBytes() < context.delta_small_pack_bytes;
                 bool schema_ok
                     = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToBlock()->getSchema();
 
