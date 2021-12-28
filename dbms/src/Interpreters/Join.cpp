@@ -54,6 +54,7 @@ static bool isCrossJoin(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
+/// (cartesian) (anti) left semi join.
 static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
@@ -1179,7 +1180,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         const auto & old_vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
         if (old_vec_matched.size() != offsets_to_replicate->size())
-            throw Exception("Size of column match-helper must be equal to size of left block.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Size of column match-helper must be equal to column size of left block.", ErrorCodes::LOGICAL_ERROR);
 
         auto col_matched = ColumnInt8::create(offsets_to_replicate->size());
         auto & vec_matched = col_matched->getData();
@@ -1207,8 +1208,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         }
 
         for (size_t i = 0; i < block.columns(); i++)
-            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
-        block.getByName("match-helper").column = makeNullable(std::move(col_matched));
+            if (i != helper_pos)
+                block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        block.safeGetByPosition(helper_pos).column = makeNullable(std::move(col_matched));
         return;
     }
 
@@ -1545,12 +1547,12 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftSemi, STRICTNESS>
     static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
         CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
-        dst_columns[num_columns_to_add-1]->insert(toField(Int8(1)));
+        dst_columns[num_existing_columns+num_columns_to_add-1]->insert(toField(Int8(1)));
     }
     static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
         CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
-        dst_columns[num_columns_to_add-1]->insert(toField(Int8(0)));
+        dst_columns[num_existing_columns+num_columns_to_add-1]->insert(toField(Int8(0)));
     }
     static bool allRightRowsMaybeAdded()
     {
@@ -1774,7 +1776,7 @@ void Join::joinBlock(Block & block) const
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
-    if (kind == ASTTableJoin::Kind::LeftAnti)
+    if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
     {
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName("match-helper").column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
