@@ -2732,14 +2732,7 @@ private:
                 }
 
                 const auto & tmp_res = tmp_block.getByPosition(tmp_res_index);
-                if (tmp_res.column->isColumnNullable())
-                {
-                    res.column = tmp_res.column;
-                }
-                else
-                {
-                    res.column = ColumnNullable::create(tmp_res.column, null_map);
-                }
+                res.column = ColumnNullable::create(tmp_res.column, null_map);
             };
         }
         else if (nullable_conversion.source_is_nullable)
