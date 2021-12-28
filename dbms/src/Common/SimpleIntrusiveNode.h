@@ -3,6 +3,7 @@
 #include <common/defines.h>
 
 #include <boost/noncopyable.hpp>
+#include <cassert>
 
 namespace DB
 {
