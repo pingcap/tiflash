@@ -158,7 +158,7 @@ def runTest(label, name, testPath, tidbBranch) {
                         } catch (e) {
                             sh "mv log ${name}-log"
                             archiveArtifacts(artifacts: "${name}-log/**/*.log", allowEmptyArchive: true)
-                            sh "find log -name '*.log' | xargs tail -n 500"
+                            sh "find ${name}-log -name '*.log' | xargs tail -n 500"
                             sh "docker ps -a"
                             throw e
                         }
