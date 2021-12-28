@@ -762,14 +762,20 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 
     const Block & block = *stored_block;
 
+    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
+    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
+    Columns materialized_columns;
+
     /// Memoize key columns to work.
     for (size_t i = 0; i < keys_size; ++i)
     {
         key_columns[i] = block.getByName(key_names_right[i]).column.get();
 
-        /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
         if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-            key_columns[i] = converted.get();
+        {
+            materialized_columns.emplace_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
     }
 
     /// We will insert to the map only keys, where all components are not NULL.
