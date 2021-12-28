@@ -27,7 +27,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
-    , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
+    , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -115,7 +115,6 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
     waitForConsumerFinish(/*allow_throw=*/true);
 }
 
-/// to avoid being blocked when pop(), we should send nullptr into send_queue in all cases
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
@@ -195,7 +194,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         else
         {
             writer = writer_;
-            auto send_thread = ThreadFactory::newThread("MPPTunnel", [this] { sendLoop(); });
+            auto send_thread = ThreadFactory::newThread(true, "MPPTunnel", [this] { sendLoop(); });
             send_thread.detach(); // communicate send_thread through `consumer_state`
         }
         connected = true;
