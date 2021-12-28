@@ -26,8 +26,8 @@ public:
 };
 
 /// DAGQueryBlock is a dag query from single source,
-/// which means the query block contains a source node(tableScan/join/projection/exchangeReceiver)
-/// and some of the action node.(selection/aggregation/limit/topN/exchangeSender)
+/// which means the query block contains a source node(tablescan or join)
+/// and some of the optional node.(selection/aggregation/project/limit/topN)
 class DAGQueryBlock
 {
 public:
