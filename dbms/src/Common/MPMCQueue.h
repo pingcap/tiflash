@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/SimpleIntrusiveNode.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -18,33 +19,9 @@ namespace MPMCQueueDetail
 /// every time a push/pop succeeds, it can notify next reader/writer in fifo.
 ///
 /// Double link is to support remove self from the mid of the list when timeout.
-struct WaitingNode
+struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 {
-    WaitingNode * next = nullptr;
-    WaitingNode * prev = nullptr;
     std::condition_variable cv;
-
-    WaitingNode()
-    {
-        next = this;
-        prev = this;
-    }
-
-    void attachTo(WaitingNode & head)
-    {
-        prev = head.prev;
-        next = &head;
-        head.prev->next = this;
-        head.prev = this;
-    }
-
-    void detach()
-    {
-        next->prev = prev;
-        prev->next = next;
-        next = this;
-        prev = this;
-    }
 };
 } // namespace MPMCQueueDetail
 
@@ -191,7 +168,7 @@ private:
         {
             while (!pred())
             {
-                node.attachTo(head);
+                node.prependTo(&head);
                 auto res = node.cv.wait_until(lock, *deadline);
                 node.detach();
                 if (res == std::cv_status::timeout)
@@ -202,7 +179,7 @@ private:
         {
             while (!pred())
             {
-                node.attachTo(head);
+                node.prependTo(&head);
                 node.cv.wait(lock);
                 node.detach();
             }
