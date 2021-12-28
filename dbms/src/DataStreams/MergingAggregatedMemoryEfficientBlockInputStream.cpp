@@ -1,6 +1,6 @@
 #include <Common/CurrentMetrics.h>
-#include <Common/wrapInvocable.h>
 #include <Common/setThreadName.h>
+#include <Common/wrapInvocable.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 
 #include <future>

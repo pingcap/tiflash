@@ -22,4 +22,3 @@ inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&..
     return std::move(capture);
 }
 } // namespace DB
-

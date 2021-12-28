@@ -7,9 +7,9 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Common/wrapInvocable.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
+#include <Common/wrapInvocable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>

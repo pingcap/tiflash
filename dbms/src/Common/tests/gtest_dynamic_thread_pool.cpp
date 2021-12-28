@@ -54,7 +54,9 @@ try
     // wait for thread pool ready
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    auto f0 = pool.schedule(true, [] { return 0; });
+    auto f0 = pool.schedule(true, [] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            return 0; });
     pool.schedule(true, [] { return 0; });
 
     auto cnt = pool.threadCount();
