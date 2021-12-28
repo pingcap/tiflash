@@ -60,8 +60,8 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
-#include <memory>
 #include <limits>
+#include <memory>
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
