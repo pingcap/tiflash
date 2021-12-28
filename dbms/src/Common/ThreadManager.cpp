@@ -95,7 +95,7 @@ std::shared_ptr<ThreadManager> newThreadManager()
         return std::make_shared<RawThreadManager>();
 }
 
-std::shared_ptr<ThreadPoolManager> newThreadManager(size_t capacity)
+std::shared_ptr<ThreadPoolManager> newThreadPoolManager(size_t capacity)
 {
     if (DynamicThreadPool::global_instance)
         return std::make_shared<DynamicThreadManager>();
