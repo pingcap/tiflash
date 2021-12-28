@@ -34,8 +34,29 @@ COMMIT_HASH_BASE=$(git merge-base origin/${BUILD_BRANCH} HEAD)
 SOURCE_DELTA=$(git diff --name-only ${COMMIT_HASH_BASE} | grep -E '.*\.(cpp|h|hpp|cc|c)$')
 echo '### Coverage for changed files' > /tiflash/profile/diff-coverage
 echo '```' >> /tiflash/profile/diff-coverage
-llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA >> /tiflash/profile/diff-coverage
+
+if [[ -z ${SOURCE_DELTA} ]]; then
+	echo 'no c/c++ source change detected' >> /tiflash/profile/diff-coverage
+else
+	llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA >> /tiflash/profile/diff-coverage
+fi
+
 echo '```' >> /tiflash/profile/diff-coverage
 echo '' >> /tiflash/profile/diff-coverage
-echo "[full coverage report](https://ci.pingcap.net/job/tics_ghpr_unit_test/${BUILD_NUMBER}/artifact/coverage-report.tar.gz)" >> /tiflash/profile/diff-coverage
+echo '### Coverage summary' >> /tiflash/profile/diff-coverage
+echo '```' >> /tiflash/profile/diff-coverage
+llvm-cov report \
+    --summary-only \
+    --ignore-filename-regex "/usr/include/.*" \
+    --ignore-filename-regex "/usr/local/.*" \
+    --ignore-filename-regex "/usr/lib/.*" \
+    --ignore-filename-regex "${SRCPATH}/contrib/.*" \
+    --ignore-filename-regex "${SRCPATH}/dbms/src/Debug/.*" \
+    --ignore-filename-regex "${SRCPATH}/dbms/src/Client/.*" \
+    /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata | \
+    grep -E "^(TOTAL|Filename)" | \
+    cut -d" " -f2- | sed -e 's/^[[:space:]]*//' | sed -e 's/Missed\ /Missed/g' | column -t >> /tiflash/profile/diff-coverage
+echo '```' >> /tiflash/profile/diff-coverage
+echo '' >> /tiflash/profile/diff-coverage
+echo "[full coverage report](https://ci-internal.pingcap.net/job/tics_ghpr_unit_test/${BUILD_NUMBER}/artifact/coverage-report.tar.gz) (for internal network access only)" >> /tiflash/profile/diff-coverage
 cat /tiflash/profile/diff-coverage
