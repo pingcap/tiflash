@@ -14,11 +14,30 @@ public:
     void SetUp() override {}
 };
 
+inline long getTimezoneAndOffset(int tz_sign, int tz_hour, int tz_min)
+{
+    time_t t = time(NULL);
+    struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
+    localtime_r(&t, &lt);
+    long offset = tz_sign * (60 * 60 * tz_hour + 60 * tz_min) - lt.tm_gmtoff;
+    offset *= 1000;
+    return offset;
+}
+
+inline void getTimezoneString(char * tzs, int tz_sign, int tz_hour, int tz_min)
+{
+    sprintf(tzs, "%c%02d:%02d", tz_sign > 0 ? '+' : '-', tz_hour, tz_min);
+}
+
 TEST_F(LogSearchTest, LogSearch)
 {
-    std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
-    std::string s_bad1 = "[2020/4/4 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
-    std::string s_bad2 = "[2020/04/23 13:11:02.329 +08:00] [\"Application : Load metadata done.\"]\n";
+    int tz_sign = 1, tz_hour = 8, tz_min = 0;
+    long offset = getTimezoneAndOffset(tz_sign, tz_hour, tz_min);
+    char tzs[10];
+    getTimezoneString(tzs, tz_sign, tz_hour, tz_min);
+    std::string s = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s_bad1 = "[2020/4/4 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s_bad2 = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [\"Application : Load metadata done.\"]\n";
     s = s + s;
     s.resize(s.size() - 1); // Trim \n
 
@@ -50,7 +69,7 @@ TEST_F(LogSearchTest, LogSearch)
             auto log = itr.next();
             ASSERT_TRUE(log.has_value());
             EXPECT_EQ(log->level(), ::diagnosticspb::LogLevel::Debug);
-            EXPECT_EQ(log->time(), 1587618662329);
+            EXPECT_EQ(log->time(), 1587618662329 + offset);
             EXPECT_EQ(log->message(), "[\"Application : Load metadata done.\"]");
         }
     }
@@ -74,6 +93,11 @@ TEST_F(LogSearchTest, LogSearch)
 
 TEST_F(LogSearchTest, SearchDir)
 {
+    time_t t = time(NULL);
+    struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
+    localtime_r(&t, &lt);
+    long offset = 60 * 60 * 8 * 1000 - lt.tm_gmtoff * 1000;
+
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"", ""}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {""}, 0));
@@ -115,7 +139,7 @@ TEST_F(LogSearchTest, SearchDir)
                         auto log = itr.next();
                         ASSERT_TRUE(log.has_value());
                         EXPECT_EQ(log->level(), ::diagnosticspb::LogLevel::Debug);
-                        EXPECT_EQ(log->time(), 1587618662329);
+                        EXPECT_EQ(log->time(), 1587618662329 + offset);
                         EXPECT_EQ(log->message(), "[\"Application : Load metadata done.\"]");
                     }
                 });

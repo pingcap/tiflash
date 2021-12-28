@@ -291,6 +291,61 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, ApplyPutWithIdenticalPages)
+try
+{
+    // Put identical page in different `edit`
+    PageId page_id = 50;
+
+    auto snap0 = dir.createSnapshot();
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snap0);
+
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(page_id, entry1);
+        dir.apply(std::move(edit));
+    }
+
+    auto snap1 = dir.createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
+
+    PageEntryV3 entry2{.file_id = 1, .size = 1024, .offset = 0x1234, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(page_id, entry2);
+        dir.apply(std::move(edit));
+    }
+
+    auto snap2 = dir.createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, page_id, snap2);
+    {
+        PageIds ids{page_id};
+        PageIDAndEntriesV3 expected_entries{{page_id, entry2}};
+        EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
+    }
+
+    // Put identical page within one `edit`
+    page_id++;
+    PageEntryV3 entry3{.file_id = 1, .size = 1024, .offset = 0x12345, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(page_id, entry1);
+        edit.put(page_id, entry2);
+        edit.put(page_id, entry3);
+
+        // Should not be dead-lock
+        dir.apply(std::move(edit));
+    }
+    auto snap3 = dir.createSnapshot();
+
+    PageIds ids{page_id};
+    PageIDAndEntriesV3 expected_entries{{page_id, entry3}};
+    EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap3);
+}
+CATCH
+
 TEST_F(PageDirectoryTest, ApplyPutDelRead)
 try
 {
