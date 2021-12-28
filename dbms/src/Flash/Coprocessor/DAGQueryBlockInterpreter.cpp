@@ -506,8 +506,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     if (is_left_semi_family)
     {
-        columns_added_by_join.emplace_back("match-helper", makeNullable(std::make_shared<DataTypeInt8>()));
-        join_output_columns.emplace_back("match-helper", makeNullable(std::make_shared<DataTypeInt8>()));
+        columns_added_by_join.emplace_back(Join::name_match_helper, makeNullable(std::make_shared<DataTypeInt8>()));
+        join_output_columns.emplace_back(Join::name_match_helper, makeNullable(std::make_shared<DataTypeInt8>()));
     }
 
     DataTypes join_key_types;
@@ -601,7 +601,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     auto sample_block = right_query.source->getHeader();
     if (is_left_semi_family)
-        sample_block.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), "match-helper"));
+        sample_block.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), Join::name_match_helper));
     right_query.join->setSampleBlock(sample_block);
     dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 

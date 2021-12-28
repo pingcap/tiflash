@@ -239,6 +239,8 @@ public:
     using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
     using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 
+    static const std::string name_match_helper;
+
 private:
     friend class NonJoinedBlockInputStream;
 

@@ -46,7 +46,8 @@ static bool isInnerJoin(ASTTableJoin::Kind kind)
 }
 static bool isAntiJoin(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
+    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti
+        || kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
 static bool isCrossJoin(ASTTableJoin::Kind kind)
 {
@@ -60,6 +61,8 @@ static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
+
+const std::string Join::name_match_helper = "match-helper";
 
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const LogWithPrefixPtr & log_)
@@ -1160,7 +1163,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
         /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind) || kind == ASTTableJoin::Kind::LeftAnti);
+        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
     }
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1175,7 +1178,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
     if (isLeftSemiFamily(kind))
     {
-        const auto helper_pos = block.getPositionByName("match-helper");
+        const auto helper_pos = block.getPositionByName(name_match_helper);
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
         const auto & old_vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
@@ -1778,7 +1781,7 @@ void Join::joinBlock(Block & block) const
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
     {
-        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName("match-helper").column.get());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(name_match_helper).column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
         auto col_non_matched = ColumnInt8::create(vec_matched.size());
@@ -1787,7 +1790,7 @@ void Join::joinBlock(Block & block) const
         for (size_t i = 0; i < vec_matched.size(); ++i)
             vec_non_matched[i] = !vec_matched[i];
 
-        block.getByName("match-helper").column = makeNullable(std::move(col_non_matched));
+        block.getByName(name_match_helper).column = makeNullable(std::move(col_non_matched));
     }
 }
 
