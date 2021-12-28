@@ -312,17 +312,18 @@ void PageDirectory::snapshotsGC()
     return;
 }
 
-bool PageDirectory::gc()
+// FIXME : should put into pagestore.
+void PageDirectory::blobstoreGC()
 {
-    snapshotsGC();
-
     std::map<BlobFileId, std::list<PageEntryV3>> blob_need_gc;
     blobstore->getGCStats(blob_need_gc);
     PageSize total_page_size = 0;
     {
         std::shared_lock read_lock(table_rw_mutex);
 
-        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
+        for (auto iter = mvcc_table_directory.begin();
+             iter != mvcc_table_directory.end();
+             iter++)
         {
             total_page_size += iter->second->getEntryByBlobId(blob_need_gc);
         }
@@ -330,8 +331,12 @@ bool PageDirectory::gc()
 
     std::map<PageId, std::pair<BlobFileOffset, PageSize>> copy_list;
     copy_list = blobstore->gc(blob_need_gc, total_page_size);
+}
 
-    return true;
+void PageDirectory::gc()
+{
+    snapshotsGC();
+    blobstoreGC();
 }
 
 } // namespace PS::V3

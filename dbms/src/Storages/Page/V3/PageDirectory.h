@@ -41,7 +41,7 @@ public:
 
     void apply(PageEntriesEdit && edit);
 
-    bool gc();
+    void gc();
 
     // FIXME : just for test.
     BlobStorePtr blobstore;
@@ -51,6 +51,7 @@ private:
 #endif
 
     void snapshotsGC();
+    void blobstoreGC();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

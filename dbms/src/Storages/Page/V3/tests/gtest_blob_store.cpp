@@ -505,4 +505,139 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     }
 }
 
+TEST_F(BlobStoreTest, testBlobStoreGcStats)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    size_t buff_size = 1024;
+    size_t buff_nums = 10;
+    PageId page_id = 50;
+    auto blob_store = BlobStore(file_provider, path, config);
+    std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
+    std::list<size_t> remove_entries_idx2 = {6, 8};
+
+    WriteBatch wb;
+    {
+        char c_buff[buff_size];
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            c_buff[i * buff_size] = (char)((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        }
+    }
+
+    auto edit = blob_store.write(wb, nullptr);
+
+    size_t idx = 0;
+    std::list<PageEntryV3> entries_del1, entries_del2;
+    for (auto & record : edit.getRecords())
+    {
+        for (size_t index : remove_entries_idx1)
+        {
+            if (idx == index)
+            {
+                entries_del1.emplace_back(record.entry);
+            }
+        }
+
+        for (size_t index : remove_entries_idx2)
+        {
+            if (idx == index)
+            {
+                entries_del2.emplace_back(record.entry);
+            }
+        }
+
+        idx++;
+    }
+
+    // After remove `entries_del1`.
+    // Remain entries index [0, 2, 5, 6, 8]
+    blob_store.remove(entries_del1);
+    ASSERT_EQ(entries_del1.begin()->file_id, 0);
+
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.5);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 5);
+
+    // After remove `entries_del2`.
+    // Remain entries index [0, 2, 5].
+    // But file size still is 10 * 1024
+    blob_store.remove(entries_del2);
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.3);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
+
+    std::map<BlobFileId, std::list<PageEntryV3>> gc_stats;
+    blob_store.getGCStats(gc_stats);
+    ASSERT_TRUE(gc_stats.empty());
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.5);
+    ASSERT_EQ(stat->sm_total_size, buff_size * 6);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
+
+    // Check disk file have been truncate to right margin
+    String path = blob_store.getBlobFilePath(0);
+    Poco::File blob_file_in_disk(path);
+    ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
+}
+
+TEST_F(BlobStoreTest, testBlobStoreGcStats2)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    size_t buff_size = 1024;
+    size_t buff_nums = 10;
+    PageId page_id = 50;
+    auto blob_store = BlobStore(file_provider, path, config);
+    std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
+
+    WriteBatch wb;
+    {
+        char c_buff[buff_size];
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            c_buff[i * buff_size] = (char)((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        }
+    }
+
+    auto edit = blob_store.write(wb, nullptr);
+
+    size_t idx = 0;
+    std::list<PageEntryV3> entries_del;
+    for (auto & record : edit.getRecords())
+    {
+        for (size_t index : remove_entries_idx)
+        {
+            if (idx == index)
+            {
+                entries_del.emplace_back(record.entry);
+            }
+        }
+
+        idx++;
+    }
+
+    // After remove `entries_del`.
+    // Remain entries index [8, 9].
+    blob_store.remove(entries_del);
+
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+
+    std::map<BlobFileId, std::list<PageEntryV3>> gc_stats;
+    blob_store.getGCStats(gc_stats);
+    ASSERT_FALSE(gc_stats.empty());
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.2);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
+
+    // Then we must do heavy GC
+    ASSERT_EQ(gc_stats.begin()->first, 0);
+}
+
 } // namespace DB::PS::V3::tests

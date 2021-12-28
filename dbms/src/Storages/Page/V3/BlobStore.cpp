@@ -329,19 +329,12 @@ void BlobStore::getGCStats(std::map<BlobFileId, std::list<PageEntryV3>> & blob_n
         assert(stat->sm_valid_rate <= 1.0);
 
         // Check if GC is required
-        if (stat->sm_valid_rate < 0.2)
+        if (stat->sm_valid_rate <= 0.2)
         {
             LOG_FMT_DEBUG(log, "Current [BlobFileId={}] valid rate is {}, Need do compact GC", stat->id, stat->sm_valid_rate);
             stat->sm_total_size = stat->sm_valid_size;
             std::list<PageEntryV3> empty_list;
             blob_need_gc[stat->id] = std::move(empty_list);
-        }
-        else if (stat->sm_valid_rate < 0.6)
-        {
-            // May no need anymore
-
-            // LOG_FMT_DEBUG(log,"Current [BlobFileId={}] valid rate is {}, Need do swap GC",stat->id);
-            // doSwapGC(stat);
         }
         else
         {
@@ -351,8 +344,8 @@ void BlobStore::getGCStats(std::map<BlobFileId, std::list<PageEntryV3>> & blob_n
         if (right_margin != stat->sm_total_size)
         {
             auto blobfile = getBlobFile(stat->id);
-            (void)blobfile;
-            // TBD : direct truncate
+            blobfile->truncate(right_margin);
+            stat->sm_total_size = right_margin;
         }
     }
 }
