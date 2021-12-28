@@ -6,6 +6,9 @@
 
 namespace DB
 {
+// MemoryTrackerSetter is a guard for `current_memory_tracker`.
+// It ensures `current_memory_tracker` unchanged after leaving the scope of
+// where MemoryTrackerSetter guards.
 class MemoryTrackerSetter : private boost::noncopyable
 {
 public:

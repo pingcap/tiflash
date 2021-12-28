@@ -77,5 +77,4 @@ private:
 
     std::atomic<Int64> alive_dynamic_threads = 0;
 };
-
 } // namespace DB

@@ -3,6 +3,7 @@
 #include <common/defines.h>
 
 #include <boost/noncopyable.hpp>
+#include <cassert>
 
 namespace DB
 {
@@ -20,25 +21,29 @@ struct SimpleIntrusiveNode : private boost::noncopyable
 
     ~SimpleIntrusiveNode() = default;
 
-    /// Attach self to the next of head. Do nothing when call on a single node.
+    /// Attach self to the next of head.
     void appendTo(Node * head)
     {
+        assert(isSingle());
+
         next = head->next;
         prev = head;
         head->next->prev = getThis();
         head->next = getThis();
     }
 
-    /// Attach self to the prev of head. Do nothing when call on a single node.
+    /// Attach self to the prev of head.
     void prependTo(Node * head)
     {
+        assert(isSingle());
+
         prev = head->prev;
         next = head;
         head->prev->next = getThis();
         head->prev = getThis();
     }
 
-    /// Detach self from a list and be a single node. Do nothing when call on a single node.
+    /// Detach self from a list and be a single node.
     void detach()
     {
         prev->next = next;
