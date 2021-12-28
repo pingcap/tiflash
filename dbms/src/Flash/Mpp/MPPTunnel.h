@@ -13,7 +13,6 @@
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
