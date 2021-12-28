@@ -177,7 +177,7 @@ private:
     {
         uint64_t prec = 0;
         uint64_t scale = 0;
-        sscanf(name.c_str(), "Decimal(%llu,%llu)", &prec, &scale);
+        sscanf(name.c_str(), "Decimal(%lu,%lu)", &prec, &scale);
         return {prec, scale};
     }
 
