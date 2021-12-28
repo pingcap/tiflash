@@ -1,8 +1,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <fmt/format.h>
 
 #include <string>
 #include <vector>
@@ -175,6 +175,42 @@ try
     for (const auto & value1 : all_inputs)
         for (const auto & value2 : all_inputs)
             test_separator_is_not_null(value1, value2);
+}
+CATCH
+
+TEST_F(StringTiDBConcatWS, MoreArgsTest)
+try
+{
+    auto more_args_test = [&](const std::vector<std::optional<String>> & values, const String & result) {
+        ColumnsWithTypeAndName args;
+        for (const auto & value : values)
+            args.push_back(toColumn(value));
+
+        ASSERT_COLUMN_EQ(
+            toColumn(result),
+            executeFunction(StringTiDBConcatWS::func_name, args));
+    };
+    // 4
+    more_args_test({",", "大家好", {}, "hello word"}, "大家好,hello word");
+    // 5
+    more_args_test({";", "这是中文", "C'est français", "これが日本の", "This is English"}, "这是中文;C'est français;これが日本の;This is English");
+    // 6
+    more_args_test({"", "", "", "", "", ""}, "");
+    // 7
+    more_args_test({"a", "b", "", "", "", "", ""}, "baaaaa");
+    // 101
+    std::string separator = "&&";
+    std::string unit = "a*b=c";
+    std::vector<std::optional<String>> args;
+    std::vector<String> res_builder;
+    args.push_back(separator);
+    for (size_t i = 0; i < 100; ++i)
+    {
+        args.push_back(unit);
+        res_builder.push_back(unit);
+    }
+    std::string res = fmt::format("{}", fmt::join(res_builder.cbegin(), res_builder.cend(), separator));
+    more_args_test(args, res);
 }
 CATCH
 
