@@ -1,0 +1,33 @@
+mysql> drop table if exists test.cmp
+mysql> create table test.cmp (a varchar(30), b varchar(30)); insert into test.t values ('aaaa', 'bbbb'), ('aaaa', '%a%'), ('a', 'a'), ('a', 'b'), ('b', 'a'), ('', ''), ('', NULL), (NULL, ''), (NULL, NULL)
+mysql> alter table test.cmp set tiflash replica 1
+mysql> set @@tidb_enforce_mpp = 1
+
+func> wait_table test cmp
+
+mysql> explain select strcmp(a, b) from test.cmp;
++---------------------------+----------+--------------+---------------+------------------------------------------+
+| id                        | estRows  | task         | access object | operator info                            |
++---------------------------+----------+--------------+---------------+------------------------------------------+
+| TableReader_11            | 10000.00 | root         |               | data:ExchangeSender_10                   |
+| └─ExchangeSender_10       | 10000.00 | cop[tiflash] |               | ExchangeType: PassThrough                |
+|   └─Projection_4          | 10000.00 | cop[tiflash] |               | strcmp(test.cmp.a, test.cmp.b)->Column#4 |
+|     └─TableFullScan_9     | 10000.00 | cop[tiflash] | table:cmp     | keep order:false, stats:pseudo           |
++---------------------------+----------+--------------+---------------+------------------------------------------+
+
+mysql> select strcmp(a, b) from test.cmp;
++--------------+
+| strcmp(a, b) |
++--------------+
+|           -1 |
+|            1 |
+|            0 |
+|           -1 |
+|            1 |
+|            0 |
+|         NULL |
+|         NULL |
+|         NULL |
++--------------+
+
+

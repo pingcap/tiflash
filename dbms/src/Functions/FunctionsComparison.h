@@ -466,7 +466,6 @@ struct StringComparisonImpl
             /// if partial compare result is 0, it means the common part of the two strings are exactly the same, then need to
             /// further compare the string length, otherwise we can get the compare result from partial compare result.
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
-            std::cout << "res[" << i << ']' << ": " << static_cast<int>(c[i]) << " " << typeid(c).name() << " " << typeid(c[i]).name() << " " << typeid(Op).name() << " " << typeid(ResultType).name() << std::endl;
         }
     }
 
@@ -1187,7 +1186,6 @@ private:
         if (!((c0_string || c0_fixed_string || c0_const) && (c1_string || c1_fixed_string || c1_const)))
             return false;
 
-        std::cout << "runtime type of ReturnColumnType: " << typeid(ReturnColumnType).name() << std::endl;
         if (collator != nullptr)
             return executeStringWithCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
         else
@@ -1681,10 +1679,10 @@ class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp>
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); };
 
-    void executeImpl(Block & block, [[maybe_unused]] const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * col_left_untyped = block.getByPosition(0).column.get();
-        const IColumn * col_right_untyped = block.getByPosition(1).column.get();
+        const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
+        const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
         bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {
