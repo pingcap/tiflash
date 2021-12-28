@@ -1,5 +1,5 @@
-#include <Storages/DeltaMerge/tests/workload/KeyGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/KeyGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <fmt/core.h>
 
 #include <atomic>

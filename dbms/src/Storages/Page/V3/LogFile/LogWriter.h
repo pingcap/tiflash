@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/types.h>
 
