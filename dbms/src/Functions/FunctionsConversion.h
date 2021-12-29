@@ -703,7 +703,7 @@ enum class ConvertFromStringParsingMode
     BestEffort /// Only applicable for DateTime. Will use sophisticated method, that is slower.
 };
 
-template <typename FromDataType, typename ToDataType, typename Name, ConvertFromStringExceptionMode exception_mode, ConvertFromStringParsingMode parsing_mode>
+template <typename FromDataType, typename ToDataType, typename Name, ConvertFromStringExceptionMode default_exception_mode, ConvertFromStringParsingMode parsing_mode>
 struct ConvertThroughParsing
 {
     static_assert(std::is_same_v<FromDataType, DataTypeString> || std::is_same_v<FromDataType, DataTypeFixedString>,
@@ -733,6 +733,8 @@ struct ConvertThroughParsing
         const DateLUTImpl * local_time_zone [[maybe_unused]] = nullptr;
         const DateLUTImpl * utc_time_zone [[maybe_unused]] = nullptr;
 
+        ConvertFromStringExceptionMode exception_mode = default_exception_mode;
+
         /// For conversion to DateTime type, second argument with time zone could be specified.
         if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
         {
@@ -743,6 +745,10 @@ struct ConvertThroughParsing
         }
 
         const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+        if(!block.getByPosition(result).type->isNullable())
+        {
+            exception_mode = ConvertFromStringExceptionMode::Throw;
+        }
         const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
         const ColumnFixedString * col_from_fixed_string = checkAndGetColumn<ColumnFixedString>(col_from);
 
@@ -762,7 +768,7 @@ struct ConvertThroughParsing
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
-        if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
+        if (exception_mode == ConvertFromStringExceptionMode::Null)
         {
             col_null_map_to = ColumnUInt8::create(size);
             vec_null_map_to = &col_null_map_to->getData();
@@ -772,7 +778,7 @@ struct ConvertThroughParsing
         const IColumn::Offsets * offsets = nullptr;
         size_t fixed_string_size = 0;
 
-        if constexpr (std::is_same_v<FromDataType, DataTypeString>)
+        if (std::is_same_v<FromDataType, DataTypeString>)
         {
             chars = &col_from_string->getChars();
             offsets = &col_from_string->getOffsets();
@@ -792,9 +798,9 @@ struct ConvertThroughParsing
 
             ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
 
-            if constexpr (exception_mode == ConvertFromStringExceptionMode::Throw)
+            if (exception_mode == ConvertFromStringExceptionMode::Throw)
             {
-                if constexpr (parsing_mode == ConvertFromStringParsingMode::BestEffort)
+                if (parsing_mode == ConvertFromStringParsingMode::BestEffort)
                 {
                     time_t res;
                     parseDateTimeBestEffort(res, read_buffer, *local_time_zone, *utc_time_zone);
@@ -812,7 +818,7 @@ struct ConvertThroughParsing
             {
                 bool parsed;
 
-                if constexpr (parsing_mode == ConvertFromStringParsingMode::BestEffort)
+                if (parsing_mode == ConvertFromStringParsingMode::BestEffort)
                 {
                     time_t res;
                     parsed = tryParseDateTimeBestEffort(res, read_buffer, *local_time_zone, *utc_time_zone);
@@ -826,14 +832,14 @@ struct ConvertThroughParsing
                 if (!parsed)
                     vec_to[i] = 0;
 
-                if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
+                if (exception_mode == ConvertFromStringExceptionMode::Null)
                     (*vec_null_map_to)[i] = !parsed;
             }
 
             current_offset = next_offset;
         }
 
-        if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
+        if (exception_mode == ConvertFromStringExceptionMode::Null)
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         else
             block.getByPosition(result).column = std::move(col_to);
