@@ -1004,6 +1004,7 @@ struct AddSecondsImpl
         return my_time.toPackedUInt();
     }
 
+    // TODO: need do these in vector mode in the future
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
         Field packed_uint_value = parseMyDateTime(str);
