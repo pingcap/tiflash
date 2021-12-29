@@ -231,7 +231,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+        send_thread = std::make_unique<std::thread>(ThreadFactory::newThread(true, "MPPTunnel", [this] { sendLoop(); }));
     }
     connected = true;
     cv_for_connected.notify_all();

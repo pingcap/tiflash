@@ -69,11 +69,8 @@ def checkoutTiCSFull(commit, pullId) {
     ])
 }
 
-def runClosure(label, Closure body) {
+def runBuilderClosure(label, Closure body) {
     podTemplate(name: label, label: label, instanceCap: 15, containers: [
-            containerTemplate(name: 'dockerd', image: 'docker:18.09.6-dind', privileged: true,
-                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
-                    resourceLimitCpu: '16000m', resourceLimitMemory: '32Gi'),
             containerTemplate(name: 'docker', image: 'hub.pingcap.net/jenkins/docker:build-essential-java',
                     alwaysPullImage: true, envVars: [
                     envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
@@ -94,8 +91,25 @@ def runClosure(label, Closure body) {
     }
 }
 
-def runWithTiCSFull(label, curws, Closure body) {
-    runClosure(label) {
+def runClosure(label, Closure body) {
+    podTemplate(name: label, label: label, instanceCap: 15, containers: [
+            containerTemplate(name: 'dockerd', image: 'docker:18.09.6-dind', privileged: true,
+                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
+                    resourceLimitCpu: '16000m', resourceLimitMemory: '32Gi'),
+            containerTemplate(name: 'docker', image: 'hub.pingcap.net/jenkins/docker:build-essential-java',
+                    alwaysPullImage: true, envVars: [
+                    envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
+            ], ttyEnabled: true, command: 'cat'),
+    ]
+    ) {
+        node(label) {
+            body()
+        }
+    }
+}
+
+def runCheckoutAndBuilderClosure(label, curws, Closure body) {
+    runBuilderClosure(label) {
         dir("${curws}/tics") {
             stage("Checkout") {
                 container("docker") {
@@ -119,7 +133,7 @@ def runWithTiCSFull(label, curws, Closure body) {
     }
 }
 
-def runTest(label, testPath, tidbBranch) {
+def runTest(label, name, testPath, tidbBranch) {
     runClosure(label) {
         stage("Unstash") {
             unstash 'git-code-tics'
@@ -142,9 +156,9 @@ def runTest(label, testPath, tidbBranch) {
                             sh "pwd"
                             sh "TAG=${params.ghprbActualCommit} BRANCH=${tidbBranch} bash -xe ./run.sh"
                         } catch (e) {
-                            sh "mv log ${label}-log"
-                            archiveArtifacts(artifacts: "${label}-log/**/*.log", allowEmptyArchive: true)
-                            sh "find log -name '*.log' | xargs tail -n 500"
+                            sh "mv log ${name}-log"
+                            archiveArtifacts(artifacts: "${name}-log/**/*.log", allowEmptyArchive: true)
+                            sh "find ${name}-log -name '*.log' | xargs tail -n 500"
                             sh "docker ps -a"
                             throw e
                         }
@@ -155,9 +169,9 @@ def runTest(label, testPath, tidbBranch) {
     }
 }
 
-def runUTCoverTICS(CURWS, NPROC) {
+def runUnitTests(label, CURWS, NPROC) {
     def NPROC_UT = NPROC * 2
-    runWithTiCSFull("ut-tics", CURWS) {
+    runCheckoutAndBuilderClosure(label, CURWS) {
         dir("${CURWS}/tics") {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
