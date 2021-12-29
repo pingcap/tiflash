@@ -1,14 +1,12 @@
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 void DataTypeDate::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeDateText(DayNum(static_cast<const ColumnUInt16 &>(column).getData()[row_num]), ostr);
@@ -44,7 +42,7 @@ void DataTypeDate::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) co
     assertChar('\'', istr);
     readDateText(x, istr);
     assertChar('\'', istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt16 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
 }
 
 void DataTypeDate::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
@@ -85,7 +83,10 @@ bool DataTypeDate::equals(const IDataType & rhs) const
 
 void registerDataTypeDate(DataTypeFactory & factory)
 {
-    factory.registerSimpleDataType("Date", [] { return DataTypePtr(std::make_shared<DataTypeDate>()); }, DataTypeFactory::CaseInsensitive);
+    factory.registerSimpleDataType(
+        "Date",
+        [] { return DataTypePtr(std::make_shared<DataTypeDate>()); },
+        DataTypeFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

@@ -21,7 +21,6 @@ using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 namespace DB
 {
-
 class Context;
 class PathPool;
 struct SchemaNameMapper;
@@ -38,7 +37,9 @@ public:
         String newName() const;
 
         TableDiskInfo(String old_name_, TiDB::TableInfoPtr info_, std::shared_ptr<SchemaNameMapper> mapper_)
-            : old_name(old_name_), tidb_table_info(std::move(info_)), mapper(std::move(mapper_))
+            : old_name(old_name_)
+            , tidb_table_info(std::move(info_))
+            , mapper(std::move(mapper_))
         {}
 
     private:
@@ -53,7 +54,10 @@ public:
         String getDataDirectory(const String & root_path, const DatabaseDiskInfo & db, bool escape_db = true, bool escape_tbl = true) const;
         // "extra_data/${db_name}/${tbl_name}/"
         String getExtraDirectory(
-            const String & root_path, const DatabaseDiskInfo & db, bool escape_db = true, bool escape_tbl = true) const;
+            const String & root_path,
+            const DatabaseDiskInfo & db,
+            bool escape_db = true,
+            bool escape_tbl = true) const;
 
         // "metadata/db_${db_id}/t_${id}.sql"
         String getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
@@ -82,7 +86,10 @@ public:
         const TiDB::DBInfo & getInfo() const;
 
     public:
-        DatabaseDiskInfo(String name_, std::shared_ptr<SchemaNameMapper> mapper_) : name(std::move(name_)), mapper(std::move(mapper_)) {}
+        DatabaseDiskInfo(String name_, std::shared_ptr<SchemaNameMapper> mapper_)
+            : name(std::move(name_))
+            , mapper(std::move(mapper_))
+        {}
 
         void setDBInfo(TiDB::DBInfoPtr info_);
 
@@ -155,7 +162,10 @@ private:
     void renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info);
 
     void renameTable(
-        const String & db_name, const DatabaseDiskInfo & db_info, const String & mapped_db_name, const TableDiskInfo & table_info);
+        const String & db_name,
+        const DatabaseDiskInfo & db_info,
+        const String & mapped_db_name,
+        const TableDiskInfo & table_info);
 
 private:
     Context & global_context;

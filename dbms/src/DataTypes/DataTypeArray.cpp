@@ -1,28 +1,23 @@
 #include <Columns/ColumnArray.h>
-
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
-
-#include <DataTypes/DataTypesNumber.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFactory.h>
-
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/IAST.h>
-
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_READ_ARRAY_FROM_TEXT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int LOGICAL_ERROR;
-}
+extern const int CANNOT_READ_ARRAY_FROM_TEXT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 DataTypeArray::DataTypeArray(const DataTypePtr & nested_)
@@ -99,49 +94,49 @@ void DataTypeArray::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 
 namespace
 {
-    void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit)
+{
+    const ColumnArray & column_array = typeid_cast<const ColumnArray &>(column);
+    const ColumnArray::Offsets & offset_values = column_array.getOffsets();
+    size_t size = offset_values.size();
+
+    if (!size)
+        return;
+
+    size_t end = limit && (offset + limit < size)
+        ? offset + limit
+        : size;
+
+    ColumnArray::Offset prev_offset = offset == 0 ? 0 : offset_values[offset - 1];
+    for (size_t i = offset; i < end; ++i)
     {
-        const ColumnArray & column_array = typeid_cast<const ColumnArray &>(column);
-        const ColumnArray::Offsets & offset_values = column_array.getOffsets();
-        size_t size = offset_values.size();
-
-        if (!size)
-            return;
-
-        size_t end = limit && (offset + limit < size)
-            ? offset + limit
-            : size;
-
-        ColumnArray::Offset prev_offset = offset == 0 ? 0 : offset_values[offset - 1];
-        for (size_t i = offset; i < end; ++i)
-        {
-            ColumnArray::Offset current_offset = offset_values[i];
-            writeIntBinary(current_offset - prev_offset, ostr);
-            prev_offset = current_offset;
-        }
-    }
-
-    void deserializeArraySizesPositionIndependent(IColumn & column, ReadBuffer & istr, size_t limit)
-    {
-        ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
-        ColumnArray::Offsets & offset_values = column_array.getOffsets();
-        size_t initial_size = offset_values.size();
-        offset_values.resize(initial_size + limit);
-
-        size_t i = initial_size;
-        ColumnArray::Offset current_offset = initial_size ? offset_values[initial_size - 1] : 0;
-        while (i < initial_size + limit && !istr.eof())
-        {
-            ColumnArray::Offset current_size = 0;
-            readIntBinary(current_size, istr);
-            current_offset += current_size;
-            offset_values[i] = current_offset;
-            ++i;
-        }
-
-        offset_values.resize(i);
+        ColumnArray::Offset current_offset = offset_values[i];
+        writeIntBinary(current_offset - prev_offset, ostr);
+        prev_offset = current_offset;
     }
 }
+
+void deserializeArraySizesPositionIndependent(IColumn & column, ReadBuffer & istr, size_t limit)
+{
+    ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
+    ColumnArray::Offsets & offset_values = column_array.getOffsets();
+    size_t initial_size = offset_values.size();
+    offset_values.resize(initial_size + limit);
+
+    size_t i = initial_size;
+    ColumnArray::Offset current_offset = initial_size ? offset_values[initial_size - 1] : 0;
+    while (i < initial_size + limit && !istr.eof())
+    {
+        ColumnArray::Offset current_size = 0;
+        readIntBinary(current_size, istr);
+        current_offset += current_size;
+        offset_values[i] = current_offset;
+        ++i;
+    }
+
+    offset_values.resize(i);
+}
+} // namespace
 
 
 void DataTypeArray::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
@@ -235,7 +230,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     /// But if elements column is empty - it's ok for columns of Nested types that was added by ALTER.
     if (!nested_column.empty() && nested_column.size() != last_offset)
         throw Exception("Cannot read all array values: read just " + toString(nested_column.size()) + " of " + toString(last_offset),
-            ErrorCodes::CANNOT_READ_ALL_DATA);
+                        ErrorCodes::CANNOT_READ_ALL_DATA);
 }
 
 
@@ -312,21 +307,17 @@ static void deserializeTextImpl(IColumn & column, ReadBuffer & istr, Reader && r
 
 void DataTypeArray::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    serializeTextImpl(column, row_num, ostr,
-                    [&](const IColumn & nested_column, size_t i)
-                    {
-                        nested->serializeTextQuoted(nested_column, i, ostr);
-                    });
+    serializeTextImpl(column, row_num, ostr, [&](const IColumn & nested_column, size_t i) {
+        nested->serializeTextQuoted(nested_column, i, ostr);
+    });
 }
 
 
 void DataTypeArray::deserializeText(IColumn & column, ReadBuffer & istr) const
 {
-    deserializeTextImpl(column, istr,
-                    [&](IColumn & nested_column)
-                    {
-                        nested->deserializeTextQuoted(nested_column, istr);
-                    });
+    deserializeTextImpl(column, istr, [&](IColumn & nested_column) {
+        nested->deserializeTextQuoted(nested_column, istr);
+    });
 }
 
 
@@ -452,4 +443,4 @@ void registerDataTypeArray(DataTypeFactory & factory)
     factory.registerDataType("Array", create);
 }
 
-}
+} // namespace DB

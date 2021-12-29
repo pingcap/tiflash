@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DNS_ERROR;
@@ -55,7 +54,8 @@ UserPtr SecurityManager::authorizeAndGetUser(const String & user_name, const Str
     // These code path below for authentication is useless for TiFlash
     if (!user->addresses.contains(address))
         throw Exception(
-            "User " + user_name + " is not allowed to connect from address " + address.toString(), ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+            "User " + user_name + " is not allowed to connect from address " + address.toString(),
+            ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
 
     auto on_wrong_password = [&]() {
         if (password.empty())
