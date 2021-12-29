@@ -687,7 +687,7 @@ uint64_t KVStore::getStoreID() const
 
 std::optional<metapb::Store> KVStore::getStore() const
 {
-    return this->store.id() ? this->store ? std::nullopt;
+    return this->store.id() ? this->store : std::nullopt;
 }
 
 
