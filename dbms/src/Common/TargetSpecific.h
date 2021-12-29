@@ -523,8 +523,12 @@ struct SimdImpl<Generic::WORD_SIZE>
 } // namespace DB::TargetSpecific
 
 
-#define DECLARE_TYPE(TYPE_PREFIX) \
-    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) TYPE_PREFIX##vec_t;
+#define DECLARE_TYPE(TYPE_PREFIX)                                                            \
+    struct TYPE_PREFIX##_wrapper                                                             \
+    {                                                                                        \
+        typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) type;    \
+    };                                                                                       \
+    using TYPE_PREFIX##vec_t = typename TYPE_PREFIX##_wrapper::type;
 
 #define ENUM_TYPE(TYPE_PREFIX) \
     TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
@@ -572,14 +576,14 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         using MatchedVectorType =
             typename TypeMatch<
                 Key,
-                TypePair<int8_t, int8vec_t>,
-                TypePair<int16_t, int16vec_t>,
-                TypePair<int32_t, int32vec_t>,
-                TypePair<int64_t, int64vec_t>,
-                TypePair<uint8_t, uint8vec_t>,
-                TypePair<uint16_t, uint16vec_t>,
-                TypePair<uint32_t, uint32vec_t>,
-                TypePair<uint64_t, uint64vec_t>>::MatchedType;
+                TypePair<int8_t, int8_wrapper>,
+                TypePair<int16_t, int16_wrapper>,
+                TypePair<int32_t, int32_wrapper>,
+                TypePair<int64_t, int64_wrapper>,
+                TypePair<uint8_t, uint8_wrapper>,
+                TypePair<uint16_t, uint16_wrapper>,
+                TypePair<uint32_t, uint32_wrapper>,
+                TypePair<uint64_t, uint64_wrapper>>::MatchedType::type;
 
         union
         {
