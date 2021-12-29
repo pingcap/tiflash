@@ -745,7 +745,7 @@ struct ConvertThroughParsing
         }
 
         const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-        if(!block.getByPosition(result).type->isNullable())
+        if (!block.getByPosition(result).type->isNullable())
         {
             exception_mode = ConvertFromStringExceptionMode::Throw;
         }
