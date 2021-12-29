@@ -163,10 +163,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             (*p_process_keys) += 1;
         }
 #ifndef NDEBUG
-        LOG_DEBUG(log,
-                  "Done loading all kvpairs from [CF=" << CFToName(cf) << "] [offset=" << (*p_process_keys)
-                                                       << "] [write_cf_offset=" << process_keys.write_cf << "] ");
-
+        LOG_FMT_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
 #endif
         return;
     }
@@ -179,15 +176,14 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
 #ifndef NDEBUG
-            LOG_DEBUG(log,
-                      "Done loading from [CF=" << CFToName(cf) << "] [offset=" << (*p_process_keys)
-                                               << "] [write_cf_offset=" << process_keys.write_cf << "] [last_loaded_rowkey="
-                                               << Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size())
-                                               << "] [rowkey_to_be_included="
-                                               << (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(),
-                                                                                                    rowkey_to_be_included->size())
-                                                                         : "<end>")
-                                               << "]");
+            LOG_FMT_DEBUG(
+                log,
+                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
+                CFToName(cf),
+                (*p_process_keys),
+                process_keys.write_cf,
+                Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
+                (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"));
 #endif
             break;
         }
@@ -232,9 +228,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, stop decoding.
-            LOG_WARNING(log,
-                        "Got error while reading region committed cache: "
-                            << e.displayText() << ". Stop decoding rows into DTFiles and keep uncommitted data in region.");
+            LOG_FMT_WARNING(log, "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep uncommitted data in region.", e.displayText());
             // Cancel the decoding process.
             // Note that we still need to scan data from CFs and keep them in `region`
             is_decode_cancelled = true;
