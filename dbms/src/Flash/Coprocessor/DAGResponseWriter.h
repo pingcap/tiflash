@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
@@ -61,6 +62,8 @@ public:
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
     const DAGContext & dagContext() const { return dag_context; }
+
+    IProfilingBlockInputStream * parent = nullptr;
 
 protected:
     Int64 records_per_chunk;

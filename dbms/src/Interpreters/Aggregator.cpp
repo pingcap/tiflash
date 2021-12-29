@@ -772,8 +772,21 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
     return true;
 }
 
+namespace
+{
+template <bool has_timer>
+Block warpReadBlock(const BlockInputStreamPtr & stream, Timeline::Timer * timer)
+{
+    if constexpr (has_timer)
+        timer->switchTo(Timeline::PULL);
+    Block block = stream->read();
+    if constexpr (has_timer)
+        timer->switchTo(Timeline::SELF);
+    return block;
+}
+} // namespace
 
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider)
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider, Timeline::Timer * timer)
 {
     if (isCancelled())
         return;
@@ -795,9 +808,13 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     size_t src_rows = 0;
     size_t src_bytes = 0;
 
+    auto read_block = timer != nullptr ? warpReadBlock<true> : warpReadBlock<false>;
+
     /// Read all the data
-    while (Block block = stream->read())
+    while (true)
     {
+        Block block = read_block(stream, timer);
+
         if (isCancelled())
             return;
 

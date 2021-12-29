@@ -110,6 +110,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         executed = true;
     }
 
+    auto timer = newTimer(Timeline::SELF);
     Block res;
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
@@ -134,6 +135,8 @@ ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
+    auto timer = parent.threads_timeline[thread_num].newTimer(Timeline::SELF);
+
     parent.aggregator.executeOnBlock(
         block,
         *parent.many_data[thread_num],
@@ -148,6 +151,8 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
 
 void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_num)
 {
+    auto timer = parent.threads_timeline[thread_num].newTimer(Timeline::SELF);
+
     if (!parent.isCancelled() && parent.aggregator.hasTemporaryFiles())
     {
         /// Flush data in the RAM to disk. So it's easier to unite them later.
@@ -186,6 +191,19 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
         parent.processor.cancel(false);
 }
 
+namespace
+{
+Timeline & mergeThreadsTimeline(std::vector<Timeline> & threads_timeline)
+{
+    assert(threads_timeline.size());
+    auto * cur = &threads_timeline[0];
+    for (size_t i = 1; i < threads_timeline.size(); ++i)
+    {
+        cur = &Timeline::merge(*cur, threads_timeline[i]);
+    }
+    return *cur;
+}
+} // namespace
 
 void ParallelAggregatingBlockInputStream::execute()
 {
@@ -193,7 +211,10 @@ void ParallelAggregatingBlockInputStream::execute()
     exceptions.resize(max_threads);
 
     for (size_t i = 0; i < max_threads; ++i)
+    {
         threads_data.emplace_back(keys_size, aggregates_size);
+        threads_timeline.emplace_back();
+    }
 
     LOG_TRACE(log, "Aggregating");
 
@@ -211,6 +232,11 @@ void ParallelAggregatingBlockInputStream::execute()
         return;
 
     double elapsed_seconds = watch.elapsedSeconds();
+
+    info.timeline = Timeline::merge(info.timeline, mergeThreadsTimeline(threads_timeline));
+    info.timeline.flushBuffer();
+
+    auto timer = newTimer(Timeline::SELF);
 
     size_t total_src_rows = 0;
     size_t total_src_bytes = 0;

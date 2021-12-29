@@ -11,11 +11,12 @@ namespace DB
 class ExchangeSender : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
-        : writer(std::move(writer))
+    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+        : writer(std::move(writer_))
         , log(getLogWithPrefix(log_, getName()))
     {
         children.push_back(input);
+        writer->parent = this;
     }
     String getName() const override { return "ExchangeSender"; }
     Block getHeader() const override { return children.back()->getHeader(); }

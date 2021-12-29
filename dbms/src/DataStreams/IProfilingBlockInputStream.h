@@ -175,6 +175,10 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    Timeline::Timer newTimer(Timeline::CounterType type, bool running = true);
+
+    Int64 getWorkingTime();
+
 protected:
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};

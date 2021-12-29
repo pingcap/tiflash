@@ -93,7 +93,8 @@ public:
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
-        const Block & header);
+        const Block & header,
+        Timeline::Timer & timer);
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
 

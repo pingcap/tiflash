@@ -72,6 +72,7 @@ Block FilterBlockInputStream::getHeader() const
 
 Block FilterBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::SELF);
     Block res;
 
     if (constant_filter_description.always_false)
@@ -82,7 +83,9 @@ Block FilterBlockInputStream::readImpl()
     {
         IColumn::Filter * child_filter = nullptr;
 
+        timer.switchTo(Timeline::PULL);
         res = children.back()->read(child_filter, true);
+        timer.switchTo(Timeline::SELF);
 
         if (!res)
             return res;

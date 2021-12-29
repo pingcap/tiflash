@@ -1,9 +1,11 @@
 #pragma once
 
-#include <vector>
 #include <Common/Stopwatch.h>
-
 #include <Core/Types.h>
+#include <DataStreams/Timeline.h>
+
+#include <chrono>
+#include <vector>
 
 #if __APPLE__
 #include <common/apple_rt.h>
@@ -11,7 +13,6 @@
 
 namespace DB
 {
-
 class Block;
 class ReadBuffer;
 class WriteBuffer;
@@ -24,7 +25,7 @@ struct BlockStreamProfileInfo
     IProfilingBlockInputStream * parent = nullptr;
 
     bool started = false;
-    Stopwatch total_stopwatch {CLOCK_MONOTONIC_COARSE};    /// Time with waiting time
+    Stopwatch total_stopwatch{CLOCK_MONOTONIC_COARSE}; /// Time with waiting time
 
     size_t rows = 0;
     size_t blocks = 0;
@@ -34,6 +35,8 @@ struct BlockStreamProfileInfo
     // time spent on current stream and all its children streams, but also the time of its
     // parent streams
     UInt64 execution_time = 0;
+
+    Timeline timeline;
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
 
@@ -65,9 +68,9 @@ private:
     void calculateRowsBeforeLimit() const;
 
     /// For these fields we make accessors, because they must be calculated beforehand.
-    mutable bool applied_limit = false;                    /// Whether LIMIT was applied
+    mutable bool applied_limit = false; /// Whether LIMIT was applied
     mutable size_t rows_before_limit = 0;
-    mutable bool calculated_rows_before_limit = false;    /// Whether the field rows_before_limit was calculated
+    mutable bool calculated_rows_before_limit = false; /// Whether the field rows_before_limit was calculated
 };
 
-}
+} // namespace DB

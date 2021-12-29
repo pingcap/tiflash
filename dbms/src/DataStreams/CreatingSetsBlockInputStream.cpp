@@ -137,6 +137,8 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
+    auto timer = newTimer(Timeline::SELF);
+
     try
     {
         LOG_DEBUG(log,
@@ -160,8 +162,14 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (table_out)
             table_out->writePrefix();
 
-        while (Block block = subquery.source->read())
+        while (true)
         {
+            timer.switchTo(Timeline::PULL);
+            Block block = subquery.source->read();
+            timer.switchTo(Timeline::SELF);
+            if (!block)
+                break;
+
             if (isCancelled())
             {
                 LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");

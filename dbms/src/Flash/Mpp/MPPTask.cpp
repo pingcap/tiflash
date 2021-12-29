@@ -319,6 +319,10 @@ void MPPTask::runImpl()
         from->readSuffix();
         finishWrite();
 
+        auto * profile_ptr = dynamic_cast<IProfilingBlockInputStream *>(from.get());
+        assert(profile_ptr);
+        mpp_task_statistics.working_time = profile_ptr->getWorkingTime();
+
         auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_FMT_DEBUG(
             log,

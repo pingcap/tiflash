@@ -265,8 +265,9 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header, Timeline::Timer & timer)
 {
+    timer.switchTo(Timeline::PULL);
     std::shared_ptr<ReceivedMessage> recv_msg;
     {
         std::unique_lock<std::mutex> lock(mu);
@@ -295,6 +296,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
+    timer.switchTo(Timeline::SELF);
     assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
     if (recv_msg->packet->has_error())

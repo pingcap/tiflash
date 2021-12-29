@@ -1,18 +1,16 @@
 #include <Common/ClickHouseRevision.h>
-
-#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
+#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event ExternalAggregationMerge;
+extern const Event ExternalAggregationMerge;
 }
 
 namespace DB
 {
-
 Block AggregatingBlockInputStream::getHeader() const
 {
     return aggregator.getHeader(final);
@@ -21,19 +19,23 @@ Block AggregatingBlockInputStream::getHeader() const
 
 Block AggregatingBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::SELF);
+
     if (!executed)
     {
         executed = true;
         AggregatedDataVariantsPtr data_variants = std::make_shared<AggregatedDataVariants>();
 
-        Aggregator::CancellationHook hook = [&]() { return this->isCancelled(); };
+        Aggregator::CancellationHook hook = [&]() {
+            return this->isCancelled();
+        };
         aggregator.setCancellationHook(hook);
 
-        aggregator.execute(children.back(), *data_variants, file_provider);
+        aggregator.execute(children.back(), *data_variants, file_provider, &timer);
 
         if (!aggregator.hasTemporaryFiles())
         {
-            ManyAggregatedDataVariants many_data { data_variants };
+            ManyAggregatedDataVariants many_data{data_variants};
             impl = aggregator.mergeAndConvertToBlocks(many_data, final, 1);
         }
         else
@@ -59,9 +61,7 @@ Block AggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_TRACE(log, "Will merge " << files.files.size() << " temporary files of size "
-                << (files.sum_size_compressed / 1048576.0) << " MiB compressed, "
-                << (files.sum_size_uncompressed / 1048576.0) << " MiB uncompressed.");
+            LOG_TRACE(log, "Will merge " << files.files.size() << " temporary files of size " << (files.sum_size_compressed / 1048576.0) << " MiB compressed, " << (files.sum_size_uncompressed / 1048576.0) << " MiB uncompressed.");
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(input_streams, params, final, 1, 1);
         }
@@ -75,12 +75,15 @@ Block AggregatingBlockInputStream::readImpl()
 
 
 AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
-    : file_provider{file_provider_}, file_in(file_provider, path, EncryptionPath(path, "")), compressed_in(file_in),
-    block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get())) {}
+    : file_provider{file_provider_}
+    , file_in(file_provider, path, EncryptionPath(path, ""))
+    , compressed_in(file_in)
+    , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))
+{}
 
 AggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 {
     file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 
-}
+} // namespace DB

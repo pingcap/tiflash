@@ -104,9 +104,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         }
     }
 
-    bool fetchRemoteResult()
+    bool fetchRemoteResult(Timeline::Timer & timer)
     {
-        auto result = remote_reader->nextResult(block_queue, sample_block);
+        auto result = remote_reader->nextResult(block_queue, sample_block, timer);
         if (result.meet_error)
         {
             LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
@@ -190,9 +190,10 @@ public:
     }
     Block readImpl() override
     {
+        auto timer = newTimer(Timeline::SELF);
         if (block_queue.empty())
         {
-            if (!fetchRemoteResult())
+            if (!fetchRemoteResult(timer))
                 return {};
         }
         // todo should merge some blocks to make sure the output block is big enough

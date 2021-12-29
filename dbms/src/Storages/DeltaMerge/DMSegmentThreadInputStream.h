@@ -60,6 +60,8 @@ protected:
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override
     {
+        auto timer = newTimer(Timeline::SELF);
+
         if (done)
             return {};
         while (true)

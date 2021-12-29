@@ -98,6 +98,7 @@ private:
     };
 
     std::vector<ThreadData> threads_data;
+    std::vector<Timeline> threads_timeline;
 
 
     struct Handler
