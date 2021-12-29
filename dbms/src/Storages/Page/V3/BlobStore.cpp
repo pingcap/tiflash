@@ -81,9 +81,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         free(buffer, all_page_data_size);
     });
     char * buffer_pos = buffer;
-    BlobFileId blob_id;
-    BlobFileOffset offset_in_file;
-    std::tie(blob_id, offset_in_file) = getPosFromStats(all_page_data_size);
+    auto [blob_id, offset_in_file] = getPosFromStats(all_page_data_size);
 
     size_t offset_in_allocated = 0;
 
@@ -438,7 +436,7 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_file.getOrSet((UInt32)blob_id, [this, blob_id]() -> BlobFilePtr {
+    return cached_file.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
                       })
         .first;

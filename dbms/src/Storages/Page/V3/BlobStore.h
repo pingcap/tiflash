@@ -135,10 +135,6 @@ public:
         BlobFileId roll_id = 0;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
-
-
-        std::list<BlobFileId> ro_ids;
-
         std::mutex lock_stats;
     };
 
