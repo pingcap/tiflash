@@ -119,9 +119,7 @@ public:
     void setStore(metapb::Store);
 
     // May return 0 if uninitialized
-    uint64_t getStoreID() const;
-
-    std::optional<metapb::Store> getStore() const;
+    uint64_t getStoreID(std::memory_order = std::memory_order_relaxed) const;
 
 private:
     friend class MockTiDB;
@@ -174,6 +172,8 @@ private:
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
+    metapb::Store & getStore();
+
 private:
     RegionManager region_manager;
 
@@ -204,6 +204,7 @@ private:
     std::atomic_int64_t read_index_event_flag{0};
 
     metapb::Store store;
+    std::atomic_int64_t store_id;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

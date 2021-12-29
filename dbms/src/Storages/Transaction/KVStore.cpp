@@ -671,23 +671,19 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
 
 void KVStore::setStore(metapb::Store store)
 {
-    const auto store_id = store.id();
-    store.clear_id();
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    this->store = std::move(store);
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    this->store.set_id(store_id);
-    LOG_FMT_INFO(log, "Set store info {}", this->store.ShortDebugString());
+    getStore() = std::move(store);
+    this->store_id = getStore().id();
+    LOG_FMT_INFO(log, "Set store info {}", getStore().ShortDebugString());
 }
 
-uint64_t KVStore::getStoreID() const
+uint64_t KVStore::getStoreID(std::memory_order memory_order) const
 {
-    return this->store.id();
+    return this->store_id.load(memory_order);
 }
 
-std::optional<metapb::Store> KVStore::getStore() const
+metapb::Store & KVStore::getStore()
 {
-    return this->store.id() ? this->store : std::nullopt;
+    return this->store;
 }
 
 
