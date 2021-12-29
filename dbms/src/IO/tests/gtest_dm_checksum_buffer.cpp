@@ -130,7 +130,7 @@ void runSeekingTest()
         CHECKSUM_BUFFER_TEST_PATH,
         ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
         ::testing::UnitTest::GetInstance()->current_test_info()->name());
-    for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
+    for (auto size = 1024; size <= 256 * 1024; size <<= 1)
     {
         auto [data, seed] = randomData(size);
         {
