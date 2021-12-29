@@ -41,8 +41,6 @@ struct DMContext : private boost::noncopyable
     const size_t segment_limit_rows;
     // The base bytes of segment.
     const size_t segment_limit_bytes;
-    // The row threshold of fg split segment.
-    const size_t segment_force_split_rows;
     // The bytes threshold of fg split segment.
     const size_t segment_force_split_bytes;
     // The rows threshold of delta.
@@ -92,7 +90,6 @@ public:
         , rowkey_column_size(rowkey_column_size_)
         , segment_limit_rows(settings.dt_segment_limit_rows)
         , segment_limit_bytes(settings.dt_segment_limit_size)
-        , segment_force_split_rows(settings.dt_segment_force_split_rows)
         , segment_force_split_bytes(settings.dt_segment_force_split_size)
         , delta_limit_rows(settings.dt_segment_delta_limit_rows)
         , delta_limit_bytes(settings.dt_segment_delta_limit_size)

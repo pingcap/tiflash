@@ -518,7 +518,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             limit = cur_limit;
             auto bytes = block.bytes(offset, limit);
 
-            bool small_pack = bytes < dm_context->delta_cache_limit_bytes / 4;
+            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && bytes < dm_context->delta_cache_limit_bytes / 4;
             // Small packs are appended to Delta Cache, the flushed later.
             // While large packs are directly written to PageStorage.
             if (small_pack)
@@ -1123,12 +1123,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
-    bool should_background_flush = unsaved_bytes >= delta_cache_limit_bytes //
-        && delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes;
+    bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
+        && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
     bool should_foreground_flush = unsaved_bytes >= delta_cache_limit_bytes * 3;
 
     bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes)
-                                          && (delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes));
+                                          && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows || delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes));
     bool should_foreground_merge_delta_by_rows_or_bytes
         = delta_check_bytes >= forceMergeDeltaBytes(dm_context);
     bool should_foreground_merge_delta_by_deletes = delta_deletes >= forceMergeDeltaDeletes(dm_context);
@@ -1136,7 +1136,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // Note that, we must use || to combine rows and bytes checks in split check, and use && in merge check.
     // Otherwise, segments could be split and merged over and over again.
     bool should_split = (segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
-        && (delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
+        && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
 
     bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
@@ -1257,9 +1257,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
-        auto my_segment_rows = my_segment->getEstimatedRows();
         size_t my_segment_bytes = my_segment->getEstimatedBytes();
-        auto my_should_split = my_segment_rows >= dm_context->segment_force_split_rows || my_segment_bytes >= dm_context->segment_force_split_bytes;
+        auto my_should_split = my_segment_bytes >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
         {
             if (segmentSplit(*dm_context, my_segment, true).first)
