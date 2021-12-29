@@ -1123,6 +1123,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
+    // Don't check rows in foreground tasks to avoid write stall when tables contain only a few columns.
+    // But we should check rows in background tasks to avoid generating segments that contain too many rows and causing performance degradation.
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
     bool should_foreground_flush = unsaved_bytes >= delta_cache_limit_bytes * 3;
