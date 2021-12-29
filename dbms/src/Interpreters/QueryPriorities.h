@@ -1,23 +1,23 @@
 #pragma once
 
-#include <map>
-#include <mutex>
-#include <condition_variable>
-#include <memory>
-#include <chrono>
 #include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
+
+#include <chrono>
+#include <condition_variable>
+#include <map>
+#include <memory>
+#include <mutex>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric QueryPreempted;
+extern const Metric QueryPreempted;
 }
 
 
 namespace DB
 {
-
 /** Implements query priorities in very primitive way.
   * Allows to freeze query execution if at least one query of higher priority is executed.
   *
@@ -104,7 +104,9 @@ public:
 
     public:
         HandleImpl(QueryPriorities & parent_, QueryPriorities::Container::value_type & value_)
-            : parent(parent_), value(value_) {}
+            : parent(parent_)
+            , value(value_)
+        {}
 
         ~HandleImpl()
         {
@@ -139,4 +141,4 @@ public:
     }
 };
 
-}
+} // namespace DB

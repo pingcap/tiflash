@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class InterpreterSelectQuery;
 
 
@@ -49,4 +48,4 @@ private:
     Block result_header;
 };
 
-}
+} // namespace DB
