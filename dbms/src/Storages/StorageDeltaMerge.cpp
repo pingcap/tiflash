@@ -642,8 +642,8 @@ BlockInputStreams StorageDeltaMerge::read(
                     fb.joinStr(
                         region.required_handle_ranges.begin(),
                         region.required_handle_ranges.end(),
-                        [](const auto & range, FmtBuffer & fb) {
-                            fb.append(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                        [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
+                            fb.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
                         },
                         ",");
                 }
@@ -651,7 +651,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    fb.fmtAppend("{}{},", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                    fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
                 }
             },
             ",");
