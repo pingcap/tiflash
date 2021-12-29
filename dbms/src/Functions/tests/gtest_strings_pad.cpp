@@ -891,5 +891,69 @@ try
 }
 CATCH
 
+// pad(str, len, padding) return NULL if len(str) < len and len(padding) == 0
+// So the result of lpad is always Nullable.
+TEST_F(StringPad, test_pad_not_nullable)
+try
+{
+    // Basic test.
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
+        executeFunction("lpad",
+                        createConstColumn<String>(5, "abc"),
+                        createConstColumn<Int64>(5, 12),
+                        createConstColumn<String>(5, "xxx")));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
+        executeFunction("rpad",
+                        createConstColumn<String>(5, "abc"),
+                        createConstColumn<Int64>(5, 12),
+                        createConstColumn<String>(5, "xxx")));
+
+    // Empty str.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"123 ", "12312", "ab", "    def", "111abc", "12"}),
+        executeFunction("lpad",
+                        createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
+                        createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
+                        createColumn<String>({"123", "123", "", " ", "1", ""})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" 123", "12312", "ab", "def    ", "abc111", "12"}),
+        executeFunction("rpad",
+                        createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
+                        createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
+                        createColumn<String>({"123", "123", "", " ", "1", ""})));
+
+    // Chinese.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"\xE4\xBD\xA0\x20", "\xe8\xa5\xbf\xe6\xb9", "\xc2\xbf\xc2\xbf\x21\x21"}),
+        executeFunction("lpad",
+                        createColumn<String>({" ", "西湖", "!!"}),
+                        createColumn<UInt64>({4, 5, 6}),
+                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"\x20\xE4\xBD\xA0", "\xe8\xa5\xbf\xe6\xb9", "\x21\x21\xc2\xbf\xc2\xbf"}),
+        executeFunction("rpad",
+                        createColumn<String>({" ", "西湖", "!!"}),
+                        createColumn<UInt64>({4, 5, 6}),
+                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+
+    // utf8 test
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"你 好 ", "杭州 西湖", "¿¿¿¿!!"}),
+        executeFunction("lpadUTF8",
+                        createColumn<String>({" ", "西湖", "!!"}),
+                        createColumn<UInt64>({4, 5, 6}),
+                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" 你 好", "西湖杭州 ", "!!¿¿¿¿"}),
+        executeFunction("rpadUTF8",
+                        createColumn<String>({" ", "西湖", "!!"}),
+                        createColumn<UInt64>({4, 5, 6}),
+                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+}
+CATCH
 } // namespace tests
 } // namespace DB

@@ -2668,10 +2668,7 @@ public:
         {
             for (size_t i = 0; i < size; ++i)
             {
-                if (column_string_ptr->isNullAt(i) || column_length_ptr->isNullAt(i) || column_padding_ptr->isNullAt(i))
-                {
-                    vec_result_null_map[i] = true;
-                }
+                vec_result_null_map[i] = (column_string_ptr->isNullAt(i) || column_length_ptr->isNullAt(i) || column_padding_ptr->isNullAt(i));
             }
             Block tmp_block = createBlockWithNestedColumns(block, arguments, result);
             column_string_ptr = tmp_block.getByPosition(arguments[0]).column;
