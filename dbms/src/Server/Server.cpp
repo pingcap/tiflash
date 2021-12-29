@@ -514,9 +514,9 @@ public:
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
         // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
-        auto max_grpc_poller = server.context().getSettingsRef().max_grpc_poller;
-        if (max_grpc_poller > 0 && max_grpc_poller <= std::numeric_limits<int>::max())
-            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_grpc_poller);
+        auto max_grpc_pollers = server.context().getSettingsRef().max_grpc_pollers;
+        if (max_grpc_pollers > 0 && max_grpc_pollers <= std::numeric_limits<int>::max())
+            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_grpc_pollers);
         builder.RegisterService(flash_service.get());
         LOG_FMT_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());

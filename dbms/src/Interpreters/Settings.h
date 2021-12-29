@@ -331,7 +331,7 @@ struct Settings
     M(SettingUInt64, max_network_bandwidth_for_all_users, 0, "The maximum speed of data exchange over the network in bytes per second for all concurrently running queries. Zero means "                                                \
                                                              "unlimited.")                                                                                                                                                              \
                                                                                                                                                                                                                                         \
-    M(SettingUInt64, max_grpc_poller, 200, "The maximum number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads.")                                                      \
+    M(SettingUInt64, max_grpc_pollers, 200, "The maximum number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads.")                                                     \
     M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
