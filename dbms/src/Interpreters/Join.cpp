@@ -8,6 +8,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
@@ -424,6 +425,9 @@ void Join::setSampleBlock(const Block & block)
     if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
+
+    if (isLeftSemiFamily(kind))
+        sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), Join::name_match_helper));
 }
 
 
