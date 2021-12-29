@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /** Duties of security manager:
   * 1) Authenticate users
   * 2) Provide user settings (profile, quota, ACLs)
@@ -32,4 +31,4 @@ public:
     virtual ~ISecurityManager() {}
 };
 
-}
+} // namespace DB
