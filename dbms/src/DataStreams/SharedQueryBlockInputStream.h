@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -48,9 +49,9 @@ public:
         if (read_prefixed)
             return;
         read_prefixed = true;
-
         /// Start reading thread.
-        thread = ThreadFactory::newThread(true, "SharedQuery", [this] { fetchBlocks(); });
+        thread_manager = newThreadManager();
+        thread_manager->schedule(true, "SharedQuery", [this] { fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -60,9 +61,8 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-
-        if (thread.joinable())
-            thread.join();
+        if (thread_manager)
+            thread_manager->wait();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -134,8 +134,8 @@ private:
     bool read_prefixed = false;
     bool read_suffixed = false;
 
-    std::thread thread;
     std::mutex mutex;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     std::string exception_msg;
 

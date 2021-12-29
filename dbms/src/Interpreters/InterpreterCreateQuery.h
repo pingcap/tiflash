@@ -67,4 +67,4 @@ private:
     /// Is this an internal query - not from the user.
     bool internal = false;
 };
-}
+} // namespace DB
