@@ -7,6 +7,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadManager.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>
@@ -1455,8 +1456,8 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data)
-            parallel_merge_data->pool.wait();
+        if (parallel_merge_data && parallel_merge_data->thread_pool)
+            parallel_merge_data->thread_pool->wait();
     }
 
 protected:
@@ -1563,10 +1564,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ThreadPool pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
 
         explicit ParallelMergeData(size_t threads)
-            : pool(threads)
+            : thread_pool(newThreadPoolManager(threads))
         {}
     };
 
@@ -1578,8 +1579,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(
-            wrapInvocable(true, [this, num] { thread(num); }));
+        parallel_merge_data->thread_pool->schedule(true, [this, num] { thread(num); });
     }
 
     void thread(Int32 bucket_num)
