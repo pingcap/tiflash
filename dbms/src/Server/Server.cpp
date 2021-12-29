@@ -489,7 +489,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_, UInt64 max_rpc_poller)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
     {
         grpc::ServerBuilder builder;
@@ -1223,7 +1223,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log, settings.max_rpc_poller);
+    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
