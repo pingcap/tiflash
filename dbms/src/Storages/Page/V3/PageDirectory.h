@@ -43,7 +43,7 @@ public:
 
     void gc();
 
-    void gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & copy_list);
+    void gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list);
 
     // FIXME : just for test.
     BlobStorePtr blobstore;

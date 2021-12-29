@@ -333,7 +333,7 @@ void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & b
             LOG_FMT_DEBUG(log, "Current [BlobFileId={}] valid rate is {}, Need do compact GC", stat->id, stat->sm_valid_rate);
             stat->sm_total_size = stat->sm_valid_size;
             VersionedPageIdAndEntryList empty_list;
-            blob_need_gc[stat->id] = std::move(empty_list);
+            blob_need_gc[stat->id] = empty_list;
 
             // Change current stat to read only
             stat->changeToReadOnly();
@@ -352,10 +352,10 @@ void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & b
     }
 }
 
-std::map<PageEntryV3, VersionedPageIdAndEntry> BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntryList> entries_need_gc,
-                                                             PageSize & total_page_size)
+std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntryList> & entries_need_gc,
+                                                                         PageSize & total_page_size)
 {
-    std::map<PageEntryV3, VersionedPageIdAndEntry> copy_list;
+    std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> copy_list;
 
     PageEntriesEdit edit;
 
@@ -401,7 +401,7 @@ std::map<PageEntryV3, VersionedPageIdAndEntry> BlobStore::gc(std::map<BlobFileId
             offset_in_data += new_entry.size;
             data_pos += new_entry.size;
 
-            copy_list[new_entry] = std::move(versioned_pageid_entry);
+            copy_list.emplace_back(std::make_pair(std::move(new_entry), std::move(versioned_pageid_entry)));
         }
     }
 

@@ -217,6 +217,7 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
 
     auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
 
+    // Nothing need be GC
     if (iter == entries.begin())
     {
         return std::make_pair(del_entries, false);
@@ -228,6 +229,21 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     {
         return std::make_pair(del_entries, false);
     }
+
+    // We need to know whether the previous sequence is the same
+    // If previous sequence is the same, we should skip it.
+    do
+    {
+        auto iter_prev = iter;
+        iter_prev--;
+
+        if (iter_prev->first.sequence != iter->first.sequence)
+        {
+            break;
+        }
+
+        iter = iter_prev;
+    } while (iter == entries.begin());
 
     for (--iter; iter != entries.begin(); iter--)
     {
@@ -248,7 +264,7 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
-PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_ids, PageId page_id)
+PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc, PageId page_id)
 {
     PageSize single_page_size = 0;
     for (auto iter = entries.begin(); iter != entries.end(); iter++)
@@ -260,7 +276,7 @@ PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFile
 
         const auto & entry = iter->second.entry;
 
-        if (auto it = blob_ids.find(entry.file_id); it != blob_ids.end())
+        if (auto it = blob_need_gc.find(entry.file_id); it != blob_need_gc.end())
         {
             single_page_size += entry.size;
             it->second.emplace_back(std::make_tuple(page_id, iter->first, iter->second.entry));
@@ -313,7 +329,7 @@ void PageDirectory::snapshotsGC()
 }
 
 
-void PageDirectory::gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & copy_list)
+void PageDirectory::gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list)
 {
     for (auto & [entry, versioned_pageid_entry] : copy_list)
     {
@@ -329,6 +345,7 @@ void PageDirectory::gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & cop
         auto versioned_page = iter->second;
         iter->second->acquireLock();
         iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
+        // TBD: wal apply
     }
 }
 
@@ -336,6 +353,7 @@ void PageDirectory::gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & cop
 void PageDirectory::blobstoreGC()
 {
     std::map<BlobFileId, VersionedPageIdAndEntryList> blob_need_gc;
+
     blobstore->getGCStats(blob_need_gc);
     PageSize total_page_size = 0;
     {
@@ -354,8 +372,7 @@ void PageDirectory::blobstoreGC()
         return;
     }
 
-    std::map<PageEntryV3, VersionedPageIdAndEntry> copy_list;
-    copy_list = blobstore->gc(blob_need_gc, total_page_size);
+    const auto & copy_list = blobstore->gc(blob_need_gc, total_page_size);
 
     if (copy_list.empty())
     {
