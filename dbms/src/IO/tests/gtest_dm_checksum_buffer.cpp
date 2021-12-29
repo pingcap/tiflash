@@ -278,7 +278,7 @@ void runStackedSeekingTest()
     auto local_engine = std::mt19937_64{seed};
     auto [limiter, provider] = prepareIO();
     auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
-    size_t size = 1024 * 1024 * 1024;
+    size_t size = 1024 * 1024 * 4;
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);
     {
