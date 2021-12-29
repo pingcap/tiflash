@@ -1,18 +1,16 @@
-#include <Parsers/IAST.h>
+#include <Common/typeid_cast.h>
+#include <Interpreters/getClusterName.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Common/typeid_cast.h>
-
-#include <Interpreters/getClusterName.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 
@@ -35,4 +33,4 @@ std::string getClusterName(const IAST & node)
     throw Exception("Illegal expression instead of cluster name.", ErrorCodes::BAD_ARGUMENTS);
 }
 
-}
+} // namespace DB

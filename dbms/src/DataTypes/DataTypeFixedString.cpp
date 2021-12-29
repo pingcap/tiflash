@@ -1,33 +1,26 @@
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
-
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnConst.h>
-
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeFactory.h>
-
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/VarInt.h>
-
-#include <Parsers/IAST.h>
-#include <Parsers/ASTLiteral.h>
-
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_READ_ALL_DATA;
-    extern const int TOO_LARGE_STRING_SIZE;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int UNEXPECTED_AST_STRUCTURE;
-}
+extern const int CANNOT_READ_ALL_DATA;
+extern const int TOO_LARGE_STRING_SIZE;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int UNEXPECTED_AST_STRUCTURE;
+} // namespace ErrorCodes
 
 
 std::string DataTypeFixedString::getName() const
@@ -102,7 +95,7 @@ void DataTypeFixedString::deserializeBinaryBulk(IColumn & column, ReadBuffer & i
 
     if (read_bytes % n != 0)
         throw Exception("Cannot read all data of type FixedString",
-            ErrorCodes::CANNOT_READ_ALL_DATA);
+                        ErrorCodes::CANNOT_READ_ALL_DATA);
 
     data.resize(initial_size + read_bytes);
 }
@@ -233,4 +226,4 @@ void registerDataTypeFixedString(DataTypeFactory & factory)
     factory.registerDataType("BINARY", create, DataTypeFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

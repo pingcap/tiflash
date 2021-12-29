@@ -1,14 +1,13 @@
 #pragma once
 
-#include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockOutputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/ASTDeleteQuery.h>
 
 namespace DB
 {
-
 /** Interprets the DELETE query.
   */
 class InterpreterDeleteQuery : public IInterpreter
@@ -26,4 +25,4 @@ private:
     bool allow_materialized;
 };
 
-}
+} // namespace DB

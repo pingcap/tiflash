@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 /// A tiny abstraction of different sources a query comes from, i.e. SQL string or DAG request.
 class IQuerySource
 {
