@@ -85,6 +85,7 @@ void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
+void SetStoreId(EngineStoreServerWrap *, BaseBuffView);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(
@@ -111,6 +112,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
         .fn_set_server_info_resp = SetServerInfoResp,
         .fn_get_config = GetConfig,
+        .fn_set_store = SetStoreId,
     };
 }
 } // namespace DB
