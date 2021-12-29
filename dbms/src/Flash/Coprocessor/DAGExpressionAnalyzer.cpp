@@ -148,6 +148,7 @@ public:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
@@ -288,6 +289,7 @@ String DAGExpressionAnalyzerHelper::buildLogicalFunction(
     }
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
+
 
 // left(str,len) = substrUTF8(str,1,len)
 String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
@@ -795,6 +797,7 @@ String DAGExpressionAnalyzer::applyFunction(
     const TiDB::TiDBCollatorPtr & collator)
 {
     String result_name = genFuncString(func_name, arg_names, {collator});
+    std::cout << "result name: " << result_name << std::endl;
     if (actions->getSampleBlock().has(result_name))
         return result_name;
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
@@ -1477,10 +1480,12 @@ String DAGExpressionAnalyzer::buildFunction(
     ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
+    std::cout << "func_name: " << func_name << std::endl;
     Names argument_names;
     for (const auto & child : expr.children())
     {
         String name = getActions(child, actions);
+        std::cout << "name: " << name << std::endl;
         argument_names.push_back(name);
     }
     return applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));

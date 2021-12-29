@@ -58,6 +58,19 @@ int getFracIndex(const String & format)
     return idx;
 }
 
+int getFsp(const String & s)
+{
+    int idx = getFracIndex(s);
+    int fsp;
+    if (idx < 0)
+        fsp = 0;
+    else
+        fsp = s.size() - idx - 1;
+    if (fsp > 6)
+        fsp = 6;
+    return fsp;
+}
+
 // helper for date part splitting, punctuation characters are valid separators anywhere,
 // while space and 'T' are valid separators only between date and time.
 bool isValidSeperator(char c, int previous_parts)

@@ -7,8 +7,9 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
-#include <iostream>
+
 #include <cstddef>
+#include <iostream>
 #include <vector>
 
 namespace DB::tests
@@ -150,7 +151,7 @@ try
     //         createColumn<Nullable<Decimal256>>(std::make_tuple(66, 0), {"999999999999999999999999999999999999999999999999999999999999999998"}),
     //         createColumn<Nullable<Decimal256>>(std::make_tuple(66, 0), {"999999999999999999999999999999999999999999999999999999999999999999"})
     //         ));
-    
+
     // ASSERT_COLUMN_EQ(
     //     createColumn<Nullable<Decimal256>>(std::make_tuple(65, 3), {"99.999"}),
     //     executeFunction(
@@ -158,7 +159,7 @@ try
     //         createColumn<Nullable<Decimal256>>(std::make_tuple(65, 0), {"99999999999999999999999999999999999999999999999999999999999999998"}),
     //         createColumn<Nullable<Decimal32>>(std::make_tuple(5, 3), {"99.999"})
     //         ));
-    
+
     // ASSERT_COLUMN_EQ(
     //     createColumn<Nullable<Decimal256>>(std::make_tuple(65, 30), {"0.000000000000000000000000000001"}),
     //     executeFunction(
@@ -320,22 +321,52 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"2021-12-28 11:19:09"}),
-            createColumn<Nullable<String>>({"2021-12-28 11:19:10"})
-            ));
-
-    ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:09"),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:09"),
-            createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:10")));
+            createColumn<Nullable<String>>({"2021-12-28 11:19:10"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
+            createColumn<Nullable<String>>({"2021-12-28 11:19:10", "2021-12-28 11:19:10"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"2020-10-20 00:00:00"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"2021-12-28 11:19:09"}),
+            createColumn<Nullable<String>>({"2020-10-20"})));
+
+    // vector_constant
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
             createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:10")));
+
+    // date_string
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"2021-12-28 11:19:09"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"2021-12-28 11:19:09"}),
+            createColumn<Nullable<String>>({"a"})));
+
+
+    // ASSERT_COLUMN_EQ(
+    //     createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:09"),
+    //     executeFunction(
+    //         func_name,
+    //         createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:09"),
+    //         createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:10")));
+
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<Nullable<String>>({"2021-12-28 11:19:09", "2021-12-28 11:19:09"}),
+    //         createConstColumn<Nullable<String>>(2, "2021-12-28 11:19:10")));
 
     // ASSERT_COLUMN_EQ(
     //     createColumn<Nullable<String>>({"2021-12-28 11:19:09"}),

@@ -101,11 +101,18 @@ struct MyDateTime : public MyTimeBase
         : MyTimeBase(packed)
     {}
 
+    MyDateTime(UInt64 packed, int fsp)
+        : MyTimeBase(packed)
+        , fsp(fsp)
+    {}
+
     MyDateTime(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
         : MyTimeBase(year_, month_, day_, hour_, minute_, second_, micro_second_)
     {}
 
     String toString(int fsp) const;
+    int fsp;
+    int getFsp() const { return fsp; }
 
     static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
@@ -188,5 +195,5 @@ bool isValidSeperator(char c, int previous_parts);
 // Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
 // Note that this function will not check if the input is logically a valid datetime value.
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
-
+int getFsp(const String & s);
 } // namespace DB

@@ -592,7 +592,7 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
-        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        c_data.reserve(std::max(a_data.size(), b_data.size()) * 3); //todo ......just hack
 
         for (size_t i = 0; i < size; ++i)
         {
@@ -649,7 +649,7 @@ struct StringOperationImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
-        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        c_data.reserve(std::max(a_data.size(), b_data.size()) * 3);
 
         for (size_t i = 0; i < size; ++i)
         {
@@ -872,8 +872,8 @@ private:
             }
             auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
             auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
-            std::cout << "leftPrec: "<< DB::toString(leftPrec) << "---rightScale:" << DB::toString(leftScale) << std::endl;
-            std::cout << "rightPrec: "<< DB::toString(rightPrec) << "---rightScale:" << DB::toString(rightScale) << std::endl;
+            std::cout << "leftPrec: " << DB::toString(leftPrec) << "---rightScale:" << DB::toString(leftScale) << std::endl;
+            std::cout << "rightPrec: " << DB::toString(rightPrec) << "---rightScale:" << DB::toString(rightScale) << std::endl;
             Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, rightScale, result_prec, result_scale);
             return createDecimal(result_prec, result_scale);
         }

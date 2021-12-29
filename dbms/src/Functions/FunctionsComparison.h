@@ -1078,7 +1078,6 @@ private:
         const ColumnConst * c1_const) const
     {
         using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>>;
-
         if (c0_const && c1_const)
         {
             UInt8 res = 0;

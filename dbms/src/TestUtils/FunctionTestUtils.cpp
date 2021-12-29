@@ -2,7 +2,6 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
@@ -98,7 +97,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
 
-    auto func = bp->build(columns, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY));
+    auto func = bp->build(columns);
 
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());

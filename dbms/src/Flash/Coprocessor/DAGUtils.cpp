@@ -1129,6 +1129,7 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
 
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
 {
+    std::cout << "field type collate: " << field_type.collate() << std::endl;
     if (field_type.collate() < 0)
         return TiDB::ITiDBCollator::getCollator(-field_type.collate());
     return nullptr;
