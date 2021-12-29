@@ -234,13 +234,14 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
+# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
+target_include_directories (dbms PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
-# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
-# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
-target_include_directories (clickhouse_common_io PUBLIC ${PROTOBUF_INCLUDE_DIRS})
 
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
