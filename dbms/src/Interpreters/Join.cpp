@@ -1298,14 +1298,20 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     size_t keys_size = key_names_left.size();
     ColumnRawPtrs key_columns(keys_size);
 
-    /// Memoize key columns to work with.
+    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
+    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
+    Columns materialized_columns;
+
+    /// Memoize key columns to work.
     for (size_t i = 0; i < keys_size; ++i)
     {
-        key_columns[i] = block.getByName(key_names_left[i]).column.get();
+        key_columns[i] = block.getByName(key_names_right[i]).column.get();
 
-        /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
         if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-            key_columns[i] = converted.get();
+        {
+            materialized_columns.emplace_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
     }
 
     /// Keys with NULL value in any column won't join to anything.

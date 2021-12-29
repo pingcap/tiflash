@@ -166,7 +166,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | 2 | NULL |
 +---+------+
 
-# left semi with other condition
+# cartesian left semi with other condition
 mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.a in (select b from test.t where b<t1.b);
 +---+------+
 | a | b    |
@@ -198,7 +198,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | 2 | NULL |
 +---+------+
 
-# simple left anti
+# cartesian simple left anti
 mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t);
 +---+------+
 | a | b    |
@@ -227,7 +227,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | 2 | NULL |
 +---+------+
 
-# left anti with other condition
+# cartesian left anti with other condition
 mysql> set @@tidb_isolation_read_engines='tikv'; select * from test.t t1 where t1.a>1 or t1.b not in (select a from test.t where b<t1.b);
 +---+------+
 | a | b    |
