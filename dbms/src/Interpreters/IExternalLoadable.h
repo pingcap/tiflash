@@ -1,20 +1,20 @@
 #pragma once
 
-#include <chrono>
-#include <string>
-#include <memory>
 #include <Core/Types.h>
+
+#include <chrono>
+#include <memory>
+#include <string>
 
 
 namespace Poco::Util
 {
-    class AbstractConfiguration;
+class AbstractConfiguration;
 }
 
 
 namespace DB
 {
-
 /// Min and max lifetimes for a loadable object or it's entry
 struct ExternalLoadableLifetime final
 {
@@ -46,4 +46,4 @@ public:
     virtual std::exception_ptr getCreationException() const = 0;
 };
 
-}
+} // namespace DB

@@ -1,15 +1,14 @@
-#include <Parsers/ASTSetQuery.h>
+#include <Common/FieldVisitors.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetQuery.h>
-#include <Common/typeid_cast.h>
-#include <Common/FieldVisitors.h>
+#include <Parsers/ASTSetQuery.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int READONLY;
+extern const int READONLY;
 }
 
 
@@ -64,4 +63,4 @@ void InterpreterSetQuery::executeForCurrentContext()
 }
 
 
-}
+} // namespace DB

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Interpreters interface for different queries.
   */
 class IInterpreter
@@ -20,4 +19,4 @@ public:
     virtual ~IInterpreter() {}
 };
 
-}
+} // namespace DB
