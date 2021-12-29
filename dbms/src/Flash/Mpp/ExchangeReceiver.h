@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/RecyclableBuffer.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -13,6 +14,7 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <future>
 #include <mutex>
 #include <thread>
 
@@ -115,7 +117,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::thread> workers;
+    std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
     std::mutex mu;
