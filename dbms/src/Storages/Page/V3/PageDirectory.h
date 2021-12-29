@@ -43,6 +43,8 @@ public:
 
     void gc();
 
+    void gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & copy_list);
+
     // FIXME : just for test.
     BlobStorePtr blobstore;
 
@@ -87,6 +89,11 @@ private:
             entries.emplace(PageVersionType(seq), entry);
         }
 
+        void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
+        {
+            entries.emplace(PageVersionType(seq, epoch), entry);
+        }
+
         void createDelete(UInt64 seq)
         {
             entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
@@ -94,7 +101,7 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-        PageSize getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids);
+        PageSize getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_ids, PageId page_id);
 
         std::pair<std::list<PageEntryV3>, bool> deleteAndGC(UInt64 lowest_seq);
 #ifndef DBMS_PUBLIC_GTEST

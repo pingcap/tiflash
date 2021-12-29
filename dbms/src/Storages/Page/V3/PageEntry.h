@@ -14,6 +14,13 @@ public:
 
     // The offset to the begining of specify field.
     PageFieldOffsetChecksums field_offsets{};
+
+
+    // Just to insert in order when PageEntryV3 as key in std::map
+    bool operator<([[maybe_unused]] const PageEntryV3 l) const
+    {
+        return false;
+    }
 };
 using PageIDAndEntryV3 = std::pair<PageId, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;

@@ -20,6 +20,11 @@ struct PageVersionType
         , epoch(0)
     {}
 
+    explicit PageVersionType(UInt64 seq, UInt64 epoch_)
+        : sequence(seq)
+        , epoch(epoch_)
+    {}
+
     PageVersionType()
         : PageVersionType(0)
     {}

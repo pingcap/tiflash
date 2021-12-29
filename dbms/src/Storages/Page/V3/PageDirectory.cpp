@@ -248,7 +248,7 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
-PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids)
+PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_ids, PageId page_id)
 {
     PageSize single_page_size = 0;
     for (auto iter = entries.begin(); iter != entries.end(); iter++)
@@ -263,7 +263,7 @@ PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFile
         if (auto it = blob_ids.find(entry.file_id); it != blob_ids.end())
         {
             single_page_size += entry.size;
-            it->second.emplace_back(iter->second.entry);
+            it->second.emplace_back(std::make_tuple(page_id, iter->first, iter->second.entry));
         }
     }
 
@@ -312,10 +312,30 @@ void PageDirectory::snapshotsGC()
     return;
 }
 
+
+void PageDirectory::gcApply(std::map<PageEntryV3, VersionedPageIdAndEntry> & copy_list)
+{
+    for (auto & [entry, versioned_pageid_entry] : copy_list)
+    {
+        auto page_id = std::get<0>(versioned_pageid_entry);
+        auto version = std::get<1>(versioned_pageid_entry);
+
+        auto iter = mvcc_table_directory.find(page_id);
+        if (iter == mvcc_table_directory.end())
+        {
+            throw Exception(fmt::format("Can't found [pageid={}]", page_id), ErrorCodes::LOGICAL_ERROR);
+        }
+
+        auto versioned_page = iter->second;
+        iter->second->acquireLock();
+        iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
+    }
+}
+
 // FIXME : should put into pagestore.
 void PageDirectory::blobstoreGC()
 {
-    std::map<BlobFileId, std::list<PageEntryV3>> blob_need_gc;
+    std::map<BlobFileId, VersionedPageIdAndEntryList> blob_need_gc;
     blobstore->getGCStats(blob_need_gc);
     PageSize total_page_size = 0;
     {
@@ -325,12 +345,24 @@ void PageDirectory::blobstoreGC()
              iter != mvcc_table_directory.end();
              iter++)
         {
-            total_page_size += iter->second->getEntryByBlobId(blob_need_gc);
+            total_page_size += iter->second->getEntryByBlobId(blob_need_gc, iter->first);
         }
     }
 
-    std::map<PageId, std::pair<BlobFileOffset, PageSize>> copy_list;
+    if (blob_need_gc.empty())
+    {
+        return;
+    }
+
+    std::map<PageEntryV3, VersionedPageIdAndEntry> copy_list;
     copy_list = blobstore->gc(blob_need_gc, total_page_size);
+
+    if (copy_list.empty())
+    {
+        throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    gcApply(copy_list);
 }
 
 void PageDirectory::gc()

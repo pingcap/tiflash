@@ -571,7 +571,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
     ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
 
-    std::map<BlobFileId, std::list<PageEntryV3>> gc_stats;
+    std::map<BlobFileId, VersionedPageIdAndEntryList> gc_stats;
     blob_store.getGCStats(gc_stats);
     ASSERT_TRUE(gc_stats.empty());
 
@@ -628,7 +628,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     auto stat = blob_store.blob_stats.fileIdToStat(0);
 
-    std::map<BlobFileId, std::list<PageEntryV3>> gc_stats;
+    std::map<BlobFileId, VersionedPageIdAndEntryList> gc_stats;
     blob_store.getGCStats(gc_stats);
     ASSERT_FALSE(gc_stats.empty());
 

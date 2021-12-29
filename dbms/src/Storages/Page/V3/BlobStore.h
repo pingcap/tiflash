@@ -19,6 +19,11 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+// FIXME : should move into PageDirectory
+// But for test now.
+using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
+using VersionedPageIdAndEntryList = std::list<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+
 class BlobStore : public Allocator<false>
 {
 public:
@@ -32,10 +37,32 @@ public:
     class BlobStats
     {
     public:
+        enum BlobStatType
+        {
+            NORMAL = 1,
+
+            // Read Only.
+            // Only after heavy GC, BlobFile will change to READ_ONLY type.
+            // After GC remove, empty files will be removed.
+            READ_ONLY = 2
+        };
+
+        String blobTypeToString(BlobStatType type)
+        {
+            switch (type)
+            {
+            case BlobStatType::NORMAL:
+                return "normal";
+            case BlobStatType::READ_ONLY:
+                return "read only";
+            }
+            return "Invalid";
+        }
+
         struct BlobStat
         {
             SpaceMapPtr smap;
-
+            BlobStatType type;
             BlobFileId id;
 
             /**
@@ -48,6 +75,11 @@ public:
             double sm_valid_rate = 1.0;
 
             std::mutex sm_lock;
+
+            void changeToReadOnly()
+            {
+                type = BlobStatType::READ_ONLY;
+            }
 
             BlobFileOffset getPosFromStat(size_t buf_size);
 
@@ -66,6 +98,8 @@ public:
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
         void eraseStat(BlobFileId blob_file_id);
+
+        void changeToReadOnly(BlobFileId blob_file_id);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.
@@ -102,6 +136,9 @@ public:
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
 
+
+        std::list<BlobFileId> ro_ids;
+
         std::mutex lock_stats;
     };
 
@@ -109,9 +146,10 @@ public:
 
     void restore();
 
-    void getGCStats(std::map<BlobFileId, std::list<PageEntryV3>> & blob_need_gc);
+    void getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc);
 
-    std::map<PageId, std::pair<BlobFileOffset, PageSize>> gc(std::map<BlobFileId, std::list<PageEntryV3>> entries_need_gc, PageSize & total_page_size);
+    std::map<PageEntryV3, VersionedPageIdAndEntry> gc(std::map<BlobFileId, VersionedPageIdAndEntryList> entries_need_gc,
+                                                      PageSize & total_page_size);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
