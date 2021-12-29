@@ -1,24 +1,23 @@
-#include <Storages/IStorage.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/formatAST.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <DataStreams/BlockIO.h>
-#include <DataStreams/copyData.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <DataStreams/copyData.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
+#include <Parsers/TablePropertiesQueriesASTs.h>
+#include <Parsers/formatAST.h>
+#include <Storages/IStorage.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
-    extern const int THERE_IS_NO_QUERY;
-}
+extern const int SYNTAX_ERROR;
+extern const int THERE_IS_NO_QUERY;
+} // namespace ErrorCodes
 
 BlockIO InterpreterShowCreateQuery::execute()
 {
@@ -30,10 +29,9 @@ BlockIO InterpreterShowCreateQuery::execute()
 
 Block InterpreterShowCreateQuery::getSampleBlock()
 {
-    return Block{{
-        ColumnString::create(),
-        std::make_shared<DataTypeString>(),
-        "statement"}};
+    return Block{{ColumnString::create(),
+                  std::make_shared<DataTypeString>(),
+                  "statement"}};
 }
 
 
@@ -62,10 +60,9 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);
 
-    return std::make_shared<OneBlockInputStream>(Block{{
-        std::move(column),
-        std::make_shared<DataTypeString>(),
-        "statement"}});
+    return std::make_shared<OneBlockInputStream>(Block{{std::move(column),
+                                                        std::make_shared<DataTypeString>(),
+                                                        "statement"}});
 }
 
-}
+} // namespace DB

@@ -15,7 +15,6 @@
 #include <Storages/Page/V2/gc/restoreFromCheckpoints.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <common/logger_fmt_useful.h>
 
 #include <ext/scope_guard.h>
 #include <queue>

@@ -10,7 +10,6 @@
 #include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
-#include <common/logger_fmt_useful.h>
 
 using namespace DB::PS::V2;
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;

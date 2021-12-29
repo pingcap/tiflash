@@ -135,7 +135,7 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
     return {std::move(col), data_type, name};
 }
 
-ColumnWithTypeAndName createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
+ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
 {
     auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(fraction));
     auto col = data_type_ptr->createColumn();
@@ -146,7 +146,14 @@ ColumnWithTypeAndName createNullableDateTimeColumn(std::initializer_list<std::op
         else
             col->insert(Null());
     }
-    return ColumnWithTypeAndName(std::move(col), data_type_ptr, "datetime");
+    return {std::move(col), data_type_ptr, "datetime"};
+}
+
+ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction)
+{
+    auto data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
+    auto col = data_type_ptr->createColumnConst(size, Field(dt.toPackedUInt()));
+    return {std::move(col), data_type_ptr, "datetime"};
 }
 
 } // namespace tests

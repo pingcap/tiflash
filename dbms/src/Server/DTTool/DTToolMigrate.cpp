@@ -49,6 +49,7 @@ static constexpr char MIGRATE_HELP[] =
     "  --workdir     Target directory.\n"
     "  --nokeep      Do not keep old version.\n"
     "  --dry         Dry run: only print change list.\n"
+    "  --imitative   Use imitative context instead. (encryption is not supported in this mode)\n"
     "  --config-file Path to TiFlash config (tiflash.toml).";
 
 // clang-format on
@@ -172,9 +173,9 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             args.no_keep};
         auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-        LOG_INFO(logger, "source version: " << (src_file->getConfiguration() ? 2 : 1));
-        LOG_INFO(logger, "source bytes: " << src_file->getBytesOnDisk());
-        LOG_INFO(logger, "migration temporary directory: " << keeper.migration_temp_dir.path().c_str());
+        LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
+        LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
+        LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.
@@ -191,13 +192,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             throw DB::Exception(fmt::format("invalid dmfile version: {}", args.version));
         }
 
-        LOG_INFO(logger, "creating new dmfile");
+        LOG_FMT_INFO(logger, "creating new dmfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
-        LOG_INFO(logger, "creating input stream");
+        LOG_FMT_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
-        LOG_INFO(logger, "creating output stream");
+        LOG_FMT_INFO(logger, "creating output stream");
         auto output_stream = DB::DM::DMFileBlockOutputStream(
             context,
             new_file,
@@ -214,7 +215,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         // iterate all blocks and rewrite them to new dmfile
         while (auto block = input_stream->read())
         {
-            LOG_INFO(logger, "migrating block " << counter++ << " ( size: " << block.bytes() << " )");
+            LOG_FMT_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
             if (!args.dry_mode)
                 output_stream.write(
                     block,
@@ -229,13 +230,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.markSuccess();
         }
 
-        LOG_INFO(logger, "checking meta status for new file");
+        LOG_FMT_INFO(logger, "checking meta status for new file");
         if (!args.dry_mode)
         {
             DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 1, keeper.migration_temp_dir.path(), DB::DM::DMFile::ReadMetaMode::all());
         }
     }
-    LOG_INFO(logger, "migration finished");
+    LOG_FMT_INFO(logger, "migration finished");
 
     return 0;
 }
@@ -247,6 +248,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     bpo::positional_options_description positional;
     bool dry_mode = false;
     bool no_keep = false;
+    bool imitative = false;
     // clang-format off
     options.add_options()
         ("help", "")
@@ -254,11 +256,12 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("algorithm", bpo::value<std::string>()->default_value("xxh3"))
         ("frame", bpo::value<size_t>()->default_value(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE))
         ("workdir", bpo::value<std::string>()->required())
-        ("config-file", bpo::value<std::string>()->required())
+        ("config-file", bpo::value<std::string>())
         ("file-id", bpo::value<size_t>()->required())
         ("dry", bpo::bool_switch(&dry_mode))
         ("compression", bpo::value<std::string>()->default_value("lz4"))
         ("level", bpo::value<int>()->default_value(-1))
+        ("imitative", bpo::bool_switch(&imitative))
         ("nokeep", bpo::bool_switch(&no_keep));
     // clang-format on
 
@@ -270,12 +273,25 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
     try
     {
-        if (vm.count("help"))
+        if (vm.count("help") != 0)
         {
             std::cout << MIGRATE_HELP << std::endl;
             return 0;
         }
+
         bpo::notify(vm);
+
+        if (imitative && vm.count("config-file") != 0)
+        {
+            std::cerr << "config-file is not allowed in imitative mode" << std::endl;
+            return -EINVAL;
+        }
+        else if (!imitative && vm.count("config-file") == 0)
+        {
+            std::cerr << "config-file is required in proxy mode" << std::endl;
+            return -EINVAL;
+        }
+
         MigrateArgs args{};
         args.version = vm["version"].as<size_t>();
         if (args.version < 1 || args.version > 2)
@@ -353,8 +369,16 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
             }
         }
 
-        CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>(), ffi_function);
-        return service.run({""});
+        if (imitative)
+        {
+            auto env = detail::ImitativeEnv{args.workdir};
+            return migrateServiceMain(*env.getContext(), args);
+        }
+        else
+        {
+            CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>(), ffi_function);
+            return service.run({""});
+        }
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
     {

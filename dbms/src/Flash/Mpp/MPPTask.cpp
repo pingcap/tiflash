@@ -1,6 +1,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -26,14 +27,11 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char hang_in_execution[];
 extern const char exception_before_mpp_register_non_root_mpp_task[];
 extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
@@ -43,7 +41,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(log, id, meta.address())
+    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -53,7 +51,7 @@ MPPTask::~MPPTask()
     if (current_memory_tracker != memory_tracker)
         current_memory_tracker = memory_tracker;
     closeAllTunnels("");
-    LOG_DEBUG(log, "finish MPPTask: " << id.toString());
+    LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
 void MPPTask::closeAllTunnels(const String & reason)
@@ -74,8 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
-    worker.detach();
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [this] { this->shared_from_this()->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
@@ -153,7 +150,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
+                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
                 Errors::Coprocessor::BadRequest);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
@@ -241,7 +238,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettings().enable_local_tunnel && meta.address() == task_meta.address();
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context->getSettings().max_threads, is_local, log);
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
+        LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
         if (!dag_context->isRootMPPTask())
@@ -252,7 +249,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tunnel_set = tunnel_set;
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
-    LOG_DEBUG(log, "begin to register the task " << id.toString());
+    LOG_FMT_DEBUG(log, "begin to register the task {}", id.toString());
 
     if (dag_context->isRootMPPTask())
     {
@@ -266,17 +263,20 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
+
+    mpp_task_statistics.initializeExecutorDAG(dag_context.get());
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(*context);
-    io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    mpp_task_statistics.compile_start_timestamp = start_time;
-    mpp_task_statistics.compile_end_timestamp = end_time;
+    mpp_task_statistics.setCompileTimestamp(start_time, end_time);
+    mpp_task_statistics.recordReadWaitIndex(*dag_context);
 }
 
 void MPPTask::runImpl()
@@ -309,44 +309,38 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = io.in;
+        auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 
-        size_t count = 0;
-
-        while (Block block = from->read())
-        {
-            count += block.rows();
-            FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-            if (dag_context->isRootMPPTask())
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-            }
-            else
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-            }
-        }
+        while (from->read())
+            continue;
 
         from->readSuffix();
         finishWrite();
-        LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
+
+        auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        LOG_FMT_DEBUG(
+            log,
+            "finish write with {} rows, {} blocks, {} bytes",
+            return_statistics.rows,
+            return_statistics.blocks,
+            return_statistics.bytes);
     }
     catch (Exception & e)
     {
         err_msg = e.displayText();
-        LOG_ERROR(log, "task running meets error: " << err_msg << " Stack Trace : " << e.getStackTrace().toString());
+        LOG_FMT_ERROR(log, "task running meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
     }
     catch (std::exception & e)
     {
         err_msg = e.what();
-        LOG_ERROR(log, "task running meets error: " << err_msg);
+        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
     }
     catch (...)
     {
         err_msg = "unrecovered error";
-        LOG_ERROR(log, "task running meets error: " << err_msg);
+        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
     }
     if (err_msg.empty())
     {
@@ -357,13 +351,13 @@ void MPPTask::runImpl()
         auto process_info = context->getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
-        mpp_task_statistics.memory_peak = peak_memory;
+        mpp_task_statistics.setMemoryPeak(peak_memory);
     }
     else
     {
         writeErrToAllTunnels(err_msg);
     }
-    LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))
@@ -372,7 +366,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
@@ -395,13 +389,13 @@ void MPPTask::writeErrToAllTunnels(const String & e)
 void MPPTask::cancel(const String & reason)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    LOG_FMT_WARNING(log, "Begin cancel task: {}", id.toString());
     while (true)
     {
         auto previous_status = status.load();
         if (previous_status == FINISHED || previous_status == CANCELLED)
         {
-            LOG_WARNING(log, "task already " << (previous_status == FINISHED ? "finished" : "cancelled"));
+            LOG_FMT_WARNING(log, "task already {}", (previous_status == FINISHED ? "finished" : "cancelled"));
             return;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))

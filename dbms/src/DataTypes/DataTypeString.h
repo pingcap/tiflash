@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ostream>
-
 #include <DataTypes/IDataType.h>
+
+#include <ostream>
 
 
 namespace DB
 {
-
 class DataTypeString final : public IDataType
 {
 public:
@@ -64,4 +63,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB
