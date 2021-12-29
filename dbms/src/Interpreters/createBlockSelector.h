@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Create a 'selector' to be used in IColumn::scatter method
   *  according to sharding scheme and values of column with sharding key.
   *
@@ -23,4 +22,4 @@ IColumn::Selector createBlockSelector(
     const IColumn & column,
     const std::vector<UInt64> & slots);
 
-}
+} // namespace DB
