@@ -2727,7 +2727,6 @@ public:
         // prepare objects related to padding_str to avoid duplicated code.
         if (is_padding_const)
         {
-            Field padding_res_field;
             const ColumnConst * column_padding = checkAndGetColumnConst<ColumnString>(column_padding_ptr.get());
             StringRef padding_str = column_padding->getDataAt(0);
             padding_size = padding_str.size + 1;
@@ -2791,9 +2790,8 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length, IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
-        (void)column_length;
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2824,9 +2822,8 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length, IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
-        (void)column_length;
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
 
@@ -2855,9 +2852,8 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_column(const String & str_val, const ColumnVector<IntType> * column_length, IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void const_column(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
-        (void)column_length;
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
 
@@ -2886,9 +2882,8 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_const(const String & str_val, const ColumnVector<IntType> * column_length, IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void const_const(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
-        (void)column_length;
         ColumnString::Offset res_prev_offset = 0;
 
         // pad(const_str, length, const_pad)
