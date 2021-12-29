@@ -371,15 +371,15 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else
-            thread_manager->schedule(true, "Receiver", [this, index] { readLoop(index); });
+            thread_manager->schedule(true, "Receiver", [this, index, req = std::move(req)] { readLoop(req); });
     }
 
     if (!async_requests.empty())
-        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)]() mutable { reactor(std::move(async_requests)); });
+        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] { reactor(async_requests); });
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_requests)
+void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
@@ -428,7 +428,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_reques
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
+void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;

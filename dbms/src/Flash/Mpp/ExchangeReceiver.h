@@ -96,8 +96,8 @@ private:
     using Request = typename RPCContext::Request;
 
     void setUpConnection();
-    void readLoop(Request req);
-    void reactor(std::vector<Request> async_requests);
+    void readLoop(const Request & req);
+    void reactor(const std::vector<Request> & async_requests);
 
     void setState(ExchangeReceiverState new_state);
     ExchangeReceiverState getState();
