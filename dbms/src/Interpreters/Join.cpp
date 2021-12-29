@@ -1309,7 +1309,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// Memoize key columns to work.
     for (size_t i = 0; i < keys_size; ++i)
     {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
+        key_columns[i] = block.getByName(key_names_left[i]).column.get();
 
         if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
         {
