@@ -746,9 +746,9 @@ struct ConvertThroughParsing
         }
 
         const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-        if (!block.getByPosition(result).type->isNullable())
+        if (block.getByPosition(result).type->isNullable())
         {
-            exception_mode = ConvertFromStringExceptionMode::Throw;
+            exception_mode = ConvertFromStringExceptionMode::Null;
         }
         const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
         const ColumnFixedString * col_from_fixed_string = checkAndGetColumn<ColumnFixedString>(col_from);
@@ -847,17 +847,6 @@ struct ConvertThroughParsing
     }
 };
 
-template <typename Name>
-struct ConvertImpl<DataTypeString, DataTypeMyDateTime, Name>
-    : ConvertThroughParsing<DataTypeString, DataTypeMyDateTime, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal>
-{
-};
-
-template <typename Name>
-struct ConvertImpl<DataTypeFixedString, DataTypeMyDateTime, Name>
-    : ConvertThroughParsing<DataTypeFixedString, DataTypeMyDateTime, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal>
-{
-};
 
 template <typename ToDataType, typename Name>
 struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name>
