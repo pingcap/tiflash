@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #if __SSE2__
-    #define LIBDIVIDE_SSE2 1
+#define LIBDIVIDE_SSE2 1
 #endif
 
 #include <libdivide.h>
@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 template <typename T>
 IColumn::Selector createBlockSelector(
     const IColumn & column,
@@ -63,4 +62,4 @@ template IColumn::Selector createBlockSelector<Int16>(const IColumn & column, co
 template IColumn::Selector createBlockSelector<Int32>(const IColumn & column, const std::vector<UInt64> & slots);
 template IColumn::Selector createBlockSelector<Int64>(const IColumn & column, const std::vector<UInt64> & slots);
 
-}
+} // namespace DB

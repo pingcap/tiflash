@@ -25,12 +25,20 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
+template <bool batch>
+const tipb::DAGRequest & DAGDriver<batch>::dagRequest() const
+{
+    return *context.getDAGContext()->dag_request;
+}
+
 template <>
-DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_)
+DAGDriver<false>::DAGDriver(
+    Context & context_,
+    UInt64 start_ts,
+    UInt64 schema_ver,
+    tipb::SelectResponse * dag_response_,
+    bool internal_)
     : context(context_)
-    , dag_request(dag_request_)
-    , regions(regions_)
-    , retry_regions(retry_regions_)
     , dag_response(dag_response_)
     , writer(nullptr)
     , internal(internal_)
@@ -40,15 +48,17 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
-    context.getTimezoneInfo().resetByDAGRequest(dag_request);
+    context.getTimezoneInfo().resetByDAGRequest(dagRequest());
 }
 
 template <>
-DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, bool internal_)
+DAGDriver<true>::DAGDriver(
+    Context & context_,
+    UInt64 start_ts,
+    UInt64 schema_ver,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+    bool internal_)
     : context(context_)
-    , dag_request(dag_request_)
-    , regions(regions_)
-    , retry_regions(retry_regions_)
     , writer(writer_)
     , internal(internal_)
     , log(&Poco::Logger::get("DAGDriver"))
@@ -57,7 +67,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
-    context.getTimezoneInfo().resetByDAGRequest(dag_request);
+    context.getTimezoneInfo().resetByDAGRequest(dagRequest());
 }
 
 template <bool batch>
@@ -65,9 +75,8 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGContext dag_context(dag_request);
-    context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""), batch);
+    DAGQuerySource dag(context);
+    DAGContext & dag_context = *context.getDAGContext();
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -77,7 +86,7 @@ try
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context.compile_time_ns = compile_time_ns;
-    LOG_DEBUG(log, "Compile dag request cost " << compile_time_ns / 1000000 << " ms");
+    LOG_FMT_DEBUG(log, "Compile dag request cost {} ms", compile_time_ns / 1000000);
 
     BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
@@ -85,8 +94,6 @@ try
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
             dag_response,
             context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(),
-            dag.getResultFieldTypes(),
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
@@ -117,10 +124,7 @@ try
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
             true,
-            dag.getEncodeType(),
-            dag.getResultFieldTypes(),
-            dag_context,
-            nullptr);
+            dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
@@ -145,11 +149,13 @@ try
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
-        LOG_DEBUG(
+        LOG_FMT_DEBUG(
             log,
-            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
-                                << " bytes.");
+            "{}: dag request without encode cost: {} seconds, produce {} rows, {} bytes.",
+            __PRETTY_FUNCTION__,
+            p_stream->getProfileInfo().execution_time / (double)1000000000,
+            p_stream->getProfileInfo().rows,
+            p_stream->getProfileInfo().bytes);
 
         if constexpr (!batch)
         {
@@ -171,29 +177,27 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n"
-                                       << e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "{}: {}\n{}", __PRETTY_FUNCTION__, e.standardText(), e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n"
-                                       << e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "{}: DB Exception: {}\n{}", __PRETTY_FUNCTION__, e.message(), e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
+    LOG_FMT_ERROR(log, "{}: KV Client Exception: {}", __PRETTY_FUNCTION__, e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
+    LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 catch (...)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+    LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 

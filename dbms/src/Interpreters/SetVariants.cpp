@@ -1,16 +1,15 @@
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/SetVariants.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_SET_DATA_VARIANT;
-    extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_SET_DATA_VARIANT;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 template <typename Variant>
 void SetVariantsTemplate<Variant>::init(Type type_)
@@ -19,15 +18,18 @@ void SetVariantsTemplate<Variant>::init(Type type_)
 
     switch (type)
     {
-        case Type::EMPTY: break;
+    case Type::EMPTY:
+        break;
 
-    #define M(NAME) \
-        case Type::NAME: NAME = std::make_unique<typename decltype(NAME)::element_type>(); break;
+#define M(NAME)                                                           \
+    case Type::NAME:                                                      \
+        NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
+        break;
         APPLY_FOR_SET_VARIANTS(M)
-    #undef M
+#undef M
 
-        default:
-            throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    default:
+        throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 
@@ -36,15 +38,17 @@ size_t SetVariantsTemplate<Variant>::getTotalRowCount() const
 {
     switch (type)
     {
-        case Type::EMPTY: return 0;
+    case Type::EMPTY:
+        return 0;
 
-    #define M(NAME) \
-        case Type::NAME: return NAME->data.size();
+#define M(NAME)      \
+    case Type::NAME: \
+        return NAME->data.size();
         APPLY_FOR_SET_VARIANTS(M)
-    #undef M
+#undef M
 
-        default:
-            throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    default:
+        throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 
@@ -53,15 +57,17 @@ size_t SetVariantsTemplate<Variant>::getTotalByteCount() const
 {
     switch (type)
     {
-        case Type::EMPTY: return 0;
+    case Type::EMPTY:
+        return 0;
 
-    #define M(NAME) \
-        case Type::NAME: return NAME->data.getBufferSizeInBytes();
+#define M(NAME)      \
+    case Type::NAME: \
+        return NAME->data.getBufferSizeInBytes();
         APPLY_FOR_SET_VARIANTS(M)
-    #undef M
+#undef M
 
-        default:
-            throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    default:
+        throw Exception("Unknown Set variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 
@@ -118,7 +124,7 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
                 return Type::nullable_keys128;
             else
                 throw Exception{"Logical error: numeric column has sizeOfField not in 1, 2, 4, 8.",
-                    ErrorCodes::LOGICAL_ERROR};
+                                ErrorCodes::LOGICAL_ERROR};
         }
 
         if (all_fixed && !has_dec)
@@ -151,8 +157,8 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
             return Type::key64;
         if (size_of_field == 16)
             return Type::keys128;
-//        if (size_of_field == sizeof(Decimal))
-//            return Type::key_decimal;
+        //        if (size_of_field == sizeof(Decimal))
+        //            return Type::key_decimal;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -178,4 +184,4 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
 template struct SetVariantsTemplate<NonClearableSet>;
 template struct SetVariantsTemplate<ClearableSet>;
 
-}
+} // namespace DB

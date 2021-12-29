@@ -20,7 +20,7 @@ struct Settings
 {
     /// For initialization from empty initializer-list to be "value initialization", not "aggregate initialization" in C++14.
     /// http://en.cppreference.com/w/cpp/language/aggregate_initialization
-    Settings() {}
+    Settings() = default;
     /** List of settings: type, name, default value.
       *
       * This looks rather unconvenient. It is done that way to avoid repeating settings in different places.
@@ -28,6 +28,7 @@ struct Settings
       *  but we are not going to do it, because settings is used everywhere as static struct fields.
       */
 
+// clang-format off
 #define APPLY_FOR_SETTINGS(M)                                                                                                                                                                                                           \
     M(SettingString, regions, "", "the region need to be read.")                                                                                                                                                                        \
     M(SettingBool, resolve_locks, false, "tmt resolve locks.")                                                                                                                                                                          \
@@ -61,7 +62,6 @@ struct Settings
     M(SettingSeconds, send_timeout, DBMS_DEFAULT_SEND_TIMEOUT_SEC, "")                                                                                                                                                                  \
     M(SettingMilliseconds, queue_max_wait_ms, DEFAULT_QUERIES_QUEUE_WAIT_TIME_MS, "The wait time in the request queue, if the number of concurrent requests exceeds the maximum.")                                                      \
     M(SettingUInt64, poll_interval, DBMS_DEFAULT_POLL_INTERVAL, "Block at the query wait loop on the server for the specified number of seconds.")                                                                                      \
-    M(SettingUInt64, distributed_connections_pool_size, DBMS_DEFAULT_DISTRIBUTED_CONNECTIONS_POOL_SIZE, "Maximum number of connections with one remote server in the pool.")                                                            \
     M(SettingUInt64, connections_with_failover_max_tries, DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES, "The maximum number of attempts to connect to replicas.")                                                               \
     M(SettingBool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.")                                                                                                       \
     M(SettingBool, use_uncompressed_cache, true, "Whether to use the cache of uncompressed blocks.")                                                                                                                                    \
@@ -69,14 +69,7 @@ struct Settings
     M(SettingUInt64, background_pool_size, DBMS_DEFAULT_BACKGROUND_POOL_SIZE, "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server "                               \
                                                                               "startup.")                                                                                                                                               \
                                                                                                                                                                                                                                         \
-    M(SettingMilliseconds, distributed_directory_monitor_sleep_time_ms, DBMS_DISTRIBUTED_DIRECTORY_MONITOR_SLEEP_TIME_MS, "Sleep time for StorageDistributed DirectoryMonitors in case there is no work or exception has been thrown.") \
-                                                                                                                                                                                                                                        \
-    M(SettingBool, distributed_directory_monitor_batch_inserts, false, "Should StorageDistributed DirectoryMonitors try to batch individual inserts into bigger ones.")                                                                 \
-                                                                                                                                                                                                                                        \
     M(SettingBool, optimize_move_to_prewhere, true, "Allows disabling WHERE to PREWHERE optimization in SELECT queries from MergeTree.")                                                                                                \
-                                                                                                                                                                                                                                        \
-    M(SettingUInt64, replication_alter_partitions_sync, 1, "Wait for actions to manipulate the partitions. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.")                                             \
-    M(SettingUInt64, replication_alter_columns_timeout, 60, "Wait for actions to change the table structure within the specified number of seconds. 0 - wait unlimited time.")                                                          \
                                                                                                                                                                                                                                         \
     M(SettingLoadBalancing, load_balancing, LoadBalancing::RANDOM, "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.")                                          \
                                                                                                                                                                                                                                         \
@@ -100,24 +93,9 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingBool, skip_unavailable_shards, false, "Silently skip unavailable shards.")                                                                                                                                                 \
                                                                                                                                                                                                                                         \
-    M(SettingBool, distributed_group_by_no_merge, false, "Do not merge aggregation states from different servers for distributed query processing - in case it is for certain that there "                                              \
-                                                         "are different keys on different shards.")                                                                                                                                     \
-                                                                                                                                                                                                                                        \
-    M(SettingUInt64, merge_tree_min_rows_for_concurrent_read, (20 * 8192), "If at least as many lines are read from one file, the reading can be parallelized.")                                                                        \
-    M(SettingUInt64, merge_tree_min_rows_for_seek, 0, "You can skip reading more than that number of rows at the price of one seek per file.")                                                                                          \
-    M(SettingUInt64, merge_tree_coarse_index_granularity, 8, "If the index segment can contain the required keys, divide it into as many parts and recursively check them. ")                                                           \
-    M(SettingUInt64, merge_tree_max_rows_to_use_cache, (1024 * 1024), "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. "                                 \
-                                                                      "(For large queries not to flush out the cache.)")                                                                                                                \
-                                                                                                                                                                                                                                        \
-    M(SettingBool, merge_tree_uniform_read_distribution, true, "Distribute read from MergeTree over threads evenly, ensuring stable average execution time of each thread within one read "                                             \
-                                                               "operation.")                                                                                                                                                            \
-                                                                                                                                                                                                                                        \
     M(SettingUInt64, optimize_min_equality_disjunction_chain_length, 3, "The minimum length of the expression `expr = x1 OR ... expr = xN` for optimization ")                                                                          \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, min_bytes_to_use_direct_io, 0, "The minimum number of bytes for input/output operations is bypassing the page cache. 0 - disabled.")                                                                               \
-                                                                                                                                                                                                                                        \
-    M(SettingBool, force_index_by_date, 0, "Throw an exception if there is a partition key in a table, and it is not used.")                                                                                                            \
-    M(SettingBool, force_primary_key, 0, "Throw an exception if there is primary key in a table, and it is not used.")                                                                                                                  \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, mark_cache_min_lifetime, 0, "If the maximum size of mark_cache is exceeded, delete only records older than mark_cache_min_lifetime seconds.")                                                                      \
                                                                                                                                                                                                                                         \
@@ -135,8 +113,6 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of "                                               \
                                                         "printed query in ordinary text log.")                                                                                                                                          \
-                                                                                                                                                                                                                                        \
-    M(SettingDistributedProductMode, distributed_product_mode, DistributedProductMode::DENY, "How are distributed subqueries performed inside IN or JOIN sections?")                                                                    \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, max_concurrent_queries_for_user, 0, "The maximum number of concurrent requests per user.")                                                                                                                         \
                                                                                                                                                                                                                                         \
@@ -207,21 +183,13 @@ struct Settings
     M(SettingUInt64, preferred_max_column_in_block_size_bytes, 0, "Limit on max column size in block while reading. Helps to decrease cache misses count. Should be close to L2 cache size.")                                           \
                                                                                                                                                                                                                                         \
     M(SettingBool, insert_distributed_sync, false, "If setting is enabled, insert query into distributed waits until data will be sent to all nodes in cluster.")                                                                       \
-    M(SettingUInt64, insert_distributed_timeout, 0, "Timeout for insert query into distributed. Setting is used only with insert_distributed_sync enabled. Zero value means no "                                                        \
-                                                    "timeout.")                                                                                                                                                                         \
-    M(SettingInt64, distributed_ddl_task_timeout, 180, "Timeout for DDL query responses from all hosts in cluster. Negative value means infinite.")                                                                                     \
-    M(SettingMilliseconds, stream_flush_interval_ms, DEFAULT_QUERY_LOG_FLUSH_INTERVAL_MILLISECONDS, "Timeout for flushing data from streaming storages.")                                                                               \
-    M(SettingString, format_schema, "", "Schema identifier (used by schema-based formats)")                                                                                                                                             \
     M(SettingBool, insert_allow_materialized_columns, 0, "If setting is enabled, Allow materialized columns in INSERT.")                                                                                                                \
     M(SettingSeconds, http_connection_timeout, DEFAULT_HTTP_READ_BUFFER_CONNECTION_TIMEOUT, "HTTP connection timeout.")                                                                                                                 \
     M(SettingSeconds, http_send_timeout, DEFAULT_HTTP_READ_BUFFER_TIMEOUT, "HTTP send timeout")                                                                                                                                         \
     M(SettingSeconds, http_receive_timeout, DEFAULT_HTTP_READ_BUFFER_TIMEOUT, "HTTP receive timeout")                                                                                                                                   \
-    M(SettingBool, optimize_throw_if_noop, false, "If setting is enabled and OPTIMIZE query didn't actually assign a merge then an explanatory exception is thrown")                                                                    \
     M(SettingBool, use_index_for_in_with_subqueries, true, "Try using an index if there is a subquery or a table expression on the right side of the IN operator.")                                                                     \
                                                                                                                                                                                                                                         \
     M(SettingBool, empty_result_for_aggregation_by_empty_set, false, "Return empty result when aggregating without keys on empty set.")                                                                                                 \
-    M(SettingBool, allow_distributed_ddl, true, "If it is set to true, then a user is allowed to executed distributed DDL queries.")                                                                                                    \
-                                                                                                                                                                                                                                        \
                                                                                                                                                                                                                                         \
     /** Limits during query execution are part of the settings. \
       * Used to provide a more safe execution of queries from the user interface. \
@@ -316,21 +284,21 @@ struct Settings
     M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                            \
     M(SettingUInt64, dt_storage_pool_log_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                         \
     M(SettingFloat, dt_storage_pool_log_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                               \
-    M(SettingDouble, dt_storage_pool_log_gc_force_hardlink_rate, 0.8, "Max valid rate of deciding a page file can do hardlink")                                                                                                         \
+    M(SettingDouble, dt_storage_pool_log_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                         \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_data_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                   \
     M(SettingUInt64, dt_storage_pool_data_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_data_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                        \
     M(SettingFloat, dt_storage_pool_data_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                              \
-    M(SettingDouble, dt_storage_pool_data_gc_force_hardlink_rate, 0.8, "Max valid rate of deciding a page file can do hardlink")                                                                                                        \
+    M(SettingDouble, dt_storage_pool_data_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                        \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                   \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                        \
     M(SettingFloat, dt_storage_pool_meta_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                              \
-    M(SettingDouble, dt_storage_pool_meta_gc_force_hardlink_rate, 0.8, "Max valid rate of deciding a page file can do hardlink")                                                                                                        \
+    M(SettingDouble, dt_storage_pool_meta_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                        \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
@@ -363,7 +331,12 @@ struct Settings
     M(SettingUInt64, max_network_bandwidth_for_all_users, 0, "The maximum speed of data exchange over the network in bytes per second for all concurrently running queries. Zero means "                                                \
                                                              "unlimited.")                                                                                                                                                              \
                                                                                                                                                                                                                                         \
+    M(SettingBool, enable_elastic_threadpool, true, "Enable elastic thread pool for thread create usages.")                                                                                                                             \
+    M(SettingUInt64, elastic_threadpool_init_cap, 400, "The size of elastic thread pool.")                                                                                                                                              \
+    M(SettingUInt64, elastic_threadpool_shrink_period_ms, 300000, "The shrink period(ms) of elastic thread pool.")                                                                                                                      \
+    M(SettingUInt64, max_rpc_poller, 200, "The maximum number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads.")                                                       \
     M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
+// clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
     APPLY_FOR_SETTINGS(DECLARE)

@@ -24,59 +24,68 @@ class LogWithPrefix : private boost::noncopyable
 {
 public:
     LogWithPrefix(Poco::Logger * log_, const String & prefix_)
-        : log(log_)
+        : logger(log_)
         , prefix(addSuffixSpace(prefix_))
     {
-        if (log == nullptr)
+        if (logger == nullptr)
             throw Exception("LogWithPrefix receives nullptr");
     }
 
-    bool trace() const { return log->trace(); }
+    bool trace() const { return logger->trace(); }
 
     void trace(const std::string & msg)
     {
         auto m = prefix + msg;
-        log->trace(m);
+        logger->trace(m);
     }
 
-    bool debug() const { return log->debug(); }
+    bool debug() const { return logger->debug(); }
 
     void debug(const std::string & msg)
     {
         auto m = prefix + msg;
-        log->debug(m);
+        logger->debug(m);
     }
 
-    bool information() const { return log->information(); }
+    bool information() const { return logger->information(); }
 
     void information(const std::string & msg)
     {
         auto m = prefix + msg;
-        log->information(m);
+        logger->information(m);
     }
 
-    bool warning() const { return log->warning(); }
+    bool warning() const { return logger->warning(); }
 
     void warning(const std::string & msg)
     {
         auto m = prefix + msg;
-        log->warning(m);
+        logger->warning(m);
     }
 
-    bool error() const { return log->error(); }
+    bool error() const { return logger->error(); }
 
     void error(const std::string & msg)
     {
         auto m = prefix + msg;
-        log->error(m);
+        logger->error(m);
     }
 
-    Poco::Logger * getLog() const { return log; }
+    Poco::Logger * getLog() const { return logger; }
 
-    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(log, prefix + str); }
+    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(logger, prefix + str); }
+
+
+    void log(const Poco::Message & msg) { return logger->log(Poco::Message(msg, prefix + msg.getText())); }
+
+    bool is(int level) const { return logger->is(level); }
+
+    Poco::Channel * getChannel() const { return logger->getChannel(); }
+
+    const std::string & name() const { return logger->name(); }
 
 private:
-    Poco::Logger * log;
+    Poco::Logger * logger;
     // prefix must be ascii.
     const String prefix;
 

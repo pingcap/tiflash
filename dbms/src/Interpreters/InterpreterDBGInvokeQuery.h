@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class Context;
 class IAST;
 class ASTDBGInvokeQuery;
@@ -18,7 +17,9 @@ class InterpreterDBGInvokeQuery : public IInterpreter
 {
 public:
     InterpreterDBGInvokeQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_), context(context_) {}
+        : query_ptr(query_ptr_)
+        , context(context_)
+    {}
 
     BlockIO execute() override;
 
@@ -28,4 +29,4 @@ private:
 };
 
 
-}
+} // namespace DB

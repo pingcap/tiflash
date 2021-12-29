@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -25,7 +26,7 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
 
     std::string source_str = "<unknown>";
     if (msg.getSourceFile())
-        source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
+        source_str = std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine());
 
     std::string message;
     const std::string & source = msg.getSource();
@@ -87,6 +88,7 @@ std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::P
 
 std::string UnifiedLogPatternFormatter::getTimestamp()
 {
+    // The format is "yyyy/MM/dd HH:mm:ss.SSS ZZZZZ"
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
 
@@ -101,11 +103,8 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    std::string buffer
-        = fmt::format("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d}", year, month, day, hour, minute, second, milliseconds);
-
-    std::stringstream ss;
-    ss << buffer << " ";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d} ", year, month, day, hour, minute, second, milliseconds);
 
     // Handle time zone section
     int offset_value = std::abs(zone_offset);
@@ -114,15 +113,13 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
     auto offset_tt = std::chrono::system_clock::to_time_t(offset_tp);
     std::tm * offset_tm = std::gmtime(&offset_tt);
     if (zone_offset < 0)
-        ss << "-";
+        fmt_buf.append("-");
     else
-        ss << "+";
-    buffer = fmt::format("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
+        fmt_buf.append("+");
 
-    ss << buffer;
+    fmt_buf.fmtAppend("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
 
-    std::string result = ss.str();
-    return result;
+    return fmt_buf.toString();
 }
 
 void UnifiedLogPatternFormatter::writeEscapedString(DB::WriteBuffer & wb, const std::string & str)

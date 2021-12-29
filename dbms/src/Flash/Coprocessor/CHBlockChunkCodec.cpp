@@ -92,4 +92,11 @@ Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
     return block_in.read();
 }
 
+Block CHBlockChunkCodec::decode(const String & str, const Block & header)
+{
+    ReadBufferFromString read_buffer(str);
+    NativeBlockInputStream block_in(read_buffer, header, 0, /*align_column_name_with_header=*/true);
+    return block_in.read();
+}
+
 } // namespace DB

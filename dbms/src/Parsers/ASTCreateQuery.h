@@ -2,15 +2,13 @@
 
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTQueryWithOutput.h>
-#include <Parsers/ASTQueryWithOnCluster.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTSetQuery.h>
 
 
 namespace DB
 {
-
 class ASTStorage : public IAST
 {
 public:
@@ -68,16 +66,15 @@ public:
             s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "SETTINGS " << (s.hilite ? hilite_none : "");
             settings->formatImpl(s, state, frame);
         }
-
     }
 };
 
 
 /// CREATE TABLE or ATTACH TABLE query
-class ASTCreateQuery : public ASTQueryWithOutput, public ASTQueryWithOnCluster
+class ASTCreateQuery : public ASTQueryWithOutput
 {
 public:
-    bool attach{false};    /// Query ATTACH TABLE, not CREATE TABLE.
+    bool attach{false}; /// Query ATTACH TABLE, not CREATE TABLE.
     bool if_not_exists{false};
     bool is_view{false};
     bool is_materialized_view{false};
@@ -86,7 +83,7 @@ public:
     String database;
     String table;
     ASTExpressionList * columns = nullptr;
-    String to_database;   /// For CREATE MATERIALIZED VIEW mv TO table.
+    String to_database; /// For CREATE MATERIALIZED VIEW mv TO table.
     String to_table;
     ASTStorage * storage = nullptr;
     String as_database;
@@ -113,18 +110,6 @@ public:
         return res;
     }
 
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
-    {
-        auto query_ptr = clone();
-        ASTCreateQuery & query = static_cast<ASTCreateQuery &>(*query_ptr);
-
-        query.cluster.clear();
-        if (query.database.empty())
-            query.database = new_database;
-
-        return query_ptr;
-    }
-
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {
@@ -133,11 +118,10 @@ protected:
         if (!database.empty() && table.empty())
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "")
-                << (attach ? "ATTACH DATABASE " : "CREATE DATABASE ")
-                << (if_not_exists ? "IF NOT EXISTS " : "")
-                << (settings.hilite ? hilite_none : "")
-                << backQuoteIfNeed(database);
-            formatOnCluster(settings);
+                          << (attach ? "ATTACH DATABASE " : "CREATE DATABASE ")
+                          << (if_not_exists ? "IF NOT EXISTS " : "")
+                          << (settings.hilite ? hilite_none : "")
+                          << backQuoteIfNeed(database);
 
             if (storage)
                 storage->formatImpl(settings, state, frame);
@@ -154,13 +138,12 @@ protected:
 
             settings.ostr
                 << (settings.hilite ? hilite_keyword : "")
-                    << (attach ? "ATTACH " : "CREATE ")
-                    << (is_temporary ? "TEMPORARY " : "")
-                    << what << " "
-                    << (if_not_exists ? "IF NOT EXISTS " : "")
+                << (attach ? "ATTACH " : "CREATE ")
+                << (is_temporary ? "TEMPORARY " : "")
+                << what << " "
+                << (if_not_exists ? "IF NOT EXISTS " : "")
                 << (settings.hilite ? hilite_none : "")
                 << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
-                formatOnCluster(settings);
         }
 
         if (!to_table.empty())
@@ -202,4 +185,4 @@ protected:
     }
 };
 
-}
+} // namespace DB

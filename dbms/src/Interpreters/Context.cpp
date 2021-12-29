@@ -1,6 +1,7 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -15,7 +16,6 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
@@ -50,6 +50,7 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
+#include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <map>
@@ -170,12 +171,6 @@ struct ContextShared
     std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
     std::chrono::steady_clock::time_point close_cycle_time = std::chrono::steady_clock::now();
     UInt64 close_cycle = 0;
-
-    /// Clusters for distributed tables
-    /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
-    std::unique_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config; /// Soteres updated configs
-    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
 
     bool shutdown_called = false;
 
@@ -686,7 +681,7 @@ void Context::checkDatabaseAccessRightsImpl(const std::string & database_name) c
         return;
     }
     if (!shared->security_manager->hasAccessToDatabase(client_info.current_user, database_name))
-        throw Exception("Access denied to database " + database_name, ErrorCodes::DATABASE_ACCESS_DENIED);
+        throw Exception(fmt::format("Access denied to database {}", database_name), ErrorCodes::DATABASE_ACCESS_DENIED);
 }
 
 void Context::addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
@@ -772,10 +767,10 @@ void Context::assertTableExists(const String & database_name, const String & tab
 
     Databases::const_iterator it = shared->databases.find(db);
     if (shared->databases.end() == it)
-        throw Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+        throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 
     if (!it->second->isTableExist(*this, table_name))
-        throw Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception(fmt::format("Table {}.{} doesn't exist.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
 }
 
 
@@ -789,7 +784,7 @@ void Context::assertTableDoesntExist(const String & database_name, const String 
 
     Databases::const_iterator it = shared->databases.find(db);
     if (shared->databases.end() != it && it->second->isTableExist(*this, table_name))
-        throw Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Table {}.{} already exists.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::TABLE_ALREADY_EXISTS);
 }
 
 
@@ -802,7 +797,7 @@ void Context::assertDatabaseExists(const String & database_name, bool check_data
         checkDatabaseAccessRightsImpl(db);
 
     if (shared->databases.end() == shared->databases.find(db))
-        throw Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+        throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 }
 
 
@@ -814,7 +809,7 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
     checkDatabaseAccessRightsImpl(db);
 
     if (shared->databases.end() != shared->databases.find(db))
-        throw Exception("Database " + backQuoteIfNeed(db) + " already exists.", ErrorCodes::DATABASE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Database {} already exists.", backQuoteIfNeed(db)), ErrorCodes::DATABASE_ALREADY_EXISTS);
 }
 
 
@@ -884,7 +879,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     if (shared->databases.end() == it)
     {
         if (exception)
-            *exception = Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+            *exception = Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
         return {};
     }
 
@@ -892,7 +887,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     if (!table)
     {
         if (exception)
-            *exception = Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            *exception = Exception(fmt::format("Table {}.{} doesn't exist.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
         return {};
     }
 
@@ -903,7 +898,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 void Context::addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast)
 {
     if (external_tables.end() != external_tables.find(table_name))
-        throw Exception("Temporary table " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Temporary table {} already exists.", backQuoteIfNeed(table_name)), ErrorCodes::TABLE_ALREADY_EXISTS);
 
     external_tables[table_name] = std::pair(storage, ast);
 }
@@ -1011,7 +1006,7 @@ ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
 {
     TableAndCreateASTs::const_iterator jt = external_tables.find(table_name);
     if (external_tables.end() == jt)
-        throw Exception("Temporary table " + backQuoteIfNeed(table_name) + " doesn't exist", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception(fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
 
     return jt->second.second;
 }
@@ -1574,69 +1569,6 @@ UInt16 Context::getTCPPort() const
 }
 
 
-std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) const
-{
-    auto res = getClusters().getCluster(cluster_name);
-
-    if (!res)
-        throw Exception("Requested cluster '" + cluster_name + "' not found", ErrorCodes::BAD_GET);
-
-    return res;
-}
-
-
-std::shared_ptr<Cluster> Context::tryGetCluster(const std::string & cluster_name) const
-{
-    return getClusters().getCluster(cluster_name);
-}
-
-
-void Context::reloadClusterConfig()
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-    shared->clusters = std::make_unique<Clusters>(config, settings);
-}
-
-
-Clusters & Context::getClusters() const
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    if (!shared->clusters)
-    {
-        auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-        shared->clusters = std::make_unique<Clusters>(config, settings);
-    }
-
-    return *shared->clusters;
-}
-
-
-/// On repeating calls updates existing clusters and adds new clusters, doesn't delete old clusters
-void Context::setClustersConfig(const ConfigurationPtr & config, const String & config_name)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    shared->clusters_config = config;
-
-    if (!shared->clusters)
-        shared->clusters = std::make_unique<Clusters>(*shared->clusters_config, settings, config_name);
-    else
-        shared->clusters->updateClusters(*shared->clusters_config, settings, config_name);
-}
-
-
-void Context::setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    if (!shared->clusters)
-        throw Exception("Clusters are not set", ErrorCodes::LOGICAL_ERROR);
-
-    shared->clusters->setCluster(cluster_name, cluster);
-}
-
-
 Compiler & Context::getCompiler()
 {
     auto lock = getLock();
@@ -1737,20 +1669,23 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
 
     String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
     String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-    std::stringstream ostr;
 
-    ostr << "Table " << backQuoteIfNeed(database) << "." << backQuoteIfNeed(table) << " was not dropped.\n"
-         << "Reason:\n"
-         << "1. Table size (" << table_size_str << ") is greater than max_table_size_to_drop (" << max_table_size_to_drop_str << ")\n"
-         << "2. File '" << force_file.path() << "' intended to force DROP "
-         << (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist") << "\n";
+    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
+                                            "Reason:\n"
+                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
+                                            "2. File '{4}' intended to force DROP {5}\n",
+                                            "How to fix this:\n"
+                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
+                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
+                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
+                                            backQuoteIfNeed(database),
+                                            backQuoteIfNeed(table),
+                                            table_size_str,
+                                            max_table_size_to_drop_str,
+                                            force_file.path(),
+                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
 
-    ostr << "How to fix this:\n"
-         << "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-         << "2. Either create forcing file " << force_file.path() << " and make sure that ClickHouse has write permission for it.\n"
-         << "Example:\nsudo touch '" << force_file.path() << "' && sudo chmod 666 '" << force_file.path() << "'";
-
-    throw Exception(ostr.str(), ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
+    throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
