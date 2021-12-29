@@ -202,4 +202,22 @@ struct GreaterOrEqualsOp
     static UInt8 apply(A a, B b) { return accurate::greaterOrEqualsOp(a, b); }
 };
 
+template <typename A, typename B>
+struct ReversedCmpOp;
+
+template <typename A, typename B>
+struct CmpOp
+{
+    using SymmetricOp = ReversedCmpOp<B, A>;
+    static Int8 apply(A a, B b) { return accurate::equalsOp(a, b) ? 0 : (accurate::lessOp(a, b) ? -1 : 1); }
+};
+
+template <typename A, typename B>
+struct ReversedCmpOp
+{
+    using SymmetricOp = CmpOp<A, B>;
+    static Int8 apply(A a, B b) { return -SymmetricOp::apply(b, a); }
+};
+
+
 } // namespace DB
