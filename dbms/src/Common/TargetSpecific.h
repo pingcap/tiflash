@@ -523,11 +523,11 @@ struct SimdImpl<Generic::WORD_SIZE>
 } // namespace DB::TargetSpecific
 
 
-#define DECLARE_TYPE(TYPE_PREFIX)                                                            \
-    struct TYPE_PREFIX##_wrapper                                                             \
-    {                                                                                        \
-        typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) type;    \
-    };                                                                                       \
+#define DECLARE_TYPE(TYPE_PREFIX)                                                         \
+    struct TYPE_PREFIX##_wrapper                                                          \
+    {                                                                                     \
+        typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) type; \
+    };                                                                                    \
     using TYPE_PREFIX##vec_t = typename TYPE_PREFIX##_wrapper::type;
 
 #define ENUM_TYPE(TYPE_PREFIX) \
