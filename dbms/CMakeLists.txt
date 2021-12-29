@@ -243,6 +243,9 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
 target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
+# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
+# We want to bundle the grpc inside tiflash, so this needs to be gone eventually.
+target_include_directories (clickhouse_common_io AFTER PUBLIC "${PROTOBUF_INCLUDE_DIRS}")
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
