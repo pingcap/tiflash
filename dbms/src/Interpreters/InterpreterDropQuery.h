@@ -26,4 +26,4 @@ private:
     ASTPtr query_ptr;
     Context & context;
 };
-}
+} // namespace DB

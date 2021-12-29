@@ -6,8 +6,10 @@
 
 namespace DB
 {
-
-SQLQuerySource::SQLQuerySource(const char * begin_, const char * end_) : begin(begin_), end(end_) {}
+SQLQuerySource::SQLQuerySource(const char * begin_, const char * end_)
+    : begin(begin_)
+    , end(end_)
+{}
 
 std::tuple<std::string, ASTPtr> SQLQuerySource::parse(size_t max_query_size)
 {
