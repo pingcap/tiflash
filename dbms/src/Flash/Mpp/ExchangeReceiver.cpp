@@ -333,6 +333,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(source_num_)
     , max_streams(max_streams_)
     , max_buffer_size(std::max(source_num, max_streams_) * 2)
+    , thread_manager(newThreadManager())
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
@@ -348,8 +349,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 
-    for (auto & worker : workers)
-        worker.join();
+    if (thread_manager)
+        thread_manager->wait();
 }
 
 template <typename RPCContext>
@@ -370,11 +371,11 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else
-            workers.push_back(ThreadFactory::newThread(true, "Receiver", &ExchangeReceiverBase<RPCContext>::readLoop, this, std::move(req)));
+            thread_manager->schedule(true, "Receiver", [this, index] { readLoop(index); });
     }
 
     if (!async_requests.empty())
-        workers.push_back(ThreadFactory::newThread(true, "RecvReactor", &ExchangeReceiverBase<RPCContext>::reactor, this, std::move(async_requests)));
+        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)]() mutable { reactor(std::move(async_requests)); });
 }
 
 template <typename RPCContext>
