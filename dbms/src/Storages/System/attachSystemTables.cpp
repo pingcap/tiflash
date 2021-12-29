@@ -1,7 +1,6 @@
 #include <Databases/IDatabase.h>
 #include <Storages/System/StorageSystemAsynchronousMetrics.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
-#include <Storages/System/StorageSystemClusters.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDTSegments.h>
 #include <Storages/System/StorageSystemDTTables.h>
@@ -46,7 +45,6 @@ void attachSystemTablesServer(IDatabase & system_database)
     system_database.attachTable("metrics", StorageSystemMetrics::create("metrics"));
     system_database.attachTable("dictionaries", StorageSystemDictionaries::create("dictionaries"));
     system_database.attachTable("models", StorageSystemModels::create("models"));
-    system_database.attachTable("clusters", StorageSystemClusters::create("clusters"));
     system_database.attachTable("graphite_retentions", StorageSystemGraphite::create("graphite_retentions"));
     system_database.attachTable("macros", StorageSystemMacros::create("macros"));
 }

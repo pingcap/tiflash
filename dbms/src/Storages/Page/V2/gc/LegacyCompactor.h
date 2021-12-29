@@ -35,13 +35,16 @@ private:
     std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>> //
     collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files);
 
-    static WriteBatch prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
-    [[nodiscard]] static size_t writeToCheckpoint(const String & storage_path,
-                                                  const PageFileIdAndLevel & file_id,
-                                                  WriteBatch && wb,
-                                                  FileProviderPtr & file_provider,
-                                                  Poco::Logger * log,
-                                                  const WriteLimiterPtr & write_limiter);
+    static WriteBatch prepareCheckpointWriteBatch(
+        const PageStorage::ConcreteSnapshotPtr & snapshot,
+        const WriteBatch::SequenceID wb_sequence);
+    [[nodiscard]] static size_t writeToCheckpoint(
+        const String & storage_path,
+        const PageFileIdAndLevel & file_id,
+        WriteBatch && wb,
+        FileProviderPtr & file_provider,
+        Poco::Logger * log,
+        const WriteLimiterPtr & write_limiter);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

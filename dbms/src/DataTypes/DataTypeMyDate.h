@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class DataTypeMyDate final : public DataTypeMyTimeBase
 {
 public:

@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 class Context;
 
 /// Load tables from system database. Only real tables like query_log, part_log.
@@ -13,4 +12,4 @@ void loadMetadataSystem(Context & context);
 /// Load tables from databases and add them to context. Database 'system' is ignored. Use separate function to load system tables.
 void loadMetadata(Context & context);
 
-}
+} // namespace DB

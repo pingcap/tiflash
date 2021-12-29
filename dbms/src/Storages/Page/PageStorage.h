@@ -7,8 +7,9 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WriteBatch.h>
+#include <fmt/format.h>
 
 #include <condition_variable>
 #include <functional>
@@ -31,10 +32,17 @@ class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 
+/**
+ * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
+ * will covered the old ones.
+ * Users should call #gc() constantly to release disk space.
+ *
+ * This class is multi-threads safe. Support multi threads write, and multi threads read.
+ */
 class PageStorage : private boost::noncopyable
 {
 public:
-    using SnapshotPtr = DB::PS::V2::PageEntriesVersionSetWithDelta::SnapshotPtr;
+    using SnapshotPtr = PageStorageSnapshotPtr;
 
     struct Config
     {
@@ -49,7 +57,7 @@ public:
         // When the value of gc_force_hardlink_rate is less than or equal to 1,
         // It means that candidates whose valid rate is greater than this value will be forced to hardlink(This will reduce the gc duration).
         // Otherwise, if gc_force_hardlink_rate is greater than 1, hardlink won't happen
-        SettingDouble gc_force_hardlink_rate = 2; // FIXME: disabled after multi-path test
+        SettingDouble gc_force_hardlink_rate = 2;
 
         SettingDouble gc_max_valid_rate = 0.35;
         SettingUInt64 gc_min_bytes = PAGE_FILE_ROLL_SIZE;
@@ -90,16 +98,19 @@ public:
 
         String toDebugString() const
         {
-            std::stringstream ss;
-            ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
-               << ", gc_force_hardlink_rate:" << DB::toString(gc_force_hardlink_rate.get(), 3)
-               << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate.get(), 3)
-               << ", gc_min_legacy_num:" << gc_min_legacy_num
-               << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files.get())
-               << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound.get(), 3)
-               << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
-               << ", open_file_max_idle_time:" << open_file_max_idle_time << "}";
-            return ss.str();
+            return fmt::format(
+                "PageStorage::Config {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
+                "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, prob_do_gc_when_write_is_low: {}, "
+                "open_file_max_idle_time: {}}}",
+                gc_min_files,
+                gc_min_bytes,
+                gc_force_hardlink_rate.get(),
+                gc_max_valid_rate.get(),
+                gc_min_legacy_num,
+                gc_max_expect_legacy_files.get(),
+                gc_max_valid_rate_bound.get(),
+                prob_do_gc_when_write_is_low,
+                open_file_max_idle_time);
         }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };

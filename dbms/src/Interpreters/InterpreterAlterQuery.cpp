@@ -39,9 +39,6 @@ BlockIO InterpreterAlterQuery::execute()
 {
     auto & alter = typeid_cast<ASTAlterQuery &>(*query_ptr);
 
-    if (!alter.cluster.empty())
-        throw Exception("Should not run into `executeDDLQueryOnCluster`");
-
     const String & table_name = alter.table;
     String database_name = alter.database.empty() ? context.getCurrentDatabase() : alter.database;
     StoragePtr table = context.getTable(database_name, table_name);

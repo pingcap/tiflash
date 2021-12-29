@@ -145,3 +145,7 @@ add_subdirectory (fmtlib-cmake)
 add_library(cpptoml INTERFACE)
 target_include_directories(cpptoml INTERFACE
     ${PROJECT_SOURCE_DIR}/contrib/cpptoml)
+
+SET (BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable google-benchmark testing")
+SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testing")
+add_subdirectory(benchmark)

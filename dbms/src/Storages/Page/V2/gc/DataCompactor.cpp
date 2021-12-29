@@ -17,7 +17,11 @@ extern const char force_set_page_data_compact_batch[];
 namespace PS::V2
 {
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_)
+DataCompactor<SnapshotPtr>::DataCompactor(
+    const PageStorage & storage,
+    PageStorage::Config gc_config,
+    const WriteLimiterPtr & write_limiter_,
+    const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name)
     , delegator(storage.delegator)
     , file_provider(storage.getFileProvider())
@@ -370,9 +374,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
             PageFile::Type::Temp,
             page_file_log);
 
-        LOG_INFO(log, "GC decide to link "
-                     << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
-                     << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
+        LOG_INFO(log,
+                 storage_name << "GC decide to link "
+                              << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
+                              << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
         PageEntriesEdit edit_;
         if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
@@ -383,6 +388,13 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         hard_link_file.setFormal();
         gc_file_edit.concate(edit_);
+        // After the hard link file is created, the original file will be removed later and subtract its data size from the delegator.
+        // So we need to increase the data size for the hard link file for correctness on the disk data usage in a longer time dimension.
+        delegator->addPageFileUsedSize(
+            hard_link_file.fileIdLevel(),
+            hard_link_file.getDataFileSize(),
+            hard_link_file.parentPath(),
+            /*need_insert_location*/ true);
     }
 
     if (gc_file_edit.empty())
@@ -554,7 +566,7 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
 }
 
 
-template class DataCompactor<PageStorage::SnapshotPtr>;
+template class DataCompactor<PageStorage::ConcreteSnapshotPtr>;
 #ifndef NDEBUG
 template class DataCompactor<DB::PS::V2::tests::MockSnapshotPtr>;
 #endif

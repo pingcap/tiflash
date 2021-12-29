@@ -25,7 +25,7 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
     }
 }
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
-grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
+grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
     current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
@@ -34,8 +34,8 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
 
-        auto remote_regions = task->prepare(task_request);
-        for (const auto & region : remote_regions)
+        task->prepare(task_request);
+        for (const auto & region : context->getDAGContext()->getRegionsForRemoteRead())
         {
             auto * retry_region = response->add_retry_regions();
             retry_region->set_id(region.region_id);
@@ -51,18 +51,18 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
         task->run();
-        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+        LOG_FMT_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
+        LOG_FMT_ERROR(log, "dispatch task meet error : {}", e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : " << e.what());
+        LOG_FMT_ERROR(log, "dispatch task meet error : {}", e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());
