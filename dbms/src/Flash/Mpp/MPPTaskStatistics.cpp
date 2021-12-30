@@ -59,7 +59,7 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     executor_statistics_collector.initialize(dag_context);
 }
 
-BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
+const BaseRuntimeStatistics & MPPTaskStatistics::collectRuntimeStatistics()
 {
     executor_statistics_collector.collectRuntimeDetails();
     const auto & executor_statistics_res = executor_statistics_collector.getResult();
@@ -70,7 +70,7 @@ BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
             "Can't find exchange sender statistics after `collectRuntimeStatistics`",
             Errors::Coprocessor::Internal);
     }
-    auto return_statistics = it->second->getBaseRuntimeStatistics();
+    const auto & return_statistics = it->second->getBaseRuntimeStatistics();
 
     // record io bytes
     output_bytes = return_statistics.bytes;

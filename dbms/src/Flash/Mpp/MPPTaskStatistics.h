@@ -31,7 +31,7 @@ public:
     void initializeExecutorDAG(DAGContext * dag_context);
 
     /// return exchange sender runtime statistics
-    BaseRuntimeStatistics collectRuntimeStatistics();
+    const BaseRuntimeStatistics & collectRuntimeStatistics();
 
     void logTracingJson();
 

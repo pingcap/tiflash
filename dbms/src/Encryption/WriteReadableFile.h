@@ -28,6 +28,8 @@ public:
 
     virtual void close() = 0;
 
+    virtual int ftruncate(off_t length) = 0;
+
     virtual String getFileName() const = 0;
 };
 

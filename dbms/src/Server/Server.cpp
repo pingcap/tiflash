@@ -490,7 +490,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_, UInt64 max_rpc_poller)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
     {
         grpc::ServerBuilder builder;
@@ -515,8 +515,9 @@ public:
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
         // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
-        if (max_rpc_poller > 0 && max_rpc_poller <= std::numeric_limits<int>::max())
-            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_rpc_poller);
+        auto max_grpc_pollers = server.context().getSettingsRef().max_grpc_pollers;
+        if (max_grpc_pollers > 0 && max_grpc_pollers <= std::numeric_limits<int>::max())
+            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_grpc_pollers);
         builder.RegisterService(flash_service.get());
         LOG_FMT_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());
@@ -1229,7 +1230,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log, settings.max_rpc_poller);
+    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
