@@ -1,6 +1,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -71,8 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto worker = ThreadFactory::newThread(true, "MPPTask", &MPPTask::runImpl, this->shared_from_this());
-    worker.detach();
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [this] { this->shared_from_this()->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)

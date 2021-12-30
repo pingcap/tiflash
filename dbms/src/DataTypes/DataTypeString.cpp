@@ -1,27 +1,21 @@
-#include <Core/Defines.h>
-
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnConst.h>
-
 #include <Common/typeid_cast.h>
-
-#include <DataTypes/DataTypeString.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
-
+#include <DataTypes/DataTypeString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 #if __SSE2__
-    #include <emmintrin.h>
+#include <emmintrin.h>
 #endif
 
 
 namespace DB
 {
-
-
 void DataTypeString::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
     const String & s = get<const String &>(field);
@@ -65,7 +59,7 @@ void DataTypeString::deserializeBinary(IColumn & column, ReadBuffer & istr) cons
     try
     {
         data.resize(offset);
-        istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+        istr.readStrict(reinterpret_cast<char *>(&data[offset - size - 1]), size);
         data.back() = 0;
     }
     catch (...)
@@ -145,15 +139,27 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
                     sse_src_pos += UNROLL_TIMES;
                     sse_dst_pos += UNROLL_TIMES;
 
-                    if (UNROLL_TIMES >= 4) __asm__("movdqu %0, %%xmm0" :: "m"(sse_src_pos[-4]));
-                    if (UNROLL_TIMES >= 3) __asm__("movdqu %0, %%xmm1" :: "m"(sse_src_pos[-3]));
-                    if (UNROLL_TIMES >= 2) __asm__("movdqu %0, %%xmm2" :: "m"(sse_src_pos[-2]));
-                    if (UNROLL_TIMES >= 1) __asm__("movdqu %0, %%xmm3" :: "m"(sse_src_pos[-1]));
+                    if (UNROLL_TIMES >= 4)
+                        __asm__("movdqu %0, %%xmm0" ::"m"(sse_src_pos[-4]));
+                    if (UNROLL_TIMES >= 3)
+                        __asm__("movdqu %0, %%xmm1" ::"m"(sse_src_pos[-3]));
+                    if (UNROLL_TIMES >= 2)
+                        __asm__("movdqu %0, %%xmm2" ::"m"(sse_src_pos[-2]));
+                    if (UNROLL_TIMES >= 1)
+                        __asm__("movdqu %0, %%xmm3" ::"m"(sse_src_pos[-1]));
 
-                    if (UNROLL_TIMES >= 4) __asm__("movdqu %%xmm0, %0" : "=m"(sse_dst_pos[-4]));
-                    if (UNROLL_TIMES >= 3) __asm__("movdqu %%xmm1, %0" : "=m"(sse_dst_pos[-3]));
-                    if (UNROLL_TIMES >= 2) __asm__("movdqu %%xmm2, %0" : "=m"(sse_dst_pos[-2]));
-                    if (UNROLL_TIMES >= 1) __asm__("movdqu %%xmm3, %0" : "=m"(sse_dst_pos[-1]));
+                    if (UNROLL_TIMES >= 4)
+                        __asm__("movdqu %%xmm0, %0"
+                                : "=m"(sse_dst_pos[-4]));
+                    if (UNROLL_TIMES >= 3)
+                        __asm__("movdqu %%xmm1, %0"
+                                : "=m"(sse_dst_pos[-3]));
+                    if (UNROLL_TIMES >= 2)
+                        __asm__("movdqu %%xmm2, %0"
+                                : "=m"(sse_dst_pos[-2]));
+                    if (UNROLL_TIMES >= 1)
+                        __asm__("movdqu %%xmm3, %0"
+                                : "=m"(sse_dst_pos[-1]));
                 }
 
                 istr.position() += size;
@@ -161,7 +167,7 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
             else
 #endif
             {
-                istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                istr.readStrict(reinterpret_cast<char *>(&data[offset - size - 1]), size);
             }
         }
 
@@ -305,7 +311,7 @@ bool DataTypeString::equals(const IDataType & rhs) const
 
 void registerDataTypeString(DataTypeFactory & factory)
 {
-    auto creator = static_cast<DataTypePtr(*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
+    auto creator = static_cast<DataTypePtr (*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
 
     factory.registerSimpleDataType("String", creator);
 
@@ -323,4 +329,4 @@ void registerDataTypeString(DataTypeFactory & factory)
     factory.registerSimpleDataType("LONGBLOB", creator, DataTypeFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

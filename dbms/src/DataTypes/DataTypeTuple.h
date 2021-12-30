@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Tuple data type.
   * Used as an intermediate result when evaluating expressions.
   * Also can be used as a column - the result of the query execution.
@@ -22,6 +21,7 @@ private:
     DataTypes elems;
     Strings names;
     bool have_explicit_names;
+
 public:
     static constexpr bool is_parametric = true;
 
@@ -94,5 +94,4 @@ public:
     size_t getPositionByName(const String & name) const;
 };
 
-}
-
+} // namespace DB

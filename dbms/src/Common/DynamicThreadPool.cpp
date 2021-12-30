@@ -115,4 +115,6 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
     }
     alive_dynamic_threads.fetch_sub(1);
 }
+
+std::unique_ptr<DynamicThreadPool> DynamicThreadPool::global_instance;
 } // namespace DB

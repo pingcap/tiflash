@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Data type that cannot have any values.
   * Used to represent NULL of unknown type as Nullable(Nothing),
   * and possibly for empty array of unknown type as Array(Nothing).
@@ -34,4 +33,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB
