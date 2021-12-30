@@ -9,8 +9,6 @@ endif()
 find_package(Protobuf REQUIRED)
 message(STATUS "Using protobuf: ${Protobuf_VERSION} : ${Protobuf_INCLUDE_DIRS}, ${Protobuf_LIBRARIES}")
 
-include_directories(${PROTOBUF_INCLUDE_DIRS})
-
 find_package(c-ares REQUIRED)
 message(STATUS "Using c-ares: ${c-ares_INCLUDE_DIR}, ${c-ares_LIBRARY}")
 

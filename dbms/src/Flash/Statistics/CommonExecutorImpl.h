@@ -31,19 +31,6 @@ struct FilterImpl
 };
 using FilterStatistics = ExecutorStatistics<FilterImpl>;
 
-struct JoinImpl
-{
-    static constexpr bool has_extra_info = false;
-
-    static constexpr auto type = "Join";
-
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_join();
-    }
-};
-using JoinStatistics = ExecutorStatistics<JoinImpl>;
-
 struct LimitImpl
 {
     static constexpr bool has_extra_info = false;
@@ -69,19 +56,6 @@ struct ProjectImpl
     }
 };
 using ProjectStatistics = ExecutorStatistics<ProjectImpl>;
-
-struct TableScanImpl
-{
-    static constexpr bool has_extra_info = false;
-
-    static constexpr auto type = "TableScan";
-
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_tbl_scan();
-    }
-};
-using TableScanStatistics = ExecutorStatistics<TableScanImpl>;
 
 struct TopNImpl
 {

@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
@@ -25,13 +26,11 @@ static void runService(const std::string & bin_path, const std::vector<std::stri
     }
     catch (DB::Exception & e)
     {
-        std::stringstream ss;
-        ss << bin_path;
-        for (const auto & arg : args)
-        {
-            ss << " " << arg;
-        }
-        e.addMessage("(while running `" + ss.str() + "`)");
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("(while running `{} ", bin_path);
+        fmt_buf.joinStr(std::begin(args), std::end(args), " ");
+        fmt_buf.append("`)");
+        e.addMessage(fmt_buf.toString());
     }
 }
 
@@ -46,13 +45,13 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!conf.has(TIFLASH_PREFIX))
     {
-        LOG_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
+        LOG_FMT_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
         return;
     }
 
     if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
     {
-        LOG_WARNING(log, "Binary path of cluster manager is not set, try to use default: " << default_bin_path);
+        LOG_FMT_WARNING(log, "Binary path of cluster manager is not set, try to use default: {}", default_bin_path);
     }
 
     auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, default_bin_path) + Poco::Path::separator() + BIN_NAME;
@@ -60,7 +59,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!Poco::File(bin_path).exists())
     {
-        LOG_ERROR(log, "Binary file of cluster manager does not exist in " << bin_path << ", can not sync tiflash replica");
+        LOG_FMT_ERROR(log, "Binary file of cluster manager does not exist in {}, can not sync tiflash replica", bin_path);
         return;
     }
 
@@ -68,7 +67,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
     args.push_back("--config");
     args.push_back(config_path);
 
-    LOG_INFO(log, "Registered timed cluster manager task at rate " << task_interval << " seconds");
+    LOG_FMT_INFO(log, "Registered timed cluster manager task at rate {} seconds", task_interval);
 
     timer.scheduleAtFixedRate(
         FunctionTimerTask::create([bin_path, args] { return runService(bin_path, args); }),

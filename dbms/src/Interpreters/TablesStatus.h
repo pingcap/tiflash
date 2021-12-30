@@ -1,19 +1,18 @@
 #pragma once
 
-#include <unordered_set>
-#include <unordered_map>
-
-#include <Core/Types.h>
 #include <Core/QualifiedTableName.h>
+#include <Core/Types.h>
+
+#include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int TOO_LARGE_ARRAY_SIZE;
-}
+extern const int LOGICAL_ERROR;
+extern const int TOO_LARGE_ARRAY_SIZE;
+} // namespace ErrorCodes
 
 class ReadBuffer;
 class WriteBuffer;
@@ -51,4 +50,4 @@ struct TablesStatusResponse
     void read(ReadBuffer & in, UInt64 server_protocol_revision);
 };
 
-}
+} // namespace DB

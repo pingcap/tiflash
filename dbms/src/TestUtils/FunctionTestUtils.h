@@ -249,7 +249,8 @@ ColumnWithTypeAndName createConstColumn(
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
-ColumnWithTypeAndName createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction);
+ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::optional<MyDateTime>> init, int fraction);
+ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction);
 
 // parse a string into decimal field.
 template <typename T>
@@ -456,6 +457,5 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-
 } // namespace tests
 } // namespace DB

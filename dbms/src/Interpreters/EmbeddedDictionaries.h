@@ -1,12 +1,20 @@
 #pragma once
 
-#include <thread>
-#include <functional>
-#include <common/MultiVersion.h>
 #include <Poco/Event.h>
+#include <common/MultiVersion.h>
+
+#include <functional>
+#include <thread>
 
 
-namespace Poco { class Logger; namespace Util { class AbstractConfiguration; } }
+namespace Poco
+{
+class Logger;
+namespace Util
+{
+class AbstractConfiguration;
+}
+} // namespace Poco
 
 class RegionsHierarchies;
 class TechDataHierarchy;
@@ -16,7 +24,6 @@ class IGeoDictionariesLoader;
 
 namespace DB
 {
-
 class Context;
 
 
@@ -95,4 +102,4 @@ public:
     }
 };
 
-}
+} // namespace DB

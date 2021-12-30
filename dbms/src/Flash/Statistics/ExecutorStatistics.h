@@ -3,10 +3,10 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -64,7 +64,25 @@ public:
 
     void collectRuntimeDetail() override
     {
-        throw Exception("Unsupported");
+        const auto & profile_streams_map = dag_context.getProfileStreamsMap();
+        auto it = profile_streams_map.find(executor_id);
+        if (it != profile_streams_map.end())
+        {
+            for (const auto & input_stream : it->second.input_streams)
+            {
+                auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get());
+                assert(p_stream);
+                const auto & profile_info = p_stream->getProfileInfo();
+                outbound_rows += profile_info.rows;
+                outbound_blocks += profile_info.blocks;
+                outbound_bytes += profile_info.bytes;
+                execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+            }
+        }
+        if constexpr (ExecutorImpl::has_extra_info)
+        {
+            collectExtraRuntimeDetail();
+        }
     }
 
     static bool isMatch(const tipb::Executor * executor)
@@ -78,14 +96,10 @@ protected:
 
     std::vector<String> children;
 
-    size_t outbound_rows = 0;
-    size_t outbound_blocks = 0;
-    size_t outbound_bytes = 0;
-
-    UInt64 execution_time_ns = 0;
-
     DAGContext & dag_context;
 
     virtual void appendExtraJson(FmtBuffer &) const {}
+
+    virtual void collectExtraRuntimeDetail() {}
 };
 } // namespace DB
