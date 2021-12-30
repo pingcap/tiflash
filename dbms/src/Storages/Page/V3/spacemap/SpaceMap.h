@@ -83,11 +83,6 @@ public:
     virtual UInt64 getRightMargin() = 0;
 
     /**
-     * Get the current distribution of free span
-     */
-    virtual std::list<std::pair<UInt64, UInt64>> getCurrentDataStats() = 0;
-
-    /**
      * Sanity check for correctness
      */
     using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;

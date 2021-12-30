@@ -58,23 +58,6 @@ public:
         return entry->start;
     }
 
-    std::list<std::pair<UInt64, UInt64>> getCurrentDataStats() override
-    {
-        struct rb_node * node = nullptr;
-        struct rb_node * next = nullptr;
-        struct smap_rb_entry * entry = nullptr;
-
-        std::list<std::pair<UInt64, UInt64>> data_stats;
-
-        for (node = rb_tree_first(&rb_tree->root); node; node = next)
-        {
-            next = rb_tree_next(node);
-            entry = node_to_entry(node);
-            data_stats.emplace_back(std::make_pair(entry->start, entry->count));
-        }
-        return data_stats;
-    }
-
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_RBTREE)

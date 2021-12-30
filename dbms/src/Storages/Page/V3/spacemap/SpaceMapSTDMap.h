@@ -60,16 +60,6 @@ protected:
         return free_map.rbegin()->first;
     }
 
-    std::list<std::pair<UInt64, UInt64>> getCurrentDataStats() override
-    {
-        std::list<std::pair<UInt64, UInt64>> data_stats;
-        for (const auto & entry : free_map)
-        {
-            data_stats.emplace_back(entry.first, entry.second);
-        }
-        return data_stats;
-    }
-
     bool isMarkUnused(UInt64 offset, size_t length) override
     {
         auto it = MapUtils::findLessEQ(free_map, offset); // first free block <= `offset`
