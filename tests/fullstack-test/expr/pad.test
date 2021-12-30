@@ -82,3 +82,11 @@ mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select
 | 55555            |
 | 55555            |
 +------------------+
+
+# TODO: fix later.
+# mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c2,c2,c2), count(*) from test.t1 group by rpad(c2,c2,c2);
+# +----------------+----------+
+# | rpad(c2,c2,c2) | count(*) |
+# +----------------+----------+
+# |                |        5 |
+# +----------------+----------+
