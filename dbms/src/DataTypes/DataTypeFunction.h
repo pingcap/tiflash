@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Special data type, representing lambda expression.
   */
 class DataTypeFunction final : public IDataTypeDummy
@@ -20,7 +19,9 @@ public:
 
     /// Some types could be still unknown.
     DataTypeFunction(const DataTypes & argument_types_ = DataTypes(), const DataTypePtr & return_type_ = nullptr)
-            : argument_types(argument_types_), return_type(return_type_) {}
+        : argument_types(argument_types_)
+        , return_type(return_type_)
+    {}
 
     std::string getName() const override;
     const char * getFamilyName() const override { return "Function"; }
@@ -39,4 +40,4 @@ public:
     bool equals(const IDataType & rhs) const override;
 };
 
-}
+} // namespace DB

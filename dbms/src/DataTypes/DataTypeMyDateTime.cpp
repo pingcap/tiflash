@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 DataTypeMyDateTime::DataTypeMyDateTime(int fraction_)
 {
     fraction = fraction_;
@@ -116,7 +115,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 
     if (arguments->children.size() != 1)
         throw Exception(
-            "MyDateTime data type can optionally have only one argument - fractional", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            "MyDateTime data type can optionally have only one argument - fractional",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::UInt64)

@@ -1,28 +1,25 @@
-#include <IO/ReadBufferFromString.h>
-
-#include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/ASTIdentifier.h>
-
-#include <Interpreters/Context.h>
-#include <Interpreters/executeQuery.h>
-#include <Interpreters/InterpreterShowTablesQuery.h>
-
 #include <Common/typeid_cast.h>
+#include <IO/ReadBufferFromString.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterShowTablesQuery.h>
+#include <Interpreters/executeQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTShowTablesQuery.h>
 
 #include <iomanip>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 
 InterpreterShowTablesQuery::InterpreterShowTablesQuery(const ASTPtr & query_ptr_, Context & context_)
-    : query_ptr(query_ptr_), context(context_)
+    : query_ptr(query_ptr_)
+    , context(context_)
 {
 }
 
@@ -67,4 +64,4 @@ BlockIO InterpreterShowTablesQuery::execute()
 }
 
 
-}
+} // namespace DB

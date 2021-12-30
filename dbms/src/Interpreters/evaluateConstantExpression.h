@@ -1,14 +1,14 @@
 #pragma once
 
-#include <memory>
 #include <Core/Field.h>
 #include <Parsers/IAST.h>
 #include <Parsers/IParser.h>
 
+#include <memory>
+
 
 namespace DB
 {
-
 class Context;
 class IDataType;
 
@@ -33,4 +33,4 @@ ASTPtr evaluateConstantExpressionAsLiteral(const ASTPtr & node, const Context & 
   */
 ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, const Context & context);
 
-}
+} // namespace DB

@@ -1,6 +1,6 @@
 #include <Common/CurrentMetrics.h>
-#include <Common/ThreadFactory.h>
 #include <Common/setThreadName.h>
+#include <Common/wrapInvocable.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 
 #include <future>
@@ -183,7 +183,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
             auto & child = children[i];
 
             reading_pool->schedule(
-                ThreadFactory(true, "MergeAggReadThr").newJob([&child] {
+                wrapInvocable(true, [&child] {
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     child->readPrefix();
                 }));
@@ -194,13 +194,11 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
 
     if (merging_threads > 1)
     {
-        auto & pool = parallel_merge_data->pool;
-
         /** Create threads that will receive and merge blocks.
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            pool.schedule(ThreadFactory(true, "MergeAggMergThr").newJob([this] { mergeThread(); }));
+            parallel_merge_data->thread_pool->schedule(true, [this] { mergeThread(); });
     }
 }
 
@@ -289,7 +287,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
     LOG_TRACE(log, "Waiting for threads to finish");
 
     if (parallel_merge_data)
-        parallel_merge_data->pool.wait();
+        parallel_merge_data->thread_pool->wait();
 
     LOG_TRACE(log, "Waited for threads to finish");
 }
@@ -477,7 +475,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                reading_pool->schedule(ThreadFactory(true, "MergeAggReadThr").newJob([&input, &read_from_input] {
+                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] {
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
                 }));

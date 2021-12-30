@@ -234,6 +234,10 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
+# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
+target_include_directories (dbms PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -252,7 +256,7 @@ if (ENABLE_TESTS)
         add_subdirectory(${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
         target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
-        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/include)
+        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest/include)
     endif ()
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)

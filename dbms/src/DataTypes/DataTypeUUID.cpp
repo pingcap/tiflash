@@ -1,10 +1,9 @@
-#include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeUUID.h>
 
 
 namespace DB
 {
-
 void DataTypeUUID::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeText(UUID(static_cast<const ColumnUInt128 &>(column).getData()[row_num]), ostr);
@@ -40,7 +39,7 @@ void DataTypeUUID::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) co
     assertChar('\'', istr);
     readText(x, istr);
     assertChar('\'', istr);
-    static_cast<ColumnUInt128 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt128 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
 }
 
 void DataTypeUUID::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
@@ -85,4 +84,4 @@ void registerDataTypeUUID(DataTypeFactory & factory)
     factory.registerSimpleDataType("UUID", [] { return DataTypePtr(std::make_shared<DataTypeUUID>()); });
 }
 
-}
+} // namespace DB
