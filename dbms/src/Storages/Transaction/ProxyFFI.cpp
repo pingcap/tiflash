@@ -438,7 +438,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
     }
 }
 
-void SetStoreId(EngineStoreServerWrap * server, BaseBuffView buff)
+void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
 {
     metapb::Store store{};
     store.ParseFromArray(buff.data, buff.len);
