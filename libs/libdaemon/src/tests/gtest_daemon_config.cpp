@@ -16,6 +16,7 @@
 #define _POSIX_C_SOURCE 1
 #endif
 #include <limits.h>
+#include <csignal>
 class DaemonConfig_test : public ::testing::Test
 {
 public:
@@ -78,7 +79,7 @@ namespace TiFlashUnwindTest
 {
 NO_INLINE int function_1()
 {
-    ::raise(SIGBUS);
+    std::raise(SIGBUS);
     return 0;
 }
 NO_INLINE int function_2()
