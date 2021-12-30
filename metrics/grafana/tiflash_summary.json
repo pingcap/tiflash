@@ -2666,7 +2666,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split|seg_split_fg\"}[1m])) by (type)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -2674,7 +2674,7 @@
               "refId": "A"
             },
             {
-              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split|seg_split_fg\"}[1m])) by (type)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
