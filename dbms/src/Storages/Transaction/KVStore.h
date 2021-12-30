@@ -134,7 +134,7 @@ private:
     {
         using Base = metapb::Store;
         Base base;
-        std::atomic_int64_t store_id{0};
+        std::atomic_uint64_t store_id{0};
         void update(Base &&);
         friend class KVStore;
     };
