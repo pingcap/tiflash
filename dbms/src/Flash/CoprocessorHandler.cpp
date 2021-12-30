@@ -81,7 +81,8 @@ grpc::Status CoprocessorHandler::execute()
             regions.emplace(cop_context.kv_context.region_id(),
                             RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges()), &bypass_lock_ts));
 
-            DAGContext dag_context(dag_request);
+            String tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
+            DAGContext dag_context(dag_request, tidb_host);
             dag_context.regions_for_local_read = std::move(regions);
             dag_context.log = std::make_shared<LogWithPrefix>(log, "");
             cop_context.db_context.setDAGContext(&dag_context);

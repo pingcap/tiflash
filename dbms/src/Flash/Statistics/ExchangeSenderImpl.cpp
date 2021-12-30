@@ -85,5 +85,13 @@ ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * execut
         const auto & mpp_tunnel = mpp_tunnels[i];
         mpp_tunnel_details.emplace_back(mpp_tunnel->id(), task_meta.task_id(), task_meta.address(), mpp_tunnel->isLocal());
     }
+
+    // for root task, exchange_sender_executor.task_meta[0].address is blank or not tidb host
+    // todo pass tidb host in exchange_sender_executor.task_meta[0]
+    if (dag_context.isRootMPPTask())
+    {
+        assert(mpp_tunnel_details.size() == 1);
+        mpp_tunnel_details.back().sender_target_host = dag_context.tidb_host;
+    }
 }
 } // namespace DB
