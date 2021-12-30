@@ -1246,62 +1246,37 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            if (!arguments[arg_idx]->onlyNull())
-            {
-                const auto * arg = removeNullable(arguments[arg_idx]).get();
-                if (!arg->isStringOrFixedString())
-                    throw Exception{
-                        fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-            }
+            const auto arg = removeNullable(arguments[arg_idx]).get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
-        return arguments[0]->onlyNull()
-            ? makeNullable(std::make_shared<DataTypeNothing>())
-            : makeNullable(std::make_shared<DataTypeString>());
+        return makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        // if separator is only null, return only null const
-        auto & separator_column = block.getByPosition(arguments[0]);
-        if (separator_column.type->onlyNull())
-        {
-            DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
-            block.getByPosition(result).column = data_type->createColumnConst(separator_column.column->size(), Null());
-            return;
-        }
-
         Block nested_block = createBlockWithNestedColumns(block, arguments, result);
-        ColumnNumbers not_only_null_arguments;
-        StringSources sources;
-
-        not_only_null_arguments.push_back(arguments[0]);
-        sources.push_back(createDynamicStringSource(*nested_block.getByPosition(not_only_null_arguments[0]).column));
-        for (size_t i = 1; i < arguments.size(); ++i)
-        {
-            auto column_number = arguments[i];
-            if (!block.getByPosition(column_number).type->onlyNull())
-            {
-                not_only_null_arguments.push_back(column_number);
-                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(column_number).column));
-            }
-        }
+        StringSources sources(arguments.size());
+        for (size_t i = 0; i < arguments.size(); ++i)
+            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
 
         size_t rows = block.rows();
         auto result_null_map = ColumnUInt8::create(rows);
         auto res = ColumnString::create();
         StringSink sink(*res, rows);
 
-        for (size_t row = 0; row < rows; ++row)
+        for (size_t row = 0; row < rows; row++)
         {
-            if (block.getByPosition(not_only_null_arguments[0]).column->isNullAt(row))
+            if (block.getByPosition(arguments[0]).column->isNullAt(row))
             {
                 result_null_map->getData()[row] = true;
             }
@@ -1310,9 +1285,9 @@ public:
                 result_null_map->getData()[row] = false;
 
                 bool has_not_null = false;
-                for (size_t col = 1; col < not_only_null_arguments.size(); ++col)
+                for (size_t col = 1; col < arguments.size(); ++col)
                 {
-                    if (!block.getByPosition(not_only_null_arguments[col]).column->isNullAt(row))
+                    if (!block.getByPosition(arguments[col]).column->isNullAt(row))
                     {
                         if (has_not_null)
                             writeSlice(sources[0]->getWhole(), sink);
@@ -1322,8 +1297,8 @@ public:
                     }
                 }
             }
-            for (auto & source : sources)
-                source->next();
+            for (size_t col = 0; col < arguments.size(); ++col)
+                sources[col]->next();
             sink.next();
         }
 
