@@ -368,16 +368,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
             PageFile::Type::Temp,
             page_file_log);
 
-<<<<<<< HEAD:dbms/src/Storages/Page/gc/DataCompactor.cpp
-        LOG_INFO(log, storage_name << " GC decide to link "
-                                   << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
-                                   << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
-=======
         LOG_INFO(log,
                  storage_name << "GC decide to link "
                               << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
                               << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
->>>>>>> d5775e63ee (Fix can't found `PageFile` after hardlink. (#3645)):dbms/src/Storages/Page/V2/gc/DataCompactor.cpp
 
         PageEntriesEdit edit_;
         if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
@@ -388,9 +382,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         hard_link_file.setFormal();
         gc_file_edit.concate(edit_);
-<<<<<<< HEAD:dbms/src/Storages/Page/gc/DataCompactor.cpp
-        delegator->addPageFileUsedSize(hard_link_file.fileIdLevel(), 0, hard_link_file.parentPath(), /*need_insert_location*/ true);
-=======
+
         // After the hard link file is created, the original file will be removed later and subtract its data size from the delegator.
         // So we need to increase the data size for the hard link file for correctness on the disk data usage in a longer time dimension.
         delegator->addPageFileUsedSize(
@@ -398,7 +390,6 @@ DataCompactor<SnapshotPtr>::migratePages( //
             hard_link_file.getDataFileSize(),
             hard_link_file.parentPath(),
             /*need_insert_location*/ true);
->>>>>>> d5775e63ee (Fix can't found `PageFile` after hardlink. (#3645)):dbms/src/Storages/Page/V2/gc/DataCompactor.cpp
     }
 
     if (gc_file_edit.empty())
