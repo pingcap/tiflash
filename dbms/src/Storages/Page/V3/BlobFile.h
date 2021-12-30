@@ -36,6 +36,8 @@ public:
 
     void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter);
 
+    void truncate(size_t size);
+
 private:
     FileProviderPtr file_provider;
     String path;

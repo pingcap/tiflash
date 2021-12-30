@@ -1278,8 +1278,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
-        auto my_segment_rows = my_segment->getEstimatedRows();
-        auto my_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
+        auto my_segment_size = my_segment->getEstimatedBytes();
+        auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
         {
             if (segmentSplit(*dm_context, my_segment, true).first)
