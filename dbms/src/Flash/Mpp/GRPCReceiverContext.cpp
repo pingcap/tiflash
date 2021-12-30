@@ -83,7 +83,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
             request.req->sender_meta().address(),
             &client_context,
             call,
-            GRPCCompletionQueuePool::Instance()->pickQueue(),
+            GRPCCompletionQueuePool::global_instance->pickQueue(),
             callback);
     }
 
