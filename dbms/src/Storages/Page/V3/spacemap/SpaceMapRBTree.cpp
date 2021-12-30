@@ -138,7 +138,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
                         auto * _entry = node_to_entry(_node);
                         if (start + count > _entry->start)
                         {
-                            LOG_WARNING(log, "Marked space free failed. [offset=" << start << ", size=" << count << "], next node is [offset=" << _entry->start << ",size=" << _entry->count << "]");
+                            LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", start, count, _entry->start, _entry->count);
                             return false;
                         }
                     }
@@ -182,7 +182,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
         entry = node_to_entry(node);
         if (entry->start + entry->count > new_entry->start)
         {
-            LOG_WARNING(log, "Marked space free failed. [offset=" << new_entry->start << ", size=" << new_entry->count << "], prev node is [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", new_entry->start, new_entry->count, entry->start, entry->count);
             rb_node_remove(new_node, root);
             rb_free_entry(private_data, new_entry);
             return false;
@@ -195,7 +195,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
         entry = node_to_entry(node);
         if (new_entry->start + new_entry->count > entry->start)
         {
-            LOG_WARNING(log, "Marked space free failed. [offset=" << new_entry->start << ", size=" << new_entry->count << "], next node is [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", new_entry->start, new_entry->count, entry->start, entry->count);
             rb_node_remove(new_node, root);
             rb_free_entry(private_data, new_entry);
             return false;
@@ -292,13 +292,13 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
 
         if ((start + count) > (entry->start + entry->count))
         {
-            LOG_WARNING(log, "Marked space used failed. [offset=" << start << ", size=" << count << "] is bigger than space [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", start, count, entry->start, entry->count);
             return false;
         }
 
         if (start < entry->start)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset=" << start << ", size=" << count << "] is less than space [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is less than space [offset={},size={}]", start, count, entry->start, entry->count);
             return false;
         }
 
@@ -397,7 +397,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 
     if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
-        LOG_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end=" << end << "]");
+        LOG_FMT_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start={}] , [end={}]", start, end);
         free(ptr->rb_tree);
         return nullptr;
     }
@@ -445,7 +445,7 @@ void RBTreeSpaceMap::smapStats()
     for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        LOG_DEBUG(log, "  Space: " << count << " start:" << entry->start << " size: " << entry->count);
+        LOG_FMT_DEBUG(log, "  Space: {} start: {} size: {}", count, entry->start, entry->count);
         count++;
         if (entry->count > max_size)
         {
@@ -544,7 +544,14 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     // No enough space for insert
     if (!node)
     {
-        LOG_ERROR(log, "Not sure why can't found any place to insert.[size=" << size << "] [old biggest_range=" << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+        LOG_FMT_ERROR(
+            log,
+            "Not sure why can't found any place to insert.[size={}] [old biggest_range={}] [old biggest_cap={}] [new biggest_range={}] [new biggest_cap={}]",
+            size,
+            biggest_range,
+            biggest_cap,
+            _biggest_range,
+            _biggest_cap);
         biggest_range = _biggest_range;
         biggest_cap = _biggest_cap;
 
