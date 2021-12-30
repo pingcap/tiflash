@@ -67,6 +67,14 @@ TEST_F(StringCharLength, charLengthVector)
         executeFunction(
             "lengthUTF8",
             toVec(candidate_strings)));
+
+    std::vector<std::optional<String>> candidate_strings_null = {{}};
+    std::vector<std::optional<UInt64>> expect_null = {{}};
+    ASSERT_COLUMN_EQ(
+        toNullableVec(expect_null),
+        executeFunction(
+            "lengthUTF8",
+            toNullableVec(candidate_strings_null)));
 }
 
 TEST_F(StringCharLength, charLengthConst)
