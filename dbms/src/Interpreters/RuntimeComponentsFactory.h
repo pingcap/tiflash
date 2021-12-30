@@ -1,13 +1,12 @@
 #pragma once
 
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
-#include <Interpreters/IRuntimeComponentsFactory.h>
 #include <Interpreters/ExternalLoaderConfigRepository.h>
+#include <Interpreters/IRuntimeComponentsFactory.h>
 #include <Interpreters/SecurityManager.h>
 
 namespace DB
 {
-
 /** Default implementation of runtime components factory
   * used by native server application.
   */
@@ -35,4 +34,4 @@ public:
     }
 };
 
-}
+} // namespace DB

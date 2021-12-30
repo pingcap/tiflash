@@ -520,12 +520,15 @@ struct SimdImpl<Generic::WORD_SIZE>
     TIFLASH_AVX512_NAMESPACE(__VA_ARGS__)      \
     TIFLASH_SSE4_NAMESPACE(__VA_ARGS__)        \
     TIFLASH_GENERIC_NAMESPACE(__VA_ARGS__)
-
 } // namespace DB::TargetSpecific
 
 
-#define DECLARE_TYPE(TYPE_PREFIX) \
-    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) TYPE_PREFIX##vec_t;
+#define DECLARE_TYPE(TYPE_PREFIX)                                                         \
+    struct TYPE_PREFIX##_wrapper                                                          \
+    {                                                                                     \
+        typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) type; \
+    };                                                                                    \
+    using TYPE_PREFIX##vec_t = typename TYPE_PREFIX##_wrapper::type;
 
 #define ENUM_TYPE(TYPE_PREFIX) \
     TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
@@ -550,6 +553,38 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         DECLARE_TYPE(uint32);
         DECLARE_TYPE(uint64);
 
+        template <typename First, typename Second>
+        struct TypePair
+        {
+            using FirstType = First;
+            using SecondType = Second;
+        };
+
+        template <typename Key, typename Head, typename... Tail>
+        struct TypeMatch
+        {
+            using MatchedType = std::conditional_t<std::is_same_v<Key, typename Head::FirstType>, typename Head::SecondType, typename TypeMatch<Key, Tail...>::MatchedType>;
+        };
+
+        template <typename Key, typename Head>
+        struct TypeMatch<Key, Head>
+        {
+            using MatchedType = typename Head::SecondType;
+        };
+
+        template <typename Key>
+        using MatchedVectorType =
+            typename TypeMatch<
+                Key,
+                TypePair<int8_t, int8_wrapper>,
+                TypePair<int16_t, int16_wrapper>,
+                TypePair<int32_t, int32_wrapper>,
+                TypePair<int64_t, int64_wrapper>,
+                TypePair<uint8_t, uint8_wrapper>,
+                TypePair<uint16_t, uint16_wrapper>,
+                TypePair<uint32_t, uint32_wrapper>,
+                TypePair<uint64_t, uint64_wrapper>>::MatchedType::type;
+
         union
         {
             typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
@@ -564,7 +599,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         };
 
         template <class T>
-        __attribute__((always_inline)) auto & get()
+        __attribute__((always_inline)) MatchedVectorType<T> & get()
         {
             GET_TYPE(int8);
             GET_TYPE(int16);
@@ -578,7 +613,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         }
 
         template <class T>
-        __attribute__((always_inline)) const auto & get() const
+        __attribute__((always_inline)) const MatchedVectorType<T> & get() const
         {
             GET_TYPE(int8);
             GET_TYPE(int16);

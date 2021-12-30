@@ -1,34 +1,38 @@
-#include <Core/Block.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
+#include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int LOGICAL_ERROR;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(const ASTPtr & node, const Context & context)
 {
     ExpressionActionsPtr expr_for_constant_folding = ExpressionAnalyzer(
-        node, context, nullptr, NamesAndTypesList{{ "_dummy", std::make_shared<DataTypeUInt8>() }}, Names()).getConstActions();
+                                                         node,
+                                                         context,
+                                                         nullptr,
+                                                         NamesAndTypesList{{"_dummy", std::make_shared<DataTypeUInt8>()}},
+                                                         Names())
+                                                         .getConstActions();
 
     /// There must be at least one column in the block so that it knows the number of rows.
-    Block block_with_constants{{ ColumnConst::create(ColumnUInt8::create(1, 0), 1), std::make_shared<DataTypeUInt8>(), "_dummy" }};
+    Block block_with_constants{{ColumnConst::create(ColumnUInt8::create(1, 0), 1), std::make_shared<DataTypeUInt8>(), "_dummy"}};
 
     expr_for_constant_folding->execute(block_with_constants);
 
@@ -67,4 +71,4 @@ ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, cons
     return evaluateConstantExpressionAsLiteral(node, context);
 }
 
-}
+} // namespace DB

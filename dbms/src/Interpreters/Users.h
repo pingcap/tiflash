@@ -23,8 +23,6 @@ class AbstractConfiguration;
 
 namespace DB
 {
-
-
 /// Allow to check that address matches a pattern.
 class IAddressPattern
 {

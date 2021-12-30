@@ -316,11 +316,11 @@ try
 
     if (!path.empty())
     {
-        LOG_DEBUG(log, "Loading metadata from " << path);
+        LOG_FMT_DEBUG(log, "Loading metadata from {}", path);
         loadMetadataSystem(*context);
         attachSystemTables();
         loadMetadata(*context);
-        LOG_DEBUG(log, "Loaded metadata.");
+        LOG_FMT_DEBUG(log, "Loaded metadata.");
     }
     else
     {
@@ -425,7 +425,7 @@ void LocalServer::processQueries()
         WriteBufferFromFileDescriptor write_buf(STDOUT_FILENO);
 
         if (verbose)
-            LOG_INFO(log, "Executing query: " << query);
+            LOG_FMT_INFO(log, "Executing query: {}", query);
 
         executeQuery(read_buf, write_buf, /* allow_into_outfile = */ true, *context, {});
     }

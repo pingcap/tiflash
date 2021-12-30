@@ -51,6 +51,7 @@ extern const int CHECKSUM_DOESNT_MATCH;
 extern const int FILE_DOESNT_EXIST;
 extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_FSYNC;
+extern const int CANNOT_FTRUNCATE;
 extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
 extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
 extern const int CANNOT_SEEK_THROUGH_FILE;
@@ -126,6 +127,14 @@ void syncFile(T & file)
     if (-1 == file->fsync())
         DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
+
+template <typename T>
+void ftruncateFile(T & file, off_t length)
+{
+    if (-1 == file->ftruncate(length))
+        DB::throwFromErrno("Cannot truncate file: " + file->getFileName(), ErrorCodes::CANNOT_FTRUNCATE);
+}
+
 
 template <typename T>
 void writeFile(

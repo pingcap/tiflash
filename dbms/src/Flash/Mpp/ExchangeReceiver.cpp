@@ -43,11 +43,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
         cv.notify_all();
     }
-
-    for (auto & worker : workers)
-    {
-        worker.join();
-    }
+    if (thread_manager)
+        thread_manager->wait();
 }
 
 template <typename RPCContext>
@@ -61,10 +58,13 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    if (!thread_manager)
+        thread_manager = newThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
+        thread_manager->schedule(true, "Receiver", [this, index] {
+            readLoop(index);
+        });
     }
 }
 

@@ -133,7 +133,11 @@ public:
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
         {
-            if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+            if (resp->has_error())
+            {
+                return {nullptr, true, resp->error().DebugString(), false};
+            }
+            else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
                 return {
                     nullptr,
                     true,
