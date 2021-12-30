@@ -1,11 +1,8 @@
 #pragma once
 
 #include <Common/LogWithPrefix.h>
-<<<<<<< HEAD
 #include <Common/MPMCQueue.h>
-=======
 #include <Common/ThreadManager.h>
->>>>>>> master
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -117,11 +114,6 @@ private:
 
     int input_streams_num;
 
-<<<<<<< HEAD
-=======
-    std::shared_ptr<ThreadManager> thread_manager;
-
->>>>>>> master
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
 

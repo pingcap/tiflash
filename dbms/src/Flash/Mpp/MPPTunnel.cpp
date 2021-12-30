@@ -27,7 +27,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
-    , thread_manager(newThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -194,7 +193,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         {
             writer = writer_;
             // communicate send_thread through `consumer_state`
-            thread_manager->scheduleThenDetach(true, "MPPTunnel", [this] {
+            newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
                 sendLoop();
             });
         }
