@@ -16,17 +16,17 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.toml up -d
+docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.toml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
+docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
 
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.toml down
+docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml down
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.toml up -d
+docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.toml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_local_tunnel'
+docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_local_tunnel'
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.toml down
+docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
 
 clean_data_log
 
