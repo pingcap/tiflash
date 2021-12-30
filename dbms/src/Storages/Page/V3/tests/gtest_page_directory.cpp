@@ -826,61 +826,37 @@ protected:
 TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithAlignSeq)
 try
 {
-    PageId page_id = 50;
-    size_t buff_nums = 5;
-    size_t buff_size = 123;
-    char c_buff[buff_size * buff_nums];
-
-    UInt64 lowest_seq = 3;
-    std::vector<UInt64> version_keep = {lowest_seq, 5};
-
-    auto blob_store = getBlobStore();
-    std::list<PageDirectorySnapshotPtr> snapshots;
-
     /**
      * before GC => 
+     *   pageid : 50
      *   entries: [v1...v5]
      *   hold_seq: [v3,v5]
      * after GC => 
+     *   pageid : 50
      *   entries remain: [v3,v4,v5]
      *   snapshot remain: [v3,v5]
      */
-    WriteBatch wb;
-    PageVersionAndEntriesV3 seq_entries;
+    PageId page_id = 50;
+    size_t buf_size = 1024;
+    PageVersionAndEntriesV3 exp_seq_entries;
 
-    for (size_t i = 0; i < buff_nums; ++i)
-    {
-        for (size_t j = 0; j < buff_size; ++j)
-        {
-            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
-        }
+    // put v1 - v2
+    putInMvccAndBlobStore(page_id, buf_size, 2, exp_seq_entries, 0, true);
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
-        wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+    // put v3
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 3, false);
+    auto snapshot_holder = dir.createSnapshot();
 
-        auto edit = blob_store->write(wb, nullptr);
-        [[maybe_unused]] const auto & record_last = edit.getRecords().rbegin();
+    // put v4
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 4, false);
 
-        dir.apply(std::move(edit));
-        dir.createSnapshot();
-        wb.clear();
-
-        if (std::find(version_keep.begin(), version_keep.end(), i + 1)
-            != version_keep.end())
-        {
-            snapshots.emplace_back(dir.createSnapshot());
-        }
-
-        if (i + 1 >= lowest_seq)
-        {
-            // (i + 1) eq. current apply seq
-            seq_entries.emplace_back(std::make_tuple(i + 1, 0, record_last->entry));
-        }
-    }
+    // put v5
+    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5, false);
+    auto snapshot_holder2 = dir.createSnapshot();
 
     dir.snapshotsGC();
 
-    EXPECT_SEQ_ENTRIES_EQ(seq_entries, dir, page_id);
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
 
@@ -901,7 +877,6 @@ try
      */
     PageId page_id = 50;
     size_t buf_size = 1024;
-    std::list<PageDirectorySnapshotPtr> snapshots;
 
     PageVersionAndEntriesV3 exp_seq_entries;
 
@@ -910,21 +885,21 @@ try
 
     // put v3
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 3);
-    dir.createSnapshot();
+    auto snapshot_holder1 = dir.createSnapshot();
 
     // push v4
     pushMvccSeqForword(1);
 
     // put v5
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
-    dir.createSnapshot();
+    auto snapshot_holder2 = dir.createSnapshot();
 
     // push v6-v9
     pushMvccSeqForword(4);
 
     // put v10
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
-    dir.createSnapshot();
+    auto snapshot_holder3 = dir.createSnapshot();
 
     dir.snapshotsGC();
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
@@ -963,14 +938,14 @@ try
 
     // put v5
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
-    dir.createSnapshot();
+    auto snapshot_holder1 = dir.createSnapshot();
 
     // push v6-v9 with anonymous entry
     pushMvccSeqForword(4);
 
     // put v10
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
-    dir.createSnapshot();
+    auto snapshot_holder2 = dir.createSnapshot();
 
     dir.snapshotsGC();
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
@@ -1016,7 +991,7 @@ try
 
     // put v10
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
-    dir.createSnapshot();
+    auto snapshot_holder = dir.createSnapshot();
 
     dir.snapshotsGC();
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
