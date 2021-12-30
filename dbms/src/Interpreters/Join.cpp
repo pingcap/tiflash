@@ -47,8 +47,7 @@ static bool isInnerJoin(ASTTableJoin::Kind kind)
 }
 static bool isAntiJoin(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti
-        || kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti;
+    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
 }
 static bool isCrossJoin(ASTTableJoin::Kind kind)
 {
@@ -1167,6 +1166,92 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, other_filter_column, false);
     }
 
+    ColumnUInt8::Container row_filter(filter.size(), 0);
+
+    if (isLeftSemiFamily(kind))
+    {
+        const auto helper_pos = block.getPositionByName(name_match_helper);
+
+        const auto * old_match_nullable = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
+        const auto & old_match_vec = static_cast<const ColumnVector<Int8> *>(old_match_nullable->getNestedColumnPtr().get())->getData();
+
+        {
+            /// we assume there is no null value in the `match-helper` column after adder<>().
+            const auto & old_match_nullmap = old_match_nullable->getNullMapData();
+            for (const auto & is_null : old_match_nullmap)
+                if (is_null)
+                    throw Exception("Before merge other conditions, there shouldn't be null.", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        const auto rows = offsets_to_replicate->size();
+        if (old_match_vec.size() != rows)
+            throw Exception("Size of column match-helper must be equal to column size of left block.", ErrorCodes::LOGICAL_ERROR);
+
+        auto match_col = ColumnInt8::create(rows, 0);
+        auto & match_vec = match_col->getData();
+        auto match_nullmap = ColumnUInt8::create(rows, 0);
+        auto & match_nullmap_vec = match_nullmap->getData();
+
+        /// nullmap and data of `other_eq_filter_from_in_column`.
+        const ColumnUInt8::Container * eq_in_vec = nullptr, * eq_in_nullmap = nullptr;
+        if (!other_eq_filter_from_in_column.empty())
+        {
+            auto orig_filter_column = block.getByName(other_eq_filter_from_in_column).column;
+            if (orig_filter_column->isColumnConst())
+                orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+            if (orig_filter_column->isColumnNullable())
+            {
+                auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+                eq_in_vec = &static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+                eq_in_nullmap = &nullable_column->getNullMapData();
+            }
+            else
+                eq_in_vec = &checkAndGetColumn<ColumnUInt8>(orig_filter_column.get())->getData();
+        }
+
+        /// for (anti)leftSemi join, we should keep only one row for each original row of left table.
+        /// and because it is semi join, we needn't save columns of right table, so we just keep the first replica.
+        for (size_t i = 0; i < offsets_to_replicate->size(); i++)
+        {
+            size_t prev_offset = i>0 ? (*offsets_to_replicate)[i-1] : 0;
+            size_t current_offset = (*offsets_to_replicate)[i];
+
+            row_filter[prev_offset] = 1;
+            if (old_match_vec[i] == 0)
+                continue;
+
+            /// fill match_vec and match_nullmap_vec
+            /// if there is `1` in filter, match_vec is 1.
+            /// if there is `null` in eq_in_nullmap, match_nullmap_vec is 1.
+            /// else, match_vec is 0.
+
+            bool has_row_matched = false, has_row_null = false;
+            for (size_t index = prev_offset; index < current_offset; index++)
+            {
+                if (!filter[index])
+                    continue;
+                if (eq_in_nullmap && (*eq_in_nullmap)[index])
+                    has_row_null = true;
+                else if (!eq_in_vec || (*eq_in_vec)[index])
+                {
+                    has_row_matched = true;
+                    break;
+                }
+            }
+
+            if (has_row_matched)
+                match_vec[i] = 1;
+            else if (has_row_null)
+                match_nullmap_vec[i] = 1;
+        }
+
+        for (size_t i = 0; i < block.columns(); i++)
+            if (i != helper_pos)
+                block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        block.safeGetByPosition(helper_pos).column = ColumnNullable::create(std::move(match_col), std::move(match_nullmap));
+        return;
+    }
+
     if (!other_eq_filter_from_in_column.empty())
     {
         /// other_eq_filter_from_in_column is used in anti semi join:
@@ -1181,49 +1266,6 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// inner join, just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); i++)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
-        return;
-    }
-
-    ColumnUInt8::Container row_filter(filter.size(), 0);
-
-    if (isLeftSemiFamily(kind))
-    {
-        const auto helper_pos = block.getPositionByName(name_match_helper);
-        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
-        const auto & old_vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
-
-        if (old_vec_matched.size() != offsets_to_replicate->size())
-            throw Exception("Size of column match-helper must be equal to column size of left block.", ErrorCodes::LOGICAL_ERROR);
-
-        auto col_matched = ColumnInt8::create(offsets_to_replicate->size());
-        auto & vec_matched = col_matched->getData();
-
-        /// for (anti)leftSemi join, we should keep only one row for each original row of left table.
-        /// and because it is semi join, we needn't save columns of right table, so we just keep the first replica.
-        for (size_t i = 0, prev_offset = 0; i < offsets_to_replicate->size(); i++)
-        {
-            size_t current_offset = (*offsets_to_replicate)[i];
-
-            row_filter[prev_offset] = 1;
-            bool has_row_matched = false;
-            for (size_t index = prev_offset; index < current_offset; index++)
-            {
-                if (filter[index])
-                {
-                    has_row_matched = true;
-                    break;
-                }
-            }
-            /// when all rows fail to satisfy the `other condition`, we set `matched` to false.
-            vec_matched[i] = old_vec_matched[i] && has_row_matched;
-
-            prev_offset = current_offset;
-        }
-
-        for (size_t i = 0; i < block.columns(); i++)
-            if (i != helper_pos)
-                block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
-        block.safeGetByPosition(helper_pos).column = makeNullable(std::move(col_matched));
         return;
     }
 
@@ -1806,7 +1848,7 @@ void Join::joinBlock(Block & block) const
         for (size_t i = 0; i < vec_matched.size(); ++i)
             vec_non_matched[i] = !vec_matched[i];
 
-        block.getByName(name_match_helper).column = makeNullable(std::move(col_non_matched));
+        block.getByName(name_match_helper).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 }
 

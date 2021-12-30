@@ -261,3 +261,42 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | 1 | NULL |
 | 2 | NULL |
 +---+------+
+
+############## as scalar test ##############
+
+mysql> drop table if exists test.build; create table test.build(a int); alter table test.build set tiflash replica 1;
+mysql> drop table if exists test.probe; create table test.probe(a int); alter table test.probe set tiflash replica 1;
+func> wait_table test build
+func> wait_table test probe
+
+mysql> insert into test.build values (0), (1), (null);
+mysql> insert into test.probe values (0), (1), (2), (null);
+
+mysql> set @@tidb_isolation_read_engines='tikv'; select a, a in (table test.build), a not in (table test.build) from test.probe;
++------+-------------------------+-----------------------------+
+| a    | a in (table test.build) | a not in (table test.build) |
++------+-------------------------+-----------------------------+
+|    0 |                       1 |                           0 |
+|    1 |                       1 |                           0 |
+|    2 |                    NULL |                        NULL |
+| NULL |                    NULL |                        NULL |
++------+-------------------------+-----------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=0;select a, a in (table test.build), a not in (table test.build) from test.probe;
++------+-------------------------+-----------------------------+
+| a    | a in (table test.build) | a not in (table test.build) |
++------+-------------------------+-----------------------------+
+|    0 |                       1 |                           0 |
+|    1 |                       1 |                           0 |
+|    2 |                    NULL |                        NULL |
+| NULL |                    NULL |                        NULL |
++------+-------------------------+-----------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1;select a, a in (table test.build), a not in (table test.build) from test.probe;
++------+-------------------------+-----------------------------+
+| a    | a in (table test.build) | a not in (table test.build) |
++------+-------------------------+-----------------------------+
+|    0 |                       1 |                           0 |
+|    1 |                       1 |                           0 |
+|    2 |                    NULL |                        NULL |
+| NULL |                    NULL |                        NULL |
++------+-------------------------+-----------------------------+
+
