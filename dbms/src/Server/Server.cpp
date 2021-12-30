@@ -1299,7 +1299,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_FMT_INFO(log, "tiflash proxy, store {} is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
 
             WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
