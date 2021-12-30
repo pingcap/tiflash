@@ -1,29 +1,30 @@
 #pragma once
 
-#include <sys/types.h>
-#include <port/unistd.h>
-#include <iostream>
-#include <memory>
-#include <functional>
-#include <optional>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
-#include <chrono>
-#include <Poco/Process.h>
-#include <Poco/ThreadPool.h>
-#include <Poco/TaskNotification.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Poco/FileChannel.h>
+#include <Poco/Net/SocketAddress.h>
 #include <Poco/NumberFormatter.h>
+#include <Poco/Process.h>
+#include <Poco/SyslogChannel.h>
+#include <Poco/TaskNotification.h>
+#include <Poco/ThreadPool.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/ServerApplication.h>
-#include <Poco/Net/SocketAddress.h>
-#include <Poco/FileChannel.h>
-#include <Poco/SyslogChannel.h>
 #include <Poco/Version.h>
-#include <common/types.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 #include <daemon/GraphiteWriter.h>
-#include <Common/Config/ConfigProcessor.h>
+#include <port/unistd.h>
+#include <sys/types.h>
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <optional>
 
 /// \brief Базовый класс для демонов
 ///
@@ -136,7 +137,7 @@ public:
 
     std::optional<size_t> getLayer() const
     {
-        return layer;    /// layer выставляется в классе-наследнике BaseDaemonApplication.
+        return layer; /// layer выставляется в классе-наследнике BaseDaemonApplication.
     }
 
 protected:
@@ -151,9 +152,9 @@ protected:
     /// реализация обработки сигналов завершения через pipe не требует блокировки сигнала с помощью sigprocmask во всех потоках
     void waitForTerminationRequest()
 #if POCO_CLICKHOUSE_PATCH || POCO_VERSION >= 0x02000000 // in old upstream poco not vitrual
-    override
+        override
 #endif
-    ;
+        ;
     /// thread safe
     virtual void onInterruptSignals(int signal_id);
 
@@ -201,6 +202,7 @@ protected:
     /// Файлы с логами.
     Poco::AutoPtr<Poco::FileChannel> log_file;
     Poco::AutoPtr<Poco::FileChannel> error_log_file;
+    Poco::AutoPtr<Poco::FileChannel> tracing_log_file;
     Poco::AutoPtr<Poco::SyslogChannel> syslog_channel;
 
     std::map<std::string, std::unique_ptr<GraphiteWriter>> graphite_writers;
@@ -217,7 +219,6 @@ protected:
     Poco::Util::AbstractConfiguration * last_configuration = nullptr;
 
 private:
-
     /// Previous value of logger element in config. It is used to reinitialize loggers whenever the value changed.
     std::string config_logger;
 };

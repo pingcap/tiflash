@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Implements part of the IDataType interface, common to all numbers and for Date and DateTime.
   */
 template <typename T>
@@ -17,7 +16,7 @@ public:
 
     const char * getFamilyName() const override { return TypeName<T>::get(); }
 
-    TypeIndex getTypeId() const override {return TypeId<T>::value;};
+    TypeIndex getTypeId() const override { return TypeId<T>::value; };
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -59,4 +58,4 @@ protected:
     bool widened = false;
 };
 
-}
+} // namespace DB

@@ -1426,11 +1426,11 @@ public:
             || block.getByPosition(arguments[2]).type->isNullable())
         {
             ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
-            ColumnPtr x_p = block.getByPosition(arguments[1]).column;
-            ColumnPtr y_p = block.getByPosition(arguments[2]).column;
+            ColumnPtr _x_p = block.getByPosition(arguments[1]).column;
+            ColumnPtr _y_p = block.getByPosition(arguments[2]).column;
             for (size_t i = 0; i < rows; i++)
             {
-                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+                vec_result_null_map[i] |= (_x_p->isNullAt(i) || _y_p->isNullAt(i));
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
@@ -1778,11 +1778,11 @@ public:
             || block.getByPosition(arguments[1]).type->isNullable())
         {
             ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
-            ColumnPtr x_p = block.getByPosition(arguments[0]).column;
-            ColumnPtr y_p = block.getByPosition(arguments[1]).column;
+            ColumnPtr _x_p = block.getByPosition(arguments[0]).column;
+            ColumnPtr _y_p = block.getByPosition(arguments[1]).column;
             for (size_t i = 0; i < rows; i++)
             {
-                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+                vec_result_null_map[i] |= (_x_p->isNullAt(i) || _y_p->isNullAt(i));
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));

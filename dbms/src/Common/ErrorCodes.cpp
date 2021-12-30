@@ -374,6 +374,7 @@ extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW = 397;
 extern const int CANNOT_MPROTECT = 445;
 extern const int DECIMAL_OVERFLOW = 446;
 extern const int CANNOT_PARSE_BOOL = 447;
+extern const int CANNOT_FTRUNCATE = 448;
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;
@@ -406,6 +407,8 @@ extern const int DIVIDED_BY_ZERO = 10011;
 extern const int INVALID_TIME = 10012;
 extern const int DEADLOCK_AVOIDED = 10013;
 extern const int PTHREAD_ERROR = 10014;
+extern const int PS_ENTRY_NOT_EXISTS = 10015;
+extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 } // namespace ErrorCodes
 
 } // namespace DB

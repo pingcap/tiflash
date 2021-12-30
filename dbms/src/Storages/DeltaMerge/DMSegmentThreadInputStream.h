@@ -70,7 +70,7 @@ protected:
                 if (!task)
                 {
                     done = true;
-                    LOG_DEBUG(log, "Read done");
+                    LOG_FMT_DEBUG(log, "Read done");
                     return {};
                 }
 
@@ -90,7 +90,7 @@ protected:
                         max_version,
                         std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
                 }
-                LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
+                LOG_FMT_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
@@ -106,7 +106,7 @@ protected:
             else
             {
                 after_segment_read(dm_context, cur_segment);
-                LOG_TRACE(log, "Finish reading segment [" << cur_segment->segmentId() << "]");
+                LOG_FMT_TRACE(log, "Finish reading segment [{}]", cur_segment->segmentId());
                 cur_segment = {};
                 cur_stream = {};
             }
