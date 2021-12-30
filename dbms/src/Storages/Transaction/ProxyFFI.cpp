@@ -438,4 +438,14 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
     }
 }
 
+void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
+{
+    metapb::Store store{};
+    store.ParseFromArray(buff.data, buff.len);
+    assert(server);
+    assert(server->tmt);
+    assert(store.id() != 0);
+    server->tmt->getKVStore()->setStore(std::move(store));
+}
+
 } // namespace DB
