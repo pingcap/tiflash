@@ -210,7 +210,7 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
 
     auto page_lock = acquireLock();
 
-    if (entries.size() == 0)
+    if (entries.empty())
     {
         return std::make_pair(del_entries, true);
     }
@@ -264,22 +264,22 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
-PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc, PageId page_id)
+PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blobs_need_gc, PageId page_id)
 {
     PageSize single_page_size = 0;
-    for (auto iter = entries.begin(); iter != entries.end(); iter++)
+    for (const auto & [versioned_type, entry_del] : entries)
     {
-        if (iter->second.is_delete)
+        if (entry_del.is_delete)
         {
             continue;
         }
 
-        const auto & entry = iter->second.entry;
+        const auto & entry = entry_del.entry;
 
-        if (auto it = blob_need_gc.find(entry.file_id); it != blob_need_gc.end())
+        if (auto it = blobs_need_gc.find(entry.file_id); it != blobs_need_gc.end())
         {
             single_page_size += entry.size;
-            it->second.emplace_back(std::make_tuple(page_id, iter->first, iter->second.entry));
+            it->second.emplace_back(std::make_tuple(page_id, versioned_type, entry_del.entry));
         }
     }
 
@@ -324,14 +324,12 @@ void PageDirectory::snapshotsGC()
             iter = mvcc_table_directory.erase(iter);
         }
     }
-
-    return;
 }
 
 
 void PageDirectory::gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list)
 {
-    for (auto & [entry, versioned_pageid_entry] : copy_list)
+    for (const auto & [entry, versioned_pageid_entry] : copy_list)
     {
         auto page_id = std::get<0>(versioned_pageid_entry);
         auto version = std::get<1>(versioned_pageid_entry);
@@ -352,27 +350,25 @@ void PageDirectory::gcApply(const std::list<std::pair<PageEntryV3, VersionedPage
 // FIXME : should put into pagestore.
 void PageDirectory::blobstoreGC()
 {
-    std::map<BlobFileId, VersionedPageIdAndEntryList> blob_need_gc;
+    std::map<BlobFileId, VersionedPageIdAndEntryList> blobs_need_gc;
 
-    blobstore->getGCStats(blob_need_gc);
+    blobstore->getGCStats(blobs_need_gc);
     PageSize total_page_size = 0;
     {
         std::shared_lock read_lock(table_rw_mutex);
 
-        for (auto iter = mvcc_table_directory.begin();
-             iter != mvcc_table_directory.end();
-             iter++)
+        for (const auto & [page_id, version_entries] : mvcc_table_directory)
         {
-            total_page_size += iter->second->getEntryByBlobId(blob_need_gc, iter->first);
+            total_page_size += version_entries->getEntryByBlobId(blobs_need_gc, page_id);
         }
     }
 
-    if (blob_need_gc.empty())
+    if (blobs_need_gc.empty())
     {
         return;
     }
 
-    const auto & copy_list = blobstore->gc(blob_need_gc, total_page_size);
+    const auto & copy_list = blobstore->gc(blobs_need_gc, total_page_size);
 
     if (copy_list.empty())
     {

@@ -47,7 +47,7 @@ public:
             READ_ONLY = 2
         };
 
-        String blobTypeToString(BlobStatType type)
+        static String blobTypeToString(BlobStatType type)
         {
             switch (type)
             {
@@ -121,7 +121,7 @@ public:
 
         BlobStatPtr fileIdToStat(BlobFileId file_id);
 
-        const std::list<BlobStatPtr> getStats()
+        std::list<BlobStatPtr> getStats() const
         {
             return stats_map;
         }

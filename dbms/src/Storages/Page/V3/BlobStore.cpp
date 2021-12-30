@@ -317,9 +317,9 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
 
 void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc)
 {
-    auto & stats_list = blob_stats.getStats();
+    const auto & stats_list = blob_stats.getStats();
 
-    for (auto & stat : stats_list)
+    for (const auto & stat : stats_list)
     {
         auto lock = blob_stats.statLock(stat);
         auto right_margin = stat->smap->getRightMargin();
@@ -376,11 +376,8 @@ std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> BlobStore::gc(std::ma
 
     for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
     {
-        for (auto versioned_pageid_entry_it = versioned_pageid_entry_list.begin();
-             versioned_pageid_entry_it != versioned_pageid_entry_list.end();
-             versioned_pageid_entry_it++)
+        for (const auto & versioned_pageid_entry : versioned_pageid_entry_list)
         {
-            VersionedPageIdAndEntry versioned_pageid_entry = *versioned_pageid_entry_it;
             PageEntryV3 new_entry;
             PageEntryV3 entry = std::get<2>(versioned_pageid_entry);
 

@@ -649,7 +649,7 @@ public:
         dir.blobstore = std::make_shared<BlobStore>(file_provider, path, config);
     }
 
-    BlobStorePtr getBlobStore()
+    BlobStorePtr getBlobStore() const
     {
         return dir.blobstore;
     }
@@ -683,10 +683,10 @@ public:
         {
             for (size_t j = 0; j < buff_size; ++j)
             {
-                c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+                c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
 
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
 
             auto edit = getBlobStore()->write(wb, nullptr);
@@ -741,7 +741,7 @@ protected:
     const PageDirectory & dir,
     const PageId page_id)
 {
-    auto & mvcc_table = dir.mvcc_table_directory;
+    const auto & mvcc_table = dir.mvcc_table_directory;
     auto mvcc_it = mvcc_table.find(page_id);
 
     if (mvcc_it == mvcc_table.end())
@@ -775,10 +775,10 @@ protected:
     size_t idx = 0;
     for (auto & [actual_version_type, actual_entry] : actual_entries_seq)
     {
-        auto & expected_seq_entry = expected_entries[idx++];
-        auto & expected_seq = std::get<0>(expected_seq_entry);
-        auto & expected_epoch = std::get<1>(expected_seq_entry);
-        auto & expected_entry = std::get<2>(expected_seq_entry);
+        const auto & expected_seq_entry = expected_entries[idx++];
+        const auto & expected_seq = std::get<0>(expected_seq_entry);
+        const auto & expected_epoch = std::get<1>(expected_seq_entry);
+        const auto & expected_entry = std::get<2>(expected_seq_entry);
 
         if (actual_entry.is_delete)
         {
@@ -852,13 +852,15 @@ try
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
 
         auto edit = blob_store->write(wb, nullptr);
+        [[maybe_unused]] const auto & record_last = edit.getRecords().rbegin();
+
         dir.apply(std::move(edit));
         dir.createSnapshot();
         wb.clear();
@@ -871,8 +873,6 @@ try
 
         if (i + 1 >= lowest_seq)
         {
-            const auto & record_last = edit.getRecords().rbegin();
-
             // (i + 1) eq. current apply seq
             seq_entries.emplace_back(std::make_tuple(i + 1, 0, record_last->entry));
         }

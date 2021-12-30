@@ -101,7 +101,7 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-        PageSize getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_ids, PageId page_id);
+        PageSize getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blobs_need_gc, PageId page_id);
 
         std::pair<std::list<PageEntryV3>, bool> deleteAndGC(UInt64 lowest_seq);
 #ifndef DBMS_PUBLIC_GTEST

@@ -192,10 +192,10 @@ TEST_F(BlobStoreTest, testWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -284,10 +284,10 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size, field_sizes);
     }
 
@@ -342,7 +342,7 @@ TEST_F(BlobStoreTest, testWrite)
         for (size_t i = 0; i < buff_size; ++i)
         {
             c_buff1[i] = i & 0xff;
-            c_buff2[i] = (char)((i & 0xff) + 1);
+            c_buff2[i] = static_cast<char>((i & 0xff) + 1);
         }
 
         ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, buff_size);
@@ -448,7 +448,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         WriteBatch wb;
         char c_buff[buff_size];
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)c_buff, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
         wb.putPage(50, /*tag*/ 0, buff, buff_size);
 
         bool catch_exception = false;
@@ -474,8 +474,8 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         char c_buff1[buf_size];
         char c_buff2[buf_size];
 
-        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff1, buf_size);
-        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff2, buf_size);
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), buf_size);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), buf_size);
 
         wb.putPage(50, /*tag*/ 0, buff1, buf_size);
 
@@ -520,8 +520,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
         char c_buff[buff_size];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i * buff_size] = (char)((0xff) + i);
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -599,8 +599,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
         char c_buff[buff_size];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i * buff_size] = (char)((0xff) + i);
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
