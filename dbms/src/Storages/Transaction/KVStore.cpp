@@ -671,7 +671,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
 
 void KVStore::setStore(metapb::Store store)
 {
-    getStore() = std::move(store);
+    this->store = std::move(store);
     this->store_id = getStore().id();
     LOG_FMT_INFO(log, "Set store info {}", getStore().ShortDebugString());
 }
