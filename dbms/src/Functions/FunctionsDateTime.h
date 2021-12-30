@@ -1385,6 +1385,7 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
                 catch (const Exception &)
                 {
                     (*vec_null_map_to)[i] = 1;
+                    write_buffer.write(reinterpret_cast<const char *>(&("1970-01-01")[0]), 10);
                 }
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
@@ -1411,6 +1412,7 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
                 catch (const Exception &)
                 {
                     (*vec_null_map_to)[i] = 1;
+                    write_buffer.write(reinterpret_cast<const char *>(&("1970-01-01")[0]), 10);
                 }
 
                 writeChar(0, write_buffer);
