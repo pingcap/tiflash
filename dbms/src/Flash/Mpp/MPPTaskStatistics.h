@@ -62,12 +62,9 @@ private:
     Int64 output_bytes = 0;
 
     // executor dag
+    bool is_root = false;
     String sender_executor_id;
     ExecutorStatisticsCollector executor_statistics_collector;
-    // root task
-    bool is_root_task = false;
-    // for non-root task, tidb_host is empty
-    String tidb_host;
 
     // resource
     Int64 working_time = 0;

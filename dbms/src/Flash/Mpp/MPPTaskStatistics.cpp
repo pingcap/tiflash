@@ -56,17 +56,7 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     const auto & root_executor = dag_context->dag_request->root_executor();
     assert(root_executor.has_exchange_sender());
 
-    // root task
-    is_root_task = dag_context->is_root_mpp_task;
-    if (is_root_task)
-    {
-        const auto & exchange_sender = root_executor.exchange_sender();
-        assert(exchange_sender.encoded_task_meta_size() == 1);
-        mpp::TaskMeta task_meta;
-        assert(task_meta.ParseFromString(exchange_sender.encoded_task_meta(0)));
-        tidb_host = task_meta.address();
-    }
-
+    is_root = dag_context->is_root_mpp_task;
     sender_executor_id = root_executor.executor_id();
     executor_statistics_collector.initialize(dag_context);
 }
@@ -95,8 +85,7 @@ void MPPTaskStatistics::logTracingJson()
 {
     LOG_FMT_INFO(
         logger,
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
-        R"(,"is_root_task":{},"tidb_host":"{}")"
+        R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
@@ -104,11 +93,10 @@ void MPPTaskStatistics::logTracingJson()
         R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
+        is_root,
         sender_executor_id,
         executor_statistics_collector.resToJson(),
         host,
-        is_root_task,
-        tidb_host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(task_start_timestamp),
         toNanoseconds(task_end_timestamp),

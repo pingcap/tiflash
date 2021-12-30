@@ -7,9 +7,10 @@ namespace DB
 String MPPTunnelDetail::toJson() const
 {
     return fmt::format(
-        R"({{"tunnel_id":"{}","sender_target_task_id":{},"is_local":{},"packets":{},"bytes":{}}})",
+        R"({{"tunnel_id":"{}","sender_target_task_id":{},"sender_target_host":"{}","is_local":{},"packets":{},"bytes":{}}})",
         tunnel_id,
         sender_target_task_id,
+        sender_target_host,
         is_local,
         packets,
         bytes);
@@ -82,7 +83,7 @@ ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * execut
         sender_target_task_ids.push_back(task_meta.task_id());
 
         const auto & mpp_tunnel = mpp_tunnels[i];
-        mpp_tunnel_details.emplace_back(mpp_tunnel->id(), task_meta.task_id(), mpp_tunnel->isLocal());
+        mpp_tunnel_details.emplace_back(mpp_tunnel->id(), task_meta.task_id(), task_meta.address(), mpp_tunnel->isLocal());
     }
 }
 } // namespace DB
