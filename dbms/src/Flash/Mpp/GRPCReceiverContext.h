@@ -30,8 +30,9 @@ class AsyncExchangePacketReader
 {
 public:
     virtual ~AsyncExchangePacketReader() = default;
-    virtual void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) = 0;
-    virtual void finish(UnaryCallback<::grpc::Status> * callback) = 0;
+    virtual void init(UnaryCallback<bool> * callback) = 0;
+    virtual void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
+    virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
 };
 using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
 
@@ -70,7 +71,8 @@ public:
 
     void makeAsyncReader(
         const ExchangeRecvRequest & request,
-        UnaryCallback<AsyncExchangePacketReaderPtr> * callback) const;
+        AsyncExchangePacketReaderPtr & reader,
+        UnaryCallback<bool> * callback) const;
 
     static Status getStatusOK()
     {

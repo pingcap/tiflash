@@ -38,47 +38,6 @@ namespace DB
 {
 namespace
 {
-struct MakeReaderCallbackProxy : public UnaryCallback<bool>
-{
-    UnaryCallback<AsyncExchangePacketReaderPtr> * callback = nullptr;
-    AsyncExchangePacketReaderPtr reader;
-
-    void execute(bool & ok) override
-    {
-        if (!ok)
-            reader.reset();
-        callback->execute(reader);
-        delete this;
-    }
-};
-
-struct BatchReadCallbackProxy : public UnaryCallback<bool>
-{
-    UnaryCallback<size_t> * callback = nullptr;
-    size_t read_index = 0;
-    MPPDataPacketPtrs * packets = nullptr;
-    ::grpc::ClientAsyncReader<MPPDataPacket> * reader = nullptr;
-
-    void execute(bool & ok) override
-    {
-        if (!ok || ++read_index == packets->size())
-            callback->execute(read_index);
-        else
-            reader->Read((*packets)[read_index].get(), this);
-    }
-};
-
-struct FinishCallbackProxy : public UnaryCallback<bool>
-{
-    UnaryCallback<::grpc::Status> * callback = nullptr;
-    ::grpc::Status status = ::grpc::Status::OK;
-
-    void execute(bool &) override
-    {
-        callback->execute(status);
-    }
-};
-
 struct GrpcExchangePacketReader : public ExchangePacketReader
 {
     std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
@@ -103,31 +62,39 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
 
 struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 {
-    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
+    pingcap::kv::Cluster * cluster;
+    const ExchangeRecvRequest & request;
+    pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
     grpc::ClientContext client_context;
     std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
-    BatchReadCallbackProxy batch_read_callback;
-    FinishCallbackProxy finish_callback;
 
-    explicit AsyncGrpcExchangePacketReader(const ExchangeRecvRequest & req)
+    AsyncGrpcExchangePacketReader(
+        pingcap::kv::Cluster * cluster_,
+        const ExchangeRecvRequest & req)
+        : cluster(cluster_)
+        , request(req)
+        , call(req.req)
     {
-        call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
     }
 
-    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) override
+    void init(UnaryCallback<bool> * callback) override
     {
-        batch_read_callback.callback = callback;
-        batch_read_callback.read_index = 0;
-        batch_read_callback.packets = &packets;
-        batch_read_callback.reader = reader.get();
-        reader->Read(packets[0].get(), &batch_read_callback);
+        reader = cluster->rpc_client->sendStreamRequestAsync(
+            request.req->sender_meta().address(),
+            &client_context,
+            call,
+            GRPCCompletionQueuePool::Instance()->pickQueue(),
+            callback);
     }
 
-    void finish(UnaryCallback<::grpc::Status> * callback) override
+    void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
     {
-        finish_callback.callback = callback;
-        finish_callback.status = ::grpc::Status::OK;
-        reader->Finish(&finish_callback.status, &finish_callback);
+        reader->Read(packet.get(), callback);
+    }
+
+    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    {
+        reader->Finish(&status, callback);
     }
 };
 
@@ -254,22 +221,11 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
-    UnaryCallback<AsyncExchangePacketReaderPtr> * callback) const
+    AsyncExchangePacketReaderPtr & reader,
+    UnaryCallback<bool> * callback) const
 {
-    auto reader = std::make_shared<AsyncGrpcExchangePacketReader>(request);
-    auto proxy = std::make_unique<MakeReaderCallbackProxy>();
-    proxy->callback = callback;
-    proxy->reader = reader;
-
-    // must init reader->reader after assign proxy->reader
-    reader->reader = cluster->rpc_client->sendStreamRequestAsync(
-        request.req->sender_meta().address(),
-        &reader->client_context,
-        *reader->call,
-        GRPCCompletionQueuePool::Instance()->pickQueue(),
-        proxy.get());
-    // must release proxy at the end, proxy will destruct itself after being triggered.
-    proxy.release();
+    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
+    reader->init(callback);
 }
 
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
