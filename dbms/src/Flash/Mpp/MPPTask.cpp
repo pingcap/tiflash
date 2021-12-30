@@ -206,11 +206,11 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
         is_root_mpp_task = task_meta.task_id() == -1;
     }
-    String tidb_host = context->getClientInfo().current_address.toString();
-    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task, tidb_host);
+    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->regions_for_local_read = std::move(local_regions);
     dag_context->regions_for_remote_read = std::move(remote_regions);
+    dag_context->tidb_host = context->getClientInfo().current_address.toString();
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())

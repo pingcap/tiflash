@@ -87,7 +87,7 @@ ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * execut
     }
 
     // for root task, exchange_sender_executor.task_meta[0].address is blank or not tidb host
-    // todo pass tidb host in exchange_sender_executor.task_meta[0]
+    // TODO pass tidb host in exchange_sender_executor.task_meta[0]
     if (dag_context.isRootMPPTask())
     {
         assert(mpp_tunnel_details.size() == 1);

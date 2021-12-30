@@ -45,9 +45,8 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 class DAGContext
 {
 public:
-    explicit DAGContext(const tipb::DAGRequest & dag_request_, String tidb_host_ = "Unknown")
+    explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
-        , tidb_host(std::move(tidb_host_))
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
@@ -62,9 +61,8 @@ public:
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
     }
 
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_, String tidb_host_ = "Unknown")
+    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
-        , tidb_host(std::move(tidb_host_))
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , return_executor_id(true)
         , is_mpp_task(true)
@@ -83,7 +81,6 @@ public:
 
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
-        , tidb_host("Unknown")
         , collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
@@ -159,7 +156,7 @@ public:
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id = "";
-    const String tidb_host;
+    String tidb_host = "Unknown";
     bool collect_execution_summaries;
     bool return_executor_id;
     bool is_mpp_task = false;

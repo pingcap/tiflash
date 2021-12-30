@@ -62,12 +62,12 @@ grpc::Status BatchCoprocessorHandler::execute()
             LOG_DEBUG(log,
                       __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
-            String tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
-            DAGContext dag_context(dag_request, tidb_host);
+            DAGContext dag_context(dag_request);
             dag_context.is_batch_cop = true;
             dag_context.regions_for_local_read = std::move(regions);
             dag_context.regions_for_remote_read = std::move(retry_regions);
             dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+            dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
