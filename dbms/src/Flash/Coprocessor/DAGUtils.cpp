@@ -636,7 +636,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::RpadUTF8, "cast"},
     //{tipb::ScalarFuncSig::Rpad, "cast"},
     //{tipb::ScalarFuncSig::Space, "cast"},
-    //{tipb::ScalarFuncSig::Strcmp, "cast"},
+    {tipb::ScalarFuncSig::Strcmp, "strcmp"},
     {tipb::ScalarFuncSig::Substring2ArgsUTF8, "substringUTF8"},
     {tipb::ScalarFuncSig::Substring3ArgsUTF8, "substringUTF8"},
     //{tipb::ScalarFuncSig::Substring2Args, "cast"},

@@ -1,11 +1,10 @@
-#include <iostream>
-#include <fstream>
-
-#include <Common/Stopwatch.h>
-
-#include <IO/WriteBufferFromOStream.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/Stopwatch.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <IO/WriteBufferFromOStream.h>
+
+#include <fstream>
+#include <iostream>
 
 
 int main(int, char **)
@@ -27,7 +26,7 @@ int main(int, char **)
     WriteBufferFromOStream out_buf(ostr);
 
     stopwatch.restart();
-    data_type.serializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &){ return &out_buf; }, 0, 0, true, {});
+    data_type.serializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &) { return &out_buf; }, 0, 0, true, {});
     stopwatch.stop();
 
     std::cout << "Elapsed: " << stopwatch.elapsedSeconds() << std::endl;

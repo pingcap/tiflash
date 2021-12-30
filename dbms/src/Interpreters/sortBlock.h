@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 /// Sort one block by `description`. If limit != 0, then the partial sort of the first `limit` rows is produced.
 void sortBlock(Block & block, const SortDescription & description, size_t limit = 0);
 
@@ -29,4 +28,4 @@ void stableGetPermutation(const Block & block, const SortDescription & descripti
   */
 bool isAlreadySorted(const Block & block, const SortDescription & description);
 
-}
+} // namespace DB

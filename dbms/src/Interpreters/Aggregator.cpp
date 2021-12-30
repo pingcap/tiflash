@@ -7,6 +7,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadManager.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>
@@ -672,8 +673,21 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Written part in " << elapsed_seconds << " sec., " << rows << " rows, " << (uncompressed_bytes / 1048576.0) << " MiB uncompressed, " << (compressed_bytes / 1048576.0) << " MiB compressed, " << (uncompressed_bytes / rows) << " uncompressed bytes per row, " << (compressed_bytes / rows) << " compressed bytes per row, "
-                              << "compression rate: " << (uncompressed_bytes / compressed_bytes) << " (" << (rows / elapsed_seconds) << " rows/sec., " << (uncompressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. uncompressed, " << (compressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. compressed)");
+    LOG_FMT_TRACE(
+        log,
+        "Written part in {:.3f} sec., {} rows, "
+        "{:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
+        "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
+        elapsed_seconds,
+        rows,
+        (uncompressed_bytes / 1048576.0),
+        (compressed_bytes / 1048576.0),
+        (uncompressed_bytes / rows),
+        (compressed_bytes / rows),
+        (uncompressed_bytes / compressed_bytes),
+        (rows / elapsed_seconds),
+        (uncompressed_bytes / elapsed_seconds / 1048576.0),
+        (compressed_bytes / elapsed_seconds / 1048576.0));
 }
 
 
@@ -731,7 +745,7 @@ void Aggregator::writeToTemporaryFileImpl(
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Max size of temporary block: " << max_temporary_block_size_rows << " rows, " << (max_temporary_block_size_bytes / 1048576.0) << " MiB.");
+    LOG_FMT_TRACE(log, "Max size of temporary block: {} rows, {:.3f} MiB.", max_temporary_block_size_rows, (max_temporary_block_size_bytes / 1048576.0));
 }
 
 
@@ -801,9 +815,15 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        src_rows,
+        rows,
+        src_bytes / 1048576.0,
+        elapsed_seconds,
+        src_rows / elapsed_seconds,
+        src_bytes / elapsed_seconds / 1048576.0);
 }
 
 template <typename Method, typename Table>
@@ -1241,9 +1261,14 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     }
 
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Converted aggregated data to blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB"
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Converted aggregated data to blocks. {} rows, {:.3f} MiB in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        rows,
+        bytes / 1048576.0,
+        elapsed_seconds,
+        rows / elapsed_seconds,
+        bytes / elapsed_seconds / 1048576.0);
 
     return blocks;
 }
@@ -1455,8 +1480,8 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data)
-            parallel_merge_data->pool.wait();
+        if (parallel_merge_data && parallel_merge_data->thread_pool)
+            parallel_merge_data->thread_pool->wait();
     }
 
 protected:
@@ -1563,10 +1588,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ThreadPool pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
 
         explicit ParallelMergeData(size_t threads)
-            : pool(threads)
+            : thread_pool(newThreadPoolManager(threads))
         {}
     };
 
@@ -1578,8 +1603,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(
-            wrapInvocable(true, [this, num] { thread(num); }));
+        parallel_merge_data->thread_pool->schedule(true, [this, num] { thread(num); });
     }
 
     void thread(Int32 bucket_num)
@@ -1903,7 +1927,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
         bucket_to_blocks[block.info.bucket_num].emplace_back(std::move(block));
     }
 
-    LOG_TRACE(log, "Read " << total_input_blocks << " blocks of partially aggregated data, total " << total_input_rows << " rows.");
+    LOG_FMT_TRACE(log, "Read {} blocks of partially aggregated data, total {} rows.", total_input_blocks, total_input_rows);
 
     if (bucket_to_blocks.empty())
         return;
@@ -2045,7 +2069,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     auto bucket_num = blocks.front().info.bucket_num;
     bool is_overflows = blocks.front().info.is_overflows;
 
-    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {})." << bucket_num);
+    LOG_FMT_TRACE(log, "Merging partially aggregated blocks (bucket = {}).", bucket_num);
     Stopwatch watch;
 
     /** If possible, change 'method' to some_hash64. Otherwise, leave as is.
@@ -2114,9 +2138,14 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     size_t rows = block.rows();
     size_t bytes = block.bytes();
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Merged partially aggregated blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB."
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Merged partially aggregated blocks. {} rows, {:.3f} MiB. in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        rows,
+        bytes / 1048576.0,
+        elapsed_seconds,
+        rows / elapsed_seconds,
+        bytes / elapsed_seconds / 1048576.0);
 
     block.info.bucket_num = bucket_num;
     return block;

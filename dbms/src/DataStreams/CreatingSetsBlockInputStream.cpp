@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -110,6 +111,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
+        auto thread_manager = newThreadManager();
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -118,15 +120,13 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.emplace_back(ThreadFactory::newThread(true, "CreatingSets", [this, &subquery = elem.second] { createOne(subquery); }));
+                    thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
-        for (auto & work : workers)
-        {
-            work.join();
-        }
+
+        thread_manager->wait();
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class Context;
 class IAST;
 class ASTSetQuery;
@@ -18,7 +17,9 @@ class InterpreterSetQuery : public IInterpreter
 {
 public:
     InterpreterSetQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_), context(context_) {}
+        : query_ptr(query_ptr_)
+        , context(context_)
+    {}
 
     /** Usual SET query. Set setting for the session.
       */
@@ -37,4 +38,4 @@ private:
 };
 
 
-}
+} // namespace DB

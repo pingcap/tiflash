@@ -9,7 +9,7 @@ SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_bl
     , min_block_size_bytes(min_block_size_bytes)
     , log(getLogWithPrefix(log_, "SquashingTransform"))
 {
-    LOG_DEBUG(log, "Squashing config - min_block_size_rows: " << min_block_size_rows << " min_block_size_bytes: " << min_block_size_bytes);
+    LOG_FMT_DEBUG(log, "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}", min_block_size_rows, min_block_size_bytes);
 }
 
 
@@ -24,7 +24,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
     /// Just read block is alredy enough.
     if (isEnoughSize(block_rows, block_bytes))
     {
-        LOG_DEBUG(log, "Block size enough - rows: " << block_rows << " bytes: " << block_bytes);
+        LOG_FMT_DEBUG(log, "Block size enough - rows: {} bytes: {}", block_rows, block_bytes);
         /// If no accumulated data, return just read block.
         if (!accumulated_block)
             return Result(std::move(block));
@@ -40,7 +40,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
     /// Accumulated block is already enough.
     if (accumulated_block && isEnoughSize(accumulated_block_rows, accumulated_block_bytes))
     {
-        LOG_DEBUG(log, "Accumulated block size enough - rows: " << accumulated_block_rows << " bytes: " << accumulated_block_bytes);
+        LOG_FMT_DEBUG(log, "Accumulated block size enough - rows: {} bytes: {}", accumulated_block_rows, accumulated_block_bytes);
         /// Return accumulated data and place new block to accumulated data.
         accumulated_block.swap(block);
         return Result(std::move(block));
@@ -53,7 +53,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
 
     if (isEnoughSize(accumulated_block_rows, accumulated_block_bytes))
     {
-        LOG_DEBUG(log, "Combined block size enough - rows: " << accumulated_block_rows << " bytes: " << accumulated_block_bytes);
+        LOG_FMT_DEBUG(log, "Combined block size enough - rows: {} bytes: {}", accumulated_block_rows, accumulated_block_bytes);
         Block res;
         res.swap(accumulated_block);
         return Result(std::move(res));
