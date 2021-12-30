@@ -130,7 +130,16 @@ private:
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
-
+    struct StoreMeta
+    {
+        using Base = metapb::Store;
+        Base base;
+        std::atomic_int64_t store_id{0};
+        void update(Base &&);
+        friend class KVStore;
+    };
+    StoreMeta & getStore();
+    const StoreMeta & getStore() const;
 
     std::vector<UInt64> preHandleSSTsToDTFiles(
         RegionPtr new_region,
@@ -172,8 +181,6 @@ private:
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
-    metapb::Store & getStore();
-
 private:
     RegionManager region_manager;
 
@@ -203,8 +210,7 @@ private:
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     std::atomic_int64_t read_index_event_flag{0};
 
-    metapb::Store store;
-    std::atomic_int64_t store_id;
+    StoreMeta store;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
