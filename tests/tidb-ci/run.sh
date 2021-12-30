@@ -15,19 +15,20 @@ wait_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+clean_data_log
 
 docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
 
 docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml down
+clean_data_log
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_local_tunnel'
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
-
 clean_data_log
 
 # run new_collation_fullstack tests
