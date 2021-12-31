@@ -783,8 +783,31 @@ struct SubstringUTF8Impl
   */
 struct RightUTF8Impl
 {
+public:
+    // length should not be zero.
+    static void vectorWithConstLength(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            res_offset += doRightUTF8(i, data, offsets, length, res_data, prev_offset, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
     template <typename FF>
-    static void vector(
+    static void vectorWithColumnLength(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         FF && get_length_func,
@@ -799,44 +822,66 @@ struct RightUTF8Impl
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            std::vector<ColumnString::Offset> start_offsets;
-            ColumnString::Offset current = prev_offset;
-            // TODO: break this loop in advance
-            // NOTE: data[offsets[i] -1] = 0, so ignore it
-            while (current < offsets[i] - 1)
-            {
-                start_offsets.push_back(current);
-                if (data[current] < 0xBF)
-                    current += 1;
-                else if (data[current] < 0xE0)
-                    current += 2;
-                else if (data[current] < 0xF0)
-                    current += 3;
-                else
-                    current += 1;
-            }
-            if (start_offsets.empty())
-            {
-                // null
-                res_data.resize(res_data.size() + 1);
-                res_data[res_offset] = 0;
-                ++res_offset;
-            }
-            else
-            {
-                // not null
-                // if(string_length > length, string_length - length, 0)
-                size_t length = get_length_func(i);
-                auto start_index = start_offsets.size() > length ? start_offsets.size() - length : 0;
-                // copy data from start to end of this string
-                size_t bytes_to_copy = offsets[i] - start_offsets[start_index];
-                res_data.resize(res_data.size() + bytes_to_copy);
-                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
-                res_offset += bytes_to_copy;
-            }
+            size_t length = get_length_func(i);
+            res_offset += (0 == length
+                               ? appendEmptyString(res_data, res_offset)
+                               : doRightUTF8(i, data, offsets, length, res_data, prev_offset, res_offset));
             res_offsets[i] = res_offset;
             prev_offset = offsets[i];
         }
+    }
+
+private:
+    // length should not be zero.
+    // copy bytes from data to res_data and return bytes_to_copy.
+    static size_t doRightUTF8(
+        size_t column_index,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        const ColumnString::Offset & prev_offset,
+        const ColumnString::Offset & res_offset)
+    {
+        std::vector<ColumnString::Offset> start_offsets;
+        ColumnString::Offset current = prev_offset;
+        // TODO: break this loop in advance
+        // NOTE: data[offsets[column_index] -column_index] = 0, so ignore it
+        while (current < offsets[column_index] - 1)
+        {
+            start_offsets.push_back(current);
+            if (data[current] < 0xBF)
+                current += 1;
+            else if (data[current] < 0xE0)
+                current += 2;
+            else if (data[current] < 0xF0)
+                current += 3;
+            else
+                current += 1;
+        }
+        if (start_offsets.empty())
+        {
+            // null
+            return appendEmptyString(res_data, res_offset);
+        }
+        else
+        {
+            // not null
+            // if(string_length > length, string_length - length, 0)
+            auto start_index = start_offsets.size() > length ? start_offsets.size() - length : 0;
+            // copy data from start to end of this string
+            size_t bytes_to_copy = offsets[column_index] - start_offsets[start_index];
+            res_data.resize(res_data.size() + bytes_to_copy);
+            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
+            return bytes_to_copy;
+        }
+    }
+
+    static size_t appendEmptyString(ColumnString::Chars_t & res_data, const ColumnString::Offset & res_offset)
+    {
+        res_data.resize(res_data.size() + 1);
+        res_data[res_offset] = 0;
+        return 1;
     }
 };
 
@@ -1642,38 +1687,28 @@ public:
             // Int64 / UInt64
             using LengthFieldType = typename LengthType::FieldType;
 
-            std::function<size_t(size_t)> get_length_func;
+            auto col_res = ColumnString::create();
             if (column_length->isColumnConst())
             {
-                get_length_func = getLengthFunc<LengthFieldType, true>(column_length);
+                size_t length = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
 
                 // for const 0, return const blank string.
-                if (0 == get_length_func(0))
+                if (0 == length)
                 {
                     block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
                     return true;
                 }
-            }
-            else
-            {
-                get_length_func = getLengthFunc<LengthFieldType, false>(column_length);
-            }
 
-            auto col_res = ColumnString::create();
-            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-            {
-                RightUTF8Impl::vector(col->getChars(), col->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
-            }
-            else if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
-            {
-                const auto * col_string = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
-                RightUTF8Impl::vector(col_string->getChars(), col_string->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
+                const ColumnString * col = getColumnStringPtr(column_string);
+                RightUTF8Impl::vectorWithConstLength(col->getChars(), col->getOffsets(), length, col_res->getChars(), col_res->getOffsets());
             }
             else
             {
-                throw Exception(
-                    fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
+                auto get_length_func = [&column_length](size_t i) {
+                    return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                };
+                const ColumnString * col = getColumnStringPtr(column_string);
+                RightUTF8Impl::vectorWithColumnLength(col->getChars(), col->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
             }
             block.getByPosition(result).column = std::move(col_res);
             return true;
@@ -1684,30 +1719,36 @@ public:
     }
 
 private:
+    static const ColumnString * getColumnStringPtr(const ColumnPtr & column_string)
+    {
+        const ColumnString * col_string = checkAndGetColumn<ColumnString>(column_string.get());
+        if (col_string)
+        {
+            return col_string;
+        }
+        else
+        {
+            if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
+            {
+                const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
+                assert(col_string_from_const);
+                return col_string_from_const;
+            }
+            else
+            {
+                throw Exception(
+                    fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), name),
+                    ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+    }
+
     template <typename F>
     static bool getLengthType(DataTypePtr type, F && f)
     {
         return castTypeToEither<
             DataTypeInt64,
             DataTypeUInt64>(type.get(), std::forward<F>(f));
-    }
-
-    template <typename Integer, bool is_const>
-    std::function<size_t(size_t)> getLengthFunc(const ColumnPtr & column_length) const
-    {
-        if constexpr (is_const)
-        {
-            UInt64 length = getValueFromLengthField<Integer>((*column_length)[0]);
-            return [length](size_t) {
-                return length;
-            };
-        }
-        else
-        {
-            return [&column_length](size_t i) {
-                return getValueFromLengthField<Integer>((*column_length)[i]);
-            };
-        }
     }
 
     template <typename Integer>
