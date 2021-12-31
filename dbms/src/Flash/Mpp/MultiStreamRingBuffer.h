@@ -38,18 +38,126 @@ public:
         return length;
     }
 
+
+    class OpBase
+    {
+    public:
+        OpBase()
+            : parent(nullptr)
+            , state(OpState::INVALID)
+        {}
+        explicit OpBase(MultiStreamRingBuffer * parent_)
+            : parent(parent_)
+            , state(OpState::RUNNING)
+        {}
+
+        bool isValid() const
+        {
+            return state != OpState::INVALID;
+        }
+
+        bool isCommitted() const
+        {
+            return state == OpState::COMMITTED;
+        }
+
+    protected:
+        enum class OpState
+        {
+            INVALID,
+            RUNNING,
+            COMMITTED
+        };
+
+        MultiStreamRingBuffer * parent;
+        OpState state;
+
+        void markAsCommitted()
+        {
+            state = OpState::COMMITTED;
+        }
+    };
+
+    class Pop final : public OpBase
+    {
+    public:
+        Pop() = default;
+
+        bool commit(Lock & lock)
+        {
+            bool result = this->parent->endPop(lock, stream_id);
+            this->markAsCommitted();
+            return result;
+        }
+
+        ItemPtr item;
+
+    private:
+        Pop(MultiStreamRingBuffer * parent, size_t stream_id_)
+            : OpBase(parent)
+            , stream_id(stream_id_)
+        {
+            item = parent->items[this->parent->next[stream_id]];
+        }
+
+        size_t stream_id;
+    };
+
+    friend class Pop;
+
     template <typename OtherCondition>
-    ItemPtr beginPop(Lock & lock, size_t stream_id, const OtherCondition & other_condition)
+    Pop beginPop(Lock & lock, size_t stream_id, const OtherCondition & other_condition)
     {
         auto condition_1 = [&, this] {
             return next[stream_id] != head;
         };
         if (!waitWithOtherCondition(head_cv, lock, condition_1, other_condition))
-            return nullptr;
+            return {};
 
-        return items[next[stream_id]];
+        return Pop(this, stream_id);
     }
 
+    class Push final : public OpBase
+    {
+    public:
+        Push() = default;
+
+        void commit(Lock & lock [[maybe_unused]])
+        {
+            this->parent->endPush(lock);
+            this->markAsCommitted();
+        }
+
+        ItemPtr item;
+
+    private:
+        explicit Push(MultiStreamRingBuffer * parent)
+            : OpBase(parent)
+        {
+            item = parent->items[head];
+        }
+    };
+
+    friend class Push;
+
+    template <typename OtherCondition>
+    Push beginPush(Lock & lock, const OtherCondition & other_condition)
+    {
+        auto condition = [this] {
+            return head != tail;
+        };
+        if (!waitWithOtherCondition(tail_cv, lock, condition, other_condition))
+            return {};
+        return Push(this);
+    }
+
+    void notify()
+    {
+        head_cv.notify_all();
+        tail_cv.notify_all();
+    }
+
+private:
     // `endPop` returns true if it is the last stream
     bool endPop(Lock & lock [[maybe_unused]], size_t stream_id)
     {
@@ -67,17 +175,6 @@ public:
         return false;
     }
 
-    template <typename OtherCondition>
-    ItemPtr beginPush(Lock & lock, const OtherCondition & other_condition)
-    {
-        auto condition = [this] {
-            return head != tail;
-        };
-        if (!waitWithOtherCondition(tail_cv, lock, condition, other_condition))
-            return nullptr;
-        return items[head];
-    }
-
     void endPush(Lock & lock [[maybe_unused]])
     {
         count[head] = num_streams;
@@ -85,13 +182,6 @@ public:
         head_cv.notify_all();
     }
 
-    void notify()
-    {
-        head_cv.notify_all();
-        tail_cv.notify_all();
-    }
-
-private:
     template <typename MainCondition, typename OtherCondition>
     static bool waitWithOtherCondition(
         std::condition_variable & cv,

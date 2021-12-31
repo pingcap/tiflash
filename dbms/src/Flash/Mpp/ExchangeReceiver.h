@@ -127,8 +127,10 @@ private:
     /// should lock `mu` when visit these members
     // RecyclableBuffer<ReceivedMessage> res_buffer;
 
+    using RingBuffer = MultiStreamRingBuffer<ReceivedMessage>;
+
     size_t num_streams = 1;
-    MultiStreamRingBuffer<ReceivedMessage> ringbuf;
+    RingBuffer ringbuf;
 
     Int32 live_connections;
     ExchangeReceiverState state;

@@ -140,9 +140,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 //     }
                 // }
 
+                RingBuffer::Push op;
+
                 {
                     std::unique_lock lock(mu);
-                    recv_msg = ringbuf.beginPush(lock, [&] { return state != ExchangeReceiverState::NORMAL; });
+                    op = ringbuf.beginPush(lock, [&] { return state != ExchangeReceiverState::NORMAL; });
                     if (state != ExchangeReceiverState::NORMAL)
                     {
                         meet_error = true;
@@ -150,10 +152,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
-                    else if (!recv_msg)
+                    else if (!op.isValid())
                         throw TiFlashException("beginPush returns nullptr", Errors::Coprocessor::Internal);
                 }
 
+                recv_msg = op.item;
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet);
@@ -190,7 +193,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
                 {
                     std::unique_lock lock(mu);
-                    ringbuf.endPush(lock);
+                    op.commit(lock);
                     if (state != ExchangeReceiverState::NORMAL)
                     {
                         meet_error = true;
@@ -345,9 +348,11 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
     //     }
     // }
 
+    RingBuffer::Pop op;
+
     {
         std::unique_lock lock(mu);
-        recv_msg = ringbuf.beginPop(lock, upstream_id, [&] {
+        op = ringbuf.beginPop(lock, upstream_id, [&] {
             return live_connections == 0 || state != ExchangeReceiverState::NORMAL;
         });
 
@@ -364,13 +369,14 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
                 msg = "Unknown error";
             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
-        else if (!recv_msg)
+        else if (!op.isValid())
         {
             /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
 
+    recv_msg = op.item;
     assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
     if (recv_msg->packet->has_error())
@@ -411,7 +417,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
     // returnEmptyMsg(recv_msg);
     {
         std::unique_lock lock(mu);
-        if (ringbuf.endPop(lock, upstream_id))
+        if (op.commit(lock))
             clearMessage(recv_msg);
     }
 
