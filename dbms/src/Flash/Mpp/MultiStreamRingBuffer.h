@@ -155,8 +155,8 @@ public:
             std::swap(u, v);
 
             // update position mapping
-            p->pos[u] = p->head;
-            p->pos[v] = index;
+            p->pos[u] = index;
+            p->pos[v] = p->head;
 
             // move head pointer and notify others
             p->count[p->head] = p->num_streams;
@@ -183,13 +183,13 @@ public:
             auto & v = p->items[p->mid];
             if (u != item)
                 throw TiFlashException("Invalid item", Errors::Coprocessor::Internal);
-            if (p->pos[v] != p->head)
-                throw TiFlashException("Invalid head", Errors::Coprocessor::Internal);
+            if (p->pos[v] != p->mid)
+                throw TiFlashException("Invalid mid", Errors::Coprocessor::Internal);
 
             std::swap(u, v);
 
-            p->pos[u] = p->mid;
-            p->pos[v] = index;
+            p->pos[u] = index;
+            p->pos[v] = p->mid;
 
             p->tail_cv.notify_all();
 
