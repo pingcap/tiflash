@@ -214,26 +214,31 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
 
-    # since we are using tiflash proxy, static linking will result in ODR problem.
-    # we use shared libraries for runtime libs
-
     if (USE_LIBCXX)
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
-        link_libraries (-stdlib=libc++ c++ c++abi)
+        if (MAKE_STATIC_LIBRARIES)
+          link_libraries (-Wl,-Bstatic -stdlib=libc++ c++ c++abi -Wl,-Bdynamic)
+        else()
+          link_libraries (-stdlib=libc++ c++ c++abi)
+        endif()
         if (LIBCXX_PATH)
-            link_directories ("${LIBCXX_PATH}/lib")
+          link_directories ("${LIBCXX_PATH}/lib")
         endif ()
     endif ()
 
     if (USE_LLVM_LIBUNWIND)
-        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
+      if (MAKE_STATIC_LIBRARIES)
         link_libraries (-unwindlib=libunwind unwind)
+      else()
+        link_libraries (-Wl,-Bstatic -unwindlib=libunwind unwind -Wl,-Bdynamic)
+      endif()
     endif()
 
     if (USE_LLVM_COMPILER_RT)
-        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
-        link_libraries (-rtlib=compiler-rt)
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
+      link_libraries (-rtlib=compiler-rt) # rtlibs are static in nature
     endif()
 
 endif ()
