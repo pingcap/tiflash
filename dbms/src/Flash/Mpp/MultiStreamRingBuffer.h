@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/TiFlashException.h>
+
 #include <condition_variable>
 #include <unordered_map>
 #include <vector>
@@ -139,13 +141,17 @@ public:
 
             // i: current position of item pointer in items array
             // move item to the front of queue
-            size_t i = p->pos[item];
-            auto & t = p->items[p->head];
-            std::swap(p->items[i], t);
+            size_t index = p->pos[item];
+            auto & u = p->items[index];
+            auto & v = p->items[p->head];
+            if (u != item)
+                throw TiFlashException("Invalid index", Errors::Coprocessor::Internal);
+
+            std::swap(u, v);
 
             // update position mapping
-            p->pos[item] = p->head;
-            p->pos[t] = i;
+            p->pos[u] = p->head;
+            p->pos[v] = index;
 
             // move head pointer and notify others
             p->count[p->head] = p->num_streams;
@@ -165,15 +171,19 @@ public:
                 return;
 
             auto p = this->parent;
-
-            size_t i = p->pos[item];
-            auto & t = p->items[p->mid];
-            std::swap(p->items[i], t);
-
-            p->pos[item] = p->mid;
-            p->pos[t] = i;
-
             p->back(p->mid);
+
+            size_t index = p->pos[item];
+            auto & u = p->items[index];
+            auto & v = p->items[p->mid];
+            if (u != item)
+                throw TiFlashException("Invalid index", Errors::Coprocessor::Internal);
+
+            std::swap(u, v);
+
+            p->pos[u] = p->mid;
+            p->pos[v] = index;
+
             p->tail_cv.notify_all();
 
             this->markAsInvalid();
