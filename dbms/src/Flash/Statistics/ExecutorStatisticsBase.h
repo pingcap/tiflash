@@ -4,6 +4,9 @@
 
 #include <memory>
 
+namespace DB
+{
+struct BlockStreamProfileInfo;
 struct BaseRuntimeStatistics
 {
     size_t rows = 0;
@@ -11,6 +14,8 @@ struct BaseRuntimeStatistics
     size_t bytes = 0;
 
     UInt64 execution_time_ns = 0;
+
+    void append(const BlockStreamProfileInfo &);
 };
 
 class ExecutorStatisticsBase
@@ -22,17 +27,11 @@ public:
 
     virtual ~ExecutorStatisticsBase() = default;
 
-    BaseRuntimeStatistics getBaseRuntimeStatistics() const
-    {
-        return {outbound_rows, outbound_blocks, outbound_bytes, execution_time_ns};
-    }
+    const BaseRuntimeStatistics & getBaseRuntimeStatistics() const { return base; }
 
 protected:
-    size_t outbound_rows = 0;
-    size_t outbound_blocks = 0;
-    size_t outbound_bytes = 0;
-
-    UInt64 execution_time_ns = 0;
+    BaseRuntimeStatistics base;
 };
 
 using ExecutorStatisticsPtr = std::shared_ptr<ExecutorStatisticsBase>;
+} // namespace DB

@@ -1,20 +1,20 @@
 #include <Core/Block.h>
-#include <Storages/ColumnDefault.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/evaluateMissingDefaults.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTWithAlias.h>
+#include <Storages/ColumnDefault.h>
+
 #include <utility>
 
 
 namespace DB
 {
-
 void evaluateMissingDefaults(Block & block,
-    const NamesAndTypesList & required_columns,
-    const ColumnDefaults & column_defaults,
-    const Context & context)
+                             const NamesAndTypesList & required_columns,
+                             const ColumnDefaults & column_defaults,
+                             const Context & context)
 {
     if (column_defaults.empty())
         return;
@@ -59,4 +59,4 @@ void evaluateMissingDefaults(Block & block,
     }
 }
 
-}
+} // namespace DB

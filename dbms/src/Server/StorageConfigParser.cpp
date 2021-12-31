@@ -59,7 +59,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (auto main_capacity = table->get_qualified_array_of<int64_t>("main.capacity"); main_capacity)
     {
         for (const auto & c : *main_capacity)
-            main_capacity_quota.emplace_back((size_t)c);
+            main_capacity_quota.emplace_back(static_cast<size_t>(c));
     }
     if (main_data_paths.empty())
     {
@@ -69,9 +69,12 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
-            + "] is not equal to \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
-            + "]. Please check your configuration file.";
+        String error_msg = fmt::format(
+            "The array size of \"storage.main.dir\"[size={}] "
+            "is not equal to \"storage.main.capacity\"[size={}]. "
+            "Please check your configuration file.",
+            main_data_paths.size(),
+            main_capacity_quota.size());
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -81,7 +84,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
         main_data_paths[i] = getNormalizedPath(main_data_paths[i]);
         if (main_capacity_quota.size() <= i)
             main_capacity_quota.emplace_back(0);
-        LOG_INFO(log, "Main data candidate path: " << main_data_paths[i] << ", capacity_quota: " << main_capacity_quota[i]);
+        LOG_FMT_INFO(log, "Main data candidate path: {}, capacity_quota: {}", main_data_paths[i], main_capacity_quota[i]);
     }
 
     // latest
@@ -90,19 +93,22 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (auto latest_capacity = table->get_qualified_array_of<int64_t>("latest.capacity"); latest_capacity)
     {
         for (const auto & c : *latest_capacity)
-            latest_capacity_quota.emplace_back((size_t)c);
+            latest_capacity_quota.emplace_back(static_cast<size_t>(c));
     }
     if (latest_data_paths.empty())
     {
-        LOG_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
+        LOG_FMT_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
         latest_data_paths = main_data_paths;
         latest_capacity_quota = main_capacity_quota;
     }
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(latest_data_paths.size())
-            + "] is not euqal to \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
-            + "]. Please check your configuration file.";
+        String error_msg = fmt::format(
+            "The array size of \"storage.main.dir\"[size={}] "
+            "is not equal to \"storage.main.capacity\"[size={}]. "
+            "Please check your configuration file.",
+            latest_data_paths.size(),
+            latest_capacity_quota.size());
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -112,7 +118,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
         latest_data_paths[i] = getNormalizedPath(latest_data_paths[i]);
         if (latest_capacity_quota.size() <= i)
             latest_capacity_quota.emplace_back(0);
-        LOG_INFO(log, "Latest data candidate path: " << latest_data_paths[i] << ", capacity_quota: " << latest_capacity_quota[i]);
+        LOG_FMT_INFO(log, "Latest data candidate path: {}, capacity_quota: {}", latest_data_paths[i], latest_capacity_quota[i]);
     }
 
     // Raft
@@ -127,11 +133,11 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
             kvstore_data_path.emplace_back(std::move(path));
         }
     }
-    for (size_t i = 0; i < kvstore_data_path.size(); ++i)
+    for (auto & path : kvstore_data_path)
     {
         // normalized
-        kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
-        LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
+        path = getNormalizedPath(path);
+        LOG_FMT_INFO(log, "Raft data candidate path: {}", path);
     }
 }
 
@@ -143,7 +149,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
 
     if (table->contains("bg_task_io_rate_limit"))
     {
-        LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
+        LOG_FMT_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
 
     if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
@@ -156,7 +162,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         lazily_init_store = (*lazily_init != 0);
     }
 
-    LOG_INFO(log, fmt::format("format_version {} lazily_init_store {}", format_version, lazily_init_store));
+    LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
@@ -180,19 +186,19 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     if (!config.has("path"))
         return false;
 
-    LOG_WARNING(log, "The configuration \"path\" is deprecated. Check [storage] section for new style.");
+    LOG_FMT_WARNING(log, "The configuration \"path\" is deprecated. Check [storage] section for new style.");
 
     String paths = config.getString("path");
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception(
-            "The configuration \"path\" is empty! [path=" + config.getString("path") + "]",
+            fmt::format("The configuration \"path\" is empty! [path={}]", config.getString("path")),
             ErrorCodes::INVALID_CONFIG_PARAMETER);
     Strings all_normal_path;
     Poco::StringTokenizer string_tokens(paths, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    for (const auto & string_token : string_tokens)
     {
-        all_normal_path.emplace_back(getNormalizedPath(*it));
+        all_normal_path.emplace_back(getNormalizedPath(string_token));
     }
 
     // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
@@ -219,7 +225,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
         String str_kvstore_path;
         if (config.has("raft.kvstore_path"))
         {
-            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check [storage.raft] section for new style.");
+            LOG_FMT_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check [storage.raft] section for new style.");
             str_kvstore_path = config.getString("raft.kvstore_path");
         }
         if (str_kvstore_path.empty())
@@ -236,11 +242,11 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
 
     // logging
     for (const auto & s : main_data_paths)
-        LOG_INFO(log, "Main data candidate path: " << s);
+        LOG_FMT_INFO(log, "Main data candidate path: {}", s);
     for (const auto & s : latest_data_paths)
-        LOG_INFO(log, "Latest data candidate path: " << s);
+        LOG_FMT_INFO(log, "Latest data candidate path: {}", s);
     for (const auto & s : kvstore_data_path)
-        LOG_INFO(log, "Raft data candidate path: " << s);
+        LOG_FMT_INFO(log, "Raft data candidate path: {}", s);
     return true;
 }
 
@@ -258,9 +264,9 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     if (config.has("storage.main"))
     {
         if (config.has("path"))
-            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
+            LOG_FMT_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
         if (config.has("capacity"))
-            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
+            LOG_FMT_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
 
         storage_config.parseStoragePath(config.getString("storage"), log);
 
@@ -270,14 +276,16 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             String deprecated_kvstore_path = config.getString("raft.kvstore_path");
             if (!deprecated_kvstore_path.empty())
             {
-                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
+                LOG_FMT_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
                 kvstore_paths.clear();
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
-                for (size_t i = 0; i < kvstore_paths.size(); ++i)
+                for (auto & kvstore_path : kvstore_paths)
                 {
-                    LOG_WARNING(log,
-                                "Raft data candidate path: "
-                                    << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
+                    LOG_FMT_WARNING(
+                        log,
+                        "Raft data candidate path: {}"
+                        ". The path is overwritten by deprecated configuration for backward compatibility.",
+                        kvstore_path);
                 }
             }
         }
@@ -287,25 +295,24 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         // capacity
         if (config.has("capacity"))
         {
-            LOG_WARNING(log, "The configuration \"capacity\" is deprecated. Check [storage] section for new style.");
+            LOG_FMT_WARNING(log, "The configuration \"capacity\" is deprecated. Check [storage] section for new style.");
             // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
             // eg. 100GiB, 10MiB
             String capacities = config.getString("capacity");
             Poco::trimInPlace(capacities);
             Poco::StringTokenizer string_tokens(capacities, ",");
             size_t num_token = 0;
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
+            for (const auto & string_token : string_tokens)
             {
                 if (num_token == 0)
                 {
-                    const std::string & s = *it;
-                    global_capacity_quota = DB::parse<size_t>(s.data(), s.size());
+                    global_capacity_quota = DB::parse<size_t>(string_token.data(), string_token.size());
                 }
                 num_token++;
             }
             if (num_token != 1)
-                LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
-            LOG_INFO(log, "The capacity limit is: " + formatReadableSizeWithBinarySuffix(global_capacity_quota));
+                LOG_FMT_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
+            LOG_FMT_INFO(log, "The capacity limit is: {}", formatReadableSizeWithBinarySuffix(global_capacity_quota));
         }
 
         if (!storage_config.parseFromDeprecatedConfiguration(config, log))
@@ -326,30 +333,30 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco:
     cpptoml::parser p(ss);
     auto config = p.parse();
 
-    auto readConfig = [&](const std::string & name, auto & value) {
+    auto read_config = [&](const std::string & name, auto & value) {
         if (auto p = config->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
         {
             value = *p;
         }
     };
 
-    readConfig("max_bytes_per_sec", max_bytes_per_sec);
-    readConfig("max_read_bytes_per_sec", max_read_bytes_per_sec);
-    readConfig("max_write_bytes_per_sec", max_write_bytes_per_sec);
-    readConfig("foreground_write_weight", fg_write_weight);
-    readConfig("background_write_weight", bg_write_weight);
-    readConfig("foreground_read_weight", fg_read_weight);
-    readConfig("background_read_weight", bg_read_weight);
-    readConfig("emergency_pct", emergency_pct);
-    readConfig("high_pct", high_pct);
-    readConfig("medium_pct", medium_pct);
-    readConfig("tune_base", tune_base);
-    readConfig("min_bytes_per_sec", min_bytes_per_sec);
-    readConfig("auto_tune_sec", auto_tune_sec);
+    read_config("max_bytes_per_sec", max_bytes_per_sec);
+    read_config("max_read_bytes_per_sec", max_read_bytes_per_sec);
+    read_config("max_write_bytes_per_sec", max_write_bytes_per_sec);
+    read_config("foreground_write_weight", fg_write_weight);
+    read_config("background_write_weight", bg_write_weight);
+    read_config("foreground_read_weight", fg_read_weight);
+    read_config("background_read_weight", bg_read_weight);
+    read_config("emergency_pct", emergency_pct);
+    read_config("high_pct", high_pct);
+    read_config("medium_pct", medium_pct);
+    read_config("tune_base", tune_base);
+    read_config("min_bytes_per_sec", min_bytes_per_sec);
+    read_config("auto_tune_sec", auto_tune_sec);
 
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
-    LOG_DEBUG(log, "storage.io_rate_limit " << toString());
+    LOG_FMT_DEBUG(log, "storage.io_rate_limit {}", toString());
 }
 
 std::string StorageIORateLimitConfig::toString() const

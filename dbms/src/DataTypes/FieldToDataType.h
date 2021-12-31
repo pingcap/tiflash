@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
 
@@ -17,19 +16,19 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 class FieldToDataType : public StaticVisitor<DataTypePtr>
 {
 public:
-    DataTypePtr operator() (const Null & x) const;
-    DataTypePtr operator() (const UInt64 & x) const;
-    DataTypePtr operator() (const Int64 & x) const;
-    DataTypePtr operator() (const Float64 & x) const;
-    DataTypePtr operator() (const String & x) const;
-    DataTypePtr operator() (const Array & x) const;
-    DataTypePtr operator() (const Tuple & x) const;
-    template<typename T>
-    DataTypePtr operator() (const DecimalField<T> & x) const {
+    DataTypePtr operator()(const Null & x) const;
+    DataTypePtr operator()(const UInt64 & x) const;
+    DataTypePtr operator()(const Int64 & x) const;
+    DataTypePtr operator()(const Float64 & x) const;
+    DataTypePtr operator()(const String & x) const;
+    DataTypePtr operator()(const Array & x) const;
+    DataTypePtr operator()(const Tuple & x) const;
+    template <typename T>
+    DataTypePtr operator()(const DecimalField<T> & x) const
+    {
         PrecType prec = maxDecimalPrecision<T>();
         return std::make_shared<DataTypeDecimal<T>>(prec, x.getScale());
     }
 };
 
-}
-
+} // namespace DB

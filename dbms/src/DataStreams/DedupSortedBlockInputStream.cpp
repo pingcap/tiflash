@@ -38,7 +38,7 @@ DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inp
         readers.schedule(std::bind(&DedupSortedBlockInputStream::asynFetch, this, i));
 
     LOG_DEBUG(log, "Start deduping in single thread, using priority-queue");
-    dedup_thread = std::make_unique<std::thread>(ThreadFactory::newThread("AsyncDedup", [this] { asyncDedupByQueue(); }));
+    dedup_thread = std::make_unique<std::thread>(ThreadFactory::newThread(true, "AsyncDedup", [this] { asyncDedupByQueue(); }));
 }
 
 
