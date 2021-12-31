@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <common/ThreadPool.h>
@@ -129,7 +130,7 @@ private:
 
     struct ParallelMergeData
     {
-        ThreadPool pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -150,7 +151,7 @@ private:
         std::condition_variable have_space;
 
         explicit ParallelMergeData(size_t max_threads)
-            : pool(max_threads)
+            : thread_pool(newThreadPoolManager(max_threads))
         {}
     };
 

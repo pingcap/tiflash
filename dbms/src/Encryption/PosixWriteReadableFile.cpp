@@ -124,4 +124,9 @@ int PosixWriteReadableFile::fsync()
     return ::fsync(fd);
 }
 
+int PosixWriteReadableFile::ftruncate(off_t length)
+{
+    return ::ftruncate(fd, length);
+}
+
 } // namespace DB

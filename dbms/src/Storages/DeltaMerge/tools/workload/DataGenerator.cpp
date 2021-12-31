@@ -156,7 +156,8 @@ private:
         }
         else if (family_name == "Decimal")
         {
-            auto [prec, scale] = parseDecimalType(data_type->getName());
+            auto prec = getDecimalPrecision(*data_type, 0);
+            auto scale = getDecimalScale(*data_type, 0);
             auto s = randomDecimal(prec, scale);
             bool negative = rand_gen() % 2 == 0;
             Field f;
@@ -171,14 +172,6 @@ private:
         }
         col.column = std::move(mut_col);
         return col;
-    }
-
-    std::pair<uint64_t, uint64_t> parseDecimalType(const std::string & name)
-    {
-        uint64_t prec = 0;
-        uint64_t scale = 0;
-        sscanf(name.c_str(), "Decimal(%lu,%lu)", &prec, &scale);
-        return {prec, scale};
     }
 
     std::string randomDecimal(uint64_t prec, uint64_t scale)

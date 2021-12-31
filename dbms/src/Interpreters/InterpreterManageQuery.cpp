@@ -25,32 +25,32 @@ BlockIO InterpreterManageQuery::execute()
 
     switch (ast.operation)
     {
-        case ManageOperation::Enum::Flush:
-        {
-            manageable_storage->flushCache(context);
-            return {};
-        }
-        case ManageOperation::Enum::Status:
-        {
-            BlockIO res;
-            res.in = manageable_storage->status();
-            return res;
-        }
-        case ManageOperation::Enum::Check:
-        {
-            manageable_storage->checkStatus(context);
-            return {};
-        }
-        case ManageOperation::Enum::DeleteRows:
-        {
-            manageable_storage->deleteRows(context, ast.rows);
-            return {};
-        }
-        case ManageOperation::Enum::MergeDelta:
-        {
-            manageable_storage->mergeDelta(context);
-            return {};
-        }
+    case ManageOperation::Enum::Flush:
+    {
+        manageable_storage->flushCache(context);
+        return {};
+    }
+    case ManageOperation::Enum::Status:
+    {
+        BlockIO res;
+        res.in = manageable_storage->status();
+        return res;
+    }
+    case ManageOperation::Enum::Check:
+    {
+        manageable_storage->checkStatus(context);
+        return {};
+    }
+    case ManageOperation::Enum::DeleteRows:
+    {
+        manageable_storage->deleteRows(context, ast.rows);
+        return {};
+    }
+    case ManageOperation::Enum::MergeDelta:
+    {
+        manageable_storage->mergeDelta(context);
+        return {};
+    }
     }
     return {};
 }

@@ -91,7 +91,7 @@ public:
     bool lazily_init_store = true;
 
 public:
-    TiFlashStorageConfig() {}
+    TiFlashStorageConfig() = default;
 
     Strings getAllNormalPaths() const;
 
@@ -102,7 +102,7 @@ private:
 
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 
-    void parseMisc(const String & config, Poco::Logger * log);
+    void parseMisc(const String & storage_section, Poco::Logger * log);
 };
 
 

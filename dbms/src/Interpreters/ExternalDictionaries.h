@@ -3,12 +3,12 @@
 #include <Dictionaries/IDictionary.h>
 #include <Interpreters/ExternalLoader.h>
 #include <common/logger_useful.h>
+
 #include <memory>
 
 
 namespace DB
 {
-
 class Context;
 
 /// Manages user-defined dictionaries.
@@ -37,9 +37,7 @@ public:
     }
 
 protected:
-
-    std::unique_ptr<IExternalLoadable> create(const std::string & name, const Configuration & config,
-                                              const std::string & config_prefix) override;
+    std::unique_ptr<IExternalLoadable> create(const std::string & name, const Configuration & config, const std::string & config_prefix) override;
 
     using ExternalLoader::getObjectsMap;
 
@@ -47,8 +45,7 @@ protected:
     friend class DatabaseDictionary;
 
 private:
-
     Context & context;
 };
 
-}
+} // namespace DB

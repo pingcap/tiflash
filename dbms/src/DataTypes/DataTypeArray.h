@@ -5,8 +5,6 @@
 
 namespace DB
 {
-
-
 class DataTypeArray final : public IDataType
 {
 private:
@@ -102,4 +100,4 @@ public:
     const DataTypePtr & getNestedType() const { return nested; }
 };
 
-}
+} // namespace DB
