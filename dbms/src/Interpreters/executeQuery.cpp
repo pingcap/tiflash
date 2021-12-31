@@ -58,23 +58,23 @@ String joinLines(const String & query)
     return res;
 }
 
-const LogWithPrefixPtr getLogger(const Context & context)
+LogWithPrefixPtr getLogger(const Context & context)
 {
     auto * dag_context = context.getDAGContext();
-    return (dag_context && nullptr != dag_context->log)
+    return (dag_context && dag_context->log)
         ? dag_context->log
         : std::make_shared<LogWithPrefix>(&Poco::Logger::get("executeQuery"), "");
 }
 
 /// Log query into text log (not into system table).
-void logQuery(const String & query, const Context & context)
+void logQuery(const String & query, const Context & context, const LogWithPrefixPtr & logger)
 {
     const auto & current_query_id = context.getClientInfo().current_query_id;
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
     const auto & current_user = context.getClientInfo().current_user;
 
     LOG_FMT_DEBUG(
-        getLogger(context),
+        logger,
         "(from {}{}, query_id: {}{}) {}",
         context.getClientInfo().current_address.toString(),
         (current_user != "default" ? ", user: " + current_user : ""),
@@ -102,10 +102,10 @@ void setExceptionStackTrace(QueryLogElement & elem)
 
 
 /// Log exception (with query info) into text log (not into system table).
-void logException(Context & context, QueryLogElement & elem)
+void logException(Context & context, QueryLogElement & elem, const LogWithPrefixPtr & logger)
 {
     LOG_FMT_ERROR(
-        getLogger(context),
+        logger,
         "{} (from {}) (in query: {}){}",
         elem.exception,
         context.getClientInfo().current_address.toString(),
@@ -114,7 +114,7 @@ void logException(Context & context, QueryLogElement & elem)
 }
 
 
-void onExceptionBeforeStart(const String & query, Context & context, time_t current_time)
+void onExceptionBeforeStart(const String & query, Context & context, time_t current_time, const LogWithPrefixPtr & logger)
 {
     /// Exception before the query execution.
     context.getQuota().addError();
@@ -137,7 +137,7 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
         elem.client_info = context.getClientInfo();
 
         setExceptionStackTrace(elem);
-        logException(context, elem);
+        logException(context, elem, logger);
 
         if (auto * query_log = context.getQueryLog())
             query_log->add(elem);
@@ -150,6 +150,8 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
+    auto execute_query_logger = getLogger(context);
+
     ProfileEvents::increment(ProfileEvents::Query);
     time_t current_time = time(nullptr);
 
@@ -175,8 +177,8 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             /// Anyway log the query.
             String str = query_src.str(max_query_size);
-            logQuery(str.substr(0, settings.log_queries_cut_to_length), context);
-            onExceptionBeforeStart(str, context, current_time);
+            logQuery(str.substr(0, settings.log_queries_cut_to_length), context, execute_query_logger);
+            onExceptionBeforeStart(str, context, current_time, execute_query_logger);
         }
 
         throw;
@@ -187,7 +189,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     try
     {
         if (!internal)
-            logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
+            logQuery(query.substr(0, settings.log_queries_cut_to_length), context, execute_query_logger);
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
@@ -272,7 +274,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
 
             /// Also make possible for caller to log successful query finish and exception during execution.
-            res.finish_callback = [elem, &context, log_queries](IBlockInputStream * stream_in, IBlockOutputStream * stream_out) mutable {
+            res.finish_callback = [elem, &context, log_queries, execute_query_logger](IBlockInputStream * stream_in, IBlockOutputStream * stream_out) mutable {
                 ProcessListElement * process_list_elem = context.getProcessListElement();
 
                 if (!process_list_elem)
@@ -319,7 +321,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (elem.read_rows != 0)
                 {
                     LOG_FMT_INFO(
-                        getLogger(context),
+                        execute_query_logger,
                         "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
                         elem.read_rows,
                         formatReadableSizeWithBinarySuffix(elem.read_bytes),
@@ -335,7 +337,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            res.exception_callback = [elem, &context, log_queries]() mutable {
+            res.exception_callback = [elem, &context, log_queries, execute_query_logger]() mutable {
                 context.getQuota().addError();
 
                 elem.type = QueryLogElement::EXCEPTION_WHILE_PROCESSING;
@@ -359,7 +361,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
 
                 setExceptionStackTrace(elem);
-                logException(context, elem);
+                logException(context, elem, execute_query_logger);
 
                 if (log_queries)
                 {
@@ -373,14 +375,14 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
                 res.in->dumpTree(log_str);
-                LOG_DEBUG(getLogger(context), log_str.str());
+                LOG_DEBUG(execute_query_logger, log_str.str());
             }
         }
     }
     catch (...)
     {
         if (!internal)
-            onExceptionBeforeStart(query, context, current_time);
+            onExceptionBeforeStart(query, context, current_time, execute_query_logger);
 
         throw;
     }
