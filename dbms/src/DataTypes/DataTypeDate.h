@@ -5,13 +5,12 @@
 
 namespace DB
 {
-
 class DataTypeDate final : public DataTypeNumberBase<UInt16>
 {
 public:
     const char * getFamilyName() const override { return "Date"; }
 
-    TypeIndex getTypeId() const override {return TypeIndex::Date;}
+    TypeIndex getTypeId() const override { return TypeIndex::Date; }
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -30,4 +29,4 @@ public:
     bool equals(const IDataType & rhs) const override;
 };
 
-}
+} // namespace DB

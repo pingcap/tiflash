@@ -485,7 +485,9 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
             {
                 auto range_check = SimdWord{};
                 auto selected = SimdWord{};
-                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                auto lower_bounds = SimdWord::template fromSingle<int8_t>(not_case_lower_bound);
+                auto upper_bounds = SimdWord::template fromSingle<int8_t>(not_case_upper_bound);
+                range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8);
                 selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
                 word.as_int8 ^= selected.as_int8;
                 word.toUnaligned(dst);
@@ -545,7 +547,9 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
             {
                 auto range_check = SimdWord{};
                 auto selected = SimdWord{};
-                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                auto lower_bounds = SimdWord::template fromSingle<int8_t>(not_case_lower_bound);
+                auto upper_bounds = SimdWord::template fromSingle<int8_t>(not_case_upper_bound);
+                range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8);
                 selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
                 word.as_int8 ^= selected.as_int8;
                 word.toUnaligned(dst);
@@ -1242,37 +1246,62 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = removeNullable(arguments[arg_idx]).get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            if (!arguments[arg_idx]->onlyNull())
+            {
+                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                if (!arg->isStringOrFixedString())
+                    throw Exception{
+                        fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            }
         }
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        return arguments[0]->onlyNull()
+            ? makeNullable(std::make_shared<DataTypeNothing>())
+            : makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
+        // if separator is only null, return only null const
+        auto & separator_column = block.getByPosition(arguments[0]);
+        if (separator_column.type->onlyNull())
+        {
+            DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+            block.getByPosition(result).column = data_type->createColumnConst(separator_column.column->size(), Null());
+            return;
+        }
+
         Block nested_block = createBlockWithNestedColumns(block, arguments, result);
-        StringSources sources(arguments.size());
-        for (size_t i = 0; i < arguments.size(); ++i)
-            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
+        ColumnNumbers not_only_null_arguments;
+        StringSources sources;
+
+        not_only_null_arguments.push_back(arguments[0]);
+        sources.push_back(createDynamicStringSource(*nested_block.getByPosition(not_only_null_arguments[0]).column));
+        for (size_t i = 1; i < arguments.size(); ++i)
+        {
+            auto column_number = arguments[i];
+            if (!block.getByPosition(column_number).type->onlyNull())
+            {
+                not_only_null_arguments.push_back(column_number);
+                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(column_number).column));
+            }
+        }
 
         size_t rows = block.rows();
         auto result_null_map = ColumnUInt8::create(rows);
         auto res = ColumnString::create();
         StringSink sink(*res, rows);
 
-        for (size_t row = 0; row < rows; row++)
+        for (size_t row = 0; row < rows; ++row)
         {
-            if (block.getByPosition(arguments[0]).column->isNullAt(row))
+            if (block.getByPosition(not_only_null_arguments[0]).column->isNullAt(row))
             {
                 result_null_map->getData()[row] = true;
             }
@@ -1281,9 +1310,9 @@ public:
                 result_null_map->getData()[row] = false;
 
                 bool has_not_null = false;
-                for (size_t col = 1; col < arguments.size(); ++col)
+                for (size_t col = 1; col < not_only_null_arguments.size(); ++col)
                 {
-                    if (!block.getByPosition(arguments[col]).column->isNullAt(row))
+                    if (!block.getByPosition(not_only_null_arguments[col]).column->isNullAt(row))
                     {
                         if (has_not_null)
                             writeSlice(sources[0]->getWhole(), sink);
@@ -1293,8 +1322,8 @@ public:
                     }
                 }
             }
-            for (size_t col = 0; col < arguments.size(); ++col)
-                sources[col]->next();
+            for (auto & source : sources)
+                source->next();
             sink.next();
         }
 
@@ -2631,6 +2660,424 @@ private:
     }
 };
 
+class tidbPadImpl
+{
+public:
+    template <typename IntType, bool IsUTF8, bool IsLeft>
+    static void tidbExecutePadImpl(Block & block, const ColumnNumbers & arguments, const size_t result, const String & func_name)
+    {
+        bool has_nullable = false;
+        bool has_null_constant = false;
+        for (const auto & arg : arguments)
+        {
+            const auto & ele = block.getByPosition(arg);
+            has_nullable |= ele.type->isNullable();
+            has_null_constant |= ele.type->onlyNull();
+        }
+
+        if (has_null_constant)
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        ColumnPtr column_string_ptr = block.getByPosition(arguments[0]).column;
+        ColumnPtr column_length_ptr = block.getByPosition(arguments[1]).column;
+        ColumnPtr column_padding_ptr = block.getByPosition(arguments[2]).column;
+        const bool is_string_const = column_string_ptr->isColumnConst();
+        const bool is_length_const = column_length_ptr->isColumnConst();
+        const bool is_padding_const = column_padding_ptr->isColumnConst();
+
+        size_t size = block.rows();
+        auto result_null_map = ColumnUInt8::create(size, 0);
+        ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
+
+        if (has_nullable)
+        {
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_result_null_map[i] = (column_string_ptr->isNullAt(i) || column_length_ptr->isNullAt(i) || column_padding_ptr->isNullAt(i));
+            }
+            Block tmp_block = createBlockWithNestedColumns(block, arguments, result);
+            column_string_ptr = tmp_block.getByPosition(arguments[0]).column;
+            column_length_ptr = tmp_block.getByPosition(arguments[1]).column;
+            column_padding_ptr = tmp_block.getByPosition(arguments[2]).column;
+        }
+
+        // Compute byte length of result so we can reserve enough memory.
+        // It's just a hint, because length UTF8 chars vary from 1 to 4.
+        size_t res_byte_len = 0;
+        const ColumnVector<IntType> * column_length = nullptr;
+        IntType target_len = 0;
+        if (is_length_const)
+        {
+            const ColumnConst * tmp_column = checkAndGetColumnConst<ColumnVector<IntType>>(column_length_ptr.get());
+            target_len = tmp_column->getInt(0);
+            res_byte_len = target_len * size + size;
+        }
+        else
+        {
+            column_length = checkAndGetColumn<ColumnVector<IntType>>(column_length_ptr.get());
+            if (column_length == nullptr)
+            {
+                throw Exception(fmt::format("the second argument type of {} is invalid", func_name), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+            for (size_t i = 0; i < size; i++)
+            {
+                if (vec_result_null_map[i])
+                {
+                    continue;
+                }
+                int32_t len = static_cast<int32_t>(column_length->getInt(i));
+                if (len <= 0)
+                {
+                    len = 0;
+                }
+                res_byte_len += len;
+            }
+            res_byte_len += size;
+        }
+
+        auto column_result = ColumnString::create();
+        ColumnString::Offsets & result_offsets = column_result->getOffsets();
+        ColumnString::Chars_t & result_data = column_result->getChars();
+        result_offsets.resize(size);
+        result_data.reserve(res_byte_len);
+
+        const ColumnString * column_padding = nullptr;
+        const ColumnString::Offsets * padding_offsets = nullptr;
+        const ColumnString::Chars_t * padding_data = nullptr;
+        size_t padding_size = 0;
+        const UInt8 * padding = nullptr;
+        // prepare objects related to padding_str to avoid duplicated code.
+        if (is_padding_const)
+        {
+            const ColumnConst * column_padding = checkAndGetColumnConst<ColumnString>(column_padding_ptr.get());
+            StringRef padding_str = column_padding->getDataAt(0);
+            padding_size = padding_str.size + 1;
+            padding = reinterpret_cast<const UInt8 *>(padding_str.data);
+        }
+        else
+        {
+            column_padding = checkAndGetColumn<ColumnString>(column_padding_ptr.get());
+            padding_offsets = &(column_padding->getOffsets());
+            padding_data = &(column_padding->getChars());
+        }
+
+        if (is_string_const)
+        {
+            const ColumnConst * column_string = checkAndGetColumnConst<ColumnString>(column_string_ptr.get());
+            Field res_field;
+            column_string->get(0, res_field);
+            String str_val = res_field.get<String>();
+
+            if (is_padding_const && is_length_const)
+            {
+                const_const<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (is_padding_const && !is_length_const)
+            {
+                const_const<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && is_length_const)
+            {
+                const_column<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && !is_length_const)
+            {
+                const_column<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+        }
+        else
+        {
+            const ColumnString * column_string = checkAndGetColumn<ColumnString>(column_string_ptr.get());
+            const ColumnString::Offsets & string_offsets = column_string->getOffsets();
+            const ColumnString::Chars_t & string_data = column_string->getChars();
+
+            if (is_padding_const && is_length_const)
+            {
+                column_const<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (is_padding_const && !is_length_const)
+            {
+                column_const<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && is_length_const)
+            {
+                column_column<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+            else if (!is_padding_const && !is_length_const)
+            {
+                column_column<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(column_result), std::move(result_null_map));
+    }
+
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
+    static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    {
+        ColumnString::Offset string_prev_offset = 0;
+        ColumnString::Offset padding_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(col_str, length, col_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if constexpr (!IsLengthConst)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                if constexpr (IsUTF8)
+                {
+                    vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+                }
+                else
+                {
+                    vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+                }
+            }
+
+            string_prev_offset = string_offsets[i];
+            padding_prev_offset = (*padding_offsets)[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
+    static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    {
+        ColumnString::Offset string_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(col_str, length, const_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if constexpr (!IsLengthConst)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                if constexpr (IsUTF8)
+                {
+                    vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+                }
+                else
+                {
+                    vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+                }
+            }
+
+            string_prev_offset = string_offsets[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
+    static void const_column(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    {
+        ColumnString::Offset padding_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(const_str, length, col_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if constexpr (!IsLengthConst)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                if constexpr (IsUTF8)
+                {
+                    vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+                }
+                else
+                {
+                    vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+                }
+            }
+
+            padding_prev_offset = (*padding_offsets)[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
+    static void const_const(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    {
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(const_str, length, const_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if constexpr (!IsLengthConst)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                if constexpr (IsUTF8)
+                {
+                    vec_result_null_map[i] = tidbPadOneRowUTF8<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+                }
+                else
+                {
+                    vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+                }
+            }
+
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    // Do padding for one row.
+    // data_size/padding_size includes the tailing '\0'.
+    // Return true if result is null.
+    template <bool IsLeft>
+    static bool tidbPadOneRowUTF8(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    {
+        ColumnString::Offset data_len = UTF8::countCodePoints(data, data_size - 1);
+        ColumnString::Offset pad_len = UTF8::countCodePoints(padding, padding_size - 1);
+
+        if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
+        {
+            return true;
+        }
+
+        ColumnString::Offset tmp_target_len = static_cast<ColumnString::Offset>(target_len);
+        ColumnString::Offset per_pad_offset = 0;
+        ColumnString::Offset pad_bytes = 0;
+        ColumnString::Offset left = 0;
+        if (data_len < tmp_target_len)
+        {
+            left = tmp_target_len - data_len;
+            if constexpr (IsLeft)
+            {
+                while (left > 0 && pad_len != 0)
+                {
+                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
+                    res_offset += pad_bytes;
+                    per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
+                    --left;
+                }
+                // Including the tailing '\0'.
+                copyResult(res, res_offset, data, 0, data_size);
+                res_offset += data_size;
+            }
+            else
+            {
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
+
+                while (left > 0 && pad_len != 0)
+                {
+                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
+                    res_offset += pad_bytes;
+                    per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
+                    --left;
+                }
+                res[res_offset] = '\0';
+                res_offset++;
+            }
+        }
+        else
+        {
+            while (left < tmp_target_len)
+            {
+                pad_bytes = UTF8::seqLength(data[per_pad_offset]);
+
+                copyResult(res, res_offset, data, per_pad_offset, pad_bytes);
+                res_offset += pad_bytes;
+                per_pad_offset += pad_bytes;
+                ++left;
+            }
+            res[res_offset] = '\0';
+            res_offset++;
+        }
+        return false;
+    }
+
+    // Same with tidbPadOneRowUTF8, but handling in byte instead of char.
+    template <bool IsLeft>
+    static bool tidbPadOneRow(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    {
+        ColumnString::Offset data_len = data_size - 1;
+        ColumnString::Offset pad_len = padding_size - 1;
+
+        if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
+        {
+            return true;
+        }
+
+        ColumnString::Offset tmp_target_len = static_cast<ColumnString::Offset>(target_len);
+        if (data_len < tmp_target_len)
+        {
+            ColumnString::Offset left = tmp_target_len - data_len;
+            ColumnString::Offset per_pad_offset = 0;
+            if (IsLeft)
+            {
+                while (left >= pad_len && pad_len != 0)
+                {
+                    copyResult(res, res_offset, padding, 0, pad_len);
+                    res_offset += pad_len;
+                    left -= pad_len;
+                }
+                while (left > 0 && pad_len != 0)
+                {
+                    copyResult(res, res_offset, padding, per_pad_offset, 1);
+                    ++per_pad_offset;
+                    ++res_offset;
+                    --left;
+                }
+                // Including the tailing '\0'.
+                copyResult(res, res_offset, data, 0, data_size);
+                res_offset += data_size;
+            }
+            else
+            {
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
+
+                while (left >= pad_len && pad_len != 0)
+                {
+                    copyResult(res, res_offset, padding, 0, pad_len);
+                    res_offset += pad_len;
+                    left -= pad_len;
+                }
+                while (left > 0 && pad_len != 0)
+                {
+                    copyResult(res, res_offset, padding, per_pad_offset, 1);
+                    ++per_pad_offset;
+                    ++res_offset;
+                    --left;
+                }
+                res[res_offset] = '\0';
+                res_offset++;
+            }
+        }
+        else
+        {
+            copyResult(res, res_offset, data, 0, tmp_target_len);
+            res_offset += tmp_target_len;
+            res[res_offset] = '\0';
+            res_offset++;
+        }
+        return false;
+    }
+
+    static void copyResult(ColumnString::Chars_t & result_data, size_t dst_offset, const UInt8 * padding, size_t padding_offset, size_t pad_bytes)
+    {
+        result_data.resize(result_data.size() + pad_bytes);
+        memcpy(&result_data[dst_offset], &padding[padding_offset], pad_bytes);
+    }
+};
+
 template <typename Name, bool is_left>
 class PadImpl : public IFunction
 {
@@ -2652,36 +3099,31 @@ public:
         return 3;
     }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (arguments.size() != 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", must be 3.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    // pad(str, len, padding) return NULL if len(str) < len and len(padding) == 0
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
-        if (!arguments[0]->isStringOrFixedString())
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+
+    {
+        if (!removeNullable(arguments[0])->isString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!arguments[1]->isNumber())
+        if (!removeNullable(arguments[1])->isInteger())
             throw Exception("Illegal type " + arguments[1]->getName()
                                 + " of second argument of function "
                                 + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!arguments[2]->isStringOrFixedString())
+        if (!removeNullable(arguments[2])->isString())
             throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeString>();
+        return makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (arguments.size() == 3)
-            executePad(block, arguments, result);
-        else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should beat least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        tidbExecutePad(block, arguments, result);
     }
 
 private:
@@ -2736,6 +3178,40 @@ private:
 
         block.getByPosition(result).column = std::move(c_res);
     }
+
+    void tidbExecutePad(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        TypeIndex type_index = removeNullable(block.getByPosition(arguments[1]).type)->getTypeId();
+        switch (type_index)
+        {
+        case TypeIndex::UInt8:
+            tidbPadImpl::tidbExecutePadImpl<UInt8, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt16:
+            tidbPadImpl::tidbExecutePadImpl<UInt16, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt32:
+            tidbPadImpl::tidbExecutePadImpl<UInt32, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt64:
+            tidbPadImpl::tidbExecutePadImpl<UInt64, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int8:
+            tidbPadImpl::tidbExecutePadImpl<Int8, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int16:
+            tidbPadImpl::tidbExecutePadImpl<Int16, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int32:
+            tidbPadImpl::tidbExecutePadImpl<Int32, false, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int64:
+            tidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
+            break;
+        default:
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        };
+    }
 };
 
 template <typename Name, bool is_left>
@@ -2759,36 +3235,29 @@ public:
         return 3;
     }
 
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", must be 3.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        if (!arguments[0]->isStringOrFixedString())
+        if (!removeNullable(arguments[0])->isString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!arguments[1]->isNumber())
+        if (!removeNullable(arguments[1])->isInteger())
             throw Exception("Illegal type " + arguments[1]->getName()
                                 + " of second argument of function "
                                 + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!arguments[2]->isStringOrFixedString())
+        if (!removeNullable(arguments[2])->isString())
             throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeString>();
+        return makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (arguments.size() == 3)
-            executePadUTF8(block, arguments, result);
-        else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should beat least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        tidbExecutePadUTF8(block, arguments, result);
     }
 
 private:
@@ -3312,6 +3781,40 @@ private:
 
             res_offsets[i] = res_offset;
         }
+    }
+
+    void tidbExecutePadUTF8(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        TypeIndex type_index = removeNullable(block.getByPosition(arguments[1]).type)->getTypeId();
+        switch (type_index)
+        {
+        case TypeIndex::UInt8:
+            tidbPadImpl::tidbExecutePadImpl<UInt8, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt16:
+            tidbPadImpl::tidbExecutePadImpl<UInt16, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt32:
+            tidbPadImpl::tidbExecutePadImpl<UInt32, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::UInt64:
+            tidbPadImpl::tidbExecutePadImpl<UInt64, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int8:
+            tidbPadImpl::tidbExecutePadImpl<Int8, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int16:
+            tidbPadImpl::tidbExecutePadImpl<Int16, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int32:
+            tidbPadImpl::tidbExecutePadImpl<Int32, true, is_left>(block, arguments, result, getName());
+            break;
+        case TypeIndex::Int64:
+            tidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
+            break;
+        default:
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        };
     }
 };
 
@@ -4197,8 +4700,10 @@ using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseU
 using FunctionTrim = FunctionTiDBTrim<NameTiDBTrim, true, true>;
 using FunctionLTrim = FunctionTiDBTrim<NameTiDBLTrim, true, false>;
 using FunctionRTrim = FunctionTiDBTrim<NameTiDBRTrim, false, true>;
-using FunctionLPadUTF8 = PadUTF8Impl<NameLPad, true>;
-using FunctionRPadUTF8 = PadUTF8Impl<NameRPad, false>;
+using FunctionLPad = PadImpl<NameLPad, true>;
+using FunctionRPad = PadImpl<NameRPad, false>;
+using FunctionLPadUTF8 = PadUTF8Impl<NameLPadUTF8, true>;
+using FunctionRPadUTF8 = PadUTF8Impl<NameRPadUTF8, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
@@ -4224,6 +4729,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionTrim>("tidbTrim", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionLTrim>("tidbLTrim", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionRTrim>("tidbRTrim", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionLPad>();
+    factory.registerFunction<FunctionRPad>();
     factory.registerFunction<FunctionLPadUTF8>();
     factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();

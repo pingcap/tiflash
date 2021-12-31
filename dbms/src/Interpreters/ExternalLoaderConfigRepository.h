@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /** Default implementation of config repository used by native server application.
   * Represents files in local filesystem.
   */
@@ -22,4 +21,4 @@ public:
     Poco::AutoPtr<Poco::Util::AbstractConfiguration> load(const std::string & config_file) const override;
 };
 
-}
+} // namespace DB

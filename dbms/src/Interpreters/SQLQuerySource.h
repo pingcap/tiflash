@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /// Regular query source of a SQL string.
 class SQLQuerySource : public IQuerySource
 {

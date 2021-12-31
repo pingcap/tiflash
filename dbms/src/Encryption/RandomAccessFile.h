@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/types.h>
+
 #include <memory>
 
 #ifndef O_DIRECT

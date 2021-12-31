@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class DataTypeMyDateTime final : public DataTypeMyTimeBase
 {
     int fraction;

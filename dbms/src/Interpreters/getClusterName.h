@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class IAST;
 
 /// Get the cluster name from AST.
@@ -18,4 +17,4 @@ class IAST;
   */
 std::string getClusterName(const IAST & node);
 
-}
+} // namespace DB

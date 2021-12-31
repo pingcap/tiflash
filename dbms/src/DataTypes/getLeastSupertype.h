@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Get data type that covers all possible values of passed data types.
   * If there is no such data type, throws an exception.
   *
@@ -14,4 +13,4 @@ namespace DB
   */
 DataTypePtr getLeastSupertype(const DataTypes & types);
 
-}
+} // namespace DB
