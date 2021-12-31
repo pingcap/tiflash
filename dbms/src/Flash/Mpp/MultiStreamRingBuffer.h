@@ -82,6 +82,12 @@ public:
     {
     public:
         Pop() = default;
+        Pop(MultiStreamRingBuffer * parent, size_t stream_id_)
+            : OpBase(parent)
+            , stream_id(stream_id_)
+        {
+            item = parent->items[this->parent->next[stream_id]];
+        }
 
         bool commit(Lock & lock)
         {
@@ -91,15 +97,6 @@ public:
         }
 
         ItemPtr item;
-
-    private:
-        Pop(MultiStreamRingBuffer * parent, size_t stream_id_)
-            : OpBase(parent)
-            , stream_id(stream_id_)
-        {
-            item = parent->items[this->parent->next[stream_id]];
-        }
-
         size_t stream_id;
     };
 
@@ -121,6 +118,11 @@ public:
     {
     public:
         Push() = default;
+        explicit Push(MultiStreamRingBuffer * parent)
+            : OpBase(parent)
+        {
+            item = parent->items[head];
+        }
 
         void commit(Lock & lock [[maybe_unused]])
         {
@@ -129,13 +131,6 @@ public:
         }
 
         ItemPtr item;
-
-    private:
-        explicit Push(MultiStreamRingBuffer * parent)
-            : OpBase(parent)
-        {
-            item = parent->items[head];
-        }
     };
 
     friend class Push;
