@@ -24,13 +24,12 @@
 
 namespace DB
 {
-
 static void executeCreateQuery(const String & query,
-    Context & context,
-    const String & database,
-    const String & file_name,
-    ThreadPool * pool,
-    bool has_force_restore_data_flag)
+                               Context & context,
+                               const String & database,
+                               const String & file_name,
+                               ThreadPool * pool,
+                               bool has_force_restore_data_flag)
 {
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "in file " + file_name, 0);
@@ -51,7 +50,11 @@ static void executeCreateQuery(const String & query,
 #define SYSTEM_DATABASE "system"
 
 static void loadDatabase(
-    Context & context, const String & database, const String & database_metadata_file, ThreadPool * thread_pool, bool force_restore_data)
+    Context & context,
+    const String & database,
+    const String & database_metadata_file,
+    ThreadPool * thread_pool,
+    bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
     /// Or, if it is absent, then database with default engine is created.
@@ -116,11 +119,12 @@ void loadMetadata(Context & context)
             if (databases.find(db_name) != databases.end()) // already detected
                 continue;
             LOG_WARNING(
-                log, "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
+                log,
+                "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
         }
     }
 
-    for (const auto & [db_name, meta_file]: databases)
+    for (const auto & [db_name, meta_file] : databases)
         loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
 
     thread_pool.wait();

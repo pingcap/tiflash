@@ -1,14 +1,12 @@
-#include <string>
-
-#include <iostream>
-#include <fstream>
-
+#include <Columns/ColumnString.h>
 #include <Common/Stopwatch.h>
-
+#include <DataTypes/DataTypeString.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
-#include <Columns/ColumnString.h>
-#include <DataTypes/DataTypeString.h>
+
+#include <fstream>
+#include <iostream>
+#include <string>
 
 
 int main(int, char **)
@@ -38,7 +36,7 @@ try
         WriteBufferFromFile out_buf("test");
 
         stopwatch.restart();
-        data_type.serializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &){ return &out_buf; }, 0, 0, true, {});
+        data_type.serializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &) { return &out_buf; }, 0, 0, true, {});
         stopwatch.stop();
 
         std::cout << "Writing, elapsed: " << stopwatch.elapsedSeconds() << std::endl;
@@ -50,14 +48,14 @@ try
         ReadBufferFromFile in_buf("test");
 
         stopwatch.restart();
-        data_type.deserializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &){ return &in_buf; }, n, 0, true, {});
+        data_type.deserializeBinaryBulkWithMultipleStreams(*column, [&](const IDataType::SubstreamPath &) { return &in_buf; }, n, 0, true, {});
         stopwatch.stop();
 
         std::cout << "Reading, elapsed: " << stopwatch.elapsedSeconds() << std::endl;
 
         std::cout << std::endl
-            << get<const String &>((*column)[0]) << std::endl
-            << get<const String &>((*column)[n - 1]) << std::endl;
+                  << get<const String &>((*column)[0]) << std::endl
+                  << get<const String &>((*column)[n - 1]) << std::endl;
     }
 
     return 0;

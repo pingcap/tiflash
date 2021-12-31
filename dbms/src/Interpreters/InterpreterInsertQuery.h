@@ -1,15 +1,13 @@
 #pragma once
 
-#include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockOutputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/ASTInsertQuery.h>
 
 namespace DB
 {
-
-
 /** Interprets the INSERT query.
   */
 class InterpreterInsertQuery : public IInterpreter
@@ -35,4 +33,4 @@ private:
 };
 
 
-}
+} // namespace DB

@@ -4,15 +4,14 @@
 #include <Poco/Timestamp.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
-#include <string>
 #include <set>
+#include <string>
 
 namespace DB
 {
-
 /** Repository with configurations of user-defined objects (dictionaries, models).
   * Used by ExternalLoader.
-  */ 
+  */
 class IExternalLoaderConfigRepository
 {
 public:
@@ -28,4 +27,4 @@ public:
     virtual ~IExternalLoaderConfigRepository() {}
 };
 
-}
+} // namespace DB

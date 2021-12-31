@@ -1,15 +1,14 @@
 #pragma once
 
-#include <Storages/IStorage.h>
-#include <Storages/AlterCommands.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/ASTAlterQuery.h>
+#include <Storages/AlterCommands.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
 {
-
 /** Allows you add or remove a column in the table.
   * It also allows you to manipulate the partitions of the MergeTree family tables.
   */
@@ -102,7 +101,9 @@ private:
     const Context & context;
 
     static void parseAlter(const ASTAlterQuery::ParameterContainer & params,
-        AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands, StoragePtr table);
+                           AlterCommands & out_alter_commands,
+                           PartitionCommands & out_partition_commands,
+                           StoragePtr table);
 };
 
-}
+} // namespace DB

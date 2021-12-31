@@ -1,16 +1,15 @@
-#include <Storages/IStorage.h>
-#include <Parsers/ASTOptimizeQuery.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterOptimizeQuery.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ASTOptimizeQuery.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 
@@ -27,4 +26,4 @@ BlockIO InterpreterOptimizeQuery::execute()
     return {};
 }
 
-}
+} // namespace DB

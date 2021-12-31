@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Data type to deal with INTERVAL in SQL (arithmetic on time intervals).
   *
   * Mostly the same as Int64.
@@ -40,18 +39,27 @@ public:
     {
         switch (kind)
         {
-            case Second: return "Second";
-            case Minute: return "Minute";
-            case Hour: return "Hour";
-            case Day: return "Day";
-            case Week: return "Week";
-            case Month: return "Month";
-            case Year: return "Year";
-            default: __builtin_unreachable();
+        case Second:
+            return "Second";
+        case Minute:
+            return "Minute";
+        case Hour:
+            return "Hour";
+        case Day:
+            return "Day";
+        case Week:
+            return "Week";
+        case Month:
+            return "Month";
+        case Year:
+            return "Year";
+        default:
+            __builtin_unreachable();
         }
     }
 
-    DataTypeInterval(Kind kind) : kind(kind) {};
+    DataTypeInterval(Kind kind)
+        : kind(kind){};
 
     std::string getName() const override { return std::string("Interval") + kindToString(); }
     const char * getFamilyName() const override { return "Interval"; }
@@ -62,8 +70,6 @@ public:
     bool cannotBeStoredInTables() const override { return true; }
     bool isCategorial() const override { return false; }
     TypeIndex getTypeId() const override { return TypeIndex::Interval; }
-
 };
 
-}
-
+} // namespace DB
