@@ -33,6 +33,8 @@
     M(StorageBufferBytes)                       \
     M(DictCacheRequests)                        \
     M(Revision)                                 \
+    M(CPUCores)                                 \
+    M(MainMemoryAmount)                         \
     M(PSMVCCNumSnapshots)                       \
     M(PSMVCCSnapshotsList)                      \
     M(RWLockWaitingReaders)                     \
