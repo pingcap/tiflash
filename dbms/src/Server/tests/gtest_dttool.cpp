@@ -175,7 +175,7 @@ TEST_F(DTToolTest, ConsecutiveMigration)
         {
             if (!DTTool::Migrate::needFrameMigration(*dmfile, i))
                 continue;
-            LOG_INFO(logger, "record file: " << i);
+            LOG_FMT_INFO(logger, "record file: {}", i);
             getHash(records, i);
         }
     }

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class Context;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -17,7 +16,8 @@ class InterpreterOptimizeQuery : public IInterpreter
 {
 public:
     InterpreterOptimizeQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_), context(context_)
+        : query_ptr(query_ptr_)
+        , context(context_)
     {
     }
 
@@ -29,4 +29,4 @@ private:
 };
 
 
-}
+} // namespace DB

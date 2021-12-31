@@ -14,8 +14,9 @@
 
 namespace DB
 {
-struct MPPTaskStatistics
+class MPPTaskStatistics
 {
+public:
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
 
@@ -25,28 +26,47 @@ struct MPPTaskStatistics
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
+    void recordReadWaitIndex(DAGContext & dag_context);
+
     void initializeExecutorDAG(DAGContext * dag_context);
+
+    /// return exchange sender runtime statistics
+    const BaseRuntimeStatistics & collectRuntimeStatistics();
 
     void logTracingJson();
 
+    void setMemoryPeak(Int64 memory_peak);
+
+    void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
+
+private:
+    void recordInputBytes(DAGContext & dag_context);
+
     const LogWithPrefixPtr logger;
 
-    /// common
+    // common
     const MPPTaskId id;
     const String host;
-    Timestamp task_init_timestamp;
-    Timestamp compile_start_timestamp;
-    Timestamp compile_end_timestamp;
-    Timestamp task_start_timestamp;
-    Timestamp task_end_timestamp;
+    Timestamp task_init_timestamp{Clock::duration::zero()};
+    Timestamp task_start_timestamp{Clock::duration::zero()};
+    Timestamp task_end_timestamp{Clock::duration::zero()};
+    Timestamp compile_start_timestamp{Clock::duration::zero()};
+    Timestamp compile_end_timestamp{Clock::duration::zero()};
+    Timestamp read_wait_index_start_timestamp{Clock::duration::zero()};
+    Timestamp read_wait_index_end_timestamp{Clock::duration::zero()};
     TaskStatus status;
     String error_message;
 
-    /// executor dag
+    Int64 local_input_bytes = 0;
+    Int64 remote_input_bytes = 0;
+    Int64 output_bytes = 0;
+
+    // executor dag
+    bool is_root = false;
     String sender_executor_id;
     ExecutorStatisticsCollector executor_statistics_collector;
 
-    /// resource
+    // resource
     Int64 working_time = 0;
     Int64 memory_peak = 0;
 };
