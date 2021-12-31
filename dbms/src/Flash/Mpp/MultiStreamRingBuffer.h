@@ -131,7 +131,10 @@ public:
         Push(MultiStreamRingBuffer * parent, size_t index)
             : OpBase(parent)
             , item(parent->items[index])
-        {}
+        {
+            if (parent->pos[item] != index)
+                throw TiFlashException("Inconsistent index", Errors::Coprocessor::Internal);
+        }
 
         void commit(Lock & lock [[maybe_unused]])
         {
@@ -145,7 +148,9 @@ public:
             auto & u = p->items[index];
             auto & v = p->items[p->head];
             if (u != item)
-                throw TiFlashException("Invalid index", Errors::Coprocessor::Internal);
+                throw TiFlashException("Invalid item", Errors::Coprocessor::Internal);
+            if (p->pos[v] != p->head)
+                throw TiFlashException("Invalid head", Errors::Coprocessor::Internal);
 
             std::swap(u, v);
 
@@ -177,7 +182,9 @@ public:
             auto & u = p->items[index];
             auto & v = p->items[p->mid];
             if (u != item)
-                throw TiFlashException("Invalid index", Errors::Coprocessor::Internal);
+                throw TiFlashException("Invalid item", Errors::Coprocessor::Internal);
+            if (p->pos[v] != p->head)
+                throw TiFlashException("Invalid head", Errors::Coprocessor::Internal);
 
             std::swap(u, v);
 
