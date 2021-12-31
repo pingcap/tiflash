@@ -1193,7 +1193,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         auto & match_nullmap_vec = match_nullmap->getData();
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
-        const ColumnUInt8::Container * eq_in_vec = nullptr, * eq_in_nullmap = nullptr;
+        const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
         if (!other_eq_filter_from_in_column.empty())
         {
             auto orig_filter_column = block.getByName(other_eq_filter_from_in_column).column;
@@ -1213,7 +1213,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// and because it is semi join, we needn't save columns of right table, so we just keep the first replica.
         for (size_t i = 0; i < offsets_to_replicate->size(); i++)
         {
-            size_t prev_offset = i>0 ? (*offsets_to_replicate)[i-1] : 0;
+            size_t prev_offset = i > 0 ? (*offsets_to_replicate)[i - 1] : 0;
             size_t current_offset = (*offsets_to_replicate)[i];
 
             row_filter[prev_offset] = 1;
