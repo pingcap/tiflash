@@ -40,8 +40,9 @@ extern const int QUERY_IS_TOO_LARGE;
 extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
 
-
-static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
+namespace
+{
+void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 {
     if (settings.max_ast_depth)
         ast.checkDepth(settings.max_ast_depth);
@@ -50,26 +51,33 @@ static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 }
 
 
-static String joinLines(const String & query)
+String joinLines(const String & query)
 {
     String res = query;
     std::replace(res.begin(), res.end(), '\n', ' ');
     return res;
 }
 
+LogWithPrefixPtr executeQueryLogger = std::make_shared<LogWithPrefix>(&Poco::Logger::get("executeQuery"), "");
+
+const LogWithPrefixPtr & getLogger(const Context & context)
+{
+    auto * dag_context = context.getDAGContext();
+    return (dag_context && nullptr != dag_context->log) ? dag_context->log : executeQueryLogger;
+}
 
 /// Log query into text log (not into system table).
-static void logQuery(const String & query, const Context & context)
+void logQuery(const String & query, const Context & context)
 {
     const auto & current_query_id = context.getClientInfo().current_query_id;
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
     const auto & current_user = context.getClientInfo().current_user;
 
     LOG_FMT_DEBUG(
-        &Poco::Logger::get("executeQuery"),
+        getLogger(context),
         "(from {}{}, query_id: {}{}) {}",
         context.getClientInfo().current_address.toString(),
-        (current_user != "default" ? ", user: " + context.getClientInfo().current_user : ""),
+        (current_user != "default" ? ", user: " + current_user : ""),
         current_query_id,
         (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
         joinLines(query));
@@ -77,7 +85,7 @@ static void logQuery(const String & query, const Context & context)
 
 
 /// Call this inside catch block.
-static void setExceptionStackTrace(QueryLogElement & elem)
+void setExceptionStackTrace(QueryLogElement & elem)
 {
     try
     {
@@ -94,10 +102,10 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 
 
 /// Log exception (with query info) into text log (not into system table).
-static void logException(Context & context, QueryLogElement & elem)
+void logException(Context & context, QueryLogElement & elem)
 {
     LOG_FMT_ERROR(
-        &Poco::Logger::get("executeQuery"),
+        getLogger(context),
         "{} (from {}) (in query: {}){}",
         elem.exception,
         context.getClientInfo().current_address.toString(),
@@ -106,7 +114,7 @@ static void logException(Context & context, QueryLogElement & elem)
 }
 
 
-static void onExceptionBeforeStart(const String & query, Context & context, time_t current_time)
+void onExceptionBeforeStart(const String & query, Context & context, time_t current_time)
 {
     /// Exception before the query execution.
     context.getQuota().addError();
@@ -136,8 +144,7 @@ static void onExceptionBeforeStart(const String & query, Context & context, time
     }
 }
 
-
-static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
+std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     IQuerySource & query_src,
     Context & context,
     bool internal,
@@ -312,7 +319,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (elem.read_rows != 0)
                 {
                     LOG_FMT_INFO(
-                        &Poco::Logger::get("executeQuery"),
+                        getLogger(context),
                         "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
                         elem.read_rows,
                         formatReadableSizeWithBinarySuffix(elem.read_bytes),
@@ -366,7 +373,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
                 res.in->dumpTree(log_str);
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
+                LOG_DEBUG(getLogger(context), log_str.str());
             }
         }
     }
@@ -380,6 +387,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     return std::make_tuple(ast, res);
 }
+} // namespace
 
 
 BlockIO executeQuery(
