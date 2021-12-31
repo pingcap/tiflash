@@ -58,12 +58,12 @@ String joinLines(const String & query)
     return res;
 }
 
-LogWithPrefixPtr executeQueryLogger = std::make_shared<LogWithPrefix>(&Poco::Logger::get("executeQuery"), "");
-
 const LogWithPrefixPtr & getLogger(const Context & context)
 {
     auto * dag_context = context.getDAGContext();
-    return (dag_context && nullptr != dag_context->log) ? dag_context->log : executeQueryLogger;
+    return (dag_context && nullptr != dag_context->log)
+        ? dag_context->log
+        : std::make_shared<LogWithPrefix>(&Poco::Logger::get("executeQuery"), "");
 }
 
 /// Log query into text log (not into system table).
