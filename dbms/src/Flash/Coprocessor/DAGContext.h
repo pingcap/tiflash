@@ -156,6 +156,7 @@ public:
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id = "";
+    String tidb_host = "Unknown";
     bool collect_execution_summaries;
     bool return_executor_id;
     bool is_mpp_task = false;
