@@ -58,7 +58,7 @@ String joinLines(const String & query)
     return res;
 }
 
-const LogWithPrefixPtr & getLogger(const Context & context)
+const LogWithPrefixPtr getLogger(const Context & context)
 {
     auto * dag_context = context.getDAGContext();
     return (dag_context && nullptr != dag_context->log)
