@@ -10,10 +10,10 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         R"("non_joined_outbound_rows":{},"non_joined_outbound_blocks":{},"non_joined_outbound_bytes":{},"non_joined_execution_time_ns":{})",
         hash_table_bytes,
         build_side_child,
-        non_joined_outbound_rows,
-        non_joined_outbound_blocks,
-        non_joined_outbound_bytes,
-        non_joined_execution_time_ns);
+        non_joined_base.rows,
+        non_joined_base.blocks,
+        non_joined_base.bytes,
+        non_joined_base.execution_time_ns);
 }
 
 void JoinStatistics::collectExtraRuntimeDetail()
@@ -30,10 +30,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
             auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
             assert(p_stream);
             const auto & profile_info = p_stream->getProfileInfo();
-            non_joined_outbound_rows += profile_info.rows;
-            non_joined_outbound_blocks += profile_info.blocks;
-            non_joined_outbound_bytes += profile_info.bytes;
-            non_joined_execution_time_ns = std::max(non_joined_execution_time_ns, profile_info.execution_time);
+            non_joined_base.append(profile_info);
         }
     }
 }

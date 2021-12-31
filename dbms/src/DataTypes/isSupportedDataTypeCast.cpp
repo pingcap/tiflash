@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
 {
     assert(from != nullptr && to != nullptr);

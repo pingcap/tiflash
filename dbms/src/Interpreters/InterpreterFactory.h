@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 class Context;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -21,4 +20,4 @@ public:
         QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);
 };
 
-}
+} // namespace DB

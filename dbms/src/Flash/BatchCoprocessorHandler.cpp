@@ -59,8 +59,12 @@ grpc::Status BatchCoprocessorHandler::execute()
                     retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
                 }
             }
-            LOG_DEBUG(log,
-                      __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
+            LOG_FMT_DEBUG(
+                log,
+                "{}: Handling {} regions in DAG request: {}",
+                __PRETTY_FUNCTION__,
+                regions.size(),
+                dag_request.DebugString());
 
             DAGContext dag_context(dag_request);
             dag_context.is_batch_cop = true;
@@ -73,7 +77,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
             // batch execution;
             driver.execute();
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
+            LOG_FMT_DEBUG(log, "{}: Handle DAG request done", __PRETTY_FUNCTION__);
             break;
         }
         case COP_REQ_TYPE_ANALYZE:
@@ -86,30 +90,28 @@ grpc::Status BatchCoprocessorHandler::execute()
     }
     catch (const TiFlashException & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n"
-                                           << e.getStackTrace().toString());
+        LOG_FMT_ERROR(log, "{}: TiFlash Exception: {}\n{}", __PRETTY_FUNCTION__, e.displayText(), e.getStackTrace().toString());
         GET_METRIC(tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n"
-                                           << e.getStackTrace().toString());
+        LOG_FMT_ERROR(log, "{}: DB Exception: {}\n{}", __PRETTY_FUNCTION__, e.message(), e.getStackTrace().toString());
         return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
+        LOG_FMT_ERROR(log, "{}: KV Client Exception: {}", __PRETTY_FUNCTION__, e.message());
         return recordError(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
+        LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
         return recordError(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+        LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
         return recordError(grpc::StatusCode::INTERNAL, "other exception");
     }
 }

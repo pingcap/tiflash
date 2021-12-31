@@ -382,14 +382,6 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
             std::string() + Impl::name + " function does not support unit " + unit + " yet.",
             Errors::Coprocessor::Unimplemented);
     String func_name = Impl::unit_to_func_name_map.find(unit)->second;
-    const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
-    if (!date_column_type->isDateOrDateTime())
-    {
-        // convert to datetime first
-        Names arg_names;
-        arg_names.push_back(date_column);
-        date_column = analyzer->applyFunction("toMyDateTimeOrNull", arg_names, actions, nullptr);
-    }
     const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
     if (!delta_column_type->isNumber())
     {

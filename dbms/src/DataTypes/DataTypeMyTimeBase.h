@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 // It stands for mysql datetime/ date/ time types.
 class DataTypeMyTimeBase : public DataTypeNumberBase<UInt64>
 {

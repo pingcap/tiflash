@@ -3,15 +3,13 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/IDataType.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
-
 class DataTypeUUID final : public DataTypeNumberBase<UInt128>
 {
-
 public:
     const char * getFamilyName() const override { return "UUID"; }
 
@@ -33,4 +31,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB
