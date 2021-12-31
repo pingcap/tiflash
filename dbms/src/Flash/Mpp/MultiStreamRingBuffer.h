@@ -121,7 +121,7 @@ public:
         explicit Push(MultiStreamRingBuffer * parent)
             : OpBase(parent)
         {
-            item = parent->items[head];
+            item = parent->items[parent->head];
         }
 
         void commit(Lock & lock [[maybe_unused]])
