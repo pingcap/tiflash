@@ -1,6 +1,7 @@
 #pragma once
 
 #include <condition_variable>
+#include <unordered_map>
 #include <vector>
 
 namespace DB
@@ -17,14 +18,17 @@ public:
         : num_streams(num_streams_)
         , length(length_)
         , head(0)
+        , mid(0)
         , tail(lastPosition())
     {
         next.resize(num_streams);
         count.resize(length);
+
         items.reserve(length);
         for (size_t i = 0; i < length; ++i)
         {
             items.emplace_back(std::make_shared<Item>());
+            pos[items.back()] = i;
         }
     }
 
@@ -76,6 +80,11 @@ public:
         {
             state = OpState::COMMITTED;
         }
+
+        void markAsInvalid()
+        {
+            state = OpState::INVALID;
+        }
     };
 
     class Pop final : public OpBase
@@ -85,9 +94,8 @@ public:
         Pop(MultiStreamRingBuffer * parent, size_t stream_id_)
             : OpBase(parent)
             , stream_id(stream_id_)
-        {
-            item = parent->items[this->parent->next[stream_id]];
-        }
+            , item(parent->items[this->parent->next[stream_id]])
+        {}
 
         bool commit(Lock & lock)
         {
@@ -96,8 +104,8 @@ public:
             return result;
         }
 
-        ItemPtr item;
         size_t stream_id;
+        ItemPtr item;
     };
 
     friend class Pop;
@@ -118,16 +126,57 @@ public:
     {
     public:
         Push() = default;
-        explicit Push(MultiStreamRingBuffer * parent)
+        Push(MultiStreamRingBuffer * parent, size_t index)
             : OpBase(parent)
-        {
-            item = parent->items[parent->head];
-        }
+            , item(parent->items[index])
+        {}
 
         void commit(Lock & lock [[maybe_unused]])
         {
-            this->parent->endPush(lock);
+            assert(this->isValid() && !this->isCommitted());
+
+            auto p = this->parent;
+
+            // i: current position of item pointer in items array
+            // move item to the front of queue
+            size_t i = p->pos[item];
+            auto & t = p->items[p->head];
+            std::swap(p->items[i], t);
+
+            // update position mapping
+            p->pos[item] = p->head;
+            p->pos[t] = i;
+
+            // move head pointer and notify others
+            p->count[p->head] = num_streams;
+            p->forward(p->head);
+            p->head_cv.notify_all();
+
             this->markAsCommitted();
+        }
+
+        void cancel(Lock & lock [[maybe_unused]])
+        {
+            // originally I want to implement this as dtor of class Push
+            // but I realized that cancel needs to hold the lock
+            // this is not elegant
+
+            if (!this->isValid())
+                return;
+
+            auto p = this->parent;
+
+            size_t i = p->pos[item];
+            auto & t = p->items[p->mid];
+            std::swap(p->items[i], t);
+
+            p->pos[item] = p->mid;
+            p->pos[t] = i;
+
+            p->back(p->mid);
+            p->tail_cv.notify_all();
+
+            this->markAsInvalid();
         }
 
         ItemPtr item;
@@ -139,11 +188,13 @@ public:
     Push beginPush(Lock & lock, const OtherCondition & other_condition)
     {
         auto condition = [this] {
-            return head != tail;
+            return mid != tail;
         };
         if (!waitWithOtherCondition(tail_cv, lock, condition, other_condition))
             return {};
-        return Push(this);
+        size_t index = mid;
+        forward(mid);
+        return Push(this, index);
     }
 
     void notify()
@@ -158,7 +209,7 @@ private:
     {
         size_t index = next[stream_id];
         count[index]--;
-        advance(next[stream_id]);
+        forward(next[stream_id]);
 
         if (count[index] == 0)
         {
@@ -168,13 +219,6 @@ private:
         }
 
         return false;
-    }
-
-    void endPush(Lock & lock [[maybe_unused]])
-    {
-        count[head] = num_streams;
-        advance(head);
-        head_cv.notify_all();
     }
 
     template <typename MainCondition, typename OtherCondition>
@@ -195,15 +239,21 @@ private:
         return length - 1;
     }
 
-    void advance(size_t & position)
+    void forward(size_t & position)
     {
         position = position >= lastPosition() ? 0 : position + 1;
     }
 
+    void back(size_t & position)
+    {
+        position = position <= 0 ? lastPosition() : position - 1;
+    }
+
 
     size_t num_streams, length;
-    size_t head, tail;
+    size_t head, mid, tail;
     std::condition_variable head_cv, tail_cv;
+    std::unordered_map<ItemPtr, size_t> pos;
     std::vector<size_t> next; // size = num_streams
     std::vector<size_t> count; // size = length
     std::vector<ItemPtr> items; // size = length

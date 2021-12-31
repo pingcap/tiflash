@@ -150,10 +150,14 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         meet_error = true;
                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
+                        op.cancel(lock);
                         break;
                     }
                     else if (!op.isValid())
+                    {
+                        op.cancel(lock);
                         throw TiFlashException("beginPush returns nullptr", Errors::Coprocessor::Internal);
+                    }
                 }
 
                 recv_msg = op.item;
@@ -164,13 +168,19 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 {
                     /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
                     // returnEmptyMsg(recv_msg);
+
+                    std::unique_lock lock(mu);
                     clearMessage(recv_msg);
+                    op.cancel(lock);
                     break;
                 }
                 else
                     has_data = true;
+
                 if (recv_msg->packet->has_error())
                 {
+                    std::unique_lock lock(mu);
+                    op.cancel(lock);
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
                 }
 
@@ -203,6 +213,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     }
                 }
             }
+
             // if meet error, such as decode packect fails, it will not retry.
             if (meet_error)
             {
