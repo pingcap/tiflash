@@ -57,9 +57,6 @@ llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/ti
 
 # Vendor dependencies
 vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so "${INSTALL_DIR}/tiflash-runtime"
 
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/tiflash-runtime/libtiflash_proxy.so"
 

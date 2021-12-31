@@ -198,7 +198,7 @@ set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGAB
 
 # with LLVM, we do not statically link c++ runtime anymore.
 # see below for reasons
-if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -223,7 +223,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ c++ c++abi)
         if (LIBCXX_PATH)
           link_directories ("${LIBCXX_PATH}/lib")
-        endif ()
+        endif()
     endif ()
 
     if (USE_LLVM_LIBUNWIND)
