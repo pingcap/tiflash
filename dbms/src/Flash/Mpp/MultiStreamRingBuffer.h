@@ -148,7 +148,7 @@ public:
             p->pos[t] = i;
 
             // move head pointer and notify others
-            p->count[p->head] = num_streams;
+            p->count[p->head] = p->num_streams;
             p->forward(p->head);
             p->head_cv.notify_all();
 
