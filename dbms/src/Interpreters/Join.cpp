@@ -62,7 +62,7 @@ static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
 
-const std::string Join::name_match_helper = "match-helper";
+const std::string Join::name_match_helper = "__match-helper";
 
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const LogWithPrefixPtr & log_)
@@ -1348,7 +1348,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
 
-    /// Memoize key columns to work.
+    /// Memoize key columns to work with.
     for (size_t i = 0; i < keys_size; ++i)
     {
         key_columns[i] = block.getByName(key_names_left[i]).column.get();
@@ -1544,8 +1544,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
         return STRICTNESS == ASTTableJoin::Strictness::All;
     }
 };
-
-
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>
 {

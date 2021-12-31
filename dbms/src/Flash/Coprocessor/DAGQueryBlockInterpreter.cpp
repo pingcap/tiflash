@@ -598,9 +598,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
-
-    auto sample_block = right_query.source->getHeader();
-    right_query.join->setSampleBlock(sample_block);
+    right_query.join->setSampleBlock(right_query.source->getHeader());
     dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
