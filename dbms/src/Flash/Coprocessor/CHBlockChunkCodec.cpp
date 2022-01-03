@@ -31,7 +31,7 @@ public:
     DataTypes expected_types;
 };
 
-void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, bool enable_compression)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -46,7 +46,8 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
     IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &ostr;
     };
-    type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {});
+
+    type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {}, enable_compression);
 }
 
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
@@ -73,7 +74,7 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         writeStringBinary(column.type->getName(), *output);
 
         if (rows)
-            writeData(*column.type, column.column, *output, 0, 0);
+            writeData(*column.type, column.column, *output, 0, 0, enable_compression);
     }
 }
 
@@ -89,6 +90,14 @@ Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
     for (const auto & c : schema)
         output_names.push_back(c.first);
     NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
+    return block_in.read();
+}
+
+Block CHBlockChunkCodec::decodeWithCompression(const String & str, const Block & header, bool enable_compression)
+{
+    ReadBufferFromString read_buffer(str);
+    NativeBlockInputStream block_in(read_buffer, header, 0, /*align_column_name_with_header=*/true);
+    block_in.enable_compression = enable_compression;
     return block_in.read();
 }
 

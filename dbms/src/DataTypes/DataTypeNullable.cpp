@@ -66,6 +66,27 @@ void DataTypeNullable::serializeBinaryBulkWithMultipleStreams(
     nested_data_type->serializeBinaryBulkWithMultipleStreams(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
 }
 
+void DataTypeNullable::serializeBinaryBulkWithMultipleStreamsWithCompression(
+    const IColumn & column,
+    const OutputStreamGetter & getter,
+    size_t offset,
+    size_t limit,
+    bool position_independent_encoding,
+    SubstreamPath & path) const
+{
+    const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+    col.checkConsistency();
+
+    /// First serialize null map.
+    path.push_back(Substream::NullMap);
+    if (auto stream = getter(path))
+        DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), *stream, offset, limit);
+
+    /// Then serialize contents of arrays.
+    path.back() = Substream::NullableElements;
+    nested_data_type->serializeBinaryBulkWithMultipleStreamsWithCompression(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
+}
+
 
 void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
     IColumn & column,
@@ -83,6 +104,24 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
 
     path.back() = Substream::NullableElements;
     nested_data_type->deserializeBinaryBulkWithMultipleStreams(col.getNestedColumn(), getter, limit, avg_value_size_hint, position_independent_encoding, path);
+}
+
+void DataTypeNullable::deserializeBinaryBulkWithMultipleStreamsWithCompression(
+    IColumn & column,
+    const InputStreamGetter & getter,
+    size_t limit,
+    double avg_value_size_hint,
+    bool position_independent_encoding,
+    SubstreamPath & path) const
+{
+    ColumnNullable & col = static_cast<ColumnNullable &>(column);
+
+    path.push_back(Substream::NullMap);
+    if (auto stream = getter(path))
+        DataTypeUInt8().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
+
+    path.back() = Substream::NullableElements;
+    nested_data_type->deserializeBinaryBulkWithMultipleStreamsWithCompression(col.getNestedColumn(), getter, limit, avg_value_size_hint, position_independent_encoding, path);
 }
 
 

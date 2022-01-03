@@ -39,7 +39,8 @@ public:
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
     void serializeWidenBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
     void deserializeWidenBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
-
+    void serializeBinaryBulkWithCompression(const IColumn &, WriteBuffer &, size_t, size_t) const override;
+    void deserializeBinaryBulkWithCompression(IColumn &, ReadBuffer &, size_t, double) const override;
     MutableColumnPtr createColumn() const override;
 
     bool isParametric() const override { return false; }

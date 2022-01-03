@@ -19,6 +19,7 @@ public:
     virtual void clear() = 0;
     virtual void encode(const Block & block, size_t start, size_t end) = 0;
     virtual ~ChunkCodecStream() = default;
+    bool enable_compression;
 
 protected:
     const std::vector<tipb::FieldType> & field_types;

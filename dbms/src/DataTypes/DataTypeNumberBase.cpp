@@ -9,6 +9,8 @@
 
 #include <type_traits>
 
+#include "../../../contrib/streamvbyte/include/streamvbyte.h"
+
 
 namespace DB
 {
@@ -245,6 +247,29 @@ void DataTypeNumberBase<T>::serializeBinaryBulk(const IColumn & column, WriteBuf
 }
 
 template <typename T>
+void DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
+{
+    const typename ColumnVector<T>::Container & x = typeid_cast<const ColumnVector<T> &>(column).getData();
+
+    size_t size = x.size();
+
+    if (limit == 0 || offset + limit > size)
+        limit = size - offset;
+
+    /// compress integers, writhe compressed_size, compressed bytes.
+    /// step 1: get enough space to put the compressed bytes.
+    auto raw_size = sizeof(typename ColumnVector<T>::value_type) * limit; /// limit should align to 32-bit integers
+    ostr.forceNext(raw_size + sizeof(size_t));
+    /// step 2: compress data
+    size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
+    size_t compsize = streamvbyte_encode(reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(&x[offset])), n32, reinterpret_cast<uint8_t *>(ostr.position() + sizeof(size_t))); // encoding
+    /// step 3: write compress_size
+    *(size_t *)ostr.position() = compsize;
+    /// step 4: update pos of WriteBuffer
+    ostr.position() += compsize + sizeof(size_t);
+}
+
+template <typename T>
 void DataTypeNumberBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
 {
     typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
@@ -252,6 +277,21 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer &
     x.resize(initial_size + limit);
     size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(typename ColumnVector<T>::value_type) * limit);
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::value_type));
+}
+
+template <typename T>
+void DataTypeNumberBase<T>::deserializeBinaryBulkWithCompression(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
+{
+    typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
+    size_t initial_size = x.size();
+    x.resize(initial_size + limit);
+    size_t compsize = *(size_t *)istr.position();
+    size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
+    size_t compsize2 = streamvbyte_decode(reinterpret_cast<const uint8_t *>(istr.position() + sizeof(size_t)), reinterpret_cast<uint32_t *>(reinterpret_cast<char *>(&x[initial_size])), n32); // decoding (fast)
+    assert(compsize == compsize2); /// compressed data
+
+    istr.position() += compsize + sizeof(size_t);
+    x.resize(initial_size + n32 * 4 / sizeof(typename ColumnVector<T>::value_type));
 }
 
 template <typename T>

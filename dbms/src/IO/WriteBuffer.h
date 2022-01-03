@@ -56,6 +56,26 @@ public:
         pos = working_buffer.begin();
     }
 
+    inline void forceNext(size_t size)
+    {
+        size_t left = working_buffer.end() - pos;
+        assert(left >= 0);
+        if (left < size) /// the remaining space is not enough
+        {
+            try
+            {
+                nextImpl(size - left);
+                bytes += size;
+            }
+            catch (...)
+            {
+                pos = working_buffer.begin();
+                throw;
+            }
+            pos = working_buffer.begin();
+        }
+    }
+
     /** it is desirable in the successors to place the next() call in the destructor,
       * so that the last data is written
       */
@@ -95,6 +115,7 @@ private:
       * Throw an exception if something is wrong.
       */
     virtual void nextImpl() { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); };
+    virtual void nextImpl(size_t) { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); };
 };
 
 

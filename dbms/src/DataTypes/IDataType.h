@@ -122,6 +122,17 @@ public:
         if (WriteBuffer * stream = getter(path))
             serializeBinaryBulk(column, *stream, offset, limit);
     }
+    virtual void serializeBinaryBulkWithMultipleStreamsWithCompression(
+        const IColumn & column,
+        const OutputStreamGetter & getter,
+        size_t offset,
+        size_t limit,
+        bool /*position_independent_encoding*/,
+        SubstreamPath & path) const
+    {
+        if (WriteBuffer * stream = getter(path))
+            serializeBinaryBulkWithCompression(column, *stream, offset, limit);
+    }
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
@@ -129,9 +140,17 @@ public:
         size_t offset,
         size_t limit,
         bool position_independent_encoding,
-        SubstreamPath && path) const
+        SubstreamPath && path,
+        bool enable_compression = false) const
     {
-        serializeBinaryBulkWithMultipleStreams(column, getter, offset, limit, position_independent_encoding, path);
+        if (enable_compression)
+        {
+            serializeBinaryBulkWithMultipleStreamsWithCompression(column, getter, offset, limit, position_independent_encoding, path);
+        }
+        else
+        {
+            serializeBinaryBulkWithMultipleStreams(column, getter, offset, limit, position_independent_encoding, path);
+        }
     }
 
     /** Read no more than limit values and append them into column.
@@ -149,21 +168,43 @@ public:
             deserializeBinaryBulk(column, *stream, limit, avg_value_size_hint);
     }
 
+    virtual void deserializeBinaryBulkWithMultipleStreamsWithCompression(
+        IColumn & column,
+        const InputStreamGetter & getter,
+        size_t limit,
+        double avg_value_size_hint,
+        bool /*position_independent_encoding*/,
+        SubstreamPath & path) const
+    {
+        if (ReadBuffer * stream = getter(path))
+            deserializeBinaryBulkWithCompression(column, *stream, limit, avg_value_size_hint);
+    }
+
     void deserializeBinaryBulkWithMultipleStreams(
         IColumn & column,
         const InputStreamGetter & getter,
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath && path) const
+        SubstreamPath && path,
+        bool enable_compression = false) const
     {
-        deserializeBinaryBulkWithMultipleStreams(column, getter, limit, avg_value_size_hint, position_independent_encoding, path);
+        if (enable_compression)
+        {
+            deserializeBinaryBulkWithMultipleStreamsWithCompression(column, getter, limit, avg_value_size_hint, position_independent_encoding, path);
+        }
+        else
+        {
+            deserializeBinaryBulkWithMultipleStreams(column, getter, limit, avg_value_size_hint, position_independent_encoding, path);
+        }
     }
 
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
     virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const;
+    virtual void serializeBinaryBulkWithCompression(const IColumn &, WriteBuffer &, size_t, size_t) const;
+    virtual void deserializeBinaryBulkWithCompression(IColumn &, ReadBuffer &, size_t, double) const;
 
     /** Widen version for `serializeBinaryBulkWithMultipleStreams`.
       */

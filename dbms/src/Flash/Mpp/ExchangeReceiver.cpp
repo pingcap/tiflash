@@ -255,7 +255,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; ++i)
     {
-        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header);
+        Block block = CHBlockChunkCodec::decodeWithCompression(recv_msg->packet->chunks(i), header, true);
         detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;

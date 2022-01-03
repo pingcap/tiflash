@@ -29,6 +29,7 @@ private:
 
     static constexpr size_t size_multiplier = 2;
 
+    /// TODO(fzh) to avoid enlarge the vector too many times
     void nextImpl() override
     {
         if (is_finished)
@@ -38,6 +39,19 @@ private:
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
         vector.resize(old_size * size_multiplier);
+        internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
+        working_buffer = internal_buffer;
+    }
+
+    void nextImpl(size_t size) override
+    {
+        if (is_finished)
+            throw Exception("WriteBufferFromVector is finished", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER);
+
+        size_t old_size = vector.size();
+        /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
+        size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
+        vector.resize(old_size + size);
         internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
         working_buffer = internal_buffer;
     }

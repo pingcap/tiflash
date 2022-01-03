@@ -90,9 +90,11 @@ public:
         IColumn & column,
         ReadBuffer & istr,
         size_t rows,
-        double avg_value_size_hint);
+        double avg_value_size_hint,
+        bool enable_compression = false);
 
     Block getHeader() const override;
+    bool enable_compression;
 
 protected:
     Block readImpl() override;

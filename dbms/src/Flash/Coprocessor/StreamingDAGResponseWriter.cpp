@@ -203,6 +203,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
         {
             chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(dag_context.result_field_types);
+            chunk_codec_stream[i]->enable_compression = true;
         }
         if constexpr (send_exec_summary_at_last)
         {

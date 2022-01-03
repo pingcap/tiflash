@@ -36,6 +36,22 @@ public:
         bool position_independent_encoding,
         SubstreamPath & path) const override;
 
+    void serializeBinaryBulkWithMultipleStreamsWithCompression(
+        const IColumn & column,
+        const OutputStreamGetter & getter,
+        size_t offset,
+        size_t limit,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
+    void deserializeBinaryBulkWithMultipleStreamsWithCompression(
+        IColumn & column,
+        const InputStreamGetter & getter,
+        size_t limit,
+        double avg_value_size_hint,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
     void serializeWidenBinaryBulkWithMultipleStreams(
         const IColumn & column,
         const OutputStreamGetter & getter,

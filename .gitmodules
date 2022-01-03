@@ -65,3 +65,6 @@
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
 	url = https://github.com/google/benchmark
+[submodule "contrib/streamvbyte"]
+	path = contrib/streamvbyte
+	url = https://github.com/fzhedu/streamvbyte.git
