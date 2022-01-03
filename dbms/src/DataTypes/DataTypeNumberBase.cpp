@@ -288,8 +288,10 @@ void DataTypeNumberBase<T>::deserializeBinaryBulkWithCompression(IColumn & colum
     size_t compsize = *(size_t *)istr.position();
     size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
     size_t compsize2 = streamvbyte_decode(reinterpret_cast<const uint8_t *>(istr.position() + sizeof(size_t)), reinterpret_cast<uint32_t *>(reinterpret_cast<char *>(&x[initial_size])), n32); // decoding (fast)
-    assert(compsize == compsize2); /// compressed data
-
+    if(compsize != compsize2)
+    {
+        throw Exception("exchange compression size is not equal");
+    }
     istr.position() += compsize + sizeof(size_t);
     x.resize(initial_size + n32 * 4 / sizeof(typename ColumnVector<T>::value_type));
 }
