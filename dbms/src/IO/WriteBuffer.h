@@ -58,8 +58,8 @@ public:
 
     inline void forceNext(size_t size)
     {
+        assert(working_buffer.end() >= pos);
         size_t left = working_buffer.end() - pos;
-        assert(left >= 0);
         if (left < size) /// the remaining space is not enough
         {
             try
