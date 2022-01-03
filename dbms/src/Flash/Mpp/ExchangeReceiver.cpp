@@ -13,6 +13,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const ::tipb::ExchangeReceiver & exc,
     const ::mpp::TaskMeta & meta,
     size_t max_streams_,
+    const bool enable_exchange_compression_,
     const std::shared_ptr<LogWithPrefix> & log_)
     : rpc_context(std::move(rpc_context_))
     , pb_exchange_receiver(exc)
@@ -23,6 +24,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , res_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
+    , enable_exchange_compression(enable_exchange_compression_)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
     for (int i = 0; i < exc.field_types_size(); ++i)
@@ -255,7 +257,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; ++i)
     {
-        Block block = CHBlockChunkCodec::decodeWithCompression(recv_msg->packet->chunks(i), header, true);
+        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header, enable_exchange_compression);
         detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;

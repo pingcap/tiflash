@@ -31,6 +31,7 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
+        bool enable_exchange_compression,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void finishWrite() override;
@@ -52,6 +53,7 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
+    bool enable_exchange_compression;
 };
 
 } // namespace DB

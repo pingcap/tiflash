@@ -83,6 +83,7 @@ public:
         const ::tipb::ExchangeReceiver & exc,
         const ::mpp::TaskMeta & meta,
         size_t max_streams_,
+        const bool enable_exchange_compression,
         const LogWithPrefixPtr & log_);
 
     ~ExchangeReceiverBase();
@@ -127,7 +128,7 @@ private:
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
-
+    bool enable_exchange_compression;
     LogWithPrefixPtr log;
 };
 

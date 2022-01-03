@@ -32,6 +32,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
+    bool enable_exchange_compression_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
@@ -40,6 +41,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
+    , enable_exchange_compression(enable_exchange_compression_)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -89,6 +91,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        chunk_codec_stream->enable_compression = enable_exchange_compression;
     }
 
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
@@ -203,7 +206,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
         {
             chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(dag_context.result_field_types);
-            chunk_codec_stream[i]->enable_compression = true;
+            chunk_codec_stream[i]->enable_compression = enable_exchange_compression;
         }
         if constexpr (send_exec_summary_at_last)
         {

@@ -57,14 +57,14 @@ void IDataType::deserializeBinaryBulk(IColumn &, ReadBuffer &, size_t, double) c
     throw Exception("Data type " + getName() + " must be deserialized with multiple streams", ErrorCodes::MULTIPLE_STREAMS_REQUIRED);
 }
 
-void IDataType::serializeBinaryBulkWithCompression(const IColumn &, WriteBuffer &, size_t, size_t) const
+void IDataType::serializeBinaryBulkWithCompression(const IColumn & a, WriteBuffer & b, size_t c, size_t d) const
 {
-    throw Exception("Data type " + getName() + " must be serialized with multiple streams", ErrorCodes::MULTIPLE_STREAMS_REQUIRED);
+    return serializeBinaryBulk(a, b, c, d);
 }
 
-void IDataType::deserializeBinaryBulkWithCompression(IColumn &, ReadBuffer &, size_t, double) const
+void IDataType::deserializeBinaryBulkWithCompression(IColumn & a, ReadBuffer & b, size_t c, double d) const
 {
-    throw Exception("Data type " + getName() + " must be deserialized with multiple streams", ErrorCodes::MULTIPLE_STREAMS_REQUIRED);
+    return deserializeBinaryBulk(a, b, c, d);
 }
 
 size_t IDataType::getSizeOfValueInMemory() const

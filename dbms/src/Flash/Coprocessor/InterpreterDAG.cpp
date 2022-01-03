@@ -64,6 +64,7 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
             dag_query_block.source->exchange_receiver(),
             dagContext().getMPPTaskMeta(),
             max_streams,
+            context.getSettings().enable_exchange_compression,
             dagContext().log);
     }
 }

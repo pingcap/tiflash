@@ -1219,6 +1219,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            context.getSettings().enable_exchange_compression,
             dagContext());
         stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), taskLogger());
     });
