@@ -104,7 +104,8 @@ private:
     off_t getPositionInFile() override { return frame_count * frame_size + offset(); }
 
     // for checksum buffer, this is the real bytes to be materialized to disk.
-    off_t getMaterializedBytes() override {
+    off_t getMaterializedBytes() override
+    {
         return materialized_bytes + (offset() ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
     }
 

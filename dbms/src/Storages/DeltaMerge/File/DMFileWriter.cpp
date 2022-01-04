@@ -3,8 +3,8 @@
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
 #ifndef NDEBUG
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 
@@ -292,7 +292,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #else
-    auto examine_buffer_size = [](auto &, auto &) { };
+    auto examine_buffer_size = [](auto &, auto &) {
+    };
 #endif
     if (options.flags.isSingleFile())
     {

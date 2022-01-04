@@ -17,7 +17,8 @@ public:
     off_t seek(off_t off, int whence = SEEK_SET);
     void truncate(off_t length = 0);
     virtual off_t getPositionInFile() = 0;
-    virtual off_t getMaterializedBytes() {
+    virtual off_t getMaterializedBytes()
+    {
         return getPositionInFile();
     }
     virtual void sync() = 0;
