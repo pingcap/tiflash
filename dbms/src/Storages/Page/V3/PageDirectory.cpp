@@ -264,9 +264,10 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
-PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, VersionedPageIdAndEntryList> & blobs_need_gc, PageId page_id)
+std::pair<VersionedPageIdAndEntryList, PageSize> PageDirectory::VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id, PageId page_id)
 {
     PageSize single_page_size = 0;
+    VersionedPageIdAndEntryList versioned_entries_list;
     for (const auto & [versioned_type, entry_del] : entries)
     {
         if (entry_del.is_delete)
@@ -276,19 +277,76 @@ PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFile
 
         const auto & entry = entry_del.entry;
 
-        if (auto it = blobs_need_gc.find(entry.file_id); it != blobs_need_gc.end())
+        if (entry.file_id == blob_id)
         {
             single_page_size += entry.size;
-            it->second.emplace_back(std::make_tuple(page_id, versioned_type, entry_del.entry));
+            versioned_entries_list.emplace_back(std::make_tuple(page_id, versioned_type, entry_del.entry));
         }
     }
 
-    return single_page_size;
+    return std::make_pair(versioned_entries_list, single_page_size);
 }
 
-void PageDirectory::snapshotsGC()
+
+void PageDirectory::gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list)
 {
-    UInt64 lowest_seq = UINT64_MAX;
+    for (const auto & [entry, versioned_pageid_entry] : copy_list)
+    {
+        auto page_id = std::get<0>(versioned_pageid_entry);
+        auto version = std::get<1>(versioned_pageid_entry);
+
+        auto iter = mvcc_table_directory.find(page_id);
+        if (iter == mvcc_table_directory.end())
+        {
+            throw Exception(fmt::format("Can't found [pageid={}]", page_id), ErrorCodes::LOGICAL_ERROR);
+        }
+
+        auto versioned_page = iter->second;
+        iter->second->acquireLock();
+        iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
+        // TBD: wal apply
+    }
+}
+
+std::pair<std::map<BlobFileId, VersionedPageIdAndEntryList>, PageSize>
+PageDirectory::getEntriesFromBlobId(std::vector<BlobFileId> blob_need_gc)
+{
+    std::map<BlobFileId, VersionedPageIdAndEntryList> blob_versioned_entries;
+
+    PageSize total_page_size = 0;
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+
+        for (const auto & [page_id, version_entries] : mvcc_table_directory)
+        {
+            for (auto & blob_id : blob_need_gc)
+            {
+                VersionedPageIdAndEntryList versioned_entries;
+                PageSize page_size;
+                std::tie(versioned_entries, page_size) = version_entries->getEntriesByBlobId(blob_id, page_id);
+                if (page_size != 0)
+                {
+                    total_page_size += page_size;
+                    auto & versioned_entries_ref = blob_versioned_entries[blob_id];
+
+                    if (versioned_entries_ref.empty())
+                    {
+                        blob_versioned_entries[blob_id] = versioned_entries;
+                    }
+                    else
+                    {
+                        versioned_entries_ref.splice(versioned_entries_ref.end(), versioned_entries);
+                    }
+                }
+            }
+        }
+    }
+    return std::make_pair(blob_versioned_entries, total_page_size);
+}
+
+void PageDirectory::gc(BlobStorePtr blobstore)
+{
+    UInt64 lowest_seq = sequence.load();
 
     // Cleanup released snapshots
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
@@ -324,64 +382,6 @@ void PageDirectory::snapshotsGC()
             iter = mvcc_table_directory.erase(iter);
         }
     }
-}
-
-
-void PageDirectory::gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list)
-{
-    for (const auto & [entry, versioned_pageid_entry] : copy_list)
-    {
-        auto page_id = std::get<0>(versioned_pageid_entry);
-        auto version = std::get<1>(versioned_pageid_entry);
-
-        auto iter = mvcc_table_directory.find(page_id);
-        if (iter == mvcc_table_directory.end())
-        {
-            throw Exception(fmt::format("Can't found [pageid={}]", page_id), ErrorCodes::LOGICAL_ERROR);
-        }
-
-        auto versioned_page = iter->second;
-        iter->second->acquireLock();
-        iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
-        // TBD: wal apply
-    }
-}
-
-// FIXME : should put into pagestore.
-void PageDirectory::blobstoreGC()
-{
-    std::map<BlobFileId, VersionedPageIdAndEntryList> blobs_need_gc;
-
-    blobstore->getGCStats(blobs_need_gc);
-    PageSize total_page_size = 0;
-    {
-        std::shared_lock read_lock(table_rw_mutex);
-
-        for (const auto & [page_id, version_entries] : mvcc_table_directory)
-        {
-            total_page_size += version_entries->getEntryByBlobId(blobs_need_gc, page_id);
-        }
-    }
-
-    if (blobs_need_gc.empty())
-    {
-        return;
-    }
-
-    const auto & copy_list = blobstore->gc(blobs_need_gc, total_page_size);
-
-    if (copy_list.empty())
-    {
-        throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    gcApply(copy_list);
-}
-
-void PageDirectory::gc()
-{
-    snapshotsGC();
-    blobstoreGC();
 }
 
 } // namespace PS::V3

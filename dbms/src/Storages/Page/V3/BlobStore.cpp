@@ -315,9 +315,10 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
 }
 
 
-void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc)
+std::vector<BlobFileId> BlobStore::getGCStats()
 {
     const auto & stats_list = blob_stats.getStats();
+    std::vector<BlobFileId> blob_need_gc;
 
     for (const auto & stat : stats_list)
     {
@@ -332,8 +333,7 @@ void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & b
         {
             LOG_FMT_DEBUG(log, "Current [BlobFileId={}] valid rate is {}, Need do compact GC", stat->id, stat->sm_valid_rate);
             stat->sm_total_size = stat->sm_valid_size;
-            VersionedPageIdAndEntryList empty_list;
-            blob_need_gc[stat->id] = empty_list;
+            blob_need_gc.emplace_back(stat->id);
 
             // Change current stat to read only
             stat->changeToReadOnly();
@@ -350,6 +350,8 @@ void BlobStore::getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & b
             stat->sm_total_size = right_margin;
         }
     }
+
+    return blob_need_gc;
 }
 
 std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntryList> & entries_need_gc,

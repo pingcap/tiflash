@@ -19,8 +19,6 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-// FIXME : should move into PageDirectory
-// But for test now.
 using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
 using VersionedPageIdAndEntryList = std::list<std::tuple<PageId, PageVersionType, PageEntryV3>>;
 
@@ -142,7 +140,7 @@ public:
 
     void restore();
 
-    void getGCStats(std::map<BlobFileId, VersionedPageIdAndEntryList> & blob_need_gc);
+    std::vector<BlobFileId> getGCStats();
 
     std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> gc(std::map<BlobFileId, VersionedPageIdAndEntryList> & entries_need_gc,
                                                                   PageSize & total_page_size);

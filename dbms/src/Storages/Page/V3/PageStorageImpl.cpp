@@ -17,6 +17,7 @@ PageStorageImpl::PageStorageImpl(
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator, config_, file_provider_)
 {
+    // TBD: init blob_store ptr.
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
@@ -106,7 +107,30 @@ void PageStorageImpl::traversePageEntries(const std::function<void(PageId page_i
 
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    page_directory.gc(blob_store);
+
+    const auto & blob_need_gc = blob_store->getGCStats();
+    if (blob_need_gc.empty())
+    {
+        return true;
+    }
+
+    auto [blob_gc_info, total_page_size] = page_directory.getEntriesFromBlobId(blob_need_gc);
+
+    if (blob_gc_info.empty())
+    {
+        return true;
+    }
+
+    const auto & copy_list = blob_store->gc(blob_gc_info, total_page_size);
+
+    if (copy_list.empty())
+    {
+        throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    page_directory.gcApply(copy_list);
+    return true;
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)

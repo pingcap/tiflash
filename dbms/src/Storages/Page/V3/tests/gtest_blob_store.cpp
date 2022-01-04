@@ -571,8 +571,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
     ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
 
-    std::map<BlobFileId, VersionedPageIdAndEntryList> gc_stats;
-    blob_store.getGCStats(gc_stats);
+    const auto & gc_stats = blob_store.getGCStats();
     ASSERT_TRUE(gc_stats.empty());
 
     ASSERT_EQ(stat->sm_valid_rate, 0.5);
@@ -628,8 +627,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     auto stat = blob_store.blob_stats.fileIdToStat(0);
 
-    std::map<BlobFileId, VersionedPageIdAndEntryList> gc_stats;
-    blob_store.getGCStats(gc_stats);
+    const auto & gc_stats = blob_store.getGCStats();
     ASSERT_FALSE(gc_stats.empty());
 
     ASSERT_EQ(stat->sm_valid_rate, 0.2);
@@ -637,7 +635,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
 
     // Then we must do heavy GC
-    ASSERT_EQ(gc_stats.begin()->first, 0);
+    ASSERT_EQ(*gc_stats.begin(), 0);
 }
 
 } // namespace DB::PS::V3::tests
