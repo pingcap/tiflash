@@ -12,9 +12,6 @@
 #include <daemon/BaseDaemon.h>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 1
-#endif
 #include <limits.h>
 
 #include <csignal>
