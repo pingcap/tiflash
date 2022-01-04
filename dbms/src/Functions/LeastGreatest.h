@@ -55,12 +55,8 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypePtr type_res = arguments[0];
-        if (type_res->isString())
-            return std::make_shared<DataTypeString>();
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            if (arguments[i]->isString())
-                return std::make_shared<DataTypeString>();
             DataTypes args{type_res, arguments[i]};
             auto res = SpecializedFunction{context}.getReturnTypeImpl(args);
             type_res = std::move(res);
@@ -77,33 +73,13 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
-        bool flag = false;
         DataTypes data_types(num_arguments);
         for (size_t i = 0; i < num_arguments; ++i)
-        {
             data_types[i] = block.getByPosition(arguments[i]).type;
-            if (data_types[i]->isString())
-                flag = true;
-        }
-        if (flag) // Need to cast all other column's type into string
-        {
-            DataTypePtr result_type = getReturnTypeImpl(data_types);
-            for (auto arg : arguments)
-            {
-                auto res_column = TiDBCastColumn(block.getByPosition(arg), result_type, context);
-                block.getByPosition(arg).column = std::move(res_column);
-                block.getByPosition(arg).type = result_type;
-            }
-        }
         return executeNary(block, arguments, result);
     }
-
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
 private:
     const Context & context;
-    TiDB::TiDBCollatorPtr collator;
-
     void executeNary(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         ColumnWithTypeAndName pre_col = block.getByPosition(arguments[0]);
@@ -119,9 +95,8 @@ private:
 
             temp_block.insert({nullptr, res_type, "res_col"});
             auto function = SpecializedFunction::create(context);
-            function->setCollator(collator);
             function->executeImpl(temp_block, {0, 1}, 2);
-            pre_col = std::move(temp_block.getByPosition(2)); // This code could have performance issue.
+            pre_col = std::move(temp_block.getByPosition(2)); // YWQ: This code could have performance issue.
         }
         block.getByPosition(result).column = std::move(pre_col.column);
     }
@@ -150,10 +125,6 @@ public:
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        for (const auto & argument : arguments)
-            if (argument->isString())
-                return std::make_shared<DataTypeString>();
 
         return FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
@@ -191,13 +162,9 @@ public:
             size_t best_arg = 0;
             for (size_t arg = 1; arg < num_arguments; ++arg)
             {
-                int cmp_result;
-                if (typeid_cast<const DataTypeString *>(result_type.get()) && collator != nullptr)
-                    cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
-                else
-                    cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
+                int cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
 
-                if constexpr (kind == LeastGreatest::Least)
+                if constexpr (kind == LeastGreatest::Least) // YWQ TODO: simplify it
                 {
                     if (cmp_result < 0)
                         best_arg = arg;
@@ -213,12 +180,8 @@ public:
         }
         block.getByPosition(result).column = std::move(result_column);
     }
-
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
 private:
     const Context & context;
-    TiDB::TiDBCollatorPtr collator;
 };
 
 template <LeastGreatest kind, typename SpecializedFunction>
@@ -258,23 +221,21 @@ public:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & result_type,
-        const TiDB::TiDBCollatorPtr & collator) const override
+        const TiDB::TiDBCollatorPtr &) const override
     {
         DataTypes data_types(arguments.size());
 
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
+        if (kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation. Will remove it when code review is done.
         {
             auto function = FunctionTiDBLeastGreatestGeneric<kind, SpecializedFunction>::create(context);
-            function->setCollator(collator);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
         }
         else
         {
             auto function = FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context);
-            function->setCollator(collator);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
         }
     }
