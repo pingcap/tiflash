@@ -674,13 +674,14 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
   */
 struct SubstringUTF8Impl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       Int64 original_start,
-                       size_t length,
-                       bool implicit_length,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+    template <bool implicit_length, bool is_positive_start>
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t original_start_abs,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -695,8 +696,8 @@ struct SubstringUTF8Impl
             ColumnString::Offset bytes_start = 0;
             ColumnString::Offset bytes_length = 0;
             size_t start = 0;
-            if (original_start >= 0)
-                start = original_start;
+            if constexpr (is_positive_start)
+                start = original_start_abs;
             else
             {
                 // set the start as string_length - abs(original_start) + 1
@@ -714,7 +715,7 @@ struct SubstringUTF8Impl
                     else
                         current += 1;
                 }
-                if (static_cast<size_t>(-original_start) > start_offsets.size())
+                if (original_start_abs > start_offsets.size())
                 {
                     // return empty string
                     res_data.resize(res_data.size() + 1);
@@ -723,7 +724,7 @@ struct SubstringUTF8Impl
                     res_offsets[i] = res_offset;
                     continue;
                 }
-                start = start_offsets.size() + original_start + 1;
+                start = start_offsets.size() - original_start_abs + 1;
                 pos = start;
                 j = start_offsets[start - 1];
             }
@@ -741,17 +742,20 @@ struct SubstringUTF8Impl
                 else
                     j += 1;
 
-                if (implicit_length)
+                if constexpr (implicit_length)
                 {
                     // implicit_length means get the substring from start to the end of the string
                     bytes_length = j - prev_offset + 1 - bytes_start;
                 }
                 else
                 {
-                    if (pos >= start && pos < start + length)
-                        bytes_length = j - prev_offset + 1 - bytes_start;
-                    else if (pos >= start + length)
-                        break;
+                    if (pos >= start)
+                    {
+                        if (pos - start < length)
+                            bytes_length = j - prev_offset + 1 - bytes_start;
+                        else
+                            break;
+                    }
                 }
 
                 ++pos;
@@ -1501,20 +1505,21 @@ public:
     {
         size_t arguments_size = arguments.size();
         if (arguments_size != 2 && arguments_size != 3)
-            throw Exception("Function " + getName()
-                                + " requires from 2 or 3 parameters: string, start, [length]. Passed "
-                                + toString(arguments.size()) + ".",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format(
+                    "Function {} requires from 2 or 3 parameters: string, start, [length]. Passed {}.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isNumber() || (arguments_size == 3 && !arguments[2]->isNumber()))
-            throw Exception("Illegal type " + (arguments[1]->isNumber() ? arguments[2]->getName() : arguments[1]->getName())
-                                + " of argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", (arguments[1]->isNumber() ? arguments[2]->getName() : arguments[1]->getName()), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1524,22 +1529,31 @@ public:
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
 
         const ColumnPtr column_start = block.getByPosition(arguments[1]).column;
+
         if (!column_start->isColumnConst())
-            throw Exception("2nd arguments of function " + getName() + " must be constants.");
+            throw Exception(fmt::format("2nd arguments of function {} must be constants.", getName()));
         Field start_field = (*block.getByPosition(arguments[1]).column)[0];
         if (start_field.getType() != Field::Types::UInt64 && start_field.getType() != Field::Types::Int64)
-            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
-        Int64 start;
+            throw Exception(fmt::format("2nd arguments of function {} must have UInt/Int type.", getName()));
+
+        size_t start_abs;
+        bool is_positive_start = true;
         if (start_field.getType() == Field::Types::Int64)
         {
-            start = start_field.get<Int64>();
+            auto signed_start = start_field.get<Int64>();
+            if (signed_start < 0)
+            {
+                is_positive_start = false;
+                start_abs = -signed_start;
+            }
+            else
+            {
+                start_abs = signed_start;
+            }
         }
         else
         {
-            UInt64 u_start = start_field.get<UInt64>();
-            if (u_start >= 0x8000000000000000ULL)
-                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            start = (Int64)u_start;
+            start_abs = start_field.get<UInt64>();
         }
 
         bool implicit_length = true;
@@ -1549,32 +1563,24 @@ public:
             implicit_length = false;
             const ColumnPtr column_length = block.getByPosition(arguments[2]).column;
             if (!column_length->isColumnConst())
-                throw Exception("3rd arguments of function " + getName() + " must be constants.");
+                throw Exception(fmt::format("3rd arguments of function {} must be constants.", getName()));
             Field length_field = (*block.getByPosition(arguments[2]).column)[0];
             // tidb will push the 3rd argument as signed int, so have to handle Int64 case
             if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
-                throw Exception(
-                    "3rd argument of function " + getName() + " must have UInt/Int type.");
+                throw Exception(fmt::format("3rd argument of function {} must have UInt/Int type.", getName()));
             if (length_field.getType() == Field::Types::UInt64)
             {
                 length = length_field.get<UInt64>();
-                /// Otherwise may lead to overflow and pass bounds check inside inner loop.
-                if (length >= 0x8000000000000000ULL)
-                    throw Exception("Too large values of 3rd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
             }
             else
             {
                 Int64 signed_length = length_field.get<Int64>();
                 // according to mysql doc: "If len is less than 1, the result is the empty string."
-                if (signed_length < 0)
-                    length = 0;
-                else
-                    length = signed_length;
+                length = signed_length < 0 ? 0 : signed_length;
             }
         }
 
-
-        if (start == 0 || (!implicit_length && length == 0))
+        if (start_abs == 0 || (!implicit_length && length == 0))
         {
             block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
             return;
@@ -1583,13 +1589,34 @@ public:
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
         {
             auto col_res = ColumnString::create();
-            SubstringUTF8Impl::vector(col->getChars(), col->getOffsets(), start, length, implicit_length, col_res->getChars(), col_res->getOffsets());
+            getVectorFunc(implicit_length, is_positive_start)(col->getChars(), col->getOffsets(), start_abs, length, col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    using VectorFunc = std::function<void(
+        const ColumnString::Chars_t &,
+        const ColumnString::Offsets &,
+        size_t,
+        size_t,
+        ColumnString::Chars_t &,
+        ColumnString::Offsets &)>;
+
+    static VectorFunc getVectorFunc(bool implicit_length, bool is_positive_start)
+    {
+        if (implicit_length)
+        {
+            return is_positive_start ? SubstringUTF8Impl::vector<true, true> : SubstringUTF8Impl::vector<true, false>;
+        }
+        else
+        {
+            return is_positive_start ? SubstringUTF8Impl::vector<false, true> : SubstringUTF8Impl::vector<false, false>;
+        }
     }
 };
 
