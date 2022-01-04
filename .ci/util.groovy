@@ -75,11 +75,7 @@ def runBuilderClosure(label, Closure body) {
                     alwaysPullImage: true, envVars: [
                     envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
             ], ttyEnabled: true, command: 'cat'),
-            containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-builder-ci',
-                    alwaysPullImage: true, ttyEnabled: true, command: 'cat',
-                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
-                    resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
-            containerTemplate(name: 'builder-llvm', image: 'hub.pingcap.net/tiflash/tiflash-llvm-base:amd64',
+            containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-llvm-base:amd64',
                     alwaysPullImage: true, ttyEnabled: true, command: 'cat',
                     resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
                     resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
@@ -179,21 +175,21 @@ def runUnitTests(label, CURWS, NPROC) {
         dir("${CURWS}/tics") {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
-                    container("builder-llvm") {
+                    container("builder") {
                         sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7-llvm/scripts/build-tiflash-ut-coverage.sh"
                     }
                 }
             }
             stage("Tests") {
                 timeout(time: 50, unit: 'MINUTES') {
-                    container("builder-llvm") {
+                    container("builder") {
                         sh "NPROC=${NPROC_UT} /build/tics/release-centos7-llvm/scripts/run-ut.sh"
                     }
                 }
             }
             stage("Show UT Coverage") {
                 timeout(time: 20, unit: 'MINUTES') {
-                    container("builder-llvm") {
+                    container("builder") {
                         sh "NPROC=${NPROC} BUILD_NUMBER=${BUILD_NUMBER} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tiflash/profile/diff-coverage ./
