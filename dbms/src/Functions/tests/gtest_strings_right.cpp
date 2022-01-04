@@ -85,11 +85,27 @@ try
     test<UInt64>(mixed_language_str, english_str.size(), english_str);
 
     // column size != 1
-    auto expected_res_column = createColumn<Nullable<String>>({unit_string, origin_str, origin_str, english_str});
-    auto str_column = createColumn<Nullable<String>>({big_string, origin_str, origin_str, mixed_language_str});
-    auto length_column = createColumn<Nullable<Int64>>({22, 12, 22, english_str.size()});
-    auto actual_res_column = executeFunction(StringRight::func_name, str_column, length_column);
-    ASSERT_COLUMN_EQ(expected_res_column, actual_res_column);
+    // case 1
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({unit_string, origin_str, origin_str, english_str}),
+        executeFunction(
+            StringRight::func_name,
+            createColumn<Nullable<String>>({big_string, origin_str, origin_str, mixed_language_str}),
+            createColumn<Nullable<Int64>>({22, 12, 22, english_str.size()})));
+    // case 2
+    String second_case_string = "abc";
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"", "c", "", "c", "", "", "c", "c"}),
+        executeFunction(
+            StringRight::func_name,
+            createColumn<Nullable<String>>({second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string}),
+            createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"", "c", "", "c", "", "", "c", "c"}),
+        executeFunction(
+            StringRight::func_name,
+            createConstColumn<Nullable<String>>(8, second_case_string),
+            createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
 }
 CATCH
 
