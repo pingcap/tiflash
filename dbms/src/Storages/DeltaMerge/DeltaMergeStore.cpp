@@ -25,7 +25,6 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
-
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
 #endif

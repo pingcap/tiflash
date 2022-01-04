@@ -862,7 +862,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
         {
             LOG_FMT_INFO(
                 log,
-                "Got bad split point [{}] for segment {{ {} }}, fall back to split physical.",
+                "Got bad split point [{}] for segment {}, fall back to split physical.",
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
@@ -1294,7 +1294,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::simpleInfo() const
 {
-    return fmt::format("{{{}:{}}}", segment_id, rowkey_range.toDebugString());
+    return "{" + DB::toString(segment_id) + ":" + rowkey_range.toDebugString() + "}";
 }
 
 String Segment::info() const
@@ -1305,10 +1305,11 @@ String Segment::info() const
                        epoch,
                        rowkey_range.toDebugString(),
                        delta->getRows(),
+                       delta->getBytes(),
                        delta->getDeletes(),
                        stable->getDMFilesString(),
-                       stable->getRows());
-    stable->getBytes();
+                       stable->getRows(),
+                       stable->getBytes());
 }
 
 Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,

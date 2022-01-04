@@ -34,11 +34,8 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
-#include <fmt/core.h>
 
 #include <random>
-
-#include "DataTypes/DataTypesNumber.h"
 
 namespace DB
 {
