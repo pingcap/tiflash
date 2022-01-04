@@ -931,7 +931,7 @@ static void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    OptionTableInfoConstRef table_info,
+    const OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context);
 

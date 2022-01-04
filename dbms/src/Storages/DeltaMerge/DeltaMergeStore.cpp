@@ -2048,7 +2048,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
                 ",");
             LOG_ERROR(log, fmt_buf.toString());
 
-            throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
+            throw Exception(fmt::format("Segment [{}] is expected to have id [{}]", segment_id, next_segment_id));
         }
         if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
             throw Exception(
@@ -2322,8 +2322,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     if (seg_it == segments.end())
     {
         throw Exception(
-            fmt::format("Failed to locate segment begin with start in range: {}",
-                        range_it->toDebugString()),
+            fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()),
             ErrorCodes::LOGICAL_ERROR);
     }
 
