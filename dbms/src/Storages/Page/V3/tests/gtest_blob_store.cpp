@@ -529,7 +529,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     auto edit = blob_store.write(wb, nullptr);
 
     size_t idx = 0;
-    std::list<PageEntryV3> entries_del1, entries_del2;
+    PageEntriesV3 entries_del1, entries_del2;
     for (auto & record : edit.getRecords())
     {
         for (size_t index : remove_entries_idx1)
@@ -607,7 +607,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     auto edit = blob_store.write(wb, nullptr);
 
     size_t idx = 0;
-    std::list<PageEntryV3> entries_del;
+    PageEntriesV3 entries_del;
     for (auto & record : edit.getRecords())
     {
         for (size_t index : remove_entries_idx)

@@ -713,6 +713,14 @@ public:
         }
     }
 
+    void doBlobStoreRemove(const std::vector<PageEntriesV3> & del_entries)
+    {
+        for (const auto & del_version_entry : del_entries)
+        {
+            blob_store->remove(del_version_entry);
+        }
+    }
+
     void delInMvccAndBlobStore(PageId page_id)
     {
         WriteBatch wb;
@@ -855,7 +863,8 @@ try
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5, false);
     auto snapshot_holder2 = dir.createSnapshot();
 
-    dir.gc(blob_store);
+    const auto & del_entries = dir.gc();
+    doBlobStoreRemove(del_entries);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -902,7 +911,9 @@ try
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
     auto snapshot_holder3 = dir.createSnapshot();
 
-    dir.gc(blob_store);
+    const auto & del_entries = dir.gc();
+    doBlobStoreRemove(del_entries);
+
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
@@ -948,7 +959,9 @@ try
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
     auto snapshot_holder2 = dir.createSnapshot();
 
-    dir.gc(blob_store);
+    const auto & del_entries = dir.gc();
+    doBlobStoreRemove(del_entries);
+
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
@@ -994,7 +1007,9 @@ try
     putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
     auto snapshot_holder = dir.createSnapshot();
 
-    dir.gc(blob_store);
+    const auto & del_entries = dir.gc();
+    doBlobStoreRemove(del_entries);
+
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
@@ -1044,7 +1059,9 @@ try
     // Also hold v11 snapshot
     pushMvccSeqForword(1, 0);
 
-    dir.gc(blob_store);
+    const auto & del_entries = dir.gc();
+    doBlobStoreRemove(del_entries);
+
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
 CATCH
@@ -1093,7 +1110,9 @@ try
     // Also hold v11 snapshot
     pushMvccSeqForword(1, 0);
 
-    dir.gc(blob_store);
+    const auto del_entries = dir.gc();
+
+
     auto snapshot = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);
 }

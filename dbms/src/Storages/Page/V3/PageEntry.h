@@ -15,6 +15,7 @@ public:
     // The offset to the begining of specify field.
     PageFieldOffsetChecksums field_offsets{};
 };
+using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageId, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 

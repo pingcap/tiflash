@@ -41,11 +41,11 @@ public:
 
     void apply(PageEntriesEdit && edit);
 
-    void gc(BlobStorePtr blobstore);
+    std::vector<PageEntriesV3> gc();
 
-    std::pair<std::map<BlobFileId, VersionedPageIdAndEntryList>, PageSize> getEntriesFromBlobId(std::vector<BlobFileId> blob_need_gc);
+    std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize> getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc);
 
-    void gcApply(const std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> & copy_list);
+    void gcApply(const VersionedPageIdAndEntryList & copy_list);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -93,9 +93,9 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-        std::pair<VersionedPageIdAndEntryList, PageSize> getEntriesByBlobId(BlobFileId blob_id, PageId page_id);
+        std::pair<VersionedEntries, PageSize> getEntriesFromBlobId(BlobFileId blob_id);
 
-        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(UInt64 lowest_seq);
+        std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif

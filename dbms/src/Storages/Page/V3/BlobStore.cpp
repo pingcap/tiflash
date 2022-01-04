@@ -171,7 +171,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     return edit;
 }
 
-void BlobStore::remove(std::list<PageEntryV3> del_entries)
+void BlobStore::remove(PageEntriesV3 del_entries)
 {
     for (const auto & entry : del_entries)
     {
@@ -354,10 +354,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     return blob_need_gc;
 }
 
-std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntryList> & entries_need_gc,
-                                                                         PageSize & total_page_size)
+VersionedPageIdAndEntryList BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
+                                          PageSize & total_page_size)
 {
-    std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> copy_list;
+    VersionedPageIdAndEntryList copy_list;
 
     PageEntriesEdit edit;
 
@@ -378,29 +378,31 @@ std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> BlobStore::gc(std::ma
 
     for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
     {
-        for (const auto & versioned_pageid_entry : versioned_pageid_entry_list)
+        for (const auto & [page_id, versioned_entry] : versioned_pageid_entry_list)
         {
-            PageEntryV3 new_entry;
-            PageEntryV3 entry = std::get<2>(versioned_pageid_entry);
+            for (const auto & [versioned, entry] : versioned_entry)
+            {
+                PageEntryV3 new_entry;
 
-            read(file_id, entry.offset, data_pos, entry.size);
+                read(file_id, entry.offset, data_pos, entry.size);
 
-            // No need do crc again, crc won't be changed.
-            new_entry.checksum = entry.checksum;
+                // No need do crc again, crc won't be changed.
+                new_entry.checksum = entry.checksum;
 
-            // Need copy the field_offsets
-            new_entry.field_offsets = entry.field_offsets;
+                // Need copy the field_offsets
+                new_entry.field_offsets = entry.field_offsets;
 
-            // Entry size won't be changed.
-            new_entry.size = entry.size;
+                // Entry size won't be changed.
+                new_entry.size = entry.size;
 
-            new_entry.file_id = blobfile_id;
-            new_entry.offset = offset_in_data;
+                new_entry.file_id = blobfile_id;
+                new_entry.offset = offset_in_data;
 
-            offset_in_data += new_entry.size;
-            data_pos += new_entry.size;
+                offset_in_data += new_entry.size;
+                data_pos += new_entry.size;
 
-            copy_list.emplace_back(std::make_pair(std::move(new_entry), std::move(versioned_pageid_entry)));
+                copy_list.emplace_back(std::make_tuple(page_id, std::move(versioned), std::move(new_entry)));
+            }
         }
     }
 

@@ -19,8 +19,10 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+using VersionedPageId = std::pair<PageId, PageVersionType>;
 using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
 using VersionedPageIdAndEntryList = std::list<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+using VersionedPageIdAndEntries = std::list<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
 {
@@ -142,12 +144,12 @@ public:
 
     std::vector<BlobFileId> getGCStats();
 
-    std::list<std::pair<PageEntryV3, VersionedPageIdAndEntry>> gc(std::map<BlobFileId, VersionedPageIdAndEntryList> & entries_need_gc,
-                                                                  PageSize & total_page_size);
+    VersionedPageIdAndEntryList gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
+                                   PageSize & total_page_size);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void remove(std::list<PageEntryV3> del_entries);
+    void remove(PageEntriesV3 del_entries);
 
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
