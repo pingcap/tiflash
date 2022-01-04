@@ -259,7 +259,8 @@ void DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & c
     /// compress integers, writhe compressed_size, compressed bytes.
     /// step 1: get enough space to put the compressed bytes.
     auto raw_size = sizeof(typename ColumnVector<T>::value_type) * limit; /// limit should align to 32-bit integers
-    ostr.forceNext(raw_size + sizeof(size_t));
+    auto need_size = streamvbyte_max_compressedbytes(raw_size/4 + 4);
+    ostr.forceNext(need_size);
     /// step 2: compress data
     size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
     size_t compsize = streamvbyte_encode(reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(&x[offset])), n32, reinterpret_cast<uint8_t *>(ostr.position() + sizeof(size_t))); // encoding
