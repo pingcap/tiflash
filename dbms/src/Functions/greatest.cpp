@@ -1,12 +1,13 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <Functions/LeastGreatest.h>
 
 namespace DB
 {
 template <typename A, typename B>
 struct GreatestBaseImpl<A, B, false>
 {
-    using ResultType = NumberTraits::ResultOfGreatest<A, B>;
+    using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -24,7 +25,7 @@ template <typename A, typename B>
 struct GreatestBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
-    using ResultPrecInferer = PlusDecimalInferer;
+    using ResultPrecInferer = ModDecimalInferer;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -63,11 +64,13 @@ struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
+using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Greatest, FunctionGreatest>;
 
 } // namespace
 
 void registerFunctionGreatest(FunctionFactory & factory)
 {
+    factory.registerFunction<FunctionTiDBGreatest>();
     factory.registerFunction<FunctionGreatest>();
 }
 
