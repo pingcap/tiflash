@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 
 namespace DB
@@ -53,13 +55,19 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    LogWithPrefixPtr log;
 
     PageDirectory page_directory;
 
-    // TBD: BlobStore::Config should add in PageStorage config.
+    // Used to `getMaxId`
+    std::mutex pageid_mutex;
+
     BlobStore::Config blob_config;
 
     BlobStore blob_store;
+
+    // A sequence number to keep ordering between multi-writers.
+    std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
 };
 
 } // namespace PS::V3

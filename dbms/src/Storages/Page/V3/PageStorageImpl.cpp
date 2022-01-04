@@ -20,7 +20,6 @@ PageStorageImpl::PageStorageImpl(
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
-    // TBD: init blob_store ptr.
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
@@ -38,8 +37,11 @@ void PageStorageImpl::drop()
 
 PageId PageStorageImpl::getMaxId()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::lock_guard<std::mutex> write_lock(pageid_mutex);
+    // return page_directory.getSnapshot()->version()->maxId();
+    return 0;
 }
+
 
 // FIXME: enable -Wunused-parameter
 #pragma GCC diagnostic push
@@ -51,61 +53,133 @@ PageId PageStorageImpl::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    return page_directory.createSnapshot();
 }
 
 std::tuple<size_t, double, unsigned> PageStorageImpl::getSnapshotsStat() const
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    return page_directory.getSnapshotsStat();
 }
 
 void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
 {
-    // Persist Page data to BlobStore
-    PageEntriesEdit edit(write_batch.getWrites().size());
+    if (unlikely(write_batch.empty()))
+        return;
 
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // Persist Page data to BlobStore
+    auto edit = blob_store.write(write_batch, write_limiter);
+    page_directory.apply(std::move(edit));
 }
 
 DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    try
+    {
+        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        // TODO : after `PageEntry` in page.h been moved to v2.
+        // Then we don't copy from V3 to V2 format
+        PageEntry entry_ret;
+        entry_ret.file_id = entry.file_id;
+        entry_ret.offset = entry.offset;
+        entry_ret.size = entry.size;
+        entry_ret.field_offsets = entry.field_offsets;
+        entry_ret.checksum = entry.checksum;
+
+        return entry_ret;
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_FMT_WARNING(log, "{}", e.message());
+        return {}; // return invalid PageEntry
+    }
 }
 
 DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
-    // PageEntryV3 entry = page_directory.get(page_id, snapshot);
-    // DB::Page page = blob_store.read(entry, read_limiter);
-    // return page;
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    auto page_entry = page_directory.get(page_id, snapshot);
+    return blob_store.read(page_entry, read_limiter);
 }
 
 PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
-    // PageIDAndEntriesV2 entries = page_directory.get(page_ids, snapshot);
-    // DB::Page page = blob_store.read(entries, read_limiter);
-    // return page;
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    auto page_entries = page_directory.get(page_ids, snapshot);
+    return blob_store.read(page_entries, read_limiter);
 }
 
 void PageStorageImpl::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    auto page_entries = page_directory.get(page_ids, snapshot);
+    blob_store.read(page_entries, handler, read_limiter);
 }
 
 PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    BlobStore::FieldReadInfos read_infos;
+    for (const auto & [page_id, field_indices] : page_fields)
+    {
+        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        auto info = BlobStore::FieldReadInfo(page_id, entry, field_indices);
+        read_infos.emplace_back(info);
+    }
+
+    return blob_store.read(read_infos, read_limiter);
 }
 
 void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    const auto & page_ids = page_directory.getAllPageIds();
+    for (const auto & valid_page : page_ids)
+    {
+        const auto & page_entries = page_directory.get(valid_page, snapshot);
+        acceptor(blob_store.read(page_entries));
+    }
 }
 
 void PageStorageImpl::traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    const auto & page_ids = page_directory.getAllPageIds();
+    for (const auto & valid_page : page_ids)
+    {
+        [[maybe_unused]] const auto & page_entries = page_directory.get(valid_page, snapshot);
+
+        // TODO V3 entry to PageEntry
+        // acceptor(valid_page, page_entries.second);
+    }
 }
 
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)

@@ -138,6 +138,7 @@ public:
         std::mutex lock_stats;
     };
 
+public:
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
     void restore();
@@ -156,6 +157,24 @@ public:
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
+
+    void read(PageIDAndEntriesV3 & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
+
+    struct FieldReadInfo
+    {
+        PageId page_id;
+        PageEntryV3 entry;
+        std::vector<size_t> fields;
+
+        FieldReadInfo(PageId id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+            : page_id(id_)
+            , entry(entry_)
+            , fields(fields_)
+        {}
+    };
+    using FieldReadInfos = std::vector<FieldReadInfo>;
+    PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
+
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

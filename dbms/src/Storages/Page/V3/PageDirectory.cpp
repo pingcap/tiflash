@@ -1,5 +1,7 @@
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/assert_cast.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -8,9 +10,20 @@
 
 #include <memory>
 #include <mutex>
+#include <type_traits>
+
+namespace CurrentMetrics
+{
+extern const Metric PSMVCCSnapshotsList;
+} // namespace CurrentMetrics
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_slow_page_storage_remove_expired_snapshots[];
+} // namespace FailPoints
+
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
@@ -118,7 +131,59 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
 {
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
     snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
+
+    CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
     return snap;
+}
+
+
+std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
+{
+    double longest_living_seconds = 0.0;
+    unsigned longest_living_from_thread_id = 0;
+    DB::Int64 num_snapshots_removed = 0;
+    size_t num_valid_snapshots = 0;
+
+    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+    {
+        if (iter->expired())
+        {
+            iter = snapshots.erase(iter);
+            num_snapshots_removed++;
+        }
+        else
+        {
+            fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
+                pcg64 rng(randomSeed());
+                std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                std::this_thread::sleep_for(ms);
+            });
+
+            const auto snapshot_lifetime = iter->lock()->elapsedSeconds();
+            if (snapshot_lifetime > longest_living_seconds)
+            {
+                longest_living_seconds = snapshot_lifetime;
+                longest_living_from_thread_id = iter->lock()->getTid();
+            }
+            num_valid_snapshots++;
+            ++iter;
+        }
+    }
+
+    CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
+    // Return some statistics of the oldest living snapshot.
+    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+}
+
+static inline PageDirectorySnapshotPtr
+toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
+{
+    return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
+}
+
+PageIDAndEntryV3 PageDirectory::get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+{
+    return get(page_id, toConcreteSnapshot(snap));
 }
 
 PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
@@ -137,6 +202,11 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
     }
 
     throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+}
+
+PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const
+{
+    return get(page_ids, toConcreteSnapshot(snap));
 }
 
 PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
@@ -172,6 +242,18 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     }
 
     return id_entries;
+}
+
+
+std::set<PageId> PageDirectory::getAllPageIds()
+{
+    std::set<PageId> page_ids;
+    for (auto & [page_id, versioned] : mvcc_table_directory)
+    {
+        (void)versioned;
+        page_ids.insert(page_id);
+    }
+    return page_ids;
 }
 
 void PageDirectory::apply(PageEntriesEdit && edit)
@@ -273,7 +355,6 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     // The edit committed, incr the sequence number to publish changes for `createSnapshot`
     sequence.fetch_add(1);
 }
-
 
 void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
 {

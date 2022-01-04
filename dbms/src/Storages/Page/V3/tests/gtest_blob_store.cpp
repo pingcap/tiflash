@@ -237,7 +237,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     // Test `PageMap` read
     page_id = 50;
     index = 0;
-    auto page_map = blob_store.read(entries, /* ReadLimiterPtr */ nullptr);
+    auto page_map = blob_store.read(entries);
     for (auto & [id, page] : page_map)
     {
         ASSERT_EQ(id, page_id++);
@@ -251,7 +251,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     index = 0;
     for (auto & entry : entries)
     {
-        auto page = blob_store.read(entry, /* ReadLimiterPtr */ nullptr);
+        auto page = blob_store.read(entry);
         ASSERT_EQ(page.data.size(), buff_size);
         ASSERT_EQ(strncmp(c_buff + index * buff_size, page.data.begin(), page.data.size()), 0);
         index++;
