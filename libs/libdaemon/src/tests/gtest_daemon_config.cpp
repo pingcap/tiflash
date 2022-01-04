@@ -245,7 +245,23 @@ level = "debug"
         char arg[] = "--gtest_filter=BaseDaemon.StackUnwind";
         char * const argv[] = {abs_path, arg, nullptr};
         char env0[] = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
-        auto env1 = std::getenv("LLVM_PROFILE_FILE");
+        std::string buffer;
+        const char * env1;
+        if (auto profile = std::getenv("LLVM_PROFILE_FILE"))
+        {
+            /*
+             * "%c" expands out to nothing, but enables a mode in which profile counter updates are continuously synced to a file.
+             * This means that if the instrumented program crashes, or is killed by a signal, perfect coverage information can still be recovered.
+             * Continuous mode does not support value profiling for PGO, and is only supported on Darwin at the moment.
+             * Support for Linux may be mostly complete but requires testing.
+             */
+            buffer = fmt::format("LLVM_PROFILE_FILE={}%c", profile);
+            env1 = buffer.c_str();
+        }
+        else
+        {
+            env1 = nullptr;
+        }
         char * const envp[] = {env0, env1, nullptr};
         ::execve(abs_path, argv, envp);
     }
