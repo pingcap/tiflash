@@ -22,13 +22,13 @@ public:
         std::vector<std::optional<String>> delims = {"", ".", "i", "测", {}};
         std::vector<std::vector<std::optional<String>>> positive_one_results = {
             {"", "", "", "", {}},
-            {"", "www", "www.p", "", {}},
-            {"", "中文", "", "中文.", {}},
+            {"", "www", "www.p", "www.pingcap", {}},
+            {"", "中文", "中文.测.试。。。", "中文.", {}},
             {{}, {}, {}, {}, {}}};
         std::vector<std::vector<std::optional<String>>> negative_one_results = {
             {"", "", "", "", {}},
-            {"", "pingcap", "ngcap", "", {}},
-            {"", "试。。。", "", ".试。。。", {}},
+            {"", "pingcap", "ngcap", "www.pingcap", {}},
+            {"", "试。。。", "中文.测.试。。。", ".试。。。", {}},
             {{}, {}, {}, {}, {}}};
         for (size_t str_i = 0; str_i < strings.size(); ++str_i)
         {
@@ -39,14 +39,17 @@ public:
                 auto return_null_if_str_or_delim_null = [&](const std::optional<String> & not_null_result) {
                     return !str.has_value() || !delim.has_value() ? std::optional<String>{} : not_null_result;
                 };
+                auto return_blank_if_delim_blank = [&](const std::optional<String> & not_null_result) {
+                    return delim.has_value() && delim.value().empty() ? "" : not_null_result;
+                };
                 test<Integer>(str, delim, 0, return_null_if_str_or_delim_null(""));
                 test<Integer>(str, delim, 1, return_null_if_str_or_delim_null(positive_one_results[str_i][delim_i]));
-                test<Integer>(str, delim, std::numeric_limits<Integer>::max(), return_null_if_str_or_delim_null(str));
+                test<Integer>(str, delim, std::numeric_limits<Integer>::max(), return_null_if_str_or_delim_null(return_blank_if_delim_blank(str)));
                 test<Integer>(str, delim, std::optional<Integer>{}, std::optional<String>{});
                 if constexpr (std::is_signed_v<Integer>)
                 {
                     test<Integer>(str, delim, -1, return_null_if_str_or_delim_null(negative_one_results[str_i][delim_i]));
-                    test<Integer>(str, delim, std::numeric_limits<Integer>::min(), return_null_if_str_or_delim_null(str));
+                    test<Integer>(str, delim, std::numeric_limits<Integer>::min(), return_null_if_str_or_delim_null(return_blank_if_delim_blank(str)));
                 }
             }
         }
