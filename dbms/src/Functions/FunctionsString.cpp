@@ -2938,7 +2938,7 @@ public:
     // data_size/padding_size includes the tailing '\0'.
     // Return true if result is null.
     template <bool IsLeft>
-    static bool tidbPadOneRowUTF8(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    static bool tidbPadOneRowUTF8(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
     {
         ColumnString::Offset data_len = UTF8::countCodePoints(data, data_size - 1);
         ColumnString::Offset pad_len = UTF8::countCodePoints(padding, padding_size - 1);
@@ -3005,7 +3005,7 @@ public:
 
     // Same with tidbPadOneRowUTF8, but handling in byte instead of char.
     template <bool IsLeft>
-    static bool tidbPadOneRow(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    static bool tidbPadOneRow(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
     {
         ColumnString::Offset data_len = data_size - 1;
         ColumnString::Offset pad_len = padding_size - 1;
