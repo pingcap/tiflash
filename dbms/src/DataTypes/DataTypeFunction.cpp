@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 std::string DataTypeFunction::getName() const
 {
     std::string res = "Function(";
@@ -29,4 +28,4 @@ bool DataTypeFunction::equals(const IDataType & rhs) const
     return typeid(rhs) == typeid(*this) && getName() == rhs.getName();
 }
 
-}
+} // namespace DB

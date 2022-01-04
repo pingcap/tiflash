@@ -55,7 +55,6 @@ inline ::testing::AssertionResult RowKeyRangeCompare(
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
      + ::testing::UnitTest::GetInstance()->current_test_info()->name())
 
-
 inline Strings createNumberStrings(size_t beg, size_t end)
 {
     Strings values;
@@ -198,6 +197,15 @@ public:
                 pk_type,
                 pk_name_,
                 pk_col_id});
+            // add extra column if need
+            if (pk_col_id != EXTRA_HANDLE_COLUMN_ID)
+            {
+                block.insert(ColumnWithTypeAndName{
+                    DB::tests::makeColumn<Int64>(EXTRA_HANDLE_COLUMN_INT_TYPE, createNumbers<Int64>(beg, end, reversed)),
+                    EXTRA_HANDLE_COLUMN_INT_TYPE,
+                    EXTRA_HANDLE_COLUMN_NAME,
+                    EXTRA_HANDLE_COLUMN_ID});
+            }
         }
         // version_col
         block.insert(DB::tests::createColumn<UInt64>(

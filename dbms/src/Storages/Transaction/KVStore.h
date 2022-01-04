@@ -116,6 +116,11 @@ public:
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
     Int64 getReadIndexEvent() const { return read_index_event_flag; }
 
+    void setStore(metapb::Store);
+
+    // May return 0 if uninitialized
+    uint64_t getStoreID(std::memory_order = std::memory_order_relaxed) const;
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
@@ -125,7 +130,16 @@ private:
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
-
+    struct StoreMeta
+    {
+        using Base = metapb::Store;
+        Base base;
+        std::atomic_uint64_t store_id{0};
+        void update(Base &&);
+        friend class KVStore;
+    };
+    StoreMeta & getStore();
+    const StoreMeta & getStore() const;
 
     std::vector<UInt64> preHandleSSTsToDTFiles(
         RegionPtr new_region,
@@ -195,6 +209,8 @@ private:
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     std::atomic_int64_t read_index_event_flag{0};
+
+    StoreMeta store;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

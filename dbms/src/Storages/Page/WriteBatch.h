@@ -1,12 +1,18 @@
 #pragma once
 
 #include <IO/ReadBuffer.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
 
 #include <vector>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 class WriteBatch : private boost::noncopyable
 {
 public:
@@ -73,6 +79,7 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
 
         Write w{WriteType::PUT, page_id, tag, read_buffer, size, 0, std::move(offsets), 0, 0, {}};
+        total_data_size += size;
         writes.emplace_back(std::move(w));
     }
 
@@ -94,6 +101,7 @@ public:
     {
         Write w{WriteType::UPSERT, page_id, tag, read_buffer, size, 0, offsets, 0, 0, file_id};
         writes.emplace_back(std::move(w));
+        total_data_size += size;
     }
 
     // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
@@ -132,7 +140,7 @@ public:
     size_t putWriteCount() const
     {
         size_t count = 0;
-        for (auto & w : writes)
+        for (const auto & w : writes)
             count += (w.type == WriteType::PUT);
         return count;
     }
@@ -140,7 +148,8 @@ public:
     void swap(WriteBatch & o)
     {
         writes.swap(o.writes);
-        o.sequence = sequence;
+        std::swap(o.total_data_size, total_data_size);
+        std::swap(o.sequence, sequence);
     }
 
     void clear()
@@ -148,17 +157,20 @@ public:
         Writes tmp;
         writes.swap(tmp);
         sequence = 0;
+        total_data_size = 0;
     }
 
     SequenceID getSequence() const { return sequence; }
 
+    size_t getTotalDataSize() const { return total_data_size; }
+
     // `setSequence` should only called by internal method of PageStorage.
-    void setSequence(SequenceID sequence_) { sequence = sequence_; }
+    void setSequence(SequenceID seq) { sequence = seq; }
 
     String toString() const
     {
         String str;
-        for (auto & w : writes)
+        for (const auto & w : writes)
         {
             if (w.type == WriteType::PUT)
                 str += DB::toString(w.page_id) + ",";
@@ -177,5 +189,6 @@ public:
 private:
     Writes writes;
     SequenceID sequence = 0;
+    size_t total_data_size = 0;
 };
 } // namespace DB

@@ -30,9 +30,11 @@ public:
 
     void close() override;
 
-    bool isClosed() override { return file->isClosed(); }
+    bool isClosed() const override { return file->isClosed(); }
 
     int fsync() override { return file->fsync(); }
+
+    int ftruncate(off_t length) override { return file->ftruncate(length); }
 
     void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); };
 

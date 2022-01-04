@@ -1,19 +1,18 @@
 #pragma once
 
-#include <Common/PODArray.h>
 #include <Common/NaNUtils.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadBuffer.h>
+#include <Common/PODArray.h>
 #include <Core/Types.h>
+#include <IO/ReadBuffer.h>
 #include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 /** Calculates quantile by collecting all values into array
@@ -73,7 +72,7 @@ struct QuantileExact
                 ? level * array.size()
                 : (array.size() - 1);
 
-            std::nth_element(array.begin(), array.begin() + n, array.end());    /// NOTE You can think of the radix-select algorithm.
+            std::nth_element(array.begin(), array.begin() + n, array.end()); /// NOTE You can think of the radix-select algorithm.
             return array[n];
         }
 
@@ -120,4 +119,4 @@ struct QuantileExact
     }
 };
 
-}
+} // namespace DB

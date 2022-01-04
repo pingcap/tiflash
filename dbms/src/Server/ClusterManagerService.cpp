@@ -1,10 +1,10 @@
-#include "ClusterManagerService.h"
-
+#include <Common/FmtUtils.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Server/ClusterManagerService.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -14,24 +14,24 @@ const std::string CLUSTER_MANAGER_PATH_KEY = TIFLASH_PREFIX + ".flash_cluster.cl
 const std::string BIN_NAME = "flash_cluster_manager";
 const std::string TASK_INTERVAL_KEY = TIFLASH_PREFIX + ".flash_cluster.update_rule_interval";
 
-constexpr long MILLISECOND = 1000;
-constexpr long INIT_DELAY = 5;
+constexpr Int64 MILLISECOND = 1000;
+constexpr Int64 INIT_DELAY = 5;
 
-void ClusterManagerService::run(const std::string & bin_path, const std::vector<std::string> & args)
-try
+static void runService(const std::string & bin_path, const std::vector<std::string> & args)
 {
-    auto proc = ShellCommand::executeDirect(bin_path, args);
-    proc->wait();
-}
-catch (DB::Exception & e)
-{
-    std::stringstream ss;
-    ss << bin_path;
-    for (const auto & arg : args)
+    try
     {
-        ss << " " << arg;
+        auto proc = ShellCommand::executeDirect(bin_path, args);
+        proc->wait();
     }
-    e.addMessage("(while running `" + ss.str() + "`)");
+    catch (DB::Exception & e)
+    {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("(while running `{} ", bin_path);
+        fmt_buf.joinStr(std::begin(args), std::end(args), " ");
+        fmt_buf.append("`)");
+        e.addMessage(fmt_buf.toString());
+    }
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
@@ -45,13 +45,13 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!conf.has(TIFLASH_PREFIX))
     {
-        LOG_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
+        LOG_FMT_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
         return;
     }
 
     if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
     {
-        LOG_WARNING(log, "Binary path of cluster manager is not set, try to use default: " << default_bin_path);
+        LOG_FMT_WARNING(log, "Binary path of cluster manager is not set, try to use default: {}", default_bin_path);
     }
 
     auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, default_bin_path) + Poco::Path::separator() + BIN_NAME;
@@ -59,7 +59,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!Poco::File(bin_path).exists())
     {
-        LOG_ERROR(log, "Binary file of cluster manager does not exist in " << bin_path << ", can not sync tiflash replica");
+        LOG_FMT_ERROR(log, "Binary file of cluster manager does not exist in {}, can not sync tiflash replica", bin_path);
         return;
     }
 
@@ -67,9 +67,12 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
     args.push_back("--config");
     args.push_back(config_path);
 
-    LOG_INFO(log, "Registered timed cluster manager task at rate " << task_interval << " seconds");
+    LOG_FMT_INFO(log, "Registered timed cluster manager task at rate {} seconds", task_interval);
 
-    timer.scheduleAtFixedRate(FunctionTimerTask::create(std::bind(&ClusterManagerService::run, bin_path, args)), INIT_DELAY * MILLISECOND, task_interval * MILLISECOND);
+    timer.scheduleAtFixedRate(
+        FunctionTimerTask::create([bin_path, args] { return runService(bin_path, args); }),
+        INIT_DELAY * MILLISECOND,
+        task_interval * MILLISECOND);
 }
 
 ClusterManagerService::~ClusterManagerService()

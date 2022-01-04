@@ -171,7 +171,7 @@ HTTPHandler::HTTPHandler(IServer & server_)
     : server(server_)
     , log(&Poco::Logger::get("HTTPHandler"))
 {
-    server_display_name = server.config().getString("display_name", getFQDNOrHostName());
+    server_display_name = server.config().getString("display_name", "TiFlash");
 }
 
 
@@ -181,7 +181,7 @@ void HTTPHandler::processQuery(
     Poco::Net::HTTPServerResponse & response,
     Output & used_output)
 {
-    LOG_TRACE(log, "Request URI: " << request.getURI());
+    LOG_FMT_TRACE(log, "Request URI: {}", request.getURI());
 
     std::istream & istr = request.stream();
 

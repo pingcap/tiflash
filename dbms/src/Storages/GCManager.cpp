@@ -1,4 +1,5 @@
 #include <Storages/GCManager.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
@@ -8,13 +9,24 @@ namespace ErrorCodes
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+GCManager::GCManager(Context & context)
+    : global_context{context.getGlobalContext()}
+    , log(&Poco::Logger::get("GCManager"))
+{
+}
+
 bool GCManager::work()
 {
     auto & global_settings = global_context.getSettingsRef();
+    if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_bg_gc_check_interval)
+        return false;
     Int64 gc_segments_limit = global_settings.dt_bg_gc_max_segments_to_check_every_round;
     // limit less than or equal to 0 means no gc
     if (gc_segments_limit <= 0)
+    {
+        gc_check_stop_watch.restart();
         return false;
+    }
 
     LOG_INFO(log, "Start GC with table id: " << next_table_id);
     // Get a storage snapshot with weak_ptrs first
@@ -72,6 +84,7 @@ bool GCManager::work()
         iter = storages.begin();
     next_table_id = iter->first;
     LOG_INFO(log, "End GC and next gc will start with table id: " << next_table_id);
+    gc_check_stop_watch.restart();
     // Always return false
     return false;
 }

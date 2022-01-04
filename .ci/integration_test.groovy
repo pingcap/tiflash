@@ -41,26 +41,24 @@ catchError {
         stash includes: "tics/**", name: "git-code-tics", useDefaultExcludes: false
     }
 
+    def pod_label = "tics-integration-test-v1"
+
     parallel (
         "tidb ci test": {
-            def label = "tidb-ci-test"
-            util.runTest(label, "tics/tests/tidb-ci", tidbBranch)
+            def name = "tidb-ci-test"
+            util.runTest(pod_label, name, "tics/tests/tidb-ci", tidbBranch)
         },
         "delta merge test": {
-            def label = "delta-merge-test"
-            util.runTest(label, "tics/tests/delta-merge-test", tidbBranch)
+            def name = "delta-merge-test"
+            util.runTest(pod_label, name, "tics/tests/delta-merge-test", tidbBranch)
         },
         "fullstack test": {
-            def label = "fullstack-test"
-            util.runTest(label, "tics/tests/fullstack-test", tidbBranch)
+            def name = "fullstack-test"
+            util.runTest(pod_label, name, "tics/tests/fullstack-test", tidbBranch)
         },
         "fullstack test2": {
-            def label = "fullstack-test2"
-            util.runTest(label, "tics/tests/fullstack-test2", tidbBranch)
-        },
-        "mutable test": {
-            def label = "mutable-test"
-            util.runTest(label, "tics/tests/mutable-test", tidbBranch)
+            def name = "fullstack-test2"
+            util.runTest(pod_label, name, "tics/tests/fullstack-test2", tidbBranch)
         },
     )
 }

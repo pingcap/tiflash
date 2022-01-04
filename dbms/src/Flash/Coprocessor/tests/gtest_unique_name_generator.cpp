@@ -5,7 +5,6 @@ namespace DB
 {
 namespace tests
 {
-
 TEST(UniqueNameGenerator_test, DuplicateNames)
 {
     std::vector<std::string> input_names = {"a", "a", "a_1", "a_2", "a", "a_3", "a_3", "a_3"};

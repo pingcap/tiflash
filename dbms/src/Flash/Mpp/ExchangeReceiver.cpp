@@ -2,6 +2,7 @@
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -24,7 +25,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
-    for (int i = 0; i < exc.field_types_size(); i++)
+    for (int i = 0; i < exc.field_types_size(); ++i)
     {
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
@@ -42,11 +43,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
         cv.notify_all();
     }
-
-    for (auto & worker : workers)
-    {
-        worker.join();
-    }
+    if (thread_manager)
+        thread_manager->wait();
 }
 
 template <typename RPCContext>
@@ -60,10 +58,13 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    if (!thread_manager)
+        thread_manager = newThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
+        thread_manager->schedule(true, "Receiver", [this, index] {
+            readLoop(index);
+        });
     }
 }
 
@@ -91,9 +92,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
     bool meet_error = false;
     String local_err_msg;
 
-    Int64 send_task_id = -1;
+    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = task_meta.task_id();
-
+    static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -101,9 +102,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < MAX_RETRY_TIMES; ++i)
         {
-            auto reader = rpc_context->makeReader(req);
+            auto reader = rpc_context->makeReader(req, task_meta.address());
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
@@ -128,9 +129,13 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 }
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
-                bool success = reader->read(recv_msg->packet.get());
+                bool success = reader->read(recv_msg->packet);
                 if (!success)
+                {
+                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
+                    returnEmptyMsg(recv_msg);
                     break;
+                }
                 else
                     has_data = true;
                 if (recv_msg->packet->has_error())
@@ -167,9 +172,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             }
             else
             {
+                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
+                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -221,7 +228,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    recv_msg->packet->Clear();
+    if (recv_msg == nullptr)
+        return;
+    if (recv_msg->packet != nullptr)
+        recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(recv_msg));
@@ -229,30 +239,33 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
 }
 
 template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
+    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    std::queue<Block> & block_queue,
+    const Block & header)
 {
     assert(recv_msg != nullptr);
-    Int64 rows = 0;
+    DecodeDetail detail;
 
     int chunk_size = recv_msg->packet->chunks_size();
     if (chunk_size == 0)
-        return rows;
+        return detail;
 
+    detail.packet_bytes = recv_msg->packet->ByteSizeLong();
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
-    for (int i = 0; i < chunk_size; i++)
+    for (int i = 0; i < chunk_size; ++i)
     {
-        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
-        rows += block.rows();
+        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header);
+        detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
-        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
-    return rows;
+    return detail;
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
     {
@@ -304,7 +317,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    result.decode_detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, header, schema);
                 }
             }
         }
@@ -314,8 +327,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         }
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
-            assert(result.rows == 0);
-            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
+            assert(result.decode_detail.rows == 0);
+            result.decode_detail = decodeChunks(recv_msg, block_queue, header);
         }
     }
     returnEmptyMsg(recv_msg);

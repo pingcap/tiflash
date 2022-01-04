@@ -1,6 +1,5 @@
 #include <Common/setThreadName.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
@@ -214,18 +213,6 @@ void RegionTable::updateRegion(const Region & region)
         dirty_regions.insert(internal_region.region_id);
 }
 
-TableID RegionTable::popOneTableToOptimize()
-{
-    TableID res = InvalidTableID;
-    std::lock_guard<std::mutex> lock(mutex);
-    if (auto it = table_to_optimize.begin(); it != table_to_optimize.end())
-    {
-        res = *it;
-        table_to_optimize.erase(it);
-    }
-    return res;
-}
-
 namespace
 {
 /// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
@@ -290,12 +277,6 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
-            if (auto & tmt = context->getTMTContext(); !tmt.isBgFlushDisabled())
-            {
-                /// All regions of this table is removed, the storage maybe drop or pd
-                /// move it to another node, we can optimize outdated data.
-                table_to_optimize.insert(table_id);
-            }
             tables.erase(table_id);
         }
         LOG_INFO(log, __FUNCTION__ << ": remove [region " << region_id << "] in RegionTable done");

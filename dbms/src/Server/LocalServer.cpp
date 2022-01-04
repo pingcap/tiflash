@@ -288,13 +288,6 @@ try
     if (uncompressed_cache_size)
         context->setUncompressedCache(uncompressed_cache_size);
 
-    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
-    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
-    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
-    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
-    if (!persisted_cache_path.empty())
-        context->setPersistedCache(persisted_cache_size, persisted_cache_path);
-
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     /// Specify default value for mark_cache_size explicitly!
     size_t mark_cache_size = config().getUInt64("mark_cache_size", 5368709120);
@@ -323,11 +316,11 @@ try
 
     if (!path.empty())
     {
-        LOG_DEBUG(log, "Loading metadata from " << path);
+        LOG_FMT_DEBUG(log, "Loading metadata from {}", path);
         loadMetadataSystem(*context);
         attachSystemTables();
         loadMetadata(*context);
-        LOG_DEBUG(log, "Loaded metadata.");
+        LOG_FMT_DEBUG(log, "Loaded metadata.");
     }
     else
     {
@@ -432,7 +425,7 @@ void LocalServer::processQueries()
         WriteBufferFromFileDescriptor write_buf(STDOUT_FILENO);
 
         if (verbose)
-            LOG_INFO(log, "Executing query: " << query);
+            LOG_FMT_INFO(log, "Executing query: {}", query);
 
         executeQuery(read_buf, write_buf, /* allow_into_outfile = */ true, *context, {});
     }

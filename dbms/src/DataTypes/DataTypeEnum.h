@@ -1,19 +1,19 @@
 #pragma once
 
-#include <DataTypes/IDataType.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnVector.h>
 #include <Common/HashTable/HashMap.h>
-#include <vector>
+#include <DataTypes/IDataType.h>
+
 #include <unordered_map>
+#include <vector>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -128,4 +128,4 @@ using DataTypeEnum8 = DataTypeEnum<Int8>;
 using DataTypeEnum16 = DataTypeEnum<Int16>;
 
 
-}
+} // namespace DB

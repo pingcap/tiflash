@@ -20,15 +20,17 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const std::chrono::seconds timeout_,
     TaskCancelledCallback callback,
     int input_steams_num_,
+    bool is_local_,
     const LogWithPrefixPtr & log_)
     : connected(false)
     , finished(false)
+    , is_local(is_local_)
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , send_thread(nullptr)
+    , thread_manager(newThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -41,10 +43,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (nullptr != send_thread && send_thread->joinable())
+        if (!is_local && thread_manager)
         {
-            send_thread->join();
+            thread_manager->wait();
         }
+        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
     }
     catch (...)
@@ -103,6 +106,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
@@ -132,6 +137,7 @@ void MPPTunnelBase<Writer>::clearSendQueue()
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
+    assert(!is_local);
     try
     {
         /// TODO(fzh) reuse it later
@@ -181,18 +187,39 @@ void MPPTunnelBase<Writer>::sendLoop()
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
-    LOG_TRACE(log, "ready to finish");
+    LOG_TRACE(log, "ready to finish, is_local: " << is_local);
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         throw Exception("has finished, " + send_loop_msg);
     /// make sure to finish the tunnel after it is connected
+    LOG_TRACE(log, "waitUntilConnectedOrCancelled");
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
+    LOG_TRACE(log, "waitForFinish");
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
+
+template <typename Writer>
+std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
+{
+    assert(is_local);
+    if (!finished)
+    {
+        MPPDataPacketPtr res;
+        send_queue.pop(res);
+        if (nullptr == res)
+        {
+            finishWithLock();
+        }
+
+        return res;
+    }
+    return nullptr;
+}
+
 
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
@@ -203,7 +230,12 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    if (!is_local)
+    {
+        thread_manager->schedule(true, "MPPTunnel", [this] {
+            sendLoop();
+        });
+    }
     connected = true;
     cv_for_connected.notify_all();
 }

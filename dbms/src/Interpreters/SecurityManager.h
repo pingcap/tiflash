@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 /** Default implementation of security manager used by native server application.
   * Manages fixed set of users listed in 'Users' configuration file.
   */
@@ -29,4 +28,4 @@ public:
     bool hasAccessToDatabase(const String & user_name, const String & database_name) const override;
 };
 
-}
+} // namespace DB

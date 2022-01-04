@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -27,34 +28,32 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         String pd_service_addrs = config.getString("raft.pd_addr");
         Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        for (const auto & string_token : string_tokens)
         {
-            res.pd_addrs.push_back(*it);
+            res.pd_addrs.push_back(string_token);
         }
-        LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
+        LOG_FMT_INFO(log, "Found pd addrs: {}", pd_service_addrs);
     }
     else
     {
-        LOG_INFO(log, "Not found pd addrs.");
+        LOG_FMT_INFO(log, "Not found pd addrs.");
     }
 
     if (config.has("raft.ignore_databases"))
     {
         String ignore_dbs = config.getString("raft.ignore_databases");
         Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-        std::stringstream ss;
-        bool first = true;
-        for (auto string_token : string_tokens)
-        {
-            string_token = Poco::trimInPlace(string_token);
-            res.ignore_databases.emplace(string_token);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << string_token;
-        }
-        LOG_INFO(log, "Found ignore databases:" << ss.str());
+        FmtBuffer fmt_buf;
+        fmt_buf.joinStr(
+            string_tokens.begin(),
+            string_tokens.end(),
+            [&res](auto arg, FmtBuffer & fb) {
+                arg = Poco::trimInPlace(arg);
+                res.ignore_databases.emplace(arg);
+                fb.append(arg);
+            },
+            ", ");
+        LOG_FMT_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
     }
 
     if (config.has("raft.storage_engine"))
@@ -76,7 +75,8 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     if (res.engine == ::TiDB::StorageEngine::TMT)
     {
         if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-            throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
+            throw Exception(
+                fmt::format("Illegal arguments: disable background flush while using engine {}", MutableSupport::txn_storage_name),
                 ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = false;
     }
@@ -85,7 +85,8 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         /// If background flush is enabled, read will not triggle schema sync.
         /// Which means that we may get the wrong result with outdated schema.
         if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-            throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
+            throw Exception(
+                fmt::format("Illegal arguments: enable background flush while using engine {}", MutableSupport::delta_tree_storage_name),
                 ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = true;
     }
@@ -108,31 +109,32 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
         }
+#if 0
+        // Not generally available for this file format
         else if (snapshot_method == "file2")
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
         }
+#endif
     }
     switch (res.snapshot_apply_method)
     {
-        case TiDB::SnapshotApplyMethod::DTFile_Directory:
-        case TiDB::SnapshotApplyMethod::DTFile_Single:
-            if (res.engine != TiDB::StorageEngine::DT)
-            {
-                throw Exception(
-                    "Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine="
-                        + DB::toString(static_cast<Int32>(res.engine))
-                        + "] [snapshot method=" + applyMethodToString(res.snapshot_apply_method) + "]",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            break;
-        default:
-            break;
+    case TiDB::SnapshotApplyMethod::DTFile_Directory:
+    case TiDB::SnapshotApplyMethod::DTFile_Single:
+        if (res.engine != TiDB::StorageEngine::DT)
+        {
+            throw Exception(
+                fmt::format("Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine={}] [snapshot method={}]",
+                            static_cast<Int32>(res.engine),
+                            applyMethodToString(res.snapshot_apply_method)),
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+        break;
+    default:
+        break;
     }
 
-    LOG_INFO(log,
-        "Default storage engine [type=" << static_cast<Int64>(res.engine)
-                                        << "] [snapshot.method=" << applyMethodToString(res.snapshot_apply_method) << "]");
+    LOG_FMT_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
 
     return res;
 }

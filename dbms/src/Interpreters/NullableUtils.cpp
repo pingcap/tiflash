@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map)
 {
     if (key_columns.size() == 1)
@@ -48,4 +47,4 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
     }
 }
 
-}
+} // namespace DB

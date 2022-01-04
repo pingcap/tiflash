@@ -1,10 +1,13 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
+#include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
+#include <Encryption/PosixWriteReadableFile.h>
+#include <Encryption/WriteReadableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -185,6 +188,222 @@ try
     f.close();
     f.open();
     f.close();
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, WriteRead)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_wr_file");
+    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+}
+CATCH
+
+
+TEST(PosixWriteReadableFileTest, WriteReadwithFileProvider)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_wr_file");
+
+    auto key_manager = std::make_shared<MockKeyManager>();
+    auto file_provider = std::make_shared<FileProvider>(key_manager, false);
+
+    WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, EncWriteReadwithFileProvider)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+    char buff_write_cpy[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    memcpy(buff_write_cpy, buff_write, buff_size);
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
+
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+
+    WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, EncryptedWriteRead)
+try
+{
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
+    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
+
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    auto encryption_info = key_manager->newFile("encryption");
+    BlockAccessCipherStreamPtr cipher_stream
+        = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+
+    WriteReadableFilePtr enc_file = std::make_shared<EncryptedWriteReadableFile>(file, cipher_stream);
+
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+    char buff_write_cpy[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+    memcpy(buff_write_cpy, buff_write, buff_size);
+
+    ASSERT_EQ(buff_size, enc_file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, enc_file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+
+    enc_file->close();
+    ASSERT_TRUE(enc_file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    enc_file->close();
+    ASSERT_TRUE(enc_file->isClosed());
+}
+CATCH
+
+class FtruncateTest : public ::testing::Test
+{
+public:
+    template <typename B, typename T, typename E>
+    void testEncFtruncate(String file_name)
+    {
+        String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
+        B file = std::make_shared<T>(file_path, true, -1, 0600);
+
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+        std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+        auto encryption_info = key_manager->newFile("encryption");
+        BlockAccessCipherStreamPtr cipher_stream
+            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+
+        auto enc_file = std::make_shared<E>(file, cipher_stream);
+
+        size_t buff_size = 123;
+        size_t buff_need_delete_size = 23;
+        char buff_write[buff_size];
+
+        size_t truncate_size = buff_size - buff_need_delete_size;
+
+        for (size_t i = 0; i < buff_size; i++)
+        {
+            buff_write[i] = i % 0xFF;
+        }
+
+        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(enc_file->fsync(), 0);
+        ASSERT_EQ(enc_file->ftruncate(truncate_size), 0);
+        ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
+
+        enc_file->close();
+        ASSERT_TRUE(enc_file->isClosed());
+    }
+
+    template <typename T>
+    void testFtruncate(String file_name)
+    {
+        size_t buff_size = 123;
+        size_t buff_need_delete_size = 23;
+        char buff_write[buff_size];
+
+        size_t truncate_size = buff_size - buff_need_delete_size;
+
+        for (size_t i = 0; i < buff_size; i++)
+        {
+            buff_write[i] = i % 0xFF;
+        }
+
+        String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
+        auto file = std::make_shared<T>(file_path, true, -1, 0600);
+
+        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(file->fsync(), 0);
+        ASSERT_EQ(file->ftruncate(truncate_size), 0);
+        ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
+
+        file->close();
+        ASSERT_TRUE(file->isClosed());
+    }
+};
+
+TEST_F(FtruncateTest, Ftruncate)
+try
+{
+    testFtruncate<PosixWritableFile>("posix_w_file");
+    testFtruncate<PosixWriteReadableFile>("posix_wr_file");
+    testEncFtruncate<WritableFilePtr, PosixWritableFile, EncryptedWritableFile>("enc_posix_w_file");
+    testEncFtruncate<WriteReadableFilePtr, PosixWriteReadableFile, EncryptedWriteReadableFile>("enc_posix_wr_file");
 }
 CATCH
 

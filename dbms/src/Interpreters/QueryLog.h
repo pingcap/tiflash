@@ -5,8 +5,6 @@
 
 namespace DB
 {
-
-
 /** Allows to log information about queries execution:
   * - info about start of query execution;
   * - performance metrics (are set at the end of query execution);
@@ -66,4 +64,4 @@ class QueryLog : public SystemLog<QueryLogElement>
     using SystemLog<QueryLogElement>::SystemLog;
 };
 
-}
+} // namespace DB

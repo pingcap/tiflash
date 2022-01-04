@@ -208,21 +208,36 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
-    set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" ON)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" ON)
 
+
+    set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
+    set (TIFLASH_LLVM_LINKAGE_FLAGS "")
     if (USE_LIBCXX)
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
-        if (MAKE_STATIC_LIBRARIES)
-            link_libraries (-Wl,-Bstatic -stdlib=libc++ c++ c++abi -Wl,-Bdynamic)
-        else ()
-            link_libraries (-stdlib=libc++ c++ c++abi)
-        endif ()
 
+        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ c++ c++abi)
         if (LIBCXX_PATH)
-#            include_directories (BEFORE SYSTEM "${LIBCXX_PATH}/include" "${LIBCXX_PATH}/include/c++/v1")
-            link_directories ("${LIBCXX_PATH}/lib")
+          link_directories ("${LIBCXX_PATH}/lib")
         endif ()
+    endif ()
+
+    if (USE_LLVM_LIBUNWIND)
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind unwind)
+    endif ()
+
+    if (USE_LLVM_COMPILER_RT)
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
+    endif ()
+
+    if (MAKE_STATIC_LIBRARIES)
+      link_libraries (-Wl,-Bstatic ${TIFLASH_LLVM_LINKAGE_FLAGS} -Wl,-Bdynamic)
+    else ()
+      link_libraries (${TIFLASH_LLVM_LINKAGE_FLAGS})
     endif ()
 endif ()
 
@@ -363,6 +378,9 @@ if (ENABLE_FAILPOINTS)
 else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
+
+# Enable PageStorage V3 test.
+option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)

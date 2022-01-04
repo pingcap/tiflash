@@ -1,16 +1,21 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <Storages/IManageableStorage.h>
+#include <Storages/Transaction/Types.h>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
+class Context;
+
 class GCManager
 {
 public:
-    GCManager(Context & context)
-        : global_context{context.getGlobalContext()}
-        , log(&Poco::Logger::get("GCManager")){};
+    explicit GCManager(Context & context);
 
     ~GCManager() = default;
 
@@ -20,6 +25,8 @@ private:
     Context & global_context;
 
     TableID next_table_id = InvalidTableID;
+
+    AtomicStopwatch gc_check_stop_watch;
 
     Poco::Logger * log;
 };

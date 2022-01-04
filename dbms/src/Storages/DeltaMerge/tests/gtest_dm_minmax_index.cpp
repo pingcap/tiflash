@@ -101,7 +101,7 @@ bool checkMatch(
         is_common_handle,
         1);
 
-    store->write(context, context.getSettingsRef(), std::move(block));
+    store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);
     store->mergeDeltaAll(context);
 

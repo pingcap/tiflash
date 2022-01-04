@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /** Data for HyperLogLogBiasEstimator in the uniqCombined function.
   * The development plan is as follows:
   * 1. Assemble ClickHouse.
@@ -36,4 +35,4 @@ struct UniqCombinedBiasData
     static const InterpolatedData & getBiases();
 };
 
-}
+} // namespace DB

@@ -6,7 +6,6 @@
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 namespace DB::DM
 {
-
 template <ChecksumAlgo algo>
 void runSerializationTest()
 {

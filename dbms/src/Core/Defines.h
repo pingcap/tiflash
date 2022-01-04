@@ -76,8 +76,6 @@
 /// Version of ClickHouse TCP protocol. Set to git tag with latest protocol change.
 #define DBMS_TCP_PROTOCOL_VERSION 54226
 
-#define DBMS_DISTRIBUTED_DIRECTORY_MONITOR_SLEEP_TIME_MS 100
-
 /// The boundary on which the blocks for asynchronous file operations should be aligned.
 #define DEFAULT_AIO_FILE_BLOCK_SIZE 4096
 
@@ -87,6 +85,12 @@
 #define DEFAULT_HTTP_READ_BUFFER_CONNECTION_TIMEOUT 1
 
 #define PLATFORM_NOT_SUPPORTED "The only supported platforms are x86_64 and AArch64 (work in progress)"
+
+#define DEFAULT_MARK_CACHE_SIZE (5ULL * 1024 * 1024 * 1024)
+
+#define DEFAULT_METRICS_PORT 8234
+
+#define DEFAULT_HTTP_PORT 8123
 
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED

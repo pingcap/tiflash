@@ -21,37 +21,47 @@ inline String likePatternToRegexp(const String & pattern)
     {
         switch (*pos)
         {
-            case '^': case '$': case '.': case '[': case '|': case '(': case ')': case '?': case '*': case '+': case '{':
-                res += '\\';
-                res += *pos;
-                break;
-            case '%':
-                if (pos + 1 != end)
-                    res += ".*";
-                else
-                    return res;
-                break;
-            case '_':
-                res += ".";
-                break;
-            case '\\':
-                ++pos;
-                if (pos == end)
-                    res += "\\\\";
+        case '^':
+        case '$':
+        case '.':
+        case '[':
+        case '|':
+        case '(':
+        case ')':
+        case '?':
+        case '*':
+        case '+':
+        case '{':
+            res += '\\';
+            res += *pos;
+            break;
+        case '%':
+            if (pos + 1 != end)
+                res += ".*";
+            else
+                return res;
+            break;
+        case '_':
+            res += ".";
+            break;
+        case '\\':
+            ++pos;
+            if (pos == end)
+                res += "\\\\";
+            else
+            {
+                if (*pos == '%' || *pos == '_')
+                    res += *pos;
                 else
                 {
-                    if (*pos == '%' || *pos == '_')
-                        res += *pos;
-                    else
-                    {
-                        res += '\\';
-                        res += *pos;
-                    }
+                    res += '\\';
+                    res += *pos;
                 }
-                break;
-            default:
-                res += *pos;
-                break;
+            }
+            break;
+        default:
+            res += *pos;
+            break;
         }
         ++pos;
     }
@@ -60,4 +70,4 @@ inline String likePatternToRegexp(const String & pattern)
     return res;
 }
 
-}
+} // namespace DB

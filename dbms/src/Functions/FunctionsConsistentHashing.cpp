@@ -1,10 +1,10 @@
 #include "FunctionsConsistentHashing.h"
+
 #include <Functions/FunctionFactory.h>
 
 
 namespace DB
 {
-
 void registerFunctionsConsistentHashing(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionYandexConsistentHash>();
@@ -12,4 +12,4 @@ void registerFunctionsConsistentHashing(FunctionFactory & factory)
     factory.registerFunction<FunctionSumburConsistentHash>();
 }
 
-}
+} // namespace DB
