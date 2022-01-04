@@ -124,7 +124,7 @@ try
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
             true,
-            context.getSettings().enable_exchange_compression,
+            false,
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);

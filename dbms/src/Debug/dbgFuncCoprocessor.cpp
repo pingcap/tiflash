@@ -330,7 +330,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 tipb_exchange_receiver,
                 root_tm,
                 10,
-                context.getSettings().enable_exchange_compression,
+                false,
                 nullptr);
         BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);
         return ret;
