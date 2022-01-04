@@ -1465,10 +1465,9 @@ public:
                     c_res->getChars(),
                     c_res->getOffsets());
             else
-                throw Exception("Illegal columns "
-                                    + c0->getName() + " and " + c1->getName()
-                                    + " of arguments of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal columns {} and {} of arguments of function {}", c0->getName(), c1->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             block.getByPosition(result).column = std::move(c_res);
             return true;
@@ -1521,10 +1520,9 @@ public:
                     c_res->getChars(),
                     c_res->getOffsets());
             else
-                throw Exception("Illegal columns "
-                                    + c0->getName() + " and " + c1->getName()
-                                    + " of arguments of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal columns {} and {} of arguments of function {}", c0->getName(), c1->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             block.getByPosition(result).column = std::move(c_res);
             return true;

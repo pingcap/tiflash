@@ -16,6 +16,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <common/types.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -49,9 +50,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypePtr type_res = arguments[0];
         if (type_res->isString())
@@ -72,32 +73,29 @@ public:
         size_t num_arguments = arguments.size();
         if (num_arguments < 2)
         {
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
-        else
+        bool flag = false;
+        DataTypes data_types(num_arguments);
+        for (size_t i = 0; i < num_arguments; ++i)
         {
-            bool flag = false;
-            DataTypes data_types(num_arguments);
-            for (size_t i = 0; i < num_arguments; ++i)
-            {
-                data_types[i] = block.getByPosition(arguments[i]).type;
-                if (data_types[i]->isString())
-                    flag = true;
-            }
-            if (flag) // Need to cast all other column's type into string
-            {
-                DataTypePtr result_type = getReturnTypeImpl(data_types);
-                for (size_t arg = 0; arg < num_arguments; ++arg)
-                {
-                    auto res_column = TiDBCastColumn(block.getByPosition(arguments[arg]), result_type, context);
-                    block.getByPosition(arguments[arg]).column = std::move(res_column);
-                    block.getByPosition(arguments[arg]).type = result_type;
-                }
-            }
-            return executeNary(block, arguments, result);
+            data_types[i] = block.getByPosition(arguments[i]).type;
+            if (data_types[i]->isString())
+                flag = true;
         }
+        if (flag) // Need to cast all other column's type into string
+        {
+            DataTypePtr result_type = getReturnTypeImpl(data_types);
+            for (auto arg : arguments)
+            {
+                auto res_column = TiDBCastColumn(block.getByPosition(arg), result_type, context);
+                block.getByPosition(arg).column = std::move(res_column);
+                block.getByPosition(arg).type = result_type;
+            }
+        }
+        return executeNary(block, arguments, result);
     }
 
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
@@ -149,9 +147,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & argument : arguments)
             if (argument->isString())
@@ -166,9 +164,9 @@ public:
         size_t num_arguments = arguments.size();
         if (num_arguments < 2)
         {
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
 
         DataTypes data_types(num_arguments);
@@ -244,9 +242,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & argument : arguments)
         {
