@@ -213,15 +213,12 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
 
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
-
+    set (TIFLASH_LLVM_LINKAGE_FLAGS "")
     if (USE_LIBCXX)
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
-        if (MAKE_STATIC_LIBRARIES)
-          link_libraries (-Wl,-Bstatic -stdlib=libc++ c++ c++abi -Wl,-Bdynamic)
-        else()
-          link_libraries (-stdlib=libc++ c++ c++abi)
-        endif()
+
+        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ c++ c++abi)
         if (LIBCXX_PATH)
           link_directories ("${LIBCXX_PATH}/lib")
         endif ()
@@ -229,18 +226,19 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     if (USE_LLVM_LIBUNWIND)
       set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
-      if (MAKE_STATIC_LIBRARIES)
-        link_libraries (-unwindlib=libunwind unwind)
-      else()
-        link_libraries (-Wl,-Bstatic -unwindlib=libunwind unwind -Wl,-Bdynamic)
-      endif()
-    endif()
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind unwind)
+    endif ()
 
     if (USE_LLVM_COMPILER_RT)
       set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
-      link_libraries (-rtlib=compiler-rt) # rtlibs are static in nature
-    endif()
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
+    endif ()
 
+    if (MAKE_STATIC_LIBRARIES)
+      link_libraries (-Wl,-Bstatic ${TIFLASH_LLVM_LINKAGE_FLAGS} -Wl,-Bdynamic)
+    else ()
+      link_libraries (${TIFLASH_LLVM_LINKAGE_FLAGS})
+    endif ()
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
