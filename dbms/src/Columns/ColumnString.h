@@ -301,7 +301,7 @@ public:
             return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
     }
 
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
+    int compareAt(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
     {
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }

@@ -271,7 +271,7 @@ std::tuple<bool, int> ColumnNullable::compareAtCheckNull(size_t n, size_t m, con
     return std::make_tuple(has_null, res);
 }
 
-int ColumnNullable::compareAtWithCollation(
+int ColumnNullable::compareAt(
     size_t n,
     size_t m,
     const IColumn & rhs_,
@@ -283,7 +283,7 @@ int ColumnNullable::compareAtWithCollation(
     if (has_null)
         return res;
     const IColumn & nested_rhs = nullable_rhs.getNestedColumn();
-    return getNestedColumn().compareAtWithCollation(n, m, nested_rhs, null_direction_hint, collator);
+    return getNestedColumn().compareAt(n, m, nested_rhs, null_direction_hint, collator);
 }
 
 int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
