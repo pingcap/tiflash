@@ -54,7 +54,7 @@ ENABLE_TESTS=${ENABLE_TESTS:-1}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
-CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}.tar"
+CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-llvm.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
 if [[ "${CMAKE_BUILD_TYPE}" != "Debug" ]]; then
   ENABLE_TESTS=0
@@ -75,7 +75,7 @@ USE_CCACHE=ON
 rm -rf "${SRCPATH}/.ccache"
 cache_file="${SRCPATH}/ccache.tar"
 rm -rf "${cache_file}"
-curl -o "${cache_file}" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache-llvm/${CCACHE_REMOTE_TAR}
+curl -o "${cache_file}" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}
 cache_size=$(ls -l "${cache_file}" | awk '{print $5}')
 min_size=$((1024000))
 if [[ ${cache_size} -gt ${min_size} ]]; then
@@ -107,7 +107,7 @@ mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 cd ${SRCPATH}/contrib/tiflash-proxy
 proxy_git_hash=$(git log -1 --format="%H")
 curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-  http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so
+  http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
 proxy_size=$(ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
 if [[ ${proxy_size} -lt ${min_size} ]]; then
@@ -116,8 +116,8 @@ if [[ ${proxy_size} -lt ${min_size} ]]; then
   bash "${SCRIPTPATH}/build-proxy.sh"
   echo "try to upload libtiflash_proxy.so"
   cd target/release
-  curl -F builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
-  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so
+  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
+  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
 fi
 
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
@@ -154,7 +154,7 @@ if [[ ${UPDATE_CCACHE} == "true" ]]; then
   cd ${SRCPATH}
   rm -rf ccache.tar
   tar -cf ccache.tar .ccache
-  curl -F builds/pingcap/tiflash/ci-cache-llvm/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
+  curl -F builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
 fi
 
 rm -rf "${INSTALL_DIR}/tiflash-runtime"
@@ -166,11 +166,7 @@ llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/ti
 cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}/flash_cluster_manager"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/tiflash-runtime/libtiflash_proxy.so"
 
-
 vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so "${INSTALL_DIR}/tiflash-runtime"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so "${INSTALL_DIR}/tiflash-runtime"
 
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"

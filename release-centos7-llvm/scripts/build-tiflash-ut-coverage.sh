@@ -50,7 +50,7 @@ fi
 
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
-CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-gcov.tar"
+CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-gcov-llvm.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
 
 rm -rf "${INSTALL_DIR}"
@@ -60,7 +60,7 @@ USE_CCACHE=ON
 rm -rf "${SRCPATH}/.ccache"
 cache_file="${SRCPATH}/ccache.tar"
 rm -rf "${cache_file}"
-curl -o "${cache_file}" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache-llvm/${CCACHE_REMOTE_TAR}
+curl -o "${cache_file}" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}
 cache_size=$(ls -l "${cache_file}" | awk '{print $5}')
 min_size=$((1024000))
 if [[ ${cache_size} -gt ${min_size} ]]; then
@@ -132,6 +132,6 @@ if [[ ${UPDATE_CCACHE} == "true" ]]; then
   cd ${SRCPATH}
   rm -rf ccache.tar
   tar -cf ccache.tar .ccache
-  curl -F builds/pingcap/tiflash/ci-cache-llvm/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
+  curl -F builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
   exit 0
 fi
