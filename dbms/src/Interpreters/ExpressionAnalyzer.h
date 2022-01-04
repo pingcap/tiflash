@@ -1,13 +1,12 @@
 #pragma once
 
+#include <Core/Block.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Settings.h>
-#include <Core/Block.h>
 
 
 namespace DB
 {
-
 class Context;
 
 class ExpressionActions;
@@ -21,7 +20,7 @@ using ASTPtr = std::shared_ptr<IAST>;
 
 class Set;
 using SetPtr = std::shared_ptr<Set>;
-using PreparedSets = std::unordered_map<IAST*, SetPtr>;
+using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
@@ -293,8 +292,11 @@ private:
       * Put in required_joined_columns the set of columns available from JOIN and needed.
       */
     void getRequiredSourceColumnsImpl(const ASTPtr & ast,
-        const NameSet & available_columns, NameSet & required_source_columns, NameSet & ignored_names,
-        const NameSet & available_joined_columns, NameSet & required_joined_columns);
+                                      const NameSet & available_columns,
+                                      NameSet & required_source_columns,
+                                      NameSet & ignored_names,
+                                      const NameSet & available_joined_columns,
+                                      NameSet & required_joined_columns);
 
     /// columns - the columns that are present before the transformations begin.
     void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const;
@@ -328,4 +330,4 @@ private:
     void removeUnneededColumnsFromSelectClause();
 };
 
-}
+} // namespace DB

@@ -28,6 +28,8 @@ private:
     size_t hash_table_bytes = 0;
     String build_side_child;
 
+    BaseRuntimeStatistics non_joined_base;
+
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;

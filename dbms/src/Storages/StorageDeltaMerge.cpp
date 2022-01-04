@@ -30,6 +30,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
@@ -92,14 +93,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_FMT_INFO(
-        log,
-        "{} {} TableName {} ordinary {} materialized {}",
-        __FILE__,
-        __func__,
-        table_column_info->table_name,
-        columns.ordinary.toString(),
-        columns.materialized.toString());
+    LOG_FMT_INFO(log, "updateTableColumnInfo: TableName {} ordinary {} materialized {}", table_column_info->table_name, columns.ordinary.toString(), columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
     auto & handle_column_define = table_column_info->handle_column_define;
@@ -183,7 +177,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
                 pks_combined_bytes += col.type->getSizeOfValueInMemory();
                 if (pks_combined_bytes > sizeof(Handle))
                 {
-                    throw Exception(fmt::format("pk columns exceeds size limit :{}", sizeof(Handle)));
+                    throw Exception(fmt::format("pk columns bytes exceeds size limit, {} > {}", pks_combined_bytes, sizeof(Handle)));
                 }
             }
             if (pks.size() == 1)
@@ -234,7 +228,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         // the statement and retry.
         if (pks.size() == 1 && !tidb_table_info.columns.empty() && !is_common_handle)
         {
-            std::vector<String> actual_pri_keys;
+            Strings actual_pri_keys;
             for (const auto & col : tidb_table_info.columns)
             {
                 if (col.hasPriKeyFlag())
@@ -248,20 +242,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
             }
             // fallover
         }
+
         // Unknown bug, throw an exception.
         FmtBuffer fmt_buf;
-        fmt_buf.append("Can not create table without primary key. Primary keys should be:[");
-        fmt_buf.joinStr(pks.begin(), pks.end(), ",");
-        fmt_buf.append("], but only these columns are found:[");
         fmt_buf.joinStr(
             all_columns.begin(),
             all_columns.end(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.append(arg.name);
+            [](const auto & col, FmtBuffer & fb) {
+                fb.append(col.name);
             },
             ",");
-        fmt_buf.append("]");
-        throw Exception(fmt_buf.toString());
+        throw Exception(
+            fmt::format("Can not create table without primary key. Primary keys should be: {}, but only these columns are found:{}",
+                        fmt::join(pks, ","),
+                        fmt_buf.toString()));
     }
     assert(!table_column_defines.empty());
 
@@ -626,37 +620,44 @@ BlockInputStreams StorageDeltaMerge::read(
                 /* ignore_cache= */ false,
                 global_context.getSettingsRef().safe_point_update_interval_seconds);
             if (read_tso < safe_point)
+            {
                 throw Exception(
-                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}", context.getCurrentQueryId(), read_tso, safe_point),
+                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
+                                context.getCurrentQueryId(),
+                                read_tso,
+                                safe_point),
                     ErrorCodes::LOGICAL_ERROR);
+            }
         }
     };
     check_read_tso(mvcc_query_info.read_tso);
 
-    String str_query_ranges;
+    FmtBuffer fmt_buf;
     if (unlikely(log->trace()))
     {
-        std::stringstream ss; // todo ywq
-        FmtBuffer fmt_buf;
-        for (const auto & region : mvcc_query_info.regions_query_info)
-        {
-            if (!region.required_handle_ranges.empty())
-            {
-                fmt_buf.joinStr(
-                    region.required_handle_ranges.begin(),
-                    region.required_handle_ranges.end(),
-                    [&region](const auto & arg, FmtBuffer & fb) {
-                        fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(arg));
-                    },
-                    ",");
-            }
-            else
-            {
-                /// only used for test cases
-                fmt_buf.fmtAppend("{}{},", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region.range_in_table));
-            }
-        }
-        str_query_ranges = ss.str();
+        fmt_buf.append("orig, ");
+        fmt_buf.joinStr(
+            mvcc_query_info.regions_query_info.begin(),
+            mvcc_query_info.regions_query_info.end(),
+            [](const auto & region, FmtBuffer & fb) {
+                if (!region.required_handle_ranges.empty())
+                {
+                    fb.joinStr(
+                        region.required_handle_ranges.begin(),
+                        region.required_handle_ranges.end(),
+                        [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
+                            fb.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                        },
+                        ",");
+                }
+                else
+                {
+                    /// only used for test cases
+                    const auto & range = region.range_in_table;
+                    fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                }
+            },
+            ",");
     }
 
     auto ranges = getQueryRanges(
@@ -669,17 +670,15 @@ BlockInputStreams StorageDeltaMerge::read(
 
     if (unlikely(log->trace()))
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("reading ranges: orig, {} merged, ", str_query_ranges);
+        fmt_buf.append(" merged, ");
         fmt_buf.joinStr(
             ranges.begin(),
             ranges.end(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.append(arg.toDebugString());
+            [](const auto & range, FmtBuffer & fb) {
+                fb.append(range.toDebugString());
             },
             ",");
-        fmt_buf.append(",");
-        LOG_TRACE(log, fmt_buf.toString());
+        LOG_FMT_TRACE(log, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -1023,8 +1022,7 @@ try
                 {
                     LOG_FMT_WARNING(
                         log,
-                        "Accept lossy column data type modification. Table (id:{})"
-                        " modify column {}({}) from {} to {}",
+                        "Accept lossy column data type modification. Table (id:{}) modify column {}({}) from {} to {}",
                         table_info.value().get().id,
                         command.column_name,
                         command.column_id,
@@ -1086,7 +1084,10 @@ try
 }
 catch (Exception & e)
 {
-    e.addMessage(fmt::format(" table name: {}, table id: {}", table_name_, table_info.has_value() ? DB::toString(table_info.value().get().id) : "unknown"));
+    e.addMessage(fmt::format(
+        " table name: {}, table id: {}",
+        table_name_,
+        (table_info ? DB::toString(table_info.value().get().id) : "unknown")));
     throw;
 }
 
@@ -1281,12 +1282,15 @@ void updateDeltaMergeTableCreateStatement(
             args.children.back() = tombstone_ast;
         }
         else
-            throw Exception(fmt::format(
-                                "Wrong arguments num:{} in table: {} with engine={}",
-                                args.children.size(),
-                                table_name,
-                                MutableSupport::delta_tree_storage_name),
-                            ErrorCodes::BAD_ARGUMENTS);
+        {
+            throw Exception(
+                fmt::format(
+                    "Wrong arguments num: {} in table: {} with engine={}",
+                    args.children.size(),
+                    table_name,
+                    MutableSupport::delta_tree_storage_name),
+                ErrorCodes::BAD_ARGUMENTS);
+        }
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);

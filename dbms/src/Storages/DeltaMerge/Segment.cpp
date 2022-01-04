@@ -573,12 +573,12 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
                                                const SegmentSnapshotPtr & segment_snap,
                                                WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(
-        log,
-        "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}",
-        segment_id,
-        segment_snap->delta->getPackCount(),
-        segment_snap->delta->getRows());
+    LOG_FMT_INFO(log,
+                 "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}, delta total size: {}",
+                 segment_id,
+                 segment_snap->delta->getPackCount(),
+                 segment_snap->delta->getRows(),
+                 segment_snap->delta->getBytes());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -1299,7 +1299,7 @@ String Segment::simpleInfo() const
 
 String Segment::info() const
 {
-    return fmt::format("{{[id:{0}], [next: {1}], [epoch:{2}], [range:{3}], [rowkey_range:{3}], [delta rows:{4}], [delete ranges:{5}], [stable({6}):{7}]}}",
+    return fmt::format("[id:{}], [next:{}], [epoch:{}], [rowkey_range:{}], [delta rows:{}], [delta bytes:{}], [delete ranges:{}], [stable({}):rows:{}, bytes:{}]",
                        segment_id,
                        next_segment_id,
                        epoch,
@@ -1308,10 +1308,10 @@ String Segment::info() const
                        delta->getDeletes(),
                        stable->getDMFilesString(),
                        stable->getRows());
+                       stable->getBytes();
 }
 
 Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
-                                       const ColumnDefines & read_columns,
                                        const SegmentSnapshotPtr & segment_snap,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const

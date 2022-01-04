@@ -1,23 +1,21 @@
 #pragma once
 
-#include <Poco/Event.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/ThreadFactory.h>
-#include <common/ThreadPool.h>
 #include <Common/MemoryTracker.h>
+#include <Common/setThreadName.h>
+#include <Common/wrapInvocable.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Poco/Event.h>
+#include <common/ThreadPool.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric QueryThread;
+extern const Metric QueryThread;
 }
 
 namespace DB
 {
-
 /** Executes another BlockInputStream in a separate thread.
   * This serves two purposes:
   * 1. Allows you to make the different stages of the query execution pipeline work in parallel.
@@ -101,7 +99,7 @@ protected:
             calculate();
             started = true;
         }
-        else    /// If the calculations are already in progress - wait for the result
+        else /// If the calculations are already in progress - wait for the result
             pool.wait();
 
         if (exception)
@@ -122,7 +120,7 @@ protected:
     void next()
     {
         ready.reset();
-        pool.schedule(ThreadFactory(false, "AsyncBlockInput").newJob([this] { calculate(); }));
+        pool.schedule(wrapInvocable(true, [this] { calculate(); }));
     }
 
 
@@ -150,5 +148,4 @@ protected:
     }
 };
 
-}
-
+} // namespace DB
