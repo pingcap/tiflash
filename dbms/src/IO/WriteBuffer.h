@@ -2,6 +2,7 @@
 
 #include <Common/Exception.h>
 #include <IO/BufferBase.h>
+#include <assert.h>
 
 #include <algorithm>
 #include <cstring>
