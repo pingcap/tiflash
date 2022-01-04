@@ -54,8 +54,10 @@ class FramedChecksumWriteBuffer : public WriteBufferFromFileDescriptor
 {
 private:
     WritableFilePtr out;
-    size_t current_frame = 0;
+    size_t materialized_bytes = 0;
+    size_t frame_count = 0;
     const size_t frame_size;
+
     void nextImpl() override
     {
         size_t len = this->offset();
@@ -88,17 +90,23 @@ private:
                 }
             }
             iter += count;
+            materialized_bytes += count;
             expected -= count;
         }
 
         ProfileEvents::increment(ProfileEvents::ChecksumBufferWriteBytes, len + sizeof(ChecksumFrame<Backend>));
-
-        current_frame++;
+        frame_count++;
     }
 
     off_t doSeek(off_t, int) override { throw Exception("framed file is not seekable in writing mode"); }
 
-    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
+    // for checksum buffer, this is the faked file size without checksum header.
+    off_t getPositionInFile() override { return frame_count * frame_size + offset(); }
+
+    // for checksum buffer, this is the real bytes to be materialized to disk.
+    off_t getMaterializedBytes() override {
+        return materialized_bytes + (offset() ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
+    }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)

@@ -2,6 +2,13 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
+#ifndef NDEBUG
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
+
 namespace DB
 {
 namespace DM
@@ -274,7 +281,19 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
-
+#ifndef NDEBUG
+    auto examine_buffer_size = [](auto & buf, auto & fp) {
+        if (!fp.isEncryptionEnabled())
+        {
+            auto fd = buf.getFD();
+            struct stat file_stat;
+            ::fstat(fd, &file_stat);
+            assert(buf.getMaterializedBytes() == file_stat.st_size);
+        }
+    };
+#else
+    auto examine_buffer_size = [](auto &, auto &) { };
+#endif
     if (options.flags.isSingleFile())
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
@@ -312,6 +331,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             const auto stream_name = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(stream_name);
             stream->flush();
+            examine_buffer_size(*stream->mark_file, *this->file_provider);
+            examine_buffer_size(*stream->plain_file, *this->file_provider);
             bytes_written += stream->getWrittenBytes();
 
             if (stream->minmaxes)
@@ -339,7 +360,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                            dmfile->configuration->getChecksumFrameLength());
                     stream->minmaxes->write(*type, *buf);
                     buf->sync();
-                    bytes_written += buf->getPositionInFile();
+                    bytes_written += buf->getMaterializedBytes();
+                    examine_buffer_size(*buf, *this->file_provider);
                 }
             }
         };
