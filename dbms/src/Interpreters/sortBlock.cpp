@@ -116,7 +116,7 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
 
         IColumn::Permutation perm;
         if (needCollation(column, description[0]))
-            column->getPermutationWithCollation(*description[0].collator, reverse, limit, description[0].nulls_direction, perm);
+            column->getPermutation(*description[0].collator, reverse, limit, description[0].nulls_direction, perm);
         else
             column->getPermutation(reverse, limit, description[0].nulls_direction, perm);
 

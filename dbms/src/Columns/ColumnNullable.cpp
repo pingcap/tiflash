@@ -6,6 +6,7 @@
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -27,10 +28,10 @@ ColumnNullable::ColumnNullable(MutableColumnPtr && nested_column_, MutableColumn
         nested_column = nested_column_materialized;
 
     if (!getNestedColumn().canBeInsideNullable())
-        throw Exception{getNestedColumn().getName() + " cannot be inside Nullable column", ErrorCodes::ILLEGAL_COLUMN};
+        throw Exception(fmt::format("{} cannot be inside Nullable column", getNestedColumn().getName()), ErrorCodes::ILLEGAL_COLUMN);
 
     if (null_map->isColumnConst())
-        throw Exception{"ColumnNullable cannot have constant null map", ErrorCodes::ILLEGAL_COLUMN};
+        throw Exception("ColumnNullable cannot have constant null map", ErrorCodes::ILLEGAL_COLUMN);
 }
 
 
@@ -92,7 +93,7 @@ void ColumnNullable::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollato
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 old_hash = hash;
     nested_column->updateWeakHash32(hash, collator, sort_key_container);
@@ -144,12 +145,12 @@ void ColumnNullable::get(size_t n, Field & res) const
 
 StringRef ColumnNullable::getDataAt(size_t /*n*/) const
 {
-    throw Exception{"Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
+    throw Exception(fmt::format("Method getDataAt is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
 {
-    throw Exception{"Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
+    throw Exception(fmt::format("Method insertData is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 bool ColumnNullable::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode)
@@ -296,7 +297,7 @@ int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null
     return getNestedColumn().compareAt(n, m, nested_rhs, null_direction_hint);
 }
 
-void ColumnNullable::getPermutationWithCollation(
+void ColumnNullable::getPermutation(
     const ICollator & collator,
     bool reverse,
     size_t limit,
@@ -304,7 +305,7 @@ void ColumnNullable::getPermutationWithCollation(
     DB::IColumn::Permutation & res) const
 {
     /// Cannot pass limit because of unknown amount of NULLs.
-    getNestedColumn().getPermutationWithCollation(collator, reverse, 0, null_direction_hint, res);
+    getNestedColumn().getPermutation(collator, reverse, 0, null_direction_hint, res);
     adjustPermutationWithNullDirection(reverse, limit, null_direction_hint, res);
 }
 
@@ -524,7 +525,7 @@ void ColumnNullable::applyNullMapImpl(const ColumnUInt8 & map)
     const NullMap & arr2 = map.getData();
 
     if (arr1.size() != arr2.size())
-        throw Exception{"Inconsistent sizes of ColumnNullable objects", ErrorCodes::LOGICAL_ERROR};
+        throw Exception("Inconsistent sizes of ColumnNullable objects", ErrorCodes::LOGICAL_ERROR);
 
     for (size_t i = 0, size = arr1.size(); i < size; ++i)
         arr1[i] |= negative ^ arr2[i];
@@ -551,9 +552,11 @@ void ColumnNullable::applyNullMap(const ColumnNullable & other)
 void ColumnNullable::checkConsistency() const
 {
     if (null_map->size() != getNestedColumn().size())
-        throw Exception("Logical error: Sizes of nested column and null map of Nullable column are not equal: null size is : "
-                            + std::to_string(null_map->size()) + " column size is : " + std::to_string(getNestedColumn().size()),
-                        ErrorCodes::SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT);
+        throw Exception(
+            fmt::format("Logical error: Sizes of nested column and null map of Nullable column are not equal: null size is : {} column size is : {}",
+                        null_map->size(),
+                        getNestedColumn().size()),
+            ErrorCodes::SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT);
 }
 
 

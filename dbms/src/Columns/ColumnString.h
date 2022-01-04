@@ -310,7 +310,7 @@ public:
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
+    void getPermutation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
     {
         getPermutationWithCollationImpl(collator, reverse, limit, res);
     }
