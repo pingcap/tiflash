@@ -695,12 +695,12 @@ struct SubstringUTF8Impl
         }
     }
 
-    template <bool implicit_length, typename Start_FF, typename Length_FF>
+    template <bool implicit_length, typename StartFf, typename LengthFf>
     static void vectorVectorVector(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        Start_FF && start_func,
-        Length_FF && length_func,
+        StartFf && start_func,
+        LengthFf && length_func,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1548,7 +1548,6 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1575,9 +1574,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        ColumnPtr & column_string = block.getByPosition(arguments[0]).column;
+        const ColumnPtr & column_string = block.getByPosition(arguments[0]).column;
 
-        ColumnPtr & column_start = block.getByPosition(arguments[1]).column;
+        const ColumnPtr & column_start = block.getByPosition(arguments[1]).column;
 
         bool implicit_length = (arguments.size() == 2);
 
@@ -1598,6 +1597,7 @@ public:
                         // Int64 / UInt64
                         using LengthFieldType = typename LengthType::FieldType;
                         length = getValueFromLengthField<LengthFieldType>((*block.getByPosition(arguments[2]).column)[0]);
+                        return true;
                     });
 
                     if (!is_length_type_valid)
@@ -1623,32 +1623,53 @@ public:
             }
             else // convert to vector vector vector
             {
-                column_start = column_start->isColumnConst() ? column_start->convertToFullColumnIfConst() : column_start;
-                auto get_start_func = [&column_start](size_t i) {
-                    return getValueFromStartField<StartFieldType>((*column_start)[i]);
-                };
+                std::function<std::pair<bool, size_t>(size_t)> get_start_func;
+                if (column_start->isColumnConst())
+                {
+                    auto start_const = getValueFromStartField<StartFieldType>((*column_start)[0]);
+                    get_start_func = [start_const](size_t) {
+                        return start_const;
+                    };
+                }
+                else
+                {
+                    get_start_func = [&column_start](size_t i) {
+                        return getValueFromStartField<StartFieldType>((*column_start)[i]);
+                    };
+                }
+
                 std::function<size_t(size_t)> get_length_func = [](size_t) {
                     return 0;
                 };
                 if (!implicit_length)
                 {
-                    ColumnPtr & column_length = block.getByPosition(arguments[2]).column;
-                    column_length = column_length->isColumnConst() ? column_length->convertToFullColumnIfConst() : column_length;
+                    const ColumnPtr & column_length = block.getByPosition(arguments[2]).column;
                     bool is_length_type_valid = getNumberType(block.getByPosition(arguments[2]).type, [&](const auto & length_type, bool) {
                         using LengthType = std::decay_t<decltype(length_type)>;
                         // Int64 / UInt64
                         using LengthFieldType = typename LengthType::FieldType;
-                        get_length_func = [&column_length](size_t i) {
-                            return getValueFromStartField<LengthFieldType>((*column_length)[i]);
-                        };
+                        if (column_length->isColumnConst())
+                        {
+                            auto length_const = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
+                            get_length_func = [length_const](size_t) {
+                                return length_const;
+                            };
+                        }
+                        else
+                        {
+                            get_length_func = [column_length](size_t i) {
+                                return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                            };
+                        }
+                        return true;
                     });
 
                     if (!is_length_type_valid)
                         throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
                 }
 
-                column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
-                if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+                ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
+                if (const ColumnString * col = checkAndGetColumn<ColumnString>(full_column_string.get()))
                 {
                     auto col_res = ColumnString::create();
                     if (implicit_length)
