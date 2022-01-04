@@ -21,12 +21,9 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <fmt/core.h>
 
 #include <atomic>
 #include <ext/scope_guard.h>
-
-#include "IO/WriteHelpers.h"
 
 
 #if USE_TCMALLOC
