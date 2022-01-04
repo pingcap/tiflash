@@ -122,7 +122,7 @@ public:
         if (WriteBuffer * stream = getter(path))
             serializeBinaryBulk(column, *stream, offset, limit);
     }
-    virtual void serializeBinaryBulkWithMultipleStreamsWithCompression(
+    virtual double serializeBinaryBulkWithMultipleStreamsWithCompression(
         const IColumn & column,
         const OutputStreamGetter & getter,
         size_t offset,
@@ -131,10 +131,11 @@ public:
         SubstreamPath & path) const
     {
         if (WriteBuffer * stream = getter(path))
-            serializeBinaryBulkWithCompression(column, *stream, offset, limit);
+            return serializeBinaryBulkWithCompression(column, *stream, offset, limit);
+        return 0;
     }
 
-    void serializeBinaryBulkWithMultipleStreams(
+    double serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
         const OutputStreamGetter & getter,
         size_t offset,
@@ -145,12 +146,13 @@ public:
     {
         if (enable_compression)
         {
-            serializeBinaryBulkWithMultipleStreamsWithCompression(column, getter, offset, limit, position_independent_encoding, path);
+            return serializeBinaryBulkWithMultipleStreamsWithCompression(column, getter, offset, limit, position_independent_encoding, path);
         }
         else
         {
             serializeBinaryBulkWithMultipleStreams(column, getter, offset, limit, position_independent_encoding, path);
         }
+        return 0;
     }
 
     /** Read no more than limit values and append them into column.
@@ -203,7 +205,7 @@ public:
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
     virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const;
-    virtual void serializeBinaryBulkWithCompression(const IColumn &, WriteBuffer &, size_t, size_t) const;
+    virtual double serializeBinaryBulkWithCompression(const IColumn &, WriteBuffer &, size_t, size_t) const;
     virtual void deserializeBinaryBulkWithCompression(IColumn &, ReadBuffer &, size_t, double) const;
 
     /** Widen version for `serializeBinaryBulkWithMultipleStreams`.

@@ -247,7 +247,7 @@ void DataTypeNumberBase<T>::serializeBinaryBulk(const IColumn & column, WriteBuf
 }
 
 template <typename T>
-void DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
+double DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
 {
     const typename ColumnVector<T>::Container & x = typeid_cast<const ColumnVector<T> &>(column).getData();
 
@@ -259,7 +259,7 @@ void DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & c
     /// compress integers, writhe compressed_size, compressed bytes.
     /// step 1: get enough space to put the compressed bytes.
     auto raw_size = sizeof(typename ColumnVector<T>::value_type) * limit; /// limit should align to 32-bit integers
-    auto need_size = streamvbyte_max_compressedbytes(raw_size/4 + 4);
+    auto need_size = streamvbyte_max_compressedbytes(raw_size / 4 + 4);
     ostr.forceNext(need_size);
     /// step 2: compress data
     size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
@@ -268,6 +268,7 @@ void DataTypeNumberBase<T>::serializeBinaryBulkWithCompression(const IColumn & c
     *(size_t *)ostr.position() = compsize;
     /// step 4: update pos of WriteBuffer
     ostr.position() += compsize + sizeof(size_t);
+    return compsize * 1.0 / raw_size;
 }
 
 template <typename T>
@@ -289,7 +290,7 @@ void DataTypeNumberBase<T>::deserializeBinaryBulkWithCompression(IColumn & colum
     size_t compsize = *(size_t *)istr.position();
     size_t n32 = limit * 1.0 * sizeof(typename ColumnVector<T>::value_type) / 4.0; /// haw may 32-bit integers
     size_t compsize2 = streamvbyte_decode(reinterpret_cast<const uint8_t *>(istr.position() + sizeof(size_t)), reinterpret_cast<uint32_t *>(reinterpret_cast<char *>(&x[initial_size])), n32); // decoding (fast)
-    if(compsize != compsize2)
+    if (compsize != compsize2)
     {
         throw Exception("exchange compression size is not equal");
     }

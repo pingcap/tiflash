@@ -66,7 +66,7 @@ void DataTypeNullable::serializeBinaryBulkWithMultipleStreams(
     nested_data_type->serializeBinaryBulkWithMultipleStreams(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
 }
 
-void DataTypeNullable::serializeBinaryBulkWithMultipleStreamsWithCompression(
+double DataTypeNullable::serializeBinaryBulkWithMultipleStreamsWithCompression(
     const IColumn & column,
     const OutputStreamGetter & getter,
     size_t offset,
@@ -84,7 +84,7 @@ void DataTypeNullable::serializeBinaryBulkWithMultipleStreamsWithCompression(
 
     /// Then serialize contents of arrays.
     path.back() = Substream::NullableElements;
-    nested_data_type->serializeBinaryBulkWithMultipleStreamsWithCompression(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
+    return nested_data_type->serializeBinaryBulkWithMultipleStreamsWithCompression(col.getNestedColumn(), getter, offset, limit, position_independent_encoding, path);
 }
 
 

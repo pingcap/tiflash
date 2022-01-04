@@ -29,9 +29,13 @@ public:
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
+
+protected:
+    double writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, bool enable_compression);
+    Poco::Logger * log = &Poco::Logger::get("CHBlockChunkCodecStream");
 };
 
-void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, bool enable_compression)
+double CHBlockChunkCodecStream::writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, bool enable_compression)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -47,7 +51,7 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
         return &ostr;
     };
 
-    type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {}, enable_compression);
+    return type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {}, enable_compression);
 }
 
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
@@ -65,17 +69,21 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
 
     writeVarUInt(columns, *output);
     writeVarUInt(rows, *output);
-
+    double compression_ratio = 0;
+    String compression_info = "compression_ratio for rows: " + std::to_string(rows) + " cols: " + std::to_string(columns);
     for (size_t i = 0; i < columns; i++)
     {
+        compression_ratio = 0;
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
         writeStringBinary(column.name, *output);
         writeStringBinary(column.type->getName(), *output);
 
         if (rows)
-            writeData(*column.type, column.column, *output, 0, 0, enable_compression);
+            compression_ratio = writeData(*column.type, column.column, *output, 0, 0, enable_compression);
+        compression_info += " " + std::to_string(i) + "-th = " + std::to_string(compression_ratio);
     }
+    LOG_DEBUG(log, compression_info);
 }
 
 std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
