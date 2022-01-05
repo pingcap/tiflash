@@ -40,7 +40,7 @@ static constexpr char MIGRATE_HELP[] =
     "Usage: migrate [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --version     Target dmfile version. [default: 2] [available: 1, 2]\n"
+    "  --version     Target dtfile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
     "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, none]\n"
@@ -189,10 +189,10 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V2);
             break;
         default:
-            throw DB::Exception(fmt::format("invalid dmfile version: {}", args.version));
+            throw DB::Exception(fmt::format("invalid dtfile version: {}", args.version));
         }
 
-        LOG_FMT_INFO(logger, "creating new dmfile");
+        LOG_FMT_INFO(logger, "creating new dtfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
         LOG_FMT_INFO(logger, "creating input stream");
@@ -212,7 +212,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         auto stat_iter = src_file->pack_stats.begin();
         auto properties_iter = src_file->pack_properties.property().begin();
         size_t counter = 0;
-        // iterate all blocks and rewrite them to new dmfile
+        // iterate all blocks and rewrite them to new dtfile
         while (auto block = input_stream->read())
         {
             LOG_FMT_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
@@ -296,7 +296,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         args.version = vm["version"].as<size_t>();
         if (args.version < 1 || args.version > 2)
         {
-            std::cerr << "invalid dmfile version: " << args.version << std::endl;
+            std::cerr << "invalid dtfile version: " << args.version << std::endl;
             return -EINVAL;
         }
         args.no_keep = no_keep;
