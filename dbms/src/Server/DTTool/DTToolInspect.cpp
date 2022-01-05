@@ -179,7 +179,6 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
-        auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
 
         if (imitative)
@@ -189,6 +188,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         }
         else
         {
+            auto config_file = vm["config-file"].as<std::string>();
             CLIService service(inspectServiceMain, args, config_file, ffi_function);
             return service.run({""});
         }
