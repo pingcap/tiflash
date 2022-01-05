@@ -5,9 +5,9 @@
 namespace DB
 {
 template <typename A, typename B>
-struct GreatestBaseImpl<A, B, false>
+struct BinaryGreatestBaseImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
+    using ResultType = typename NumberTraits::ResultOfBinaryGreatest<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -22,7 +22,7 @@ struct GreatestBaseImpl<A, B, false>
 };
 
 template <typename A, typename B>
-struct GreatestBaseImpl<A, B, true>
+struct BinaryGreatestBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -40,7 +40,7 @@ struct GreatestBaseImpl<A, B, true>
 };
 
 template <typename A, typename B>
-struct GreatestSpecialImpl
+struct BinaryGreatestSpecialImpl
 {
     using ResultType = std::make_unsigned_t<A>;
 
@@ -63,15 +63,15 @@ namespace
 struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
-using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
-using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Greatest, FunctionGreatest>;
+using FunctionBinaryGreatest = FunctionBinaryArithmetic<BinaryGreatestImpl, NameGreatest>;
+using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Greatest, FunctionBinaryGreatest>;
 
 } // namespace
 
 void registerFunctionGreatest(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBGreatest>();
-    factory.registerFunction<FunctionGreatest>();
+    factory.registerFunction<FunctionBinaryGreatest>();
 }
 
 } // namespace DB

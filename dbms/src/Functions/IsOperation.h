@@ -43,22 +43,22 @@ template <typename A, typename B>
 using ModuloImpl_t = ModuloImpl<A, B>;
 
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
-struct GreatestBaseImpl;
+struct BinaryGreatestBaseImpl;
 template <typename A, typename B>
-using GreatestBaseImpl_t = GreatestBaseImpl<A, B>;
+using BinaryGreatestBaseImpl_t = BinaryGreatestBaseImpl<A, B>;
 template <typename A, typename B>
-struct GreatestSpecialImpl;
+struct BinaryGreatestSpecialImpl;
 template <typename A, typename B>
-using GreatestImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, GreatestBaseImpl<A, B>, GreatestSpecialImpl<A, B>>;
+using BinaryGreatestImpl = std::conditional_t<!NumberTraits::BinaryLeastGreatestSpecialCase<A, B>, BinaryGreatestBaseImpl<A, B>, BinaryGreatestSpecialImpl<A, B>>;
 
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
-struct LeastBaseImpl;
+struct BinaryLeastBaseImpl;
 template <typename A, typename B>
-using LeastBaseImpl_t = LeastBaseImpl<A, B>;
+using BinaryLeastBaseImpl_t = BinaryLeastBaseImpl<A, B>;
 template <typename A, typename B>
-struct LeastSpecialImpl;
+struct BinaryLeastSpecialImpl;
 template <typename A, typename B>
-using LeastImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, LeastBaseImpl<A, B>, LeastSpecialImpl<A, B>>;
+using BinaryLeastImpl = std::conditional_t<!NumberTraits::BinaryLeastGreatestSpecialCase<A, B>, BinaryLeastBaseImpl<A, B>, BinaryLeastSpecialImpl<A, B>>; // todo clean the code...
 
 template <template <typename, typename> typename Op1, template <typename, typename> typename Op2>
 struct IsSameOperation
@@ -76,8 +76,8 @@ struct IsOperation
     static constexpr bool modulo = IsSameOperation<Op, ModuloImpl_t>::value;
     static constexpr bool div_floating = IsSameOperation<Op, DivideFloatingImpl_t>::value || IsSameOperation<Op, TiDBDivideFloatingImpl_t>::value;
     static constexpr bool div_int = IsSameOperation<Op, DivideIntegralImpl_t>::value || IsSameOperation<Op, DivideIntegralOrZeroImpl_t>::value;
-    static constexpr bool least = IsSameOperation<Op, LeastBaseImpl_t>::value;
-    static constexpr bool greatest = IsSameOperation<Op, GreatestBaseImpl_t>::value;
+    static constexpr bool least = IsSameOperation<Op, BinaryLeastBaseImpl_t>::value;
+    static constexpr bool greatest = IsSameOperation<Op, BinaryGreatestBaseImpl_t>::value;
 };
 
 } // namespace DB

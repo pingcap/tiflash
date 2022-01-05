@@ -341,30 +341,22 @@ struct ToInteger<Int128>
 // CLICKHOUSE-29. The same depth, different signs
 // NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
 template <typename A, typename B>
-constexpr bool LeastGreatestSpecialCase
+constexpr bool BinaryLeastGreatestSpecialCase
     = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B)) && (std::is_signed_v<A> ^ std::is_signed_v<B>);
 
 template <typename A, typename B>
-using ResultOfLeast = std::conditional_t<
-    LeastGreatestSpecialCase<A, B>,
-    typename Construct<true, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
-
-template <typename A, typename B>
-using ResultOfGreatest = std::conditional_t<
-    LeastGreatestSpecialCase<A, B>,
-    typename Construct<false, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
-
-
-template <typename A, typename B>
-constexpr bool TiDBLeastGreatestSpecialCase
+constexpr bool TiDBGreatestSpecialCase
     = (8 == sizeof(A) || 8 == sizeof(B))
     && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
 
+template <typename A, typename B>
+constexpr bool TiDBLeastSpecialCase
+    = (8 == sizeof(A) || 8 == sizeof(B))
+    && (std::is_signed_v<A> || std::is_signed_v<B>);
+
 
 template <typename A, typename B>
-struct ResultOfTiDBLeast
+struct ResultOfBinaryLeast
 {
     /**
      * in TiDB:
@@ -375,7 +367,22 @@ struct ResultOfTiDBLeast
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<TiDBLeastGreatestSpecialCase<A, B>, UInt64, Int64>>;
+        std::conditional_t<TiDBLeastSpecialCase<A, B>, Int64, UInt64>>;
+};
+
+template <typename A, typename B>
+struct ResultOfBinaryGreatest
+{
+    /**
+     * in TiDB:
+     * * if A or B is floating-point, least(A, B) evalutes to Float64.
+     * * if A or B is Integer which is not unsigned, least(A, B) evaluates to Int64.
+     * * if one of them is UInt64, least(A,B) evaluates to UInt64
+     */
+    using Type = std::conditional_t<
+        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        std::conditional_t<TiDBGreatestSpecialCase<A, B>, UInt64, Int64>>;
 };
 } // namespace NumberTraits
 

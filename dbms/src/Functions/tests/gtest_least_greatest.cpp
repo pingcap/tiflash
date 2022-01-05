@@ -114,7 +114,7 @@ try
             createColumn<Nullable<UInt64>>({9223372036854775820U})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt64>>({92233720368547720U}),
+        createColumn<Nullable<Int64>>({92233720368547720}),
         executeFunction(
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),

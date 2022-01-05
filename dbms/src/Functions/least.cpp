@@ -5,9 +5,9 @@
 namespace DB
 {
 template <typename A, typename B>
-struct LeastBaseImpl<A, B, false>
+struct BinaryLeastBaseImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
+    using ResultType = typename NumberTraits::ResultOfBinaryLeast<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -23,7 +23,7 @@ struct LeastBaseImpl<A, B, false>
 };
 
 template <typename A, typename B>
-struct LeastBaseImpl<A, B, true>
+struct BinaryLeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -41,7 +41,7 @@ struct LeastBaseImpl<A, B, true>
 };
 
 template <typename A, typename B>
-struct LeastSpecialImpl
+struct BinaryLeastSpecialImpl
 {
     using ResultType = std::make_signed_t<A>;
 
@@ -64,15 +64,15 @@ namespace
 struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
 
-using FunctionLeast = FunctionBinaryArithmetic<LeastBaseImpl_t, NameLeast>;
-using FunctionTiDBLeast = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Least, FunctionLeast>;
+using FunctionBinaryLeast = FunctionBinaryArithmetic<BinaryLeastImpl, NameLeast>;
+using FunctionTiDBLeast = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Least, FunctionBinaryLeast>;
 
 } // namespace
 
 void registerFunctionLeast(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBLeast>();
-    factory.registerFunction<FunctionLeast>();
+    factory.registerFunction<FunctionBinaryLeast>();
 }
 
 } // namespace DB
