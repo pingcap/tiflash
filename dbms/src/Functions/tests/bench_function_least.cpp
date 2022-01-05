@@ -143,9 +143,8 @@ private:
 
         std::default_random_engine e;
         for (size_t i = 0; i < col_num; ++i)
-        {
             col_types.push_back(data_types[e() % data_types.size()]);
-        }
+
         std::vector<MutableColumnPtr> cols;
         for (size_t i = 0; i < col_num; ++i)
         {
@@ -155,14 +154,10 @@ private:
         for (size_t i = 0; i < data_size_random; ++i)
         {
             for (size_t j = 0; j < col_num; j++)
-            {
                 cols[j]->insert(static_cast<Int64>(e()));
-            }
         }
         for (size_t i = 0; i < col_num; ++i)
-        {
             v_col.push_back(ColumnWithTypeAndName(std::move(cols[i]), col_types[i], "col"));
-        }
     }
 };
 

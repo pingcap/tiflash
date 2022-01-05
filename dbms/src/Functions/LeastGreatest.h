@@ -78,6 +78,7 @@ public:
             data_types[i] = block.getByPosition(arguments[i]).type;
         return executeNary(block, arguments, result);
     }
+
 private:
     const Context & context;
     void executeNary(Block & block, const ColumnNumbers & arguments, size_t result) const
@@ -180,6 +181,7 @@ public:
         }
         block.getByPosition(result).column = std::move(result_column);
     }
+
 private:
     const Context & context;
 };

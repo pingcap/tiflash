@@ -112,14 +112,13 @@ try
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<UInt64>>({9223372036854775820U})));
-    
+
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({92233720368547720U}),
         executeFunction(
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<Int64>>({92233720368547720})));
-
 }
 CATCH
 
@@ -193,7 +192,6 @@ try
             createColumn<Nullable<Int32>>({-2, 3, -12, 0, {}}),
             createColumn<Nullable<Int64>>({-1, 0, 0, {}, {}})));
 
-    
 
     // const-vector greatest
     ASSERT_COLUMN_EQ(
