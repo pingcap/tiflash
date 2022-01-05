@@ -291,9 +291,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             assert(buf.getMaterializedBytes() == file_stat.st_size);
         }
     };
-#else
-    auto examine_buffer_size = [](auto &, auto &) {
-    };
 #endif
     if (options.flags.isSingleFile())
     {
@@ -332,8 +329,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             const auto stream_name = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(stream_name);
             stream->flush();
+#ifndef NDEBUG
             examine_buffer_size(*stream->mark_file, *this->file_provider);
             examine_buffer_size(*stream->plain_file, *this->file_provider);
+#endif
             bytes_written += stream->getWrittenBytes();
 
             if (stream->minmaxes)
@@ -362,7 +361,9 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     stream->minmaxes->write(*type, *buf);
                     buf->sync();
                     bytes_written += buf->getMaterializedBytes();
+#ifndef NDEBUG
                     examine_buffer_size(*buf, *this->file_provider);
+#endif
                 }
             }
         };
