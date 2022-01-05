@@ -973,7 +973,7 @@ private:
                 return true;
             else
                 throw Exception(
-                    fmt::format("Illegal column {} of second argument of function ", col_right_untyped->getName(), getName()),
+                    fmt::format("Illegal column {} of second argument of function {}", col_right_untyped->getName(), getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
 
