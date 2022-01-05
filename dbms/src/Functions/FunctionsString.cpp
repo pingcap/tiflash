@@ -691,7 +691,7 @@ struct SubstringUTF8Impl
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            doSubstringUTF8Impl<implicit_length, is_positive_start>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
+            doSubstringUTF8<implicit_length, is_positive_start>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
         }
     }
 
@@ -714,23 +714,23 @@ struct SubstringUTF8Impl
         {
             auto [is_positive, original_start_abs] = start_func(i);
             size_t length = 0;
-            if constexpr (implicit_length)
+            if constexpr (!implicit_length)
                 length = length_func(i);
 
             if (is_positive)
             {
-                doSubstringUTF8Impl<implicit_length, true>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
+                doSubstringUTF8<implicit_length, true>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
             }
             else
             {
-                doSubstringUTF8Impl<implicit_length, false>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
+                doSubstringUTF8<implicit_length, false>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
             }
         }
     }
 
 private:
     template <bool implicit_length, bool is_positive_start>
-    static void doSubstringUTF8Impl(
+    static void doSubstringUTF8(
         size_t column_index,
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
@@ -1638,9 +1638,7 @@ public:
                     };
                 }
 
-                std::function<size_t(size_t)> get_length_func = [](size_t) {
-                    return 0;
-                };
+                std::function<size_t(size_t)> get_length_func;
                 if (!implicit_length)
                 {
                     const ColumnPtr & column_length = block.getByPosition(arguments[2]).column;
@@ -1732,11 +1730,11 @@ private:
     }
 
     template <typename Integer>
-    static std::pair<bool, size_t> getValueFromStartField(const Field & length_field)
+    static std::pair<bool, size_t> getValueFromStartField(const Field & start_field)
     {
         if constexpr (std::is_same_v<Integer, Int64>)
         {
-            Int64 signed_length = length_field.get<Int64>();
+            Int64 signed_length = start_field.get<Int64>();
 
             if (signed_length < 0)
             {
@@ -1750,7 +1748,7 @@ private:
         else
         {
             static_assert(std::is_same_v<Integer, UInt64>);
-            return {true, length_field.get<UInt64>()};
+            return {true, start_field.get<UInt64>()};
         }
     }
 
