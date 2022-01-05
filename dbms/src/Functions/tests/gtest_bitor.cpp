@@ -24,14 +24,16 @@ class TestFunctionBitOr : public DB::tests::FunctionTest
 #define ASSERT_BITOR(t1, t2, result) \
     ASSERT_COLUMN_EQ(result, executeFunction("bitOr", {t1, t2}))
 
-TEST_F(TestFunctionBitOr, SimpleTest)
+TEST_F(TestFunctionBitOr, Simple)
 try
 {
     ASSERT_BITOR(createColumn<Nullable<Int64>>({-1, 1}), createColumn<Nullable<Int64>>({0, 0}), createColumn<Nullable<Int64>>({-1, 1}));
-}
+}8:00] [INFO] [PageStorage.cpp:339] ["PageStorage:RegionPersister restore 0 pages, write batch sequence: 0, 0 puts and 0 refs and 0 deletes and 0 upserts"] [thread_id=1]
+        [2022/01/05 16:20:59.961 +08:00] [INFO] [<unknown>] ["KVStore:Restored 0 regions. "] [thread_id=1]
+        [2022/01/05 16:20:59.961
 CATCH
 
-/// Note: Only IntX and UIntX will be received by BitOr, others will be casted by TiDB Optimizer.
+/// Note: Only IntX and UIntX will be received by BitOr, others will be casted by TiDB Planner.
 TEST_F(TestFunctionBitOr, TypePromotion)
 try
 {
@@ -106,7 +108,7 @@ try
 }
 CATCH
 
-TEST_F(TestFunctionBitOr, TypeTestWithConst)
+TEST_F(TestFunctionBitOr, TypeCastWithConst)
 try
 {
     /// need test these kinds of columns:
@@ -131,20 +133,33 @@ try
     ASSERT_BITOR(createConstColumn<Int8>(4, 0), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Int64>({0, 1, 0, 1}));
     ASSERT_BITOR(createConstColumn<Int8>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int64>>({0, 1, std::nullopt, std::nullopt}));
     ASSERT_BITOR(createConstColumn<Int8>(4, 0), createConstColumn<UInt64>(4, 0), createConstColumn<Int64>(4, 0));
-    ASSERT_BITOR(createConstColumn<Int8>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<Nullable<Int64>>({0, 0, 0, 0}));
+    ASSERT_BITOR(createConstColumn<Int8>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<Nullable<Int64>>(4, 0));
     ASSERT_BITOR(createConstColumn<Int8>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<Int64>>(4, std::nullopt));
-//
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int64>>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, 0), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createColumn<Int64>({1, 1}));
-//
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int64>>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<Int64>({1, 1}));
-//    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createColumn<Int64>({1, 1}));
+
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Nullable<Int64>>({0, 1, 0, 1}));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int64>>({0, 1, std::nullopt, std::nullopt}));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<Int64>>(4, 0));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<Nullable<Int64>>(4, 0));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<UInt64>({0, 1, 0, 1}), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+    ASSERT_BITOR(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<Int64>>(4, std::nullopt));
+}
+CATCH
+
+TEST_F(TestFunctionBitOr, Boundary)
+try
+{
+    ASSERT_BITOR(createColumn<Int8>({127, 127, -128, -128}), createColumn<UInt8>({0, 255, 0, 255}), createColumn<Int8>({127, -1, -128, -1}));
+    ASSERT_BITOR(createColumn<Int8>({127, 127, -128, -128}), createColumn<UInt16>({0, 65535, 0, 65535}), createColumn<Int16>({127, -1, -128, -1}));
+    ASSERT_BITOR(createColumn<Int16>({32767, 32767, -32768, -32768}), createColumn<UInt8>({0, 255, 0, 255}), createColumn<Int16>({32767, 32767, -32768, -32513}));
+
+    ASSERT_BITOR(createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
+                 createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX}),
+                 createColumn<Int64>({0, -1, 1, -1, -1, -1, INT64_MAX, -1, INT64_MIN, -1}));
 }
 CATCH
 
