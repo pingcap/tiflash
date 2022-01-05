@@ -32,6 +32,84 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
     return std::nullopt;
 }
 
+
+std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
+{
+    PageSize single_page_size = 0;
+    VersionedEntries versioned_entries;
+
+    acquireLock();
+    for (const auto & [versioned_type, entry_del] : entries)
+    {
+        if (entry_del.is_delete)
+        {
+            continue;
+        }
+
+        const auto & entry = entry_del.entry;
+
+        if (entry.file_id == blob_id)
+        {
+            single_page_size += entry.size;
+            versioned_entries.emplace_back(std::make_pair(versioned_type, entry_del.entry));
+        }
+    }
+
+    return std::make_pair(versioned_entries, single_page_size);
+}
+
+std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
+{
+    PageEntriesV3 del_entries;
+
+    auto page_lock = acquireLock();
+
+    // for (auto & [seq, entry_or_del] : entries)
+    // {
+    //     std::cout << "seq : " << seq.sequence << " , epoch : " << seq.epoch << std::endl;
+    // }
+    // std::cout << "-----------------------------------" << std::endl;
+
+    if (entries.empty())
+    {
+        return std::make_pair(del_entries, true);
+    }
+
+    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
+
+
+    // Nothing need be GC
+    if (iter == entries.begin())
+    {
+        return std::make_pair(del_entries, false);
+    }
+
+    // If we can't find any seq lower than `lowest_seq`
+    // It means all seq in this entry no need gc.
+    if (iter == entries.end())
+    {
+        return std::make_pair(del_entries, false);
+    }
+
+    for (--iter; iter != entries.begin(); iter--)
+    {
+        // Already deleted, no need put in `del_entries`
+        if (iter->second.is_delete)
+        {
+            continue;
+        }
+
+        del_entries.emplace_back(iter->second.entry);
+        iter = entries.erase(iter);
+    }
+
+    // erase begin
+    del_entries.emplace_back(iter->second.entry);
+    entries.erase(iter);
+
+    return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
+}
+
 PageDirectory::PageDirectory()
     : sequence(0)
     , log(getLogWithPrefix(nullptr, "PageDirectory"))
@@ -201,90 +279,6 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
     // The edit committed, incr the sequence number to publish changes for `createSnapshot`
     sequence.fetch_add(1);
-}
-
-
-std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
-{
-    PageEntriesV3 del_entries;
-
-    auto page_lock = acquireLock();
-
-    if (entries.empty())
-    {
-        return std::make_pair(del_entries, true);
-    }
-
-    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
-
-    // Nothing need be GC
-    if (iter == entries.begin())
-    {
-        return std::make_pair(del_entries, false);
-    }
-
-    // If we can't find any seq lower than `lowest_seq`
-    // It means all seq in this entry no need gc.
-    if (iter == entries.end())
-    {
-        return std::make_pair(del_entries, false);
-    }
-
-    // We need to know whether the previous sequence is the same
-    // If previous sequence is the same, we should skip it.
-    do
-    {
-        auto iter_prev = iter;
-        iter_prev--;
-
-        if (iter_prev->first.sequence != iter->first.sequence)
-        {
-            break;
-        }
-
-        iter = iter_prev;
-    } while (iter == entries.begin());
-
-    for (--iter; iter != entries.begin(); iter--)
-    {
-        // Already deleted, no need put in `del_entries`
-        if (iter->second.is_delete)
-        {
-            continue;
-        }
-
-        del_entries.emplace_back(iter->second.entry);
-        iter = entries.erase(iter);
-    }
-
-    // erase begin
-    del_entries.emplace_back(iter->second.entry);
-    entries.erase(iter);
-
-    return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
-}
-
-std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
-{
-    PageSize single_page_size = 0;
-    VersionedEntries versioned_entries;
-    for (const auto & [versioned_type, entry_del] : entries)
-    {
-        if (entry_del.is_delete)
-        {
-            continue;
-        }
-
-        const auto & entry = entry_del.entry;
-
-        if (entry.file_id == blob_id)
-        {
-            single_page_size += entry.size;
-            versioned_entries.emplace_back(std::make_pair(versioned_type, entry_del.entry));
-        }
-    }
-
-    return std::make_pair(versioned_entries, single_page_size);
 }
 
 

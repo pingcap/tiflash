@@ -93,8 +93,46 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
+        /**
+         * Take out the `VersionedEntries` which exist in the `BlobFileId`.
+         * Also return the total size of entries.
+         */
         std::pair<VersionedEntries, PageSize> getEntriesFromBlobId(BlobFileId blob_id);
 
+        /**
+         * GC will give a `lowest_seq`.
+         * We will find the second entry which `LE` than `lowest_seq`.
+         * And reclaim all entries before that one.
+         * If we can't found any entry less than `lowest_seq`.
+         * Then all entries will be remained.
+         * 
+         * Ex1. 
+         *    entry 1 : seq 2 epoch 0
+         *    entry 2 : seq 2 epoch 1
+         *    entry 3 : seq 3 epoch 0
+         *    entry 4 : seq 4 epoch 0
+         * 
+         *    lowest_seq : 3
+         *    Then (entry 1, entry 2) will be delete.
+         * 
+         * Ex2. 
+         *    entry 1 : seq 2 epoch 0
+         *    entry 2 : seq 2 epoch 1
+         *    entry 3 : seq 4 epoch 0
+         *    entry 4 : seq 4 epoch 1
+         * 
+         *    lowest_seq : 3
+         *    Then (entry 1) will be delete
+         * 
+         * Ex2. 
+         *    entry 1 : seq 2 epoch 0
+         *    entry 2 : seq 2 epoch 1
+         *    entry 3 : seq 4 epoch 0
+         *    entry 4 : seq 4 epoch 1
+         * 
+         *    lowest_seq : 1
+         *    Then no entry should be delete.
+         */
         std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
 #ifndef DBMS_PUBLIC_GTEST
     private:

@@ -476,20 +476,21 @@ try
     auto removed_entries = entries.deleteAndGC(1);
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 0);
+
     // noting to be removed
     removed_entries = entries.deleteAndGC(2);
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 0);
 
-    // <2,0>, <2,1> get removed.
+    // <2,0> get removed.
     removed_entries = entries.deleteAndGC(4);
     ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 2);
+    ASSERT_EQ(removed_entries.first.size(), 1);
 
-    // <5,0>, <5,1>, <5,2>, <10,0> get removed.
+    // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
     removed_entries = entries.deleteAndGC(11);
     ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 4);
+    ASSERT_EQ(removed_entries.first.size(), 5);
 
     // <11,0> get removed, all cleared.
     removed_entries = entries.deleteAndGC(20);
