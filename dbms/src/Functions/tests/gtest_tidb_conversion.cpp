@@ -714,6 +714,36 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, castRealAsInt)
+try
+{
+}
+CATCH
+
+TEST_F(TestTidbConversion, castRealAsReal)
+try
+{
+}
+CATCH
+
+TEST_F(TestTidbConversion, castRealAsString)
+try
+{
+}
+CATCH
+
+TEST_F(TestTidbConversion, castRealAsDecimal)
+try
+{
+}
+CATCH
+
+TEST_F(TestTidbConversion, castRealAsTime)
+try
+{
+}
+CATCH
+
 TEST_F(TestTidbConversion, castTimeAsReal)
 try
 {
