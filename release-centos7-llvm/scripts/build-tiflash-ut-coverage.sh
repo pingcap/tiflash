@@ -50,7 +50,7 @@ fi
 
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
-CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-gcov-llvm.tar"
+CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-utcov-llvm.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
 
 rm -rf "${INSTALL_DIR}"
