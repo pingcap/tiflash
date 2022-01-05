@@ -1323,7 +1323,7 @@ struct DateTimeAddIntervalImpl
         else
         {
             throw Exception(
-                fmt::format("Illegal column {} of first argument of function ", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
