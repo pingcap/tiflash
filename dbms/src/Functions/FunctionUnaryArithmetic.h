@@ -170,7 +170,7 @@ public:
               || checkType<DataTypeDecimal256>(arguments, result)
               || checkType<DataTypeFloat64>(arguments, result)))
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}",  arguments[0]->getName(), getName()),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return result;
