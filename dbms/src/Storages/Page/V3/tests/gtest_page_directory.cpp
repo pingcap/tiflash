@@ -350,7 +350,7 @@ try
 
     // <11,0> get removed, all cleared.
     removed_entries = entries.deleteAndGC(20);
-    ASSERT_FALSE(removed_entries.second);
+    ASSERT_TRUE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 1);
 }
 CATCH
