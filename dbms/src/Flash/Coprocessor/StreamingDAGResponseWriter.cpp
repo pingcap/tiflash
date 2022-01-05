@@ -16,14 +16,6 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-#define SIZE2GB (1 << 31)
-
-inline void checkPacketSize(size_t size)
-{
-    if (size >= (size_t)SIZE2GB)
-        throw Exception(fmt::format("Packet is too large to send, size : {}", size));
-}
-
 inline void serializeToPacket(mpp::MPPDataPacket & packet, const tipb::SelectResponse & response)
 {
     if (!response.SerializeToString(packet.mutable_data()))
@@ -116,7 +108,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    checkPacketSize(packet.ByteSizeLong());
                     writer->write(packet);
                 }
                 return;
@@ -127,7 +118,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 packet.add_chunks(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            checkPacketSize(packet.ByteSizeLong());
             writer->write(packet);
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
@@ -148,7 +138,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 dag_chunk->set_rows_data(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            checkPacketSize(response.ByteSizeLong());
             writer->write(response);
         }
     }
@@ -190,7 +179,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             dag_chunk->set_rows_data(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        checkPacketSize(response.ByteSizeLong());
         writer->write(response);
     }
 }
@@ -308,16 +296,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     {
         if constexpr (send_exec_summary_at_last)
         {
-            checkPacketSize(packet[part_id].ByteSizeLong());
             writer->write(packet[part_id], part_id);
         }
         else
         {
             if (responses_row_count[part_id] > 0)
-            {
-                checkPacketSize(packet[part_id].ByteSizeLong());
                 writer->write(packet[part_id], part_id);
-            }
         }
     }
 }
