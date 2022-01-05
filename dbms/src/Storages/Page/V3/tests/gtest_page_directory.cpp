@@ -250,6 +250,115 @@ String toString(const PageIDAndEntriesV3 & entries)
 #define EXPECT_ENTRIES_NOT_EXIST(dir, pids, snap) \
     EXPECT_PRED_FORMAT3(getEntriesNotExist, dir, pids, snap)
 
+#define INSERT_ENTRY(VERSION)                                                                           \
+    PageEntryV3 entry_v##VERSION{.file_id = 1, .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+    entries.createNewVersion((VERSION), entry_v##VERSION);
+#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                              \
+    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = (VERSION), .offset = 0x234, .checksum = 0x5678}; \
+    entries.createNewVersion((VERSION), (EPOCH), entry_gc_v##VERSION##_##EPOCH);
+
+TEST(VersionedEntriesTest, InsertGet)
+{
+    PageDirectory::VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(5);
+    INSERT_ENTRY(10);
+
+    // Insert some entries with version
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_v2));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v5));
+    }
+    for (UInt64 seq = 10; seq < 20; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+
+    // Insert some entries with version && gc epoch
+    INSERT_GC_ENTRY(2, 1);
+    INSERT_GC_ENTRY(5, 1);
+    INSERT_GC_ENTRY(5, 2);
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+    }
+    for (UInt64 seq = 10; seq < 20; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+
+    // Insert delete. Can not get entry with seq >= delete_version.
+    // But it won't affect reading with old seq.
+    entries.createDelete(15);
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+    }
+    for (UInt64 seq = 10; seq < 15; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+    for (UInt64 seq = 15; seq < 20; ++seq)
+    {
+        ASSERT_FALSE(entries.getEntry(seq).has_value());
+    }
+}
+
+TEST(VersionedEntriesTest, Gc)
+try
+{
+    PageDirectory::VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_GC_ENTRY(2, 1);
+    INSERT_ENTRY(5);
+    INSERT_GC_ENTRY(5, 1);
+    INSERT_GC_ENTRY(5, 2);
+    INSERT_ENTRY(10);
+    INSERT_ENTRY(11);
+    entries.createDelete(15);
+
+    // noting to be removed
+    auto removed_entries = entries.deleteAndGC(1);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 0);
+    // noting to be removed
+    removed_entries = entries.deleteAndGC(2);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 0);
+
+    // <2,0>, <2,1> get removed.
+    removed_entries = entries.deleteAndGC(4);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 2);
+
+    // <5,0>, <5,1>, <5,2>, <10,0> get removed.
+    removed_entries = entries.deleteAndGC(11);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 4);
+
+    // <11,0> get removed, all cleared.
+    removed_entries = entries.deleteAndGC(20);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 1);
+}
+CATCH
+
+#undef INSERT_ENTRY
+#undef INSERT_GC_ENTRY
+// end of testing `VersionedEntriesTest`
+
 class PageDirectoryTest : public ::testing::Test
 {
 protected:
