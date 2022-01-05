@@ -8,6 +8,7 @@
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST.h>
+#include <streamvbyte.h>
 
 namespace DB
 {
@@ -67,6 +68,43 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & is
     x.resize(initial_size + limit);
     size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
     x.resize(initial_size + size / sizeof(FieldType));
+}
+
+template <typename T>
+double DataTypeDecimal<T>::serializeBinaryBulkWithCompression(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
+{
+    const typename ColumnType::Container & x = typeid_cast<const ColumnType &>(column).getData();
+
+    size_t size = x.size();
+
+    if (limit == 0 || offset + limit > size)
+        limit = size - offset;
+    /// TODO: compress int_64, int_128?
+    auto raw_size = sizeof(FieldType) * limit;
+    auto need_size = streamvbyte_max_compressedbytes(raw_size / 4 + 4);
+    ostr.forceNext(need_size);
+    size_t n32 = raw_size * 1.0 / 4.0;
+    size_t compsize = streamvbyte_encode(reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(&x[offset])), n32, reinterpret_cast<uint8_t *>(ostr.position() + sizeof(size_t)));
+    *(size_t *)ostr.position() = compsize;
+    ostr.position() += compsize + sizeof(size_t);
+    return compsize * 1.0 / raw_size;
+}
+
+template <typename T>
+void DataTypeDecimal<T>::deserializeBinaryBulkWithCompression(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
+{
+    typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
+    size_t initial_size = x.size();
+    x.resize(initial_size + limit);
+    size_t compsize = *(size_t *)istr.position();
+    size_t n32 = limit * 1.0 * sizeof(FieldType) / 4.0;
+    size_t compsize2 = streamvbyte_decode(reinterpret_cast<const uint8_t *>(istr.position() + sizeof(size_t)), reinterpret_cast<uint32_t *>(reinterpret_cast<char *>(&x[initial_size])), n32); // decoding (fast)
+    if (compsize != compsize2)
+    {
+        throw Exception("exchange compression size is not equal");
+    }
+    istr.position() += compsize + sizeof(size_t);
+    x.resize(initial_size + limit);
 }
 
 template <typename T>
