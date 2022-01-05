@@ -345,8 +345,7 @@ PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
 
 std::vector<PageEntriesV3> PageDirectory::gc()
 {
-    UInt64 sequence_loaded = sequence.load();
-    UInt64 lowest_seq = sequence_loaded;
+    UInt64 lowest_seq = sequence.load();
     std::vector<PageEntriesV3> all_del_entries;
 
     // Cleanup released snapshots
@@ -356,10 +355,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             iter = snapshots.erase(iter);
         else
         {
-            if (lowest_seq == sequence_loaded)
-            {
-                lowest_seq = iter->lock()->sequence;
-            }
+            lowest_seq = std::min(lowest_seq, iter->lock()->sequence);
             ++iter;
         }
     }
