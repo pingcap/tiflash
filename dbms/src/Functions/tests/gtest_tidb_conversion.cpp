@@ -49,6 +49,21 @@ const UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 
 class TestTidbConversion : public DB::tests::FunctionTest
 {
+public:
+    template<typename Input, typename Output>
+    void testNotOnlyNull(const std::optional<Input> & input, const std::optional<Output> & output)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createConstColumn<Nullable<Output>>(1, output) : createColumn<Nullable<Output>>({output}),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
 };
 
 using DecimalField32 = DecimalField<Decimal32>;
