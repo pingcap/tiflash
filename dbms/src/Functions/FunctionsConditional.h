@@ -814,7 +814,7 @@ private:
             }
             else
                 throw Exception(
-                    fmt::format("Illegal column {} of first argument of function {}. Must be ColumnUInt8 or ColumnConstUInt8." + arg_cond.column->getName(), getName()),
+                    fmt::format("Illegal column {} of first argument of function {}. Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
             return true;
         }
