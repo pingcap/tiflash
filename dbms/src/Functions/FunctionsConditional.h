@@ -368,7 +368,7 @@ private:
                 return true;
             else
                 throw Exception(
-                    fmt::format("Illegal column {}  of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
+                    fmt::format("Illegal column {} of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (col_arr_left && col_arr_left_elems)
