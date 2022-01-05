@@ -97,7 +97,7 @@ private:
             temp_block.insert({nullptr, res_type, "res_col"});
             auto function = SpecializedFunction::create(context);
             function->executeImpl(temp_block, {0, 1}, 2);
-            pre_col = std::move(temp_block.getByPosition(2)); // YWQ: This code could have performance issue.
+            pre_col = std::move(temp_block.getByPosition(2));
         }
         block.getByPosition(result).column = std::move(pre_col.column);
     }
@@ -226,7 +226,6 @@ public:
         const TiDB::TiDBCollatorPtr &) const override
     {
         DataTypes data_types(arguments.size());
-
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
