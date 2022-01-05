@@ -16,9 +16,9 @@ static constexpr char INSPECT_HELP[] =
     "Usage: inspect [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --config-file Tiflash config file.\n"
+    "  --config-file TiFlash config file.\n"
     "  --check       Iterate data files to check integrity.\n"
-    "  --file-id     Target DMFile ID.\n"
+    "  --file-id     Target DTFile ID.\n"
     "  --imitative   Use imitative context instead. (encryption is not supported in this mode)\n"
     "  --workdir     Target directory.";
 
