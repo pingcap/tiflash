@@ -1,6 +1,8 @@
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/PathPool.h>
 
 namespace DB
 {
@@ -12,10 +14,11 @@ namespace PS::V3
 {
 PageStorageImpl::PageStorageImpl(
     String name,
-    PSDiskDelegatorPtr delegator,
+    PSDiskDelegatorPtr delegator_,
     const Config & config_,
     const FileProviderPtr & file_provider_)
-    : DB::PageStorage(name, delegator, config_, file_provider_)
+    : DB::PageStorage(name, delegator_, config_, file_provider_)
+    , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
     // TBD: init blob_store ptr.
 }
@@ -111,10 +114,10 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
 
     for (const auto & del_version_entry : del_entries)
     {
-        blob_store->remove(del_version_entry);
+        blob_store.remove(del_version_entry);
     }
 
-    const auto & blob_need_gc = blob_store->getGCStats();
+    const auto & blob_need_gc = blob_store.getGCStats();
     if (blob_need_gc.empty())
     {
         return true;
@@ -127,7 +130,7 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
         return true;
     }
 
-    const auto & copy_list = blob_store->gc(blob_gc_info, total_page_size);
+    const auto & copy_list = blob_store.gc(blob_gc_info, total_page_size);
 
     if (copy_list.empty())
     {

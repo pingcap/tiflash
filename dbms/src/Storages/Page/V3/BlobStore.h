@@ -21,8 +21,8 @@ namespace PS::V3
 {
 using VersionedPageId = std::pair<PageId, PageVersionType>;
 using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
-using VersionedPageIdAndEntryList = std::list<std::tuple<PageId, PageVersionType, PageEntryV3>>;
-using VersionedPageIdAndEntries = std::list<std::pair<PageId, VersionedEntries>>;
+using VersionedPageIdAndEntryList = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+using VersionedPageIdAndEntries = std::vector<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
 {
