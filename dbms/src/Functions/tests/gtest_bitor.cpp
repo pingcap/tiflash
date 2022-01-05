@@ -27,9 +27,7 @@ TEST_F(TestFunctionBitOr, Simple)
 try
 {
     ASSERT_BITOR(createColumn<Nullable<Int64>>({-1, 1}), createColumn<Nullable<Int64>>({0, 0}), createColumn<Nullable<Int64>>({-1, 1}));
-}8:00] [INFO] [PageStorage.cpp:339] ["PageStorage:RegionPersister restore 0 pages, write batch sequence: 0, 0 puts and 0 refs and 0 deletes and 0 upserts"] [thread_id=1]
-        [2022/01/05 16:20:59.961 +08:00] [INFO] [<unknown>] ["KVStore:Restored 0 regions. "] [thread_id=1]
-        [2022/01/05 16:20:59.961
+}
 CATCH
 
 /// Note: Only IntX and UIntX will be received by BitOr, others will be casted by TiDB Planner.
