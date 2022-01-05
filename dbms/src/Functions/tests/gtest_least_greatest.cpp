@@ -1,26 +1,13 @@
 #include <Core/Field.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/IDataType.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
-
-#include <cstddef>
-#include <iostream>
-#include <vector>
 
 namespace DB::tests
 {
 class LeastGreatestTest : public DB::tests::FunctionTest
 {
-protected:
-    using DecimalField32 = DecimalField<Decimal32>;
-    using DecimalField64 = DecimalField<Decimal64>;
-    using DecimalField128 = DecimalField<Decimal128>;
-    using DecimalField256 = DecimalField<Decimal256>;
 };
 
 TEST_F(LeastGreatestTest, testLeast)
@@ -29,40 +16,40 @@ try
     const String & func_name = "tidbLeast";
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({1}),
+        createColumn<Int64>({1, 3, 2, 1, 3, 2, 8}),
         executeFunction(
             func_name,
-            createColumn<Int8>({2}),
-            createColumn<Int8>({1}),
-            createColumn<Int8>({3}),
-            createColumn<Int8>({4}),
-            createColumn<Int32>({5})));
+            createColumn<Int8>({2, 3, 4, 5, 6, 7, 8}),
+            createColumn<Int8>({1, 3, 5, 7, 9, 11, 10}),
+            createColumn<Int8>({3, 5, 7, 6, 3, 2, 16}),
+            createColumn<Int8>({4, 3, 2, 1, 7, 8, 9}),
+            createColumn<Int32>({5, 6, 7, 8, 10, 9, 8})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({7}),
+        createColumn<Int64>({7, 2, 3, 3, 2}),
         executeFunction(
             func_name,
-            createColumn<Int16>({10}),
-            createColumn<Int32>({7}),
-            createColumn<Int64>({8})));
+            createColumn<Int16>({10, 2, 3, 4, 5}),
+            createColumn<Int32>({7, 6, 5, 3, 4}),
+            createColumn<Int64>({8, 9, 6, 3, 2})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({7}),
+        createColumn<Int64>({7, 0, 1, 2, 6}),
         executeFunction(
             func_name,
-            createColumn<Int8>({10}),
-            createColumn<Int8>({7}),
-            createColumn<Int64>({8})));
+            createColumn<Int8>({10, 0, 1, 2, 6}),
+            createColumn<Int8>({7, 6, 5, 4, 9}),
+            createColumn<Int64>({8, 3, 4, 5, 6})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({1}),
+        createColumn<Int64>({1, 3, 2, 5, 4}),
         executeFunction(
             func_name,
-            createColumn<Int8>({2}),
-            createColumn<Int32>({1}),
-            createColumn<Int64>({3}),
-            createColumn<Int16>({4}),
-            createColumn<Int8>({5})));
+            createColumn<Int8>({2, 5, 6, 7, 9}),
+            createColumn<Int32>({1, 4, 3, 7, 8}),
+            createColumn<Int64>({3, 8, 4, 6, 7}),
+            createColumn<Int16>({4, 3, 2, 9, 8}),
+            createColumn<Int8>({5, 7, 6, 5, 4})));
 
     // consider null
     ASSERT_COLUMN_EQ(
@@ -125,6 +112,13 @@ try
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<UInt64>>({9223372036854775820U})));
+    
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({92233720368547720U}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({9223372036854775818U}),
+            createColumn<Nullable<Int64>>({92233720368547720})));
 
 }
 CATCH
@@ -135,40 +129,40 @@ try
     const String & func_name = "tidbGreatest";
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({5}),
+        createColumn<Int64>({5, 6, 7, 8, 10, 11, 16}),
         executeFunction(
             func_name,
-            createColumn<Int8>({2}),
-            createColumn<Int8>({1}),
-            createColumn<Int8>({3}),
-            createColumn<Int8>({4}),
-            createColumn<Int32>({5})));
+            createColumn<Int8>({2, 3, 4, 5, 6, 7, 8}),
+            createColumn<Int8>({1, 3, 5, 7, 9, 11, 10}),
+            createColumn<Int8>({3, 5, 7, 6, 3, 2, 16}),
+            createColumn<Int8>({4, 3, 2, 1, 7, 8, 9}),
+            createColumn<Int32>({5, 6, 7, 8, 10, 9, 8})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({10}),
+        createColumn<Int64>({10, 9, 6, 4, 5}),
         executeFunction(
             func_name,
-            createColumn<Int16>({10}),
-            createColumn<Int32>({7}),
-            createColumn<Int64>({8})));
+            createColumn<Int16>({10, 2, 3, 4, 5}),
+            createColumn<Int32>({7, 6, 5, 3, 4}),
+            createColumn<Int64>({8, 9, 6, 3, 2})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({10}),
+        createColumn<Int64>({10, 6, 5, 5, 9}),
         executeFunction(
             func_name,
-            createColumn<Int8>({10}),
-            createColumn<Int8>({7}),
-            createColumn<Int64>({8})));
+            createColumn<Int8>({10, 0, 1, 2, 6}),
+            createColumn<Int8>({7, 6, 5, 4, 9}),
+            createColumn<Int64>({8, 3, 4, 5, 6})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({5}),
+        createColumn<Int64>({5, 8, 6, 9, 9}),
         executeFunction(
             func_name,
-            createColumn<Int8>({2}),
-            createColumn<Int32>({1}),
-            createColumn<Int64>({3}),
-            createColumn<Int16>({4}),
-            createColumn<Int8>({5})));
+            createColumn<Int8>({2, 5, 6, 7, 9}),
+            createColumn<Int32>({1, 4, 3, 7, 8}),
+            createColumn<Int64>({3, 8, 4, 6, 7}),
+            createColumn<Int16>({4, 3, 2, 9, 8}),
+            createColumn<Int8>({5, 7, 6, 5, 4})));
 
     // consider null
     ASSERT_COLUMN_EQ(
@@ -232,6 +226,13 @@ try
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<UInt64>>({9223372036854775820U})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({9223372036854775818U}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({9223372036854775818U}),
+            createColumn<Nullable<Int64>>({92233720368547720})));
 }
 CATCH
 
