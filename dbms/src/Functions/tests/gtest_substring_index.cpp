@@ -10,7 +10,7 @@ namespace DB
 {
 namespace tests
 {
-class SubStringIndex : public DB::tests::FunctionTest
+class SubstringIndexTest : public DB::tests::FunctionTest
 {
 public:
     static constexpr auto func_name = "substringIndex";
@@ -65,7 +65,7 @@ public:
             auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
             auto delim_column = is_delim_const ? createConstColumn<Nullable<String>>(1, delim) : createColumn<Nullable<String>>({delim});
             auto count_column = is_count_const ? createConstColumn<Nullable<Integer>>(1, count) : createColumn<Nullable<Integer>>({count});
-            auto actual_res_column = executeFunction(SubStringIndex::func_name, str_column, delim_column, count_column);
+            auto actual_res_column = executeFunction(func_name, str_column, delim_column, count_column);
             ASSERT_COLUMN_EQ(expected_res_column, actual_res_column);
         };
         std::vector<bool> is_consts = {true, false};
@@ -76,7 +76,7 @@ public:
     }
 };
 
-TEST_F(SubStringIndex, BoundaryUnitTest)
+TEST_F(SubstringIndexTest, testBoundary)
 try
 {
     testBoundary<UInt8>();
@@ -90,14 +90,14 @@ try
 }
 CATCH
 
-TEST_F(SubStringIndex, strStringIndexStrTest)
+TEST_F(SubstringIndexTest, testMoreCases)
 try
 {
     // Test string
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"www.pingcap", "pingcap.com", "", "www.pingcap.com"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>(
                 {"www.pingcap.com", "www.pingcap.com", "www.pingcap.com", "www.pingcap.com"}),
             createColumn<Nullable<String>>({".", ".", ".", "."}),
@@ -106,7 +106,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, {}, "www.pingcap.com"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>(
                 {{}, "www.pingcap.com", "www.pingcap.com", "www.pingcap.com"}),
             createColumn<Nullable<String>>({".", {}, ".", "."}),
@@ -115,7 +115,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"pingcap.com", "www", "www.", ".com", "pingcap.com", ".com"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>(
                 {"www.pingcap.com", "www.pingcap.com", "www.pingcap.com", "www.pingcap.com", ".www.pingcap.com", ".www.pingcap.com"}),
             createColumn<Nullable<String>>({".", ".", "pingcap", "pingcap", ".", ".pingcap"}),
@@ -124,7 +124,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "", "aa", "aaaa", "aaaaaa", "aaaaaaaaa1"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>(
                 {"aaaaaaaaa1", "aaaaaaaaa1", "aaaaaaaaa1", "aaaaaaaaa1", "aaaaaaaaa1", "aaaaaaaaa1"}),
             createColumn<Nullable<String>>({"a", "aa", "aa", "aa", "aa", "aa"}),
@@ -133,7 +133,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "aaa", "aaaaaa", "aaaaaaaaa1", "", "aaaa"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(6, "aaaaaaaaa1"),
             createColumn<Nullable<String>>({"aaa", "aaa", "aaa", "aaa", "aaaa", "aaaa"}),
             createColumn<Nullable<Int64>>({1, 2, 3, 4, 1, 2})));
@@ -141,7 +141,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"aaaaaaaaa", "1", "a1", "aaa1", "aaaaa1", "aaaaaaa1", "aaaaaaaaa1"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(7, "aaaaaaaaa1"),
             createColumn<Nullable<String>>({"1", "a", "aa", "aa", "aa", "aa", "aa"}),
             createColumn<Nullable<Int64>>({1, -1, -1, -2, -3, -4, -5})));
@@ -149,7 +149,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1", "aaa1", "aaaaaa1", "aaaaaaaaa1"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(4, "aaaaaaaaa1"),
             createColumn<Nullable<String>>({"aaa", "aaa", "aaa", "aaa"}),
             createColumn<Nullable<Int64>>({-1, -2, -3, -4})));
@@ -158,7 +158,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(4, "aaa.bbb.ccc.ddd.eee.fff"),
             createColumn<Nullable<String>>({".", ".", ".", "."}),
             createColumn<Nullable<UInt64>>({18446744073709551615llu, 18446744073709551614llu, 18446744073709551613llu, 18446744073709551612llu})));
@@ -167,7 +167,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"begin" + std::string(INT8_MAX - 1, '.'), "begin" + std::string(INT8_MAX - 2, '.'), std::string(INT8_MAX, '.') + "end", std::string(INT8_MAX - 1, '.') + "end"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(4, "begin" + std::string(300, '.') + "end"),
             createColumn<Nullable<String>>({".", ".", ".", "."}),
             createColumn<Nullable<Int8>>({INT8_MAX, INT8_MAX - 1, INT8_MIN, INT8_MIN + 1})));
@@ -176,7 +176,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"begin" + std::string(UINT8_MAX - 1, '.'), "begin" + std::string(UINT8_MAX - 2, '.')}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(2, "begin" + std::string(300, '.') + "end"),
             createColumn<Nullable<String>>({".", "."}),
             createColumn<Nullable<UInt8>>({UINT8_MAX, UINT8_MAX - 1})));
@@ -185,7 +185,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"ping.cap", "ping.cap", "ping.cap", "ping.cap"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(4, "ping.cap"),
             createColumn<Nullable<String>>({".", ".", ".", "."}),
             createColumn<Nullable<Int64>>({INT64_MAX, INT64_MAX - 1, INT64_MIN, INT64_MIN + 1})));
@@ -194,7 +194,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"www.pingcap", "www.", "中文.测", "www.www"}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
             createConstColumn<Nullable<String>>(4, "."),
             createConstColumn<Nullable<Int64>>(4, 2)));
@@ -216,49 +216,49 @@ try
     auto result_nullable_string_col = createColumn<Nullable<String>>({"www.pingcap", "www.pingcap", "www.pingcap", "www.pingcap"});
     auto result_const_col = createConstColumn<String>(4, "www.pingcap");
     // Test type, type, type/nullable/const
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_string_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_string_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_string_col, delim_string_col, count_const_col));
     // Test type, nullable, type/nullable/const
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_nullable_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_nullable_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_nullable_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_string_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_string_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_string_col, delim_nullable_string_col, count_const_col));
     // Test type, const, type/nullable/const
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_const_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_const_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_string_col, delim_const_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_string_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_string_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_string_col, delim_const_col, count_const_col));
 
     // Test nullable, type, type/nullable/const
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_string_col, count_const_col));
     // Test nullable, nullable, type/nullable/const
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_nullable_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_nullable_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_nullable_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_nullable_string_col, count_const_col));
     // Test nullable, const, type/nullable/const
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_const_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_const_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_nullable_string_col, delim_const_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_nullable_string_col, delim_const_col, count_const_col));
 
     // Test const, type, type/nullable/const
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_const_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_const_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_const_col, delim_string_col, count_const_col));
     // Test const, nullable, type/nullable/const
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_nullable_string_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_nullable_string_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_nullable_string_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_const_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_const_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_const_col, delim_nullable_string_col, count_const_col));
     // Test const, const, type/nullable/const
-    ASSERT_COLUMN_EQ(result_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_const_col, count_int64_col));
-    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_const_col, count_nullable_int64_col));
-    ASSERT_COLUMN_EQ(result_const_col, executeFunction(SubStringIndex::func_name, data_const_col, delim_const_col, count_const_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction(func_name, data_const_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction(func_name, data_const_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_const_col, executeFunction(func_name, data_const_col, delim_const_col, count_const_col));
 
     // Test vector, empty const, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "", "", ""}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
             createConstColumn<Nullable<String>>(4, ""),
             createConstColumn<Nullable<Int64>>(4, 2)));
@@ -267,7 +267,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "", "", ""}),
         executeFunction(
-            SubStringIndex::func_name,
+            func_name,
             createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
             createColumn<Nullable<String>>({"", "", "", ""}),
             createColumn<Nullable<Int64>>({2, 2, 2, 2})));
