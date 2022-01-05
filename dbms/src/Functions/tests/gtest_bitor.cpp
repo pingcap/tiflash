@@ -12,7 +12,6 @@
 #include <vector>
 
 
-
 namespace DB
 {
 namespace tests
@@ -163,5 +162,5 @@ try
 }
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB

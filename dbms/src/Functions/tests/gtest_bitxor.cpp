@@ -12,7 +12,6 @@
 #include <vector>
 
 
-
 namespace DB
 {
 namespace tests
@@ -22,7 +21,7 @@ class TestFunctionBitXor : public DB::tests::FunctionTest
 };
 
 #define ASSERT_BITXOR(t1, t2, result) \
-ASSERT_COLUMN_EQ(result, executeFunction("bitXor", {t1, t2}))
+    ASSERT_COLUMN_EQ(result, executeFunction("bitXor", {t1, t2}))
 
 TEST_F(TestFunctionBitXor, Simple)
 try
@@ -156,10 +155,10 @@ try
     ASSERT_BITXOR(createColumn<Int16>({32767, 32767, -32768, -32768}), createColumn<UInt8>({0, 255, 0, 255}), createColumn<Int16>({32767, 32512, -32768, -32513}));
 
     ASSERT_BITXOR(createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
-                 createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX}),
-                 createColumn<Int64>({0, -1, 1, -2, -1, 0, INT64_MAX, INT64_MIN, INT64_MIN, INT64_MAX}));
+                  createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX}),
+                  createColumn<Int64>({0, -1, 1, -2, -1, 0, INT64_MAX, INT64_MIN, INT64_MIN, INT64_MAX}));
 }
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB

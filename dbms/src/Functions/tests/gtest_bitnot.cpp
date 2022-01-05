@@ -12,7 +12,6 @@
 #include <vector>
 
 
-
 namespace DB
 {
 namespace tests
@@ -23,7 +22,7 @@ class TestFunctionBitNot : public DB::tests::FunctionTest
 };
 
 #define ASSERT_BITNOT(t1, result) \
-ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
+    ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
 
 TEST_F(TestFunctionBitNot, Simple)
 try
@@ -41,10 +40,10 @@ try
     ASSERT_BITNOT(createColumn<Nullable<Int32>>({1}), createColumn<Nullable<Int32>>({-2}));
     ASSERT_BITNOT(createColumn<Nullable<Int64>>({1}), createColumn<Nullable<Int64>>({-2}));
 
-    ASSERT_BITNOT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt8>>({UINT8_MAX-1}));
-    ASSERT_BITNOT(createColumn<Nullable<UInt16>>({1}), createColumn<Nullable<UInt16>>({UINT16_MAX-1}));
-    ASSERT_BITNOT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt32>>({UINT32_MAX-1}));
-    ASSERT_BITNOT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<UInt64>>({UINT64_MAX-1}));
+    ASSERT_BITNOT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt8>>({UINT8_MAX - 1}));
+    ASSERT_BITNOT(createColumn<Nullable<UInt16>>({1}), createColumn<Nullable<UInt16>>({UINT16_MAX - 1}));
+    ASSERT_BITNOT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt32>>({UINT32_MAX - 1}));
+    ASSERT_BITNOT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<UInt64>>({UINT64_MAX - 1}));
 
     ASSERT_BITNOT(createColumn<Int8>({0, 0, 1, 1}), createColumn<Int8>({-1, -1, -2, -2}));
     ASSERT_BITNOT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int8>>({-1, -2, std::nullopt, std::nullopt}));
@@ -61,10 +60,10 @@ try
                   createColumn<Int64>({-1, -2, 0, INT64_MIN, INT64_MAX}));
 
     ASSERT_BITNOT(createColumn<UInt64>({0, 1, UINT64_MAX}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX-1, 0}));
+                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0}));
 }
 
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB

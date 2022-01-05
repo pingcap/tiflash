@@ -12,7 +12,6 @@
 #include <vector>
 
 
-
 namespace DB
 {
 namespace tests
@@ -22,7 +21,7 @@ class TestFunctionBitAnd : public DB::tests::FunctionTest
 };
 
 #define ASSERT_BITAND(t1, t2, result) \
-ASSERT_COLUMN_EQ(result, executeFunction("bitAnd", {t1, t2}))
+    ASSERT_COLUMN_EQ(result, executeFunction("bitAnd", {t1, t2}))
 
 TEST_F(TestFunctionBitAnd, Simple)
 try
@@ -161,5 +160,5 @@ try
 }
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB
