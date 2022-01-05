@@ -17,12 +17,14 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-#define SIZE2GB (1 << 30)
+#define SIZE2GB (1 << 31)
+
 inline void checkPacketSize(size_t size)
 {
-    if (size >= SIZE2GB)
+    if (size >= (size_t)SIZE2GB)
         throw Exception(fmt::format("Packet is too large to send, size : {}", size));
 }
+
 inline void serializeToPacket(mpp::MPPDataPacket & packet, const tipb::SelectResponse & response)
 {
     if (!response.SerializeToString(packet.mutable_data()))
