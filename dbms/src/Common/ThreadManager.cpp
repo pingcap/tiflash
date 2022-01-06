@@ -59,16 +59,16 @@ public:
 
     void wait() override
     {
-        wait0();
+        waitAndClear();
     }
 
     ~RawThreadManager()
     {
-        wait0();
+        waitAndClear();
     }
 
 protected:
-    void wait0()
+    void waitAndClear()
     {
         for (auto & worker : workers)
             worker.join();
