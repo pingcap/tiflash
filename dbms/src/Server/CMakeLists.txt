@@ -199,7 +199,7 @@ else ()
         set_target_properties(tiflash PROPERTIES
             BUILD_RPATH_USE_ORIGIN TRUE
             BUILD_WITH_INSTALL_RPATH TRUE
-            INSTALL_RPATH "$ORIGIN/tiflash-runtime"
+            INSTALL_RPATH "$ORIGIN/"
         )
     endif()
     install (TARGETS tiflash RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)

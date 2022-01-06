@@ -50,15 +50,14 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
 ninja tiflash
 
 source ${SCRIPTPATH}/utils/vendor_dependency.sh
-rm -rf ${INSTALL_DIR}/tiflash-runtime
-mkdir -p ${INSTALL_DIR}/tiflash-runtime
+
 # compress debug symbols
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 
 # Vendor dependencies
-vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/tiflash-runtime"
+vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/"
 
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/tiflash-runtime/libtiflash_proxy.so"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 # unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH

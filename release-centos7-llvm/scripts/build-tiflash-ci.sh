@@ -157,16 +157,14 @@ if [[ ${UPDATE_CCACHE} == "true" ]]; then
   curl -F builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
 fi
 
-rm -rf "${INSTALL_DIR}/tiflash-runtime"
-mkdir -p "${INSTALL_DIR}/tiflash-runtime"
 source ${SCRIPTPATH}/utils/vendor_dependency.sh
 
 # Reduce binary size by compressing.
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}/flash_cluster_manager"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/tiflash-runtime/libtiflash_proxy.so"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
-vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/tiflash-runtime"
+vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/"
 
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
