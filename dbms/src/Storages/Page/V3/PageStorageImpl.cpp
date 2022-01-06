@@ -165,23 +165,6 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     }
 }
 
-void PageStorageImpl::traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot();
-    }
-
-    const auto & page_ids = page_directory.getAllPageIds();
-    for (const auto & valid_page : page_ids)
-    {
-        [[maybe_unused]] const auto & page_entries = page_directory.get(valid_page, snapshot);
-
-        // TODO V3 entry to PageEntry
-        // acceptor(valid_page, page_entries.second);
-    }
-}
-
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     auto del_entries = page_directory.gc();
@@ -217,7 +200,11 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
 
 void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // TBD
+    assert(scanner != nullptr);
+    assert(remover != nullptr);
+    external_pages_scanner = scanner;
+    external_pages_remover = remover;
 }
 #pragma GCC diagnostic pop
 

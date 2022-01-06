@@ -46,8 +46,6 @@ public:
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
-    void traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot) override;
-
     bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
@@ -68,6 +66,9 @@ private:
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
+
+    ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 } // namespace PS::V3

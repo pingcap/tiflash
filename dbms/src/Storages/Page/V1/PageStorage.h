@@ -90,7 +90,6 @@ public:
     PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
     void read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
-    void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
     bool gc();
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});

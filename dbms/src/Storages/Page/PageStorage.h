@@ -173,8 +173,6 @@ public:
 
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) = 0;
 
-    virtual void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot) = 0;
-
     virtual PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
     // We may skip the GC to reduce useless reading by default.

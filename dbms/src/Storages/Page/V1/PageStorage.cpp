@@ -448,36 +448,6 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
     }
 }
 
-void PageStorage::traversePageEntries( //
-    const std::function<void(PageId page_id, const PageEntry & page)> & acceptor,
-    SnapshotPtr snapshot)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot();
-    }
-
-    // traverse over all Pages or RefPages
-#ifdef DELTA_VERSION_SET
-    auto valid_pages_ids = snapshot->version()->validPageIds();
-    for (auto page_id : valid_pages_ids)
-    {
-        const auto page_entry = snapshot->version()->find(page_id);
-        if (unlikely(!page_entry))
-            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries",
-                            ErrorCodes::LOGICAL_ERROR);
-        acceptor(page_id, *page_entry);
-    }
-#else
-    for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
-    {
-        const PageId page_id = iter.pageId();
-        const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
-        acceptor(page_id, page_entry);
-    }
-#endif
-}
-
 void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
 {
     assert(scanner != nullptr);
