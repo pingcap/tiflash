@@ -231,6 +231,13 @@ try
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<Int64>>({92233720368547720})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({923372036854775818}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({923372036854775818}),
+            createColumn<Nullable<Int64>>({92233720368547720})));
 }
 CATCH
 
