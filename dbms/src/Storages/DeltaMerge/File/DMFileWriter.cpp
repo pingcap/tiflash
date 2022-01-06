@@ -286,7 +286,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         if (!fp.isEncryptionEnabled())
         {
             auto fd = buf.getFD();
-            struct stat file_stat;
+            struct stat file_stat = {};
             ::fstat(fd, &file_stat);
             assert(buf.getMaterializedBytes() == file_stat.st_size);
         }

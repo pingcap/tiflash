@@ -402,17 +402,26 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             LOG_FMT_DEBUG(
                 pool.log,
                 "added new dt_file. [id={}] [path={}] [real_size={}] [reported_size={}]",
-                file_id, path, dmf_file.getSize(), file_size);
-        } else {
+                file_id,
+                path,
+                dmf_file.getSize(),
+                file_size);
+        }
+        else
+        {
             size_t size_sum = 0;
             auto get_folder_size = [](const Poco::File & target, size_t & counter) -> void {
                 auto get_folder_size_impl = [](const Poco::File & inner_target, size_t & inner_counter, auto & self) -> void {
                     std::vector<Poco::File> files;
                     inner_target.list(files);
-                    for (auto & i : files) {
-                        if(i.isFile()) {
+                    for (auto & i : files)
+                    {
+                        if (i.isFile())
+                        {
                             inner_counter += i.getSize();
-                        } else {
+                        }
+                        else
+                        {
                             self(i, inner_counter, self);
                         }
                     }
@@ -423,7 +432,10 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             LOG_FMT_DEBUG(
                 pool.log,
                 "added new dt_file. [id={}] [path={}] [real_size={}] [reported_size={}]",
-                file_id, path, size_sum, file_size);
+                file_id,
+                path,
+                size_sum,
+                file_size);
         }
     }
 #endif
