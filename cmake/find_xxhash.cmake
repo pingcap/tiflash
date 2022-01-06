@@ -5,5 +5,12 @@ if(NOT BUILD_SHARED_LIBS)
 endif()
 add_subdirectory(
         ${ClickHouse_SOURCE_DIR}/contrib/xxHash/cmake_unofficial EXCLUDE_FROM_ALL)
+if(ARCH_AMD64)
+    add_library(xxhash_dispatch STATIC ${ClickHouse_SOURCE_DIR}/contrib/xxHash/xxh_x86dispatch.c)
+    target_link_libraries(xxhash_dispatch PUBLIC xxHash::xxhash)
+    set(TIFLASH_XXHASH_LIBRARY xxhash_dispatch)
+else()
+    set(TIFLASH_XXHASH_LIBRARY xxHash::xxhash)
+endif()
 set(XXHASH_INCLUDE_DIR ${ClickHouse_SOURCE_DIR}/contrib/xxHash)
 
