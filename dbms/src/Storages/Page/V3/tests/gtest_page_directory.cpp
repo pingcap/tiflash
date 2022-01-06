@@ -500,6 +500,24 @@ try
 }
 CATCH
 
+TEST(VersionedEntriesTest, ReadAfterGcApplied)
+try
+{
+    PageDirectory::VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(3);
+    INSERT_ENTRY(5);
+    // Read with snapshot seq=2
+    ASSERT_TRUE(isSameEntry(entry_v2, *entries.getEntry(2)));
+    // Mock that gc applied and insert <2, 1>
+    INSERT_GC_ENTRY(2, 1);
+    // Now we should read the entry <2, 1> with seq=2
+    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *entries.getEntry(2)));
+    // <2,0> get removed
+    auto removed_entries = entries.deleteAndGC(2);
+    ASSERT_EQ(removed_entries.first.size(), 1);
+}
+CATCH
 
 TEST(VersionedEntriesTest, getEntriesFromBlobId)
 {
@@ -562,7 +580,7 @@ TEST(VersionedEntriesTest, getEntriesFromBlobId)
     ASSERT_TRUE(isSameEntry(it->second, entry_v8));
 }
 
-
+#undef INSERT_BLOBID_ENTRY
 #undef INSERT_ENTRY
 #undef INSERT_GC_ENTRY
 // end of testing `VersionedEntriesTest`

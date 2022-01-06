@@ -38,7 +38,7 @@ std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEn
     PageSize single_page_size = 0;
     VersionedEntries versioned_entries;
 
-    acquireLock();
+    auto page_lock = acquireLock();
     for (const auto & [versioned_type, entry_del] : entries)
     {
         if (entry_del.is_delete)
@@ -55,7 +55,7 @@ std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEn
         }
     }
 
-    return std::make_pair(versioned_entries, single_page_size);
+    return std::make_pair(std::move(versioned_entries), single_page_size);
 }
 
 std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
@@ -63,12 +63,6 @@ std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(
     PageEntriesV3 del_entries;
 
     auto page_lock = acquireLock();
-
-    // for (auto & [seq, entry_or_del] : entries)
-    // {
-    //     std::cout << "seq : " << seq.sequence << " , epoch : " << seq.epoch << std::endl;
-    // }
-    // std::cout << "-----------------------------------" << std::endl;
 
     if (entries.empty())
     {
@@ -107,7 +101,7 @@ std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(
     del_entries.emplace_back(iter->second.entry);
     entries.erase(iter);
 
-    return std::make_pair(del_entries, entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
+    return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
 PageDirectory::PageDirectory()
@@ -354,7 +348,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
         }
     }
 
-    for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
+    for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
     {
         const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
         if (!del_entries.empty())
@@ -366,6 +360,10 @@ std::vector<PageEntriesV3> PageDirectory::gc()
         {
             std::unique_lock write_lock(table_rw_mutex);
             iter = mvcc_table_directory.erase(iter);
+        }
+        else
+        {
+            iter++;
         }
     }
 
