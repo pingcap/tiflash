@@ -394,8 +394,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
 
 #ifndef NDEBUG
     {
-        auto folder = getDTFilePath(file_id, true);
-        auto dmf_path = fmt::format("{}/dmf_{}", folder, file_id);
+        auto dmf_path = fmt::format("{}/stable/dmf_{}", path, file_id);
         Poco::File dmf_file = {dmf_path};
         if (dmf_file.isFile())
         {
