@@ -602,60 +602,9 @@ TEST(VersionedEntriesTest, getEntriesFromBlobId)
 #undef INSERT_GC_ENTRY
 // end of testing `VersionedEntriesTest`
 
-class PageDirectoryGCTest : public DB::base::TiFlashStorageTestBasic
+class PageDirectoryGCTest : public PageDirectoryTest
 {
-public:
-    void pushMvcc(size_t seq_nums, UInt64 get_snapshot = UINT64_MAX)
-    {
-        PageId page_id = UINT64_MAX - 100;
-        [[maybe_unused]] PageVersionAndEntriesV3 meanless_seq_entries;
-
-        for (size_t idx = 0; idx < seq_nums; idx++)
-        {
-            putMvcc(page_id, 1, meanless_seq_entries, 0, true);
-            if (get_snapshot != UINT64_MAX && idx == get_snapshot)
-            {
-                snapshots_holder.emplace_back(dir.createSnapshot());
-            }
-        }
-    }
-
-    void putMvcc(PageId page_id,
-                 size_t buff_nums,
-                 PageVersionAndEntriesV3 & seq_entries,
-                 UInt64 seq_start,
-                 bool no_need_add = false)
-    {
-        for (size_t i = 0; i < buff_nums; ++i)
-        {
-            PageEntriesEdit edit;
-            PageEntryV3 entry{.file_id = 1, .size = 1024, .offset = 0x123, .checksum = 0x4567};
-            edit.put(page_id, entry);
-
-            if (!no_need_add)
-            {
-                seq_entries.emplace_back(std::make_tuple(seq_start++, 0, entry));
-            }
-            dir.apply(std::move(edit));
-        }
-    }
-
-
-    void delMvcc(PageId page_id)
-    {
-        PageEntriesEdit edit;
-        edit.del(page_id);
-        dir.apply(std::move(edit));
-    }
-
-protected:
-    PageDirectory dir;
-    std::list<PageDirectorySnapshotPtr> snapshots_holder;
 };
-
-// class PageDirectoryGCTest : public PageDirectoryTest
-// {
-// };
 
 #define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                              \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
