@@ -224,7 +224,7 @@ struct UnaryFunctionVectorized
 #else
 
 #define UnaryFunctionVectorized UnaryFunctionPlain
-#define UnaryFunctionNullableVectorized  UnaryFunctionNullablePlain
+#define UnaryFunctionNullableVectorized UnaryFunctionNullablePlain
 
 #endif
 
