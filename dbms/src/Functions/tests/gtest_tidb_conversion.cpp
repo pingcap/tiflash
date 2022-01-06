@@ -47,22 +47,117 @@ const UInt16 MAX_UINT16 = std::numeric_limits<UInt16>::max();
 const UInt32 MAX_UINT32 = std::numeric_limits<UInt32>::max();
 const UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 
+const Float32 MAX_FLOAT32 = std::numeric_limits<Float32>::max();
+const Float32 MIN_FLOAT32 = std::numeric_limits<Float32>::min();
+const Float64 MAX_FLOAT64 = std::numeric_limits<Float64>::max();
+const Float64 MIN_FLOAT64 = std::numeric_limits<Float64>::min();
+
 class TestTidbConversion : public DB::tests::FunctionTest
 {
 public:
-    template<typename Input, typename Output>
+    template <typename Input, typename Output>
     void testNotOnlyNull(const std::optional<Input> & input, const std::optional<Output> & output)
     {
         auto inner_test = [&](bool is_const) {
-            ASSERT_COLUMN_EQ(
-                is_const ? createConstColumn<Nullable<Output>>(1, output) : createColumn<Nullable<Output>>({output}),
-                executeFunction(
-                    func_name,
-                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
-                     createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+            if constexpr (IsDecimal<Output>)
+            {
+                if (std::is_same_v<Output, Decimal32>)
+                {
+                }
+                else if (std::is_same_v<Output, Decimal64>)
+                {
+                }
+                else if (std::is_same_v<Output, Decimal128>)
+                {
+                }
+                else
+                {
+                    static_assert(std::is_same_v<Output, Decimal256>);
+                }
+            }
+            else if constexpr (std::is_same_v<Output, MyDateTime>)
+            {
+            }
+            else
+            {
+                ASSERT_COLUMN_EQ(
+                    is_const ? createConstColumn<Nullable<Output>>(1, output) : createColumn<Nullable<Output>>({output}),
+                    executeFunction(
+                        func_name,
+                        {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                         createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+            }
         };
         inner_test(true);
         inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    void testOnlyNull()
+    {
+        std::vector<ColumnWithTypeAndName> nulls = {
+            createOnlyNullColumnConst(1),
+            createOnlyNullColumn(1),
+            createColumn<Nullable<Input>>({{}}),
+            createConstColumn<Nullable<Input>>(1, {})};
+
+        auto inner_test = [&](const ColumnWithTypeAndName & null_one) {
+            if constexpr (IsDecimal<Output>)
+            {
+                auto precision = 0;
+                if constexpr (std::is_same_v<Output, Decimal32>)
+                {
+                    precision = 9;
+                }
+                else if constexpr (std::is_same_v<Output, Decimal64>)
+                {
+                    precision = 18;
+                }
+                else if constexpr (std::is_same_v<Output, Decimal128>)
+                {
+                    precision = 38;
+                }
+                else
+                {
+                    static_assert(std::is_same_v<Output, Decimal256>);
+                    precision = 65;
+                }
+                auto meta = std::make_tuple(precision, 0);
+                auto res = null_one.column->isColumnConst()
+                    ? createConstColumn<Nullable<Output>>(meta, 1, std::optional<DecimalField<Output>>{})
+                    : createColumn<Nullable<Output>>(meta, {std::optional<DecimalField<Output>>{}});
+                ASSERT_COLUMN_EQ(
+                    res,
+                    executeFunction(
+                        func_name,
+                        {null_one,
+                         createCastTypeConstColumn(fmt::format("Nullable(Decimal({},0))", precision))}));
+            }
+            else if constexpr (std::is_same_v<Output, MyDateTime>)
+            {
+                auto res = null_one.column->isColumnConst() ? createDateTimeColumnConst(1, {}, 6) : createDateTimeColumn({{}}, 6);
+                ASSERT_COLUMN_EQ(
+                    res,
+                    executeFunction(
+                        func_name,
+                        {null_one,
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+            }
+            else
+            {
+                auto res = null_one.column->isColumnConst() ? createConstColumn<Nullable<Output>>(1, {}) : createColumn<Nullable<Output>>({{}});
+                ASSERT_COLUMN_EQ(
+                    res,
+                    executeFunction(
+                        func_name,
+                        {null_one,
+                         createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+            }
+        };
+        for (const auto & null_one : nulls)
+        {
+            inner_test(null_one);
+        }
     }
 };
 
@@ -692,12 +787,12 @@ TEST_F(TestTidbConversion, castIntAsTime)
 try
 {
     ASSERT_COLUMN_EQ(
-        createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        createDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, 20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
-        createDateTimeColumnNullable({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        createDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({{}, 20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
@@ -717,7 +812,7 @@ try
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
         TiFlashException);
     ASSERT_COLUMN_EQ(
-        createDateTimeColumnNullable({{}}, 6),
+        createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
@@ -732,30 +827,48 @@ CATCH
 TEST_F(TestTidbConversion, castRealAsInt)
 try
 {
+    testOnlyNull<Float32, Int64>();
+    testOnlyNull<Float32, UInt64>();
+    testOnlyNull<Float64, Int64>();
+    testOnlyNull<Float64, UInt64>();
 }
 CATCH
 
 TEST_F(TestTidbConversion, castRealAsReal)
 try
 {
+    testOnlyNull<Float32, Float64>();
+    testOnlyNull<Float64, Float64>();
 }
 CATCH
 
 TEST_F(TestTidbConversion, castRealAsString)
 try
 {
+    testOnlyNull<Float32, String>();
+    testOnlyNull<Float64, String>();
 }
 CATCH
 
 TEST_F(TestTidbConversion, castRealAsDecimal)
 try
 {
+    testOnlyNull<Float32, Decimal32>();
+    testOnlyNull<Float32, Decimal64>();
+    testOnlyNull<Float32, Decimal128>();
+    testOnlyNull<Float32, Decimal256>();
+    testOnlyNull<Float64, Decimal32>();
+    testOnlyNull<Float64, Decimal64>();
+    testOnlyNull<Float64, Decimal128>();
+    testOnlyNull<Float64, Decimal256>();
 }
 CATCH
 
 TEST_F(TestTidbConversion, castRealAsTime)
 try
 {
+    testOnlyNull<Float32, MyDateTime>();
+    testOnlyNull<Float64, MyDateTime>();
 }
 CATCH
 
