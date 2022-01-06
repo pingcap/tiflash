@@ -393,6 +393,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
 
 #ifndef NDEBUG
+    try
     {
         auto dmf_path = fmt::format("{}/stable/dmf_{}", path, file_id);
         Poco::File dmf_file = {dmf_path};
@@ -400,7 +401,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         {
             LOG_FMT_DEBUG(
                 pool.log,
-                "added new dt_file. [id={}] [path={}] [real_size={}] [reported_size={}]",
+                "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
                 file_id,
                 path,
                 dmf_file.getSize(),
@@ -430,12 +431,16 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             get_folder_size(dmf_file, size_sum);
             LOG_FMT_DEBUG(
                 pool.log,
-                "added new dt_file. [id={}] [path={}] [real_size={}] [reported_size={}]",
+                "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
                 file_id,
                 path,
                 size_sum,
                 file_size);
         }
+    }
+    catch (const Poco::Exception & exp)
+    {
+        LOG_FMT_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
     }
 #endif
 
