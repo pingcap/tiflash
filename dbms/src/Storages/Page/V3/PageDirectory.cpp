@@ -19,7 +19,7 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
@@ -33,7 +33,7 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
 }
 
 
-std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
+std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
 {
     PageSize single_page_size = 0;
     VersionedEntries versioned_entries;
@@ -58,7 +58,7 @@ std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEn
     return std::make_pair(std::move(versioned_entries), single_page_size);
 }
 
-std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
+std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
 {
     PageEntriesV3 del_entries;
 

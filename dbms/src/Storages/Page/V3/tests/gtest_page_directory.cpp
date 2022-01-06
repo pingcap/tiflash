@@ -404,7 +404,7 @@ CATCH
 
 TEST(VersionedEntriesTest, InsertGet)
 {
-    PageDirectory::VersionedPageEntries entries;
+    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_ENTRY(5);
     INSERT_ENTRY(10);
@@ -464,7 +464,7 @@ TEST(VersionedEntriesTest, InsertGet)
 TEST(VersionedEntriesTest, GC)
 try
 {
-    PageDirectory::VersionedPageEntries entries;
+    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
     INSERT_ENTRY(5);
@@ -516,7 +516,7 @@ CATCH
 TEST(VersionedEntriesTest, ReadAfterGcApplied)
 try
 {
-    PageDirectory::VersionedPageEntries entries;
+    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_ENTRY(3);
     INSERT_ENTRY(5);
@@ -538,7 +538,7 @@ CATCH
 
 TEST(VersionedEntriesTest, getEntriesFromBlobId)
 {
-    PageDirectory::VersionedPageEntries entries;
+    VersionedPageEntries entries;
 
     INSERT_BLOBID_ENTRY(1, 1);
     INSERT_BLOBID_ENTRY(1, 2);
