@@ -753,7 +753,7 @@ public:
                const AggregateDescriptions & aggregates_,
                bool overflow_row_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, true, "", collators_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
         {
             intermediate_header = intermediate_header_;
         }
