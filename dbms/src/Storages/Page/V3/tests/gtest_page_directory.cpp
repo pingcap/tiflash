@@ -460,7 +460,7 @@ TEST(VersionedEntriesTest, InsertGet)
     }
 }
 
-TEST(VersionedEntriesTest, Gc)
+TEST(VersionedEntriesTest, GC)
 try
 {
     PageDirectory::VersionedPageEntries entries;
@@ -478,15 +478,15 @@ try
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 0);
 
-    // noting to be removed
+    // <2,0> get removed.
     removed_entries = entries.deleteAndGC(2);
     ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 0);
+    ASSERT_EQ(removed_entries.first.size(), 1);
 
-    // <2,0> get removed.
+    // nothing get removed.
     removed_entries = entries.deleteAndGC(4);
     ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 1);
+    ASSERT_EQ(removed_entries.first.size(), 0);
 
     // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
     removed_entries = entries.deleteAndGC(11);
@@ -507,12 +507,16 @@ try
     INSERT_ENTRY(2);
     INSERT_ENTRY(3);
     INSERT_ENTRY(5);
+
     // Read with snapshot seq=2
     ASSERT_TRUE(isSameEntry(entry_v2, *entries.getEntry(2)));
+
     // Mock that gc applied and insert <2, 1>
     INSERT_GC_ENTRY(2, 1);
+
     // Now we should read the entry <2, 1> with seq=2
     ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *entries.getEntry(2)));
+
     // <2,0> get removed
     auto removed_entries = entries.deleteAndGC(2);
     ASSERT_EQ(removed_entries.first.size(), 1);
@@ -931,10 +935,14 @@ try
 
     const auto del_entries = dir.gc();
 
-    ASSERT_EQ(del_entries.size(), 1);
+    ASSERT_EQ(del_entries.size(), 2);
 
     // v2 v5 have been removed.
+    // Also v10 have been remove, It's a `del`, so it won't in `del_entries`
     ASSERT_EQ(del_entries[0].size(), 2);
+
+    // v1 v3 v4 v6 v7 v8 v9 have been removed.
+    ASSERT_EQ(del_entries[1].size(), 7);
 
     auto snapshot = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);

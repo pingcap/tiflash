@@ -69,8 +69,7 @@ std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(
         return std::make_pair(del_entries, true);
     }
 
-    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq));
-
+    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq, UINT64_MAX));
 
     // Nothing need be GC
     if (iter == entries.begin())
