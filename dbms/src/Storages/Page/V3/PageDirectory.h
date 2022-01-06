@@ -47,6 +47,12 @@ public:
 
     void gcApply(const VersionedPageIdAndEntryList & copy_list);
 
+    size_t numPages() const
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        return mvcc_table_directory.size();
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

@@ -275,9 +275,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 }
 
 
-void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
+void PageDirectory::gcApply(const VersionedPageIdAndEntryList & migrated_entries)
 {
-    for (const auto & [page_id, version, entry] : copy_list)
+    for (const auto & [page_id, version, entry] : migrated_entries)
     {
         auto iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())

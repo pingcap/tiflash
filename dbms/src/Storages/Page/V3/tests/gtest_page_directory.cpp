@@ -657,18 +657,25 @@ protected:
 // {
 // };
 
-// Insert an entry into mvcc directory
-#define INSERT_ENTRY(PAGE_ID, VERSION)                                                                  \
-    PageEntryV3 entry_v##VERSION{.file_id = 1, .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                   \
-        PageEntriesEdit edit;                                                                           \
-        edit.put((PAGE_ID), entry_v##VERSION);                                                          \
-        dir.apply(std::move(edit));                                                                     \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                              \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+    {                                                                                                                \
+        PageEntriesEdit edit;                                                                                        \
+        edit.put((PAGE_ID), entry_v##VERSION);                                                                       \
+        dir.apply(std::move(edit));                                                                                  \
     }
+// Insert an entry into mvcc directory
+#define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
 // Insert an entry into mvcc directory, and acquire a snapshot
 #define INSERT_ENTRY_ACQ_SNAP(PAGE_ID, VERSION) \
     INSERT_ENTRY(PAGE_ID, VERSION)              \
     auto snapshot##VERSION = dir.createSnapshot();
+#define INSERT_DELETE(PAGE_ID)      \
+    {                               \
+        PageEntriesEdit edit;       \
+        edit.del((PAGE_ID));        \
+        dir.apply(std::move(edit)); \
+    }
 
 static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
 {
@@ -759,8 +766,8 @@ try
          *   snapshot remain: [v3, v5]
          */
         const auto & del_entries = dir.gc();
-        // pae_id: v2; another_page_id: v1 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 2);
+        // page_id: []; another_page_id: v1 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
     }
 
     {
@@ -773,7 +780,7 @@ try
          *   snapshot remain: [v5]
          */
         const auto & del_entries = dir.gc();
-        // another_page_id: v3,v4 have been removed.
+        // page_id: v2; another_page_id: v3 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 2);
     }
 
@@ -787,8 +794,8 @@ try
          *   snapshot remain: []
          */
         const auto & del_entries = dir.gc();
-        // pae_id: v2; another_page_id: v1 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 4);
+        // page_id: v5; another_page_id: v6,v7,v8 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 5);
     }
 }
 CATCH
@@ -879,197 +886,218 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, GCCleanUP)
+TEST_F(PageDirectoryGCTest, GCCleanUPDeletedPage)
 try
 {
     /**
-     * case 3
-     * before GC => 
-     *   pageid : 50
-     *   entries: [v2, v5, v10]
-     *   lowest_seq: 7
-     *   hold_seq: [v7, v10]
-     * after GC => 
-     *   pageid : 50
-     *   entries remain: [v5, v10]
-     *   snapshot remain : [v5, v10]
+     * before GC => {
+     *     50  -> [v3,v5,v8(delete)]
+     *     512 -> [v1,v2,v4,v6,v7,v8,v9,v10(delete)]
+     *   }
+     *   snapshot remain: [v5, v8, v9]
      */
     PageId page_id = 50;
+    PageId another_page_id = 512;
 
-    PageVersionAndEntriesV3 exp_seq_entries;
+    // Push entries
+    INSERT_ENTRY(another_page_id, 1);
+    INSERT_ENTRY(another_page_id, 2);
+    INSERT_ENTRY(page_id, 3);
+    INSERT_ENTRY(another_page_id, 4);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 5);
+    INSERT_ENTRY(another_page_id, 6);
+    INSERT_ENTRY(another_page_id, 7);
+    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.del(page_id);
+        edit.put(another_page_id, entry_v8);
+        dir.apply(std::move(edit));
+    }
+    auto snapshot8 = dir.createSnapshot();
+    INSERT_ENTRY_ACQ_SNAP(another_page_id, 9);
+    INSERT_DELETE(another_page_id);
 
-    // push v1 with anonymous entry
-    pushMvcc(1);
+    {
+        EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+        EXPECT_ENTRY_EQ(entry_v4, dir, another_page_id, snapshot5);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot8);
+        EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        /**
+         * after GC => [
+         *     50  -> [v5,v8(delete)]
+         *     512 -> [v4,v6,v8,v9,v10(delete)]
+         *   }
+         *   snapshot remain: [v5,v8,v9]
+         */
+        auto del_entries = dir.gc();
+        // page_id: v3; another_page_id: v1,v2 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 3);
+        ASSERT_EQ(dir.numPages(), 2);
+    }
 
-    // put v2 without hold the snapshot.
-    // No need add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, exp_seq_entries, 2, true);
+    {
+        /**
+         * after GC => [
+         *     512 -> [v8,v9,v10(delete)]
+         *   }
+         *   snapshot remain: [v8,v9]
+         */
+        snapshot5.reset();
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot8);
+        EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        auto del_entries = dir.gc();
+        // page_id: v5; another_page_id: v4,v6,v7 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 4);
+        ASSERT_EQ(dir.numPages(), 1); // page_id should be removed.
+    }
 
-    // push v3, v4 with anonymous entry
-    pushMvcc(2);
+    {
+        /**
+         * after GC => [
+         *     512 -> [v9, v10(delete)]
+         *   }
+         *   snapshot remain: [v9]
+         */
+        snapshot8.reset();
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        auto del_entries = dir.gc();
+        // another_page_id: v8 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
+    }
 
-    // put v5 without hold the snapshot.
-    putMvcc(page_id, 1, exp_seq_entries, 5);
+    {
+        /**
+         * after GC => { empty }
+         *   snapshot remain: []
+         */
+        snapshot9.reset();
+        auto del_entries = dir.gc();
+        // another_page_id: v9 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
+        ASSERT_EQ(dir.numPages(), 0); // all should be removed.
+    }
 
-    // push v6-v9 with anonymous entry
-    // Also hold v7 snapshot
-    pushMvcc(4, 1);
-
-    // put v10
-    putMvcc(page_id, 1, exp_seq_entries, 10);
-    auto snapshot_holder = dir.createSnapshot();
-
-    const auto & del_entries = dir.gc();
-
-    ASSERT_EQ(del_entries.size(), 2);
-
-    // v2 have been removed.
-    ASSERT_EQ(del_entries[0].size(), 1);
-
-    // v1 v3 v4 v6 have been removed.
-    ASSERT_EQ(del_entries[1].size(), 4);
-
-    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+    auto snapshot_after_all = dir.createSnapshot();
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot_after_all);
+    EXPECT_ENTRY_NOT_EXIST(dir, another_page_id, snapshot_after_all);
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithUnalignSeq4)
+TEST_F(PageDirectoryGCTest, FullGCApply)
 try
 {
-    /**
-     * case 4
-     * before GC => 
-     *   pageid : 50
-     *   entries: [v2, v5, v10]
-     *   lowest_seq: 11
-     *   hold_seq: [11]
-     * after GC => 
-     *   pageid : 50
-     *   entries remain: [v10]
-     *   snapshot remain : [v10]
-     */
     PageId page_id = 50;
+    PageId another_page_id = 512;
+    INSERT_ENTRY_TO(page_id, 1, 1);
+    INSERT_ENTRY_TO(page_id, 2, 2);
+    INSERT_ENTRY_TO(another_page_id, 3, 2);
+    INSERT_ENTRY_TO(page_id, 4, 1);
+    INSERT_ENTRY_TO(page_id, 5, 3);
+    INSERT_ENTRY_TO(another_page_id, 6, 1);
 
-    PageVersionAndEntriesV3 exp_seq_entries;
+    // FIXME: This will copy many outdate pages
+    // Full GC get entries 
+    auto candidate_entries_1 = dir.getEntriesFromBlobIds({1});
+    EXPECT_EQ(candidate_entries_1.first.size(), 1);
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 2); // 2 page entries list
 
-    // push v1 with anonymous entry
-    pushMvcc(1);
+    auto candidate_entries_2_3 = dir.getEntriesFromBlobIds({2, 3});
+    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
+    const auto & entries_in_file2 = candidate_entries_2_3.first[2];
+    const auto & entries_in_file3 = candidate_entries_2_3.first[3];
+    EXPECT_EQ(entries_in_file2.size(), 2); // 2 page entries list
+    EXPECT_EQ(entries_in_file3.size(), 1); // 1 page entries list
 
-    // put v2 without hold the snapshot.
-    // No need add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, exp_seq_entries, 2, true);
+    VersionedPageIdAndEntryList gc_migrate_entries;
+    for (const auto & [file_id, entries] : candidate_entries_1.first)
+    {
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+    for (const auto & [file_id, entries] : candidate_entries_2_3.first)
+    {
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
 
-    // push v3, v4 with anonymous entry
-    pushMvcc(2);
-
-    // put v5 without hold the snapshot.
-    // No need add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, exp_seq_entries, 5, true);
-
-    // push v6-v9 with anonymous entry
-    pushMvcc(4);
-
-    // put v10 without hold the snapshot.
-    // add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, exp_seq_entries, 10);
-
-    // push v11 with anonymous entry
-    // Also hold v11 snapshot
-    pushMvcc(1, 0);
-
-    const auto & del_entries = dir.gc();
-
-    ASSERT_EQ(del_entries.size(), 2);
-
-    // v2 v5 have been removed.
-    ASSERT_EQ(del_entries[0].size(), 2);
-
-    // v1 v3 v4 v6 v7 v8 v9 have been removed.
-    ASSERT_EQ(del_entries[1].size(), 7);
-
-    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+    // Full GC execute apply
+    dir.gcApply(gc_migrate_entries);
 }
 CATCH
-
-TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithDel)
+TEST_F(PageDirectoryGCTest, MVCCAndFullGCInConcurrent)
 try
 {
-    /**
-     * before GC => 
-     *   pageid : 50
-     *   entries: [v2, v5, v10(del)]
-     *   lowest_seq: 11
-     *   hold_seq: [11]
-     * after GC => 
-     *   pageid : 50
-     *   entries remain: [none]
-     *   snapshot remain : [none]
-     */
     PageId page_id = 50;
+    PageId another_page_id = 512;
+    INSERT_ENTRY_TO(page_id, 1, 1);
+    INSERT_ENTRY_TO(page_id, 2, 2);
+    INSERT_ENTRY_TO(page_id, 3, 2);
+    INSERT_ENTRY_TO(page_id, 4, 1);
+    INSERT_ENTRY_TO(page_id, 5, 3);
+    INSERT_ENTRY_TO(another_page_id, 6, 1);
+    INSERT_DELETE(page_id);
 
-    [[maybe_unused]] PageVersionAndEntriesV3 meanless_seq_entries;
+    EXPECT_EQ(dir.numPages(), 2);
 
-    // push v1 with anonymous entry
-    pushMvcc(1);
+    // 1.1 Full GC get entries
+    auto candidate_entries_1 = dir.getEntriesFromBlobIds({1});
+    EXPECT_EQ(candidate_entries_1.first.size(), 1);
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 2);
 
-    // put v2 without hold the snapshot.
-    // No need add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, meanless_seq_entries, 2, true);
+    auto candidate_entries_2_3 = dir.getEntriesFromBlobIds({2, 3});
+    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
+    const auto & entries_in_file2 = candidate_entries_2_3.first[2];
+    const auto & entries_in_file3 = candidate_entries_2_3.first[3];
+    EXPECT_EQ(entries_in_file2.size(), 1);
+    EXPECT_EQ(entries_in_file3.size(), 1);
 
-    // push v3, v4 with anonymous entry
-    pushMvcc(2);
+    // 2.1 Execute GC
+    dir.gc();
+    // `page_id` get removed
+    EXPECT_EQ(dir.numPages(), 1);
 
-    // put v5 without hold the snapshot.
-    // No need add v2 into `exp_seq_entries`
-    putMvcc(page_id, 1, meanless_seq_entries, 5, true);
+    VersionedPageIdAndEntryList gc_migrate_entries;
+    for (const auto & [file_id, entries] : candidate_entries_1.first)
+    {
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+    for (const auto & [file_id, entries] : candidate_entries_2_3.first)
+    {
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
 
-    // push v6-v9 with anonymous entry
-    pushMvcc(4);
-
-    // put a writebatch with [type=del].
-    // Then mvcc will push seq into v10
-    delMvcc(page_id);
-
-    // push v11 with anonymous entry
-    // Also hold v11 snapshot
-    pushMvcc(1, 0);
-
-    const auto del_entries = dir.gc();
-
-    ASSERT_EQ(del_entries.size(), 2);
-
-    // v2 v5 have been removed.
-    // Also v10 have been remove, It's a `del`, so it won't in `del_entries`
-    ASSERT_EQ(del_entries[0].size(), 2);
-
-    // v1 v3 v4 v6 v7 v8 v9 have been removed.
-    ASSERT_EQ(del_entries[1].size(), 7);
-
-    auto snapshot = dir.createSnapshot();
-    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);
+    // 1.2 Full GC execute apply
+    dir.gcApply(gc_migrate_entries);
 }
 CATCH
-
-TEST_F(PageDirectoryGCTest, gcApply)
-{
-    PageId page_id = 50;
-    PageVersionAndEntriesV3 exp_seq_entries;
-    VersionedPageIdAndEntryList versioned_pageid_entry_list;
-
-    PageEntryV3 entry1{.file_id = 0, .size = 1024, .offset = 0x1234, .checksum = 0x5678};
-    PageEntryV3 entry2{.file_id = 0, .size = 1024, .offset = 0x12345, .checksum = 0x678910};
-
-    putMvcc(page_id, 4, exp_seq_entries, 1);
-    exp_seq_entries.emplace_back(std::make_tuple(4, 1, entry1));
-    putMvcc(page_id, 2, exp_seq_entries, 5);
-    exp_seq_entries.emplace_back(std::make_tuple(6, 1, entry2));
-
-    versioned_pageid_entry_list.emplace_back(std::make_tuple(page_id, PageVersionType(4, 0), entry1));
-    versioned_pageid_entry_list.emplace_back(std::make_tuple(page_id, PageVersionType(6, 0), entry2));
-
-    dir.gcApply(versioned_pageid_entry_list);
-    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
-}
 
 
 } // namespace PS::V3::tests
