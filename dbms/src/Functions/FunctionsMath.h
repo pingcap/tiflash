@@ -224,6 +224,7 @@ struct UnaryFunctionVectorized
 #else
 
 #define UnaryFunctionVectorized UnaryFunctionPlain
+#define UnaryFunctionNullableVectorized  UnaryFunctionNullablePlain
 
 #endif
 
@@ -591,6 +592,16 @@ bool log2args(double b, double e, double & result)
     return false;
 }
 
+bool sqrtNullable(double x, double & result)
+{
+    if (x < 0)
+    {
+        return true;
+    }
+    result = sqrt(x);
+    return false;
+}
+
 double sign(double x)
 {
     return (x > 0) - (x < 0);
@@ -702,7 +713,7 @@ using FunctionExp2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp2Name, 
 using FunctionLog2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log2Name, log2>>;
 using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name, preciseExp10>>;
 using FunctionLog10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log10Name, log10>>;
-using FunctionSqrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<SqrtName, sqrt>>;
+using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<SqrtName, DB::sqrtNullable>>;
 
 using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CbrtName,
 #if USE_VECTORCLASS
