@@ -1048,6 +1048,11 @@ try
 }
 CATCH
 
+#undef INSERT_ENTRY_TO
+#undef INSERT_ENTRY
+#undef INSERT_ENTRY_ACQ_SNAP
+#undef INSERT_DELETE
+
 
 } // namespace PS::V3::tests
 } // namespace DB
