@@ -347,7 +347,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                         write_limiter);
                     stream->minmaxes->write(*type, buf);
                     buf.sync();
-                    bytes_written += buf.getPositionInFile();
+                    bytes_written += buf.getMaterializedBytes();
                 }
                 else
                 {
