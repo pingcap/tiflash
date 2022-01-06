@@ -128,7 +128,7 @@ private:
     // so that above buffers can do seek/read without knowing the existence of frame headers
     off_t getMaterializedBytes() override
     {
-        return materialized_bytes + (offset() ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
+        return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
     }
 
 public:
