@@ -19,6 +19,9 @@
 #include <common/types.h>
 #include <fmt/core.h>
 
+#include <cstddef>
+#include <type_traits>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -26,22 +29,27 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-enum class LeastGreatest
+struct LeastImpl
 {
-    Least,
-    Greatest
+    static constexpr auto name = "tidbLeast";
+    static bool apply(int cmp_result) { return cmp_result < 0; }
+};
+struct GreatestImpl
+{
+    static constexpr auto name = "tidbGreatest";
+    static bool apply(int cmp_result) { return cmp_result > 0; }
 };
 
-template <LeastGreatest kind, typename SpecializedFunction>
+template <typename Impl, typename SpecializedFunction>
 class FunctionVectorizedLeastGreatest : public IFunction
 {
 public:
-    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    static constexpr auto name = Impl::name;
     explicit FunctionVectorizedLeastGreatest(const Context & context)
         : context(context){};
     static FunctionPtr create(const Context & context)
     {
-        return std::make_shared<FunctionVectorizedLeastGreatest<kind, SpecializedFunction>>(context);
+        return std::make_shared<FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>>(context);
     }
 
     String getName() const override { return name; }
@@ -90,9 +98,7 @@ private:
         ColumnNumbers col_nums = {0, 1};
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            Block temp_block{
-                pre_col,
-                block.getByPosition(arguments[i])};
+            Block temp_block{pre_col, block.getByPosition(arguments[i])};
             DataTypePtr res_type = function_builder.getReturnTypeImpl({pre_col.type, block.getByPosition(arguments[i]).type});
             temp_block.insert({nullptr, res_type, "res_col"});
             function->executeImpl(temp_block, col_nums, 2);
@@ -103,16 +109,16 @@ private:
     const Context & context;
 };
 
-template <LeastGreatest kind, typename SpecializedFunction>
+template <typename Impl, typename SpecializedFunction>
 class FunctionRowbasedLeastGreatest : public IFunction
 {
 public:
-    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    static constexpr auto name = Impl::name;
     explicit FunctionRowbasedLeastGreatest(const Context & context)
         : context(context){};
     static FunctionPtr create(const Context & context)
     {
-        return std::make_shared<FunctionRowbasedLeastGreatest<kind, SpecializedFunction>>(context);
+        return std::make_shared<FunctionRowbasedLeastGreatest<Impl, SpecializedFunction>>(context);
     }
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -127,10 +133,35 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        return FunctionVectorizedLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
+        return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    template <typename T, typename ColVec>
+    void dispatch(Block & block, const ColumnNumbers & arguments, Columns converted_columns, size_t result) const
+    {
+        auto col_to = ColVec::create(block.rows());
+        auto & vec_to = col_to->getData();
+        size_t num_arguments = arguments.size();
+
+        for (size_t row_num = 0; row_num < block.rows(); ++row_num)
+        {
+            size_t best_arg = 0;
+            for (size_t arg = 1; arg < num_arguments; ++arg)
+            {
+                int cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
+                if (Impl::apply(cmp_result))
+                    best_arg = arg;
+            }
+            if (const auto * from = checkAndGetColumn<ColVec>(converted_columns[best_arg].get()); from)
+            {
+                const auto & vec_from = from->getData();
+                vec_to[row_num] = vec_from[row_num];
+            }
+        }
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const override
     {
         size_t num_arguments = arguments.size();
         if (num_arguments < 2)
@@ -145,39 +176,35 @@ public:
             data_types[i] = block.getByPosition(arguments[i]).type;
 
         DataTypePtr result_type = getReturnTypeImpl(data_types);
-
-        auto result_column = result_type->createColumn();
-        result_column->reserve(block.rows());
-
-        for (size_t row_num = 0; row_num < block.rows(); ++row_num)
+        Columns converted_columns(num_arguments);
+        for (size_t arg = 0; arg < num_arguments; ++arg)
         {
-            size_t best_arg = 0;
-            for (size_t arg = 1; arg < num_arguments; ++arg)
-            {
-                int cmp_result = block.getByPosition(arguments[arg]).column->compareAt(row_num, row_num, *block.getByPosition(arguments[best_arg]).column, 1);
-
-                if constexpr (kind == LeastGreatest::Least) // YWQ TODO: simplify it
-                {
-                    if (cmp_result < 0)
-                        best_arg = arg;
-                }
-                else
-                {
-                    if (cmp_result > 0)
-                        best_arg = arg;
-                }
-            }
-
-            result_column->insertFrom(*block.getByPosition(arguments[best_arg]).column, row_num);
+            converted_columns[arg] = tiDBCastColumn(block.getByPosition(arguments[arg]), result_type, context);
+            auto temp = converted_columns[arg]->convertToFullColumnIfConst();
+            if (temp != nullptr)
+                converted_columns[arg] = std::move(temp);
         }
-        block.getByPosition(result).column = std::move(result_column);
+
+        if (checkDataType<DataTypeInt64>(result_type.get()))
+        {
+            // if constexpr (std::is_same_v<typename ColVec::value_type, T>)
+            dispatch<Int64, ColumnInt64>(block, arguments, converted_columns, result);
+        }
+        else if (checkDataType<DataTypeUInt64>(result_type.get()))
+        {
+            dispatch<UInt64, ColumnUInt64>(block, arguments, converted_columns, result);
+        }
+        else if (checkDataType<DataTypeFloat64>(result_type.get()))
+        {
+            dispatch<Float64, ColumnFloat64>(block, arguments, converted_columns, result);
+        }
     }
 
 private:
     const Context & context;
 };
 
-template <LeastGreatest kind, typename SpecializedFunction>
+template <typename Impl, typename SpecializedFunction>
 class FunctionBuilderTiDBLeastGreatest : public IFunctionBuilder
 {
 public:
@@ -187,10 +214,10 @@ public:
 
     static FunctionBuilderPtr create(const Context & context)
     {
-        return std::make_unique<FunctionBuilderTiDBLeastGreatest<kind, SpecializedFunction>>(context);
+        return std::make_unique<FunctionBuilderTiDBLeastGreatest<Impl, SpecializedFunction>>(context);
     }
 
-    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    static constexpr auto name = Impl::name;
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isVariadic() const override { return true; }
@@ -202,7 +229,7 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        return FunctionVectorizedLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
+        return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
 
     FunctionBasePtr buildImpl(
@@ -214,14 +241,14 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorized implementation. Will remove it when code review is done.
+        if (std::is_same_v<Impl, GreatestImpl>) //YWQ: A hack, make Greatest use non-vectorized implementation. Will remove it when the code review is done.
         {
-            auto function = FunctionRowbasedLeastGreatest<kind, SpecializedFunction>::create(context);
+            auto function = FunctionRowbasedLeastGreatest<Impl, SpecializedFunction>::create(context);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
         }
         else
         {
-            auto function = FunctionVectorizedLeastGreatest<kind, SpecializedFunction>::create(context);
+            auto function = FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
         }
     }

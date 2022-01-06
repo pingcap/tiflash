@@ -48,7 +48,7 @@ struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionBinaryGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
-using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Greatest, FunctionBinaryGreatest>;
+using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<GreatestImpl, FunctionBinaryGreatest>;
 
 } // namespace
 
