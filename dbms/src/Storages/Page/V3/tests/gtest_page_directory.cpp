@@ -506,34 +506,14 @@ CATCH
 class PageDirectoryGCTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    void SetUp() override
-    {
-        path = getTemporaryPath();
-        DB::tests::TiFlashTestEnv::tryRemovePath(path);
-
-        Poco::File file(path);
-        if (!file.exists())
-        {
-            file.createDirectories();
-        }
-
-        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-        blob_store = std::make_shared<BlobStore>(file_provider, path, config);
-    }
-
-    BlobStorePtr getBlobStore() const
-    {
-        return blob_store;
-    }
-
-    void pushMvccSeqForword(size_t seq_nums, UInt64 get_snapshot = UINT64_MAX)
+    void pushMvcc(size_t seq_nums, UInt64 get_snapshot = UINT64_MAX)
     {
         PageId page_id = UINT64_MAX - 100;
         [[maybe_unused]] PageVersionAndEntriesV3 meanless_seq_entries;
 
         for (size_t idx = 0; idx < seq_nums; idx++)
         {
-            putInMvccAndBlobStore(page_id, fixed_test_buff_size, 1, meanless_seq_entries, 0, true, false);
+            putMvcc(page_id, 1, meanless_seq_entries, 0, true);
             if (get_snapshot != UINT64_MAX && idx == get_snapshot)
             {
                 snapshots_holder.emplace_back(dir.createSnapshot());
@@ -541,77 +521,37 @@ public:
         }
     }
 
-    void putInMvccAndBlobStore(PageId page_id,
-                               size_t buff_size,
-                               size_t buff_nums,
-                               PageVersionAndEntriesV3 & seq_entries,
-                               UInt64 seq_start,
-                               bool no_need_add = false,
-                               bool copy_one_epoch = false)
+    void putMvcc(PageId page_id,
+                 size_t buff_nums,
+                 PageVersionAndEntriesV3 & seq_entries,
+                 UInt64 seq_start,
+                 bool no_need_add = false)
     {
-        char c_buff[buff_size * buff_nums];
-        WriteBatch wb;
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            for (size_t j = 0; j < buff_size; ++j)
-            {
-                c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
-            }
-
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
-            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
-
-            auto edit = getBlobStore()->write(wb, nullptr);
-            const auto & record_last = edit.getRecords().rbegin();
+            PageEntriesEdit edit;
+            PageEntryV3 entry{.file_id = 1, .size = 1024, .offset = 0x123, .checksum = 0x4567};
+            edit.put(page_id, entry);
 
             if (!no_need_add)
             {
-                seq_entries.emplace_back(std::make_tuple(seq_start, 0, record_last->entry));
-                if (copy_one_epoch)
-                {
-                    // If copy_one_epoch enable
-                    // We will copy a new entry in new blobfile.
-                    auto new_entry = record_last->entry;
-                    new_entry.file_id += 1;
-                    new_entry.offset = epoch_offset;
-                    epoch_offset += buff_size;
-                    seq_entries.emplace_back(std::make_tuple(seq_start, 1, new_entry));
-                }
-                seq_start++;
+                seq_entries.emplace_back(std::make_tuple(seq_start++, 0, entry));
             }
-
             dir.apply(std::move(edit));
-            wb.clear();
         }
     }
 
-    void doBlobStoreRemove(const std::vector<PageEntriesV3> & del_entries)
-    {
-        for (const auto & del_version_entry : del_entries)
-        {
-            blob_store->remove(del_version_entry);
-        }
-    }
 
-    void delInMvccAndBlobStore(PageId page_id)
+    void delMvcc(PageId page_id)
     {
-        WriteBatch wb;
-        wb.delPage(page_id);
-        auto edit = getBlobStore()->write(wb, nullptr);
+        PageEntriesEdit edit;
+        edit.del(page_id);
         dir.apply(std::move(edit));
     }
 
 protected:
-    BlobStorePtr blob_store;
-    BlobStore::Config config;
-    FileProviderPtr file_provider;
-    String path{};
     PageDirectory dir;
-
     std::list<PageDirectorySnapshotPtr> snapshots_holder;
-    size_t fixed_test_buff_size = 1024;
-
-    size_t epoch_offset = 0;
 };
 
 TEST_F(PageDirectoryGCTest, TestPageDirectoryGCwithAlignSeq)
@@ -628,25 +568,27 @@ try
      *   snapshot remain: [v3,v5]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
     PageVersionAndEntriesV3 exp_seq_entries;
 
     // put v1 - v2
-    putInMvccAndBlobStore(page_id, buf_size, 2, exp_seq_entries, 0, true);
+    putMvcc(page_id, 2, exp_seq_entries, 0, true);
 
     // put v3
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 3, false);
+    putMvcc(page_id, 1, exp_seq_entries, 3, false);
     auto snapshot_holder = dir.createSnapshot();
 
     // put v4
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 4, false);
+    putMvcc(page_id, 1, exp_seq_entries, 4, false);
 
     // put v5
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5, false);
+    putMvcc(page_id, 1, exp_seq_entries, 5, false);
     auto snapshot_holder2 = dir.createSnapshot();
 
     const auto & del_entries = dir.gc();
-    doBlobStoreRemove(del_entries);
+
+    ASSERT_EQ(del_entries.size(), 1);
+    // v1 , v2 have been removed.
+    ASSERT_EQ(del_entries[0].size(), 2);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -668,33 +610,33 @@ try
      *   snapshot remain: [v3, v5, v10]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
 
     PageVersionAndEntriesV3 exp_seq_entries;
 
     // push v1 - v2
-    pushMvccSeqForword(2, 1);
+    pushMvcc(2, 0);
 
     // put v3
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 3);
+    putMvcc(page_id, 1, exp_seq_entries, 3);
     auto snapshot_holder1 = dir.createSnapshot();
 
     // push v4
-    pushMvccSeqForword(1);
+    pushMvcc(1);
 
     // put v5
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+    putMvcc(page_id, 1, exp_seq_entries, 5);
     auto snapshot_holder2 = dir.createSnapshot();
 
     // push v6-v9
-    pushMvccSeqForword(4);
+    pushMvcc(4);
 
     // put v10
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    putMvcc(page_id, 1, exp_seq_entries, 10);
     auto snapshot_holder3 = dir.createSnapshot();
 
     const auto & del_entries = dir.gc();
-    doBlobStoreRemove(del_entries);
+    // no entry been removed
+    ASSERT_EQ(del_entries.size(), 0);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -716,33 +658,35 @@ try
      *   snapshot remain: [v2, v5, v10]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
 
     PageVersionAndEntriesV3 exp_seq_entries;
 
     // push v1 with anonymous entry
-    pushMvccSeqForword(1);
+    pushMvcc(1);
 
     // put v2 without hold the snapshot.
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2);
+    putMvcc(page_id, 1, exp_seq_entries, 2);
 
     // push v3, v4 with anonymous entry
     // Also hold v3 snapshot
-    pushMvccSeqForword(2, 0);
+    pushMvcc(2, 0);
 
     // put v5
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+    putMvcc(page_id, 1, exp_seq_entries, 5);
     auto snapshot_holder1 = dir.createSnapshot();
 
     // push v6-v9 with anonymous entry
-    pushMvccSeqForword(4);
+    pushMvcc(4);
 
     // put v10
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    putMvcc(page_id, 1, exp_seq_entries, 10);
     auto snapshot_holder2 = dir.createSnapshot();
 
     const auto & del_entries = dir.gc();
-    doBlobStoreRemove(del_entries);
+
+    ASSERT_EQ(del_entries.size(), 1);
+    // v1  have been removed.
+    ASSERT_EQ(del_entries[0].size(), 1);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -764,33 +708,39 @@ try
      *   snapshot remain : [v5, v10]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
 
     PageVersionAndEntriesV3 exp_seq_entries;
 
     // push v1 with anonymous entry
-    pushMvccSeqForword(1);
+    pushMvcc(1);
 
     // put v2 without hold the snapshot.
     // No need add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2, true);
+    putMvcc(page_id, 1, exp_seq_entries, 2, true);
 
     // push v3, v4 with anonymous entry
-    pushMvccSeqForword(2);
+    pushMvcc(2);
 
     // put v5 without hold the snapshot.
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5);
+    putMvcc(page_id, 1, exp_seq_entries, 5);
 
     // push v6-v9 with anonymous entry
     // Also hold v7 snapshot
-    pushMvccSeqForword(4, 1);
+    pushMvcc(4, 1);
 
     // put v10
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    putMvcc(page_id, 1, exp_seq_entries, 10);
     auto snapshot_holder = dir.createSnapshot();
 
     const auto & del_entries = dir.gc();
-    doBlobStoreRemove(del_entries);
+
+    ASSERT_EQ(del_entries.size(), 2);
+
+    // v2 have been removed.
+    ASSERT_EQ(del_entries[0].size(), 1);
+
+    // v1 v3 v4 v6 have been removed.
+    ASSERT_EQ(del_entries[1].size(), 4);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -812,37 +762,43 @@ try
      *   snapshot remain : [v10]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
 
     PageVersionAndEntriesV3 exp_seq_entries;
 
     // push v1 with anonymous entry
-    pushMvccSeqForword(1);
+    pushMvcc(1);
 
     // put v2 without hold the snapshot.
     // No need add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 2, true);
+    putMvcc(page_id, 1, exp_seq_entries, 2, true);
 
     // push v3, v4 with anonymous entry
-    pushMvccSeqForword(2);
+    pushMvcc(2);
 
     // put v5 without hold the snapshot.
     // No need add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 5, true);
+    putMvcc(page_id, 1, exp_seq_entries, 5, true);
 
     // push v6-v9 with anonymous entry
-    pushMvccSeqForword(4);
+    pushMvcc(4);
 
     // put v10 without hold the snapshot.
     // add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, exp_seq_entries, 10);
+    putMvcc(page_id, 1, exp_seq_entries, 10);
 
     // push v11 with anonymous entry
     // Also hold v11 snapshot
-    pushMvccSeqForword(1, 0);
+    pushMvcc(1, 0);
 
     const auto & del_entries = dir.gc();
-    doBlobStoreRemove(del_entries);
+
+    ASSERT_EQ(del_entries.size(), 2);
+
+    // v2 v5 have been removed.
+    ASSERT_EQ(del_entries[0].size(), 2);
+
+    // v1 v3 v4 v6 v7 v8 v9 have been removed.
+    ASSERT_EQ(del_entries[1].size(), 7);
 
     EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
 }
@@ -863,37 +819,40 @@ try
      *   snapshot remain : [none]
      */
     PageId page_id = 50;
-    size_t buf_size = 1024;
 
     [[maybe_unused]] PageVersionAndEntriesV3 meanless_seq_entries;
 
     // push v1 with anonymous entry
-    pushMvccSeqForword(1);
+    pushMvcc(1);
 
     // put v2 without hold the snapshot.
     // No need add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, meanless_seq_entries, 2, true);
+    putMvcc(page_id, 1, meanless_seq_entries, 2, true);
 
     // push v3, v4 with anonymous entry
-    pushMvccSeqForword(2);
+    pushMvcc(2);
 
     // put v5 without hold the snapshot.
     // No need add v2 into `exp_seq_entries`
-    putInMvccAndBlobStore(page_id, buf_size, 1, meanless_seq_entries, 5, true);
+    putMvcc(page_id, 1, meanless_seq_entries, 5, true);
 
     // push v6-v9 with anonymous entry
-    pushMvccSeqForword(4);
+    pushMvcc(4);
 
     // put a writebatch with [type=del].
     // Then mvcc will push seq into v10
-    delInMvccAndBlobStore(page_id);
+    delMvcc(page_id);
 
     // push v11 with anonymous entry
     // Also hold v11 snapshot
-    pushMvccSeqForword(1, 0);
+    pushMvcc(1, 0);
 
     const auto del_entries = dir.gc();
 
+    ASSERT_EQ(del_entries.size(), 1);
+
+    // v2 v5 have been removed.
+    ASSERT_EQ(del_entries[0].size(), 2);
 
     auto snapshot = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);

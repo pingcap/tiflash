@@ -355,7 +355,9 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 }
 
 VersionedPageIdAndEntryList BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
-                                          PageSize & total_page_size)
+                                          PageSize & total_page_size,
+                                          const WriteLimiterPtr & write_limiter,
+                                          const ReadLimiterPtr & read_limiter)
 {
     VersionedPageIdAndEntryList copy_list;
 
@@ -384,7 +386,7 @@ VersionedPageIdAndEntryList BlobStore::gc(std::map<BlobFileId, VersionedPageIdAn
             {
                 PageEntryV3 new_entry;
 
-                read(file_id, entry.offset, data_pos, entry.size);
+                read(file_id, entry.offset, data_pos, entry.size, read_limiter);
 
                 // No need do crc again, crc won't be changed.
                 new_entry.checksum = entry.checksum;
@@ -418,7 +420,7 @@ VersionedPageIdAndEntryList BlobStore::gc(std::map<BlobFileId, VersionedPageIdAn
     try
     {
         auto blob_file = getBlobFile(blobfile_id);
-        blob_file->write(data_buf, offset_in_file, total_page_size, nullptr);
+        blob_file->write(data_buf, offset_in_file, total_page_size, write_limiter);
     }
     catch (DB::Exception & e)
     {

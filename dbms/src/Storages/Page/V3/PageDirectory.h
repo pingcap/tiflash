@@ -124,7 +124,7 @@ private:
          *    lowest_seq : 3
          *    Then (entry 1) will be delete
          * 
-         * Ex2. 
+         * Ex3. 
          *    entry 1 : seq 2 epoch 0
          *    entry 2 : seq 2 epoch 1
          *    entry 3 : seq 4 epoch 0

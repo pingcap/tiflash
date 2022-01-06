@@ -145,7 +145,9 @@ public:
     std::vector<BlobFileId> getGCStats();
 
     VersionedPageIdAndEntryList gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
-                                   PageSize & total_page_size);
+                                   PageSize & total_page_size,
+                                   const WriteLimiterPtr & write_limiter = nullptr,
+                                   const ReadLimiterPtr & read_limiter = nullptr);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
