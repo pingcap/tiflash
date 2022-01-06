@@ -337,53 +337,53 @@ struct ToInteger<Int128>
     using Type = Int128;
 };
 
-
-// CLICKHOUSE-29. The same depth, different signs
-// NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
+/**
+ * If A and B's size is 8 bytes 
+ * For greatest, returns unsigned result if there is at least one argument is unsigned.
+ * For least, returns signed result if there is at least one argument is signed.
+ */
 template <typename A, typename B>
-constexpr bool BinaryLeastGreatestSpecialCase
-    = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B)) && (std::is_signed_v<A> ^ std::is_signed_v<B>);
+struct BinaryLeastSpecialCase
+{
+    using Type = std::conditional_t<
+        std::is_unsigned_v<A> && std::is_unsigned_v<B>, 
+        UInt64,
+        Int64>;
+};
 
 template <typename A, typename B>
-constexpr bool TiDBGreatestSpecialCase
-    = (8 == sizeof(A) || 8 == sizeof(B))
-    && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
+struct BinaryGreatestSpecialCase
+{
+    using Type = std::conditional_t<
+        std::is_signed_v<A> && std::is_signed_v<B>, 
+        Int64,
+        UInt64>;
+};
 
-template <typename A, typename B>
-constexpr bool TiDBLeastSpecialCase
-    = (8 == sizeof(A) || 8 == sizeof(B))
-    && (std::is_signed_v<A> || std::is_signed_v<B>);
 
-
+ /**
+     * in TiDB:
+     * * if A or B is floating-point, least/Greatest(A, B) evalutes to Float64.
+     * * if A or B is Integer which is not unsigned, least/Greatest(A, B) evaluates to Int64.
+     */
 template <typename A, typename B>
 struct ResultOfBinaryLeast
 {
-    /**
-     * in TiDB:
-     * * if A or B is floating-point, least(A, B) evalutes to Float64.
-     * * if A or B is Integer which is not unsigned, least(A, B) evaluates to Int64.
-     * * if one of them is UInt64, least(A,B) evaluates to UInt64
-     */
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<TiDBLeastSpecialCase<A, B>, Int64, UInt64>>;
+        std::conditional_t<sizeof(A) == 8 && sizeof(A) == sizeof(B), typename BinaryLeastSpecialCase<A, B>::Type, Int64>>;
 };
 
 template <typename A, typename B>
 struct ResultOfBinaryGreatest
 {
-    /**
-     * in TiDB:
-     * * if A or B is floating-point, least(A, B) evalutes to Float64.
-     * * if A or B is Integer which is not unsigned, least(A, B) evaluates to Int64.
-     * * if one of them is UInt64, least(A,B) evaluates to UInt64
-     */
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<TiDBGreatestSpecialCase<A, B>, UInt64, Int64>>;
+        std::conditional_t<sizeof(A) == 8 && sizeof(A) == sizeof(B), typename BinaryGreatestSpecialCase<A, B>::Type, Int64>>;
 };
+
 } // namespace NumberTraits
 
 } // namespace DB

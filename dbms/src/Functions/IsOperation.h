@@ -46,19 +46,12 @@ template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<
 struct BinaryGreatestBaseImpl;
 template <typename A, typename B>
 using BinaryGreatestBaseImpl_t = BinaryGreatestBaseImpl<A, B>;
-template <typename A, typename B>
-struct BinaryGreatestSpecialImpl;
-template <typename A, typename B>
-using BinaryGreatestImpl = std::conditional_t<!NumberTraits::BinaryLeastGreatestSpecialCase<A, B>, BinaryGreatestBaseImpl<A, B>, BinaryGreatestSpecialImpl<A, B>>;
 
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
 struct BinaryLeastBaseImpl;
 template <typename A, typename B>
 using BinaryLeastBaseImpl_t = BinaryLeastBaseImpl<A, B>;
-template <typename A, typename B>
-struct BinaryLeastSpecialImpl;
-template <typename A, typename B>
-using BinaryLeastImpl = std::conditional_t<!NumberTraits::BinaryLeastGreatestSpecialCase<A, B>, BinaryLeastBaseImpl<A, B>, BinaryLeastSpecialImpl<A, B>>; // todo clean the code...
+
 
 template <template <typename, typename> typename Op1, template <typename, typename> typename Op2>
 struct IsSameOperation
