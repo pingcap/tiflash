@@ -58,35 +58,44 @@ public:
     template <typename Input, typename Output>
     void testNotOnlyNull(const Input & input, const Output & output)
     {
+        static_assert(!IsDecimal<Output> && !std::is_same_v<Output, MyDateTime>);
         auto inner_test = [&](bool is_const) {
-            if constexpr (IsDecimal<Output>)
-            {
-                if (std::is_same_v<Output, Decimal32>)
-                {
-                }
-                else if (std::is_same_v<Output, Decimal64>)
-                {
-                }
-                else if (std::is_same_v<Output, Decimal128>)
-                {
-                }
-                else
-                {
-                    static_assert(std::is_same_v<Output, Decimal256>);
-                }
-            }
-            else if constexpr (std::is_same_v<Output, MyDateTime>)
-            {
-            }
-            else
-            {
-                ASSERT_COLUMN_EQ(
-                    is_const ? createConstColumn<Nullable<Output>>(1, output) : createColumn<Nullable<Output>>({output}),
-                    executeFunction(
-                        func_name,
-                        {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
-                         createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
-            }
+            ASSERT_COLUMN_EQ(
+                is_const ? createConstColumn<Nullable<Output>>(1, output) : createColumn<Nullable<Output>>({output}),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<IsDecimal<Output>, void>::type testNotOnlyNull(const Input & input, const DecimalField<Output> & output, const std::tuple<UInt32, UInt32> & meta)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createConstColumn<Nullable<Output>>(meta, 1, output) : createColumn<Nullable<Output>>(meta, {output}),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(Decimal({},{}))", std::get<0>(meta), std::get<1>(meta)))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const Input & input, const Output & output, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumnConst(1, output, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
         };
         inner_test(true);
         inner_test(false);
@@ -95,35 +104,14 @@ public:
     template <typename Input, typename Output>
     void testThrowException(const Input & input)
     {
+        static_assert(!IsDecimal<Output> && !std::is_same_v<Output, MyDateTime>);
         auto inner_test = [&](bool is_const) {
-            if constexpr (IsDecimal<Output>)
-            {
-                if (std::is_same_v<Output, Decimal32>)
-                {
-                }
-                else if (std::is_same_v<Output, Decimal64>)
-                {
-                }
-                else if (std::is_same_v<Output, Decimal128>)
-                {
-                }
-                else
-                {
-                    static_assert(std::is_same_v<Output, Decimal256>);
-                }
-            }
-            else if constexpr (std::is_same_v<Output, MyDateTime>)
-            {
-            }
-            else
-            {
-                ASSERT_THROW(
-                    executeFunction(
-                        func_name,
-                        {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
-                         createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}),
-                    TiFlashException);
-            }
+            ASSERT_THROW(
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}),
+                     TiFlashException);
         };
         inner_test(true);
         inner_test(false);
@@ -958,6 +946,54 @@ try
     testOnlyNull<Float64, Decimal64>();
     testOnlyNull<Float64, Decimal128>();
     testOnlyNull<Float64, Decimal256>();
+
+    testNotOnlyNull<Float32, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
+    testNotOnlyNull<Float32, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
+    testNotOnlyNull<Float32, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+//    testNotOnlyNull<Float32, Decimal32>(MAX_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+//    testNotOnlyNull<Float32, Decimal32>(MIN_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+
+    testNotOnlyNull<Float32, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
+    testNotOnlyNull<Float32, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
+    testNotOnlyNull<Float32, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+//    testNotOnlyNull<Float32, Decimal64>(MAX_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+//    testNotOnlyNull<Float32, Decimal64>(MIN_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+
+    testNotOnlyNull<Float32, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
+    testNotOnlyNull<Float32, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
+    testNotOnlyNull<Float32, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+//    testNotOnlyNull<Float32, Decimal128>(MAX_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+//    testNotOnlyNull<Float32, Decimal128>(MIN_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+
+    testNotOnlyNull<Float32, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
+    testNotOnlyNull<Float32, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
+    testNotOnlyNull<Float32, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+//    testNotOnlyNull<Float32, Decimal256>(MAX_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+//    testNotOnlyNull<Float32, Decimal256>(MIN_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+
+    testNotOnlyNull<Float64, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
+    testNotOnlyNull<Float64, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
+    testNotOnlyNull<Float64, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+//    testNotOnlyNull<Float64, Decimal32>(MAX_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+//    testNotOnlyNull<Float64, Decimal32>(MIN_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+
+    testNotOnlyNull<Float64, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
+    testNotOnlyNull<Float64, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
+    testNotOnlyNull<Float64, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+//    testNotOnlyNull<Float64, Decimal64>(MAX_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+//    testNotOnlyNull<Float64, Decimal64>(MIN_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+
+    testNotOnlyNull<Float64, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
+    testNotOnlyNull<Float64, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
+    testNotOnlyNull<Float64, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+//    testNotOnlyNull<Float64, Decimal128>(MAX_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
+//    testNotOnlyNull<Float64, Decimal128>(MIN_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
+
+    testNotOnlyNull<Float64, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
+    testNotOnlyNull<Float64, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
+    testNotOnlyNull<Float64, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+//    testNotOnlyNull<Float64, Decimal256>(MAX_FLOAT64, DecimalField256(static_cast<Int256>(12213), 0), std::make_tuple(65, 0));
+//    testNotOnlyNull<Float64, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
 }
 CATCH
 
@@ -966,6 +1002,10 @@ try
 {
     testOnlyNull<Float32, MyDateTime>();
     testOnlyNull<Float64, MyDateTime>();
+
+    testNotOnlyNull<Float32, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+
+    testNotOnlyNull<Float64, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
 }
 CATCH
 
