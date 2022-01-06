@@ -56,7 +56,7 @@ class TestTidbConversion : public DB::tests::FunctionTest
 {
 public:
     template <typename Input, typename Output>
-    void testNotOnlyNull(const std::optional<Input> & input, const std::optional<Output> & output)
+    void testNotOnlyNull(const Input & input, const Output & output)
     {
         auto inner_test = [&](bool is_const) {
             if constexpr (IsDecimal<Output>)
@@ -86,6 +86,43 @@ public:
                         func_name,
                         {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
                          createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}));
+            }
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    void testThrowException(const Input & input)
+    {
+        auto inner_test = [&](bool is_const) {
+            if constexpr (IsDecimal<Output>)
+            {
+                if (std::is_same_v<Output, Decimal32>)
+                {
+                }
+                else if (std::is_same_v<Output, Decimal64>)
+                {
+                }
+                else if (std::is_same_v<Output, Decimal128>)
+                {
+                }
+                else
+                {
+                    static_assert(std::is_same_v<Output, Decimal256>);
+                }
+            }
+            else if constexpr (std::is_same_v<Output, MyDateTime>)
+            {
+            }
+            else
+            {
+                ASSERT_THROW(
+                    executeFunction(
+                        func_name,
+                        {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                         createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}),
+                    TiFlashException);
             }
         };
         inner_test(true);
@@ -831,6 +868,28 @@ try
     testOnlyNull<Float32, UInt64>();
     testOnlyNull<Float64, Int64>();
     testOnlyNull<Float64, UInt64>();
+
+    testNotOnlyNull<Float32, Int64>(0, 0);
+    testThrowException<Float32, Int64>(MAX_FLOAT32);
+    testNotOnlyNull<Float32, Int64>(MIN_FLOAT32, 0);
+    testNotOnlyNull<Float32, Int64>(12.213f, 12);
+    testNotOnlyNull<Float32, Int64>(-12.213f, -12);
+    testNotOnlyNull<Float32, UInt64>(0, 0);
+    testThrowException<Float32, UInt64>(MAX_FLOAT32);
+    testNotOnlyNull<Float32, UInt64>(MIN_FLOAT32, 0);
+    testNotOnlyNull<Float32, UInt64>(12.213f, 12);
+    testThrowException<Float32, UInt64>(-12.213f);
+
+    testNotOnlyNull<Float64, Int64>(0, 0);
+    testThrowException<Float64, Int64>(MAX_FLOAT64);
+    testNotOnlyNull<Float64, Int64>(MIN_FLOAT64, 0);
+    testNotOnlyNull<Float64, Int64>(12.213, 12);
+    testNotOnlyNull<Float64, Int64>(-12.213, -12);
+    testNotOnlyNull<Float64, UInt64>(0, 0);
+    testThrowException<Float64, UInt64>(MAX_FLOAT64);
+    testNotOnlyNull<Float64, UInt64>(MIN_FLOAT64, 0);
+    testNotOnlyNull<Float64, UInt64>(12.213, 12);
+    testThrowException<Float64, UInt64>(-12.213);
 }
 CATCH
 
@@ -839,6 +898,18 @@ try
 {
     testOnlyNull<Float32, Float64>();
     testOnlyNull<Float64, Float64>();
+
+    testNotOnlyNull<Float32, Float64>(0, 0);
+    testNotOnlyNull<Float32, Float64>(12.213, 12.213000297546387);
+    testNotOnlyNull<Float32, Float64>(-12.213, -12.213000297546387);
+    testNotOnlyNull<Float32, Float64>(MIN_FLOAT32, MIN_FLOAT32);
+    testNotOnlyNull<Float32, Float64>(MAX_FLOAT32, MAX_FLOAT32);
+
+    testNotOnlyNull<Float64, Float64>(0, 0);
+    testNotOnlyNull<Float64, Float64>(12.213, 12.213);
+    testNotOnlyNull<Float64, Float64>(-12.213, -12.213);
+    testNotOnlyNull<Float64, Float64>(MIN_FLOAT64, MIN_FLOAT64);
+    testNotOnlyNull<Float64, Float64>(MAX_FLOAT64, MAX_FLOAT64);
 }
 CATCH
 
@@ -847,6 +918,32 @@ try
 {
     testOnlyNull<Float32, String>();
     testOnlyNull<Float64, String>();
+
+    testNotOnlyNull<Float32, String>(0, "0");
+    testNotOnlyNull<Float32, String>(12.213, "12.213");
+    testNotOnlyNull<Float32, String>(-12.213, "-12.213");
+    // TODO add tests after fix results is not compatible with tidb/mysql
+    // tiflash: 3.4028235e38
+    // tidb: 340282350000000000000000000000000000000
+    // mysql: 3.40282e38
+    //    testNotOnlyNull<Float32, String>(MAX_FLOAT32, "3.4028235e38");
+    // tiflash: 1.1754944e-38
+    // tidb: 0.000000000000000000000000000000000000011754944
+    // mysql: 1.17549e-38
+    //    testNotOnlyNull<Float32, String>(MIN_FLOAT32, "1.1754944e-38");
+
+    testNotOnlyNull<Float64, String>(0, "0");
+    testNotOnlyNull<Float64, String>(12.213, "12.213");
+    testNotOnlyNull<Float64, String>(-12.213, "-12.213");
+    // TODO add tests after fix results is not compatible with tidb/mysql
+    // tiflash: 1.7976931348623157e308
+    // tidb: 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    // mysql: 1.7976931348623157e308
+    //    testNotOnlyNull<Float64, String>(MAX_FLOAT64, "1.7976931348623157e308");
+    // tiflash: 2.2250738585072014e-308
+    // tidb: 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072014
+    // mysql: 2.2250738585072014e-308
+    //    testNotOnlyNull<Float64, String>(MIN_FLOAT64, "2.2250738585072014e-308");
 }
 CATCH
 
