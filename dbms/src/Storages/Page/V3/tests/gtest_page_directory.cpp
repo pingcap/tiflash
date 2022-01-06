@@ -393,9 +393,10 @@ try
 }
 CATCH
 
-#define INSERT_ENTRY(VERSION)                                                                           \
-    PageEntryV3 entry_v##VERSION{.file_id = 1, .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                 \
+    PageEntryV3 entry_v##VERSION{.file_id = BLOBID, .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
     entries.createNewVersion((VERSION), entry_v##VERSION);
+#define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                              \
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = (VERSION), .offset = 0x234, .checksum = 0x5678}; \
     entries.createNewVersion((VERSION), (EPOCH), entry_gc_v##VERSION##_##EPOCH);
@@ -498,6 +499,69 @@ try
     ASSERT_EQ(removed_entries.first.size(), 1);
 }
 CATCH
+
+
+TEST(VersionedEntriesTest, getEntriesFromBlobId)
+{
+    PageDirectory::VersionedPageEntries entries;
+
+    INSERT_BLOBID_ENTRY(1, 1);
+    INSERT_BLOBID_ENTRY(1, 2);
+    INSERT_BLOBID_ENTRY(2, 3);
+    INSERT_BLOBID_ENTRY(2, 4);
+    INSERT_BLOBID_ENTRY(1, 5);
+    INSERT_BLOBID_ENTRY(3, 6);
+    INSERT_BLOBID_ENTRY(3, 8);
+    INSERT_BLOBID_ENTRY(1, 11);
+
+    const auto & [versioned_entries1, total_size1] = entries.getEntriesFromBlobId(1);
+
+    ASSERT_EQ(versioned_entries1.size(), 4);
+    ASSERT_EQ(total_size1, 1 + 2 + 5 + 11);
+    auto it = versioned_entries1.begin();
+
+    ASSERT_EQ(it->first.sequence, 1);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v1));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 2);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v2));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 5);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v5));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 11);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v11));
+
+    const auto & [versioned_entries2, total_size2] = entries.getEntriesFromBlobId(2);
+
+    ASSERT_EQ(versioned_entries2.size(), 2);
+    ASSERT_EQ(total_size2, 3 + 4);
+    it = versioned_entries2.begin();
+
+    ASSERT_EQ(it->first.sequence, 3);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v3));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 4);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v4));
+
+    const auto & [versioned_entries3, total_size3] = entries.getEntriesFromBlobId(3);
+
+    ASSERT_EQ(versioned_entries3.size(), 2);
+    ASSERT_EQ(total_size3, 6 + 8);
+    it = versioned_entries3.begin();
+
+    ASSERT_EQ(it->first.sequence, 6);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v6));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 8);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v8));
+}
+
 
 #undef INSERT_ENTRY
 #undef INSERT_GC_ENTRY
@@ -858,6 +922,28 @@ try
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot);
 }
 CATCH
+
+TEST_F(PageDirectoryGCTest, gcApply)
+{
+    PageId page_id = 50;
+    PageVersionAndEntriesV3 exp_seq_entries;
+    VersionedPageIdAndEntryList versioned_pageid_entry_list;
+
+    PageEntryV3 entry1{.file_id = 0, .size = 1024, .offset = 0x1234, .checksum = 0x5678};
+    PageEntryV3 entry2{.file_id = 0, .size = 1024, .offset = 0x12345, .checksum = 0x678910};
+
+    putMvcc(page_id, 4, exp_seq_entries, 1);
+    exp_seq_entries.emplace_back(std::make_tuple(4, 1, entry1));
+    putMvcc(page_id, 2, exp_seq_entries, 5);
+    exp_seq_entries.emplace_back(std::make_tuple(6, 1, entry2));
+
+    versioned_pageid_entry_list.emplace_back(std::make_tuple(page_id, PageVersionType(4, 0), entry1));
+    versioned_pageid_entry_list.emplace_back(std::make_tuple(page_id, PageVersionType(6, 0), entry2));
+
+    dir.gcApply(versioned_pageid_entry_list);
+    EXPECT_SEQ_ENTRIES_EQ(exp_seq_entries, dir, page_id);
+}
+
 
 } // namespace PS::V3::tests
 } // namespace DB

@@ -1,6 +1,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -636,6 +637,71 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     // Then we must do heavy GC
     ASSERT_EQ(*gc_stats.begin(), 0);
+}
+
+
+TEST_F(BlobStoreTest, GC)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId page_id = 50;
+    size_t buff_nums = 21;
+    size_t buff_size = 123;
+
+    auto blob_store = BlobStore(file_provider, path, config);
+    char c_buff[buff_size * buff_nums];
+
+    WriteBatch wb;
+
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
+    }
+
+    ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
+    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    ASSERT_EQ(edit.size(), buff_nums);
+
+    VersionedEntries versioned_entries;
+    for (const auto & record : edit.getRecords())
+    {
+        versioned_entries.emplace_back(1, record.entry);
+    }
+
+    VersionedPageIdAndEntries versioned_pageid_entries;
+    versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
+    std::map<BlobFileId, VersionedPageIdAndEntries> gc_context;
+    gc_context[0] = versioned_pageid_entries;
+
+    // Before we do BlobStore we need change BlobFile0 to Read-Only
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+    stat->changeToReadOnly();
+
+    const auto & copy_list = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+
+    // Check copy_list which will apply fo Mvcc
+    ASSERT_EQ(copy_list.size(), buff_nums);
+    auto it = versioned_entries.begin();
+    for (const auto & [page_id_, version_type, entry_] : copy_list)
+    {
+        ASSERT_EQ(page_id_, page_id);
+        ASSERT_EQ(entry_.file_id, 1);
+        ASSERT_EQ(it->second.checksum, entry_.checksum);
+        ASSERT_EQ(it->second.size, entry_.size);
+        it++;
+    }
+
+    // Check blobfile1
+    Poco::File file0(blob_store.getBlobFilePath(0));
+    Poco::File file1(blob_store.getBlobFilePath(1));
+    ASSERT_TRUE(file0.exists());
+    ASSERT_TRUE(file1.exists());
+    ASSERT_EQ(file0.getSize(), file1.getSize());
 }
 
 } // namespace DB::PS::V3::tests
