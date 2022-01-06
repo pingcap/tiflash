@@ -1,9 +1,9 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatest.h>
+
 #include <type_traits>
-#include "DataTypes/NumberTraits.h"
-#include "common/types.h"
+
 
 namespace DB
 {
