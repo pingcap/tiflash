@@ -134,6 +134,13 @@ private:
          *    Then no entry should be delete.
          */
         std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
+
+        size_t size() const
+        {
+            auto lock = acquireLock();
+            return entries.size();
+        }
+
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
