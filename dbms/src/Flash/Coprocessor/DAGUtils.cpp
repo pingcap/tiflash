@@ -58,6 +58,14 @@ const std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::GroupConcat, "groupUniqArray"},
 });
 
+const std::unordered_map<tipb::AggFunctionMode, TiDB::AggregateFunctionMode> agg_func_mode_map({
+    {tipb::AggFunctionMode::CompleteMode, TiDB::AggregateFunctionMode::CompleteMode},
+    {tipb::AggFunctionMode::FinalMode, TiDB::AggregateFunctionMode::FinalMode},
+    {tipb::AggFunctionMode::Partial1Mode, TiDB::AggregateFunctionMode::Partial1Mode},
+    {tipb::AggFunctionMode::Partial2Mode, TiDB::AggregateFunctionMode::Partial2Mode},
+    {tipb::AggFunctionMode::DedupMode, TiDB::AggregateFunctionMode::DedupMode},
+});
+
 const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "tidb_cast"},
@@ -737,6 +745,18 @@ const String & getFunctionName(const tipb::Expr & expr)
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", Errors::Coprocessor::Unimplemented);
         return it->second;
     }
+}
+
+const TiDB::AggregateFunctionMode & getAggFunctionMode(const tipb::Expr & expr)
+{
+    auto it = agg_func_mode_map.find(expr.aggfuncmode());
+    if (it != agg_func_mode_map.end())
+        return it->second;
+
+    const auto errmsg = fmt::format(
+        "AggFunctionMode={} is not supported.",
+        tipb::AggFunctionMode_Name(expr.aggfuncmode()));
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)

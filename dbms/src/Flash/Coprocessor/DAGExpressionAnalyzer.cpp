@@ -204,6 +204,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         }
 
         AggregateDescription aggregate;
+        aggregate.mode = getAggFunctionMode(expr);
         auto child_size = expr.children_size();
         DataTypes types(child_size);
         TiDB::TiDBCollators arg_collators;
