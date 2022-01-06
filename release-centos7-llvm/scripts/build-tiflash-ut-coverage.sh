@@ -15,7 +15,7 @@ command -v lcov >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install lcov"
   pushd /tmp
-  wget https://github.com/linux-test-project/lcov/releases/download/v1.15/lcov-1.15-1.noarch.rpm
+  wget http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/lcov-1.15-1.noarch.rpm
   rpm -i lcov-1.15-1.noarch.rpm
   rm -rf lcov-1.15-1.noarch.rpm
   popd
