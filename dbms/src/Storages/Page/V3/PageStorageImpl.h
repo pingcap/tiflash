@@ -26,27 +26,27 @@ public:
 
     PageId getMaxId() override;
 
-    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot) override;
+    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot() override;
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 
-    void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
+    void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) override;
 
-    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) override;
+    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) override;
 
-    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override;
 
-    bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override;
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
 

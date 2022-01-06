@@ -356,7 +356,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids = true)
+std::set<PageId> PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids)
 {
     for (const auto & [page_id, version, entry] : copy_list)
     {

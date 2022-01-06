@@ -68,6 +68,14 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 edit.ref(write.page_id, write.ori_page_id);
                 break;
             }
+            case WriteBatch::WriteType::PUT:
+            { // Only putExternal won't have data.
+                PageEntryV3 entry;
+                entry.tag = write.tag;
+
+                edit.put(write.page_id, entry);
+                break;
+            }
             default:
                 throw Exception("write batch have a invalid total size.",
                                 ErrorCodes::LOGICAL_ERROR);
@@ -100,6 +108,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             entry.file_id = blob_id;
             entry.size = write.size;
             entry.offset = offset_in_file + offset_in_allocated;
+            entry.tag = write.tag;
             offset_in_allocated += write.size;
 
             digest.update(buffer_pos, write.size);
