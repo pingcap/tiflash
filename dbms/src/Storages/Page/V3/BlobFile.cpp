@@ -50,6 +50,11 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
     PageUtil::syncFile(wrfile);
 }
 
+void BlobFile::truncate(size_t size)
+{
+    PageUtil::ftruncateFile(wrfile, size);
+}
+
 BlobFile::~BlobFile()
 {
     wrfile->close();

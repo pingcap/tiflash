@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -98,7 +99,7 @@ private:
 
     int input_streams_num;
 
-    std::unique_ptr<std::thread> send_thread;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;

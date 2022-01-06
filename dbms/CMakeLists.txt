@@ -234,6 +234,10 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
+# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
+target_include_directories (dbms PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -242,7 +246,7 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
-target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
+target_link_libraries (clickhouse_common_io PUBLIC ${TIFLASH_XXHASH_LIBRARY})
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)

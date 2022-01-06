@@ -500,14 +500,32 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
-// TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp)
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+{
+    if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    {
+        return false;
+    }
+    static int days_of_month_table[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (month != 2)
+        return day <= days_of_month_table[month];
+    bool is_leap_year = false;
+    if ((year & 0b0011) == 0)
+    {
+        is_leap_year = year % 100 != 0 || year % 400 == 0;
+    }
+    return day <= (is_leap_year ? 29 : 28);
+}
+
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
     static const DateLUTImpl & lut = DateLUT::instance("UTC");
 
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
+
+    bool is_date = false;
 
     bool hhmmss = false;
 
@@ -626,6 +644,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
             case 0:
                 ret = 1;
+                is_date = true;
                 break;
             case 1:
             case 2:
@@ -668,6 +687,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // YYYY-MM-DD
         scanTimeArgs(seps, {&year, &month, &day});
+        is_date = true;
         break;
     }
     case 4:
@@ -747,6 +767,11 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         }
     }
 
+    if (needCheckTimeValid && !checkTimeValid(year, month, day, hour, minute, second))
+    {
+        throw Exception("Wrong datetime format");
+    }
+
     MyDateTime result(year, month, day, hour, minute, second, micro_second);
 
     if (has_tz)
@@ -781,7 +806,13 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         result = MyDateTime(tmp);
     }
 
-    return result.toPackedUInt();
+    return std::pair<Field, bool>{result.toPackedUInt(), is_date};
+}
+
+// TODO: support parse time from float string
+Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
+{
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid).first;
 }
 
 String MyDateTime::toString(int fsp) const

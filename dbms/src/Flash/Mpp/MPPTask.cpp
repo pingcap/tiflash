@@ -1,6 +1,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -71,8 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto worker = ThreadFactory::newThread(true, "MPPTask", &MPPTask::runImpl, this->shared_from_this());
-    worker.detach();
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [this] { this->shared_from_this()->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
@@ -210,6 +210,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->regions_for_local_read = std::move(local_regions);
     dag_context->regions_for_remote_read = std::move(remote_regions);
+    dag_context->tidb_host = context->getClientInfo().current_address.toString();
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -319,7 +320,7 @@ void MPPTask::runImpl()
         from->readSuffix();
         finishWrite();
 
-        auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_FMT_DEBUG(
             log,
             "finish write with {} rows, {} blocks, {} bytes",

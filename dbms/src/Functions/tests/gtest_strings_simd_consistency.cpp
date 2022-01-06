@@ -278,7 +278,7 @@ TEST(StringsLowerUpperAscii, Simple)
 TEST(StringsLowerUpperAscii, Random)
 {
     using namespace std::chrono;
-    size_t limit = 1024 * 1024 * 64;
+    size_t limit = 1024 * 512;
     std::random_device device;
     auto seed = device();
     std::cout << "seeded with: " << seed << std::endl;
@@ -314,7 +314,7 @@ TEST(StringsLowerUpperAscii, Random)
 TEST(StringsLowerUpperUtf8, Random)
 {
     using namespace std::chrono;
-    size_t limit = 1024 * 1024 * 64;
+    size_t limit = 1024 * 512;
     std::random_device device;
     auto seed = device();
     std::cout << "seeded with: " << seed << std::endl;
