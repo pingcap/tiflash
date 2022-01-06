@@ -849,8 +849,8 @@ void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt6
             uint64_t kv_size = 0;
             while (sst_reader.remained())
             {
-                auto key = sst_reader.key();
-                auto value = sst_reader.value();
+                auto key = sst_reader.keyView();
+                auto value = sst_reader.valueView();
                 doInsert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 ++kv_size;
                 sst_reader.next();

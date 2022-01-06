@@ -4,12 +4,11 @@
 
 namespace DB
 {
-
 struct SSTReader
 {
     bool remained() const;
-    BaseBuffView key() const;
-    BaseBuffView value() const;
+    BaseBuffView keyView() const;
+    BaseBuffView valueView() const;
     void next();
 
     SSTReader(const SSTReader &) = delete;
