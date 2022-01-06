@@ -356,7 +356,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
+std::set<PageId> PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids = true)
 {
     for (const auto & [page_id, version, entry] : copy_list)
     {
@@ -372,6 +372,21 @@ void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
 
         // TBD: wal apply
     }
+
+    if (!need_scan_page_ids)
+    {
+        return {};
+    }
+
+    std::set<PageId> page_ids;
+    std::unique_lock write_lock(table_rw_mutex);
+
+    for (const auto & [page_id, versioned_entries] : mvcc_table_directory)
+    {
+        page_ids.insert(page_id);
+    }
+
+    return page_ids;
 }
 
 std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize>

@@ -95,7 +95,7 @@ public:
 
     std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize> getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc);
 
-    void gcApply(const VersionedPageIdAndEntryList & copy_list);
+    std::set<PageId> gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids = true);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

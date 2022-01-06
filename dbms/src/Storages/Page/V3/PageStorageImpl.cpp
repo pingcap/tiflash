@@ -167,6 +167,13 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
 
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
+    /// Get all pending external pages and BlobFiles. Note that we should get external pages before BlobFiles.
+    PathAndIdsVec external_pages;
+    if (external_pages_scanner)
+    {
+        external_pages = external_pages_scanner();
+    }
+
     auto del_entries = page_directory.gc();
 
     for (const auto & del_version_entry : del_entries)
@@ -194,13 +201,17 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
         throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
     }
 
-    page_directory.gcApply(copy_list);
+    const auto & page_ids = page_directory.gcApply(copy_list, external_pages_scanner != nullptr);
+    if (external_pages_remover)
+    {
+        external_pages_remover(external_pages, page_ids);
+    }
+
     return true;
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
 {
-    // TBD
     assert(scanner != nullptr);
     assert(remover != nullptr);
     external_pages_scanner = scanner;
