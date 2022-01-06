@@ -6,6 +6,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
+#include <Core/AccurateComparison.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -19,7 +20,6 @@
 #include <common/types.h>
 #include <fmt/core.h>
 
-#include <cstddef>
 #include <type_traits>
 
 namespace DB
@@ -137,7 +137,7 @@ public:
     }
 
     template <typename T, typename ColVec>
-    void dispatch(Block & block, const ColumnNumbers & arguments, Columns converted_columns, size_t result) const
+    void dispatch(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         auto col_to = ColVec::create(block.rows());
         auto & vec_to = col_to->getData();
@@ -148,11 +148,20 @@ public:
             size_t best_arg = 0;
             for (size_t arg = 1; arg < num_arguments; ++arg)
             {
-                int cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
-                if (Impl::apply(cmp_result))
-                    best_arg = arg;
+                if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arg).column.get()); from)
+                {
+                    if (const auto * best = checkAndGetColumn<ColVec>(block.getByPosition(best_arg).column.get()); best)
+                    {
+                        const auto & vec_from = from->getData();
+                        const auto & vec_best = best->getData();
+                        int cmp_result = accurate::lessOp(vec_from[row_num], vec_best[row_num]);
+                        if (Impl::apply(cmp_result))
+                            best_arg = arg;
+                    }
+                }
             }
-            if (const auto * from = checkAndGetColumn<ColVec>(converted_columns[best_arg].get()); from)
+
+            if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(best_arg).column.get()); from)
             {
                 const auto & vec_from = from->getData();
                 vec_to[row_num] = vec_from[row_num];
@@ -176,27 +185,18 @@ public:
             data_types[i] = block.getByPosition(arguments[i]).type;
 
         DataTypePtr result_type = getReturnTypeImpl(data_types);
-        Columns converted_columns(num_arguments);
-        for (size_t arg = 0; arg < num_arguments; ++arg)
-        {
-            converted_columns[arg] = tiDBCastColumn(block.getByPosition(arguments[arg]), result_type, context);
-            auto temp = converted_columns[arg]->convertToFullColumnIfConst();
-            if (temp != nullptr)
-                converted_columns[arg] = std::move(temp);
-        }
 
         if (checkDataType<DataTypeInt64>(result_type.get()))
         {
-            // if constexpr (std::is_same_v<typename ColVec::value_type, T>)
-            dispatch<Int64, ColumnInt64>(block, arguments, converted_columns, result);
+            dispatch<Int64, ColumnInt64>(block, arguments, result);
         }
         else if (checkDataType<DataTypeUInt64>(result_type.get()))
         {
-            dispatch<UInt64, ColumnUInt64>(block, arguments, converted_columns, result);
+            dispatch<UInt64, ColumnUInt64>(block, arguments, result);
         }
         else if (checkDataType<DataTypeFloat64>(result_type.get()))
         {
-            dispatch<Float64, ColumnFloat64>(block, arguments, converted_columns, result);
+            dispatch<Float64, ColumnFloat64>(block, arguments, result);
         }
     }
 
