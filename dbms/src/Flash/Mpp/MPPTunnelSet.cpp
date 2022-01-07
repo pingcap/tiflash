@@ -13,6 +13,15 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
         throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
     return packet;
 }
+
+#define SIZE2GB (1 << 31)
+
+inline void checkPacketSize(size_t size)
+{
+    if (size >= (size_t)SIZE2GB)
+        throw Exception(fmt::format("Packet is too large to send, size : {}", size));
+}
+
 } // namespace
 
 template <typename Tunnel>
@@ -51,6 +60,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 {
+    checkPacketSize(packet.ByteSizeLong());
     tunnels[0]->write(packet);
     auto tunnels_size = tunnels.size();
     if (tunnels_size > 1)
@@ -78,6 +88,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t pa
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
 {
+    checkPacketSize(packet.ByteSizeLong());
     if (partition_id != 0 && !packet.data().empty())
         packet.mutable_data()->clear();
 

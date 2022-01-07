@@ -1,7 +1,6 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
