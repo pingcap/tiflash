@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context);
 
 }

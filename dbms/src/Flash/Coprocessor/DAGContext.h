@@ -26,10 +26,11 @@ struct ProfileStreamsInfo
 
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
-struct JoinBuildSideInfo
+struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
     JoinPtr join_ptr;
+    BlockInputStreams non_joined_streams;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -95,7 +96,7 @@ public:
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
-    std::unordered_map<String, JoinBuildSideInfo> & getJoinBuildSideInfoMap();
+    std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
@@ -149,11 +150,13 @@ public:
     }
 
     const tipb::DAGRequest * dag_request;
-    Int64 compile_time_ns;
+    Int64 compile_time_ns = 0;
+    size_t final_concurrency = 1;
     bool has_read_wait_index = false;
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id = "";
+    String tidb_host = "Unknown";
     bool collect_execution_summaries;
     bool return_executor_id;
     bool is_mpp_task = false;
@@ -184,9 +187,9 @@ private:
     /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
-    /// join_build_side_info_map is a map that maps from join_probe_executor_id to JoinBuildSideInfo
-    /// JoinStatistics gets JoinBuildSideInfo through it.
-    std::unordered_map<std::string, JoinBuildSideInfo> join_build_side_info_map;
+    /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
+    /// JoinStatistics gets JoinExecuteInfo through it.
+    std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
     /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;

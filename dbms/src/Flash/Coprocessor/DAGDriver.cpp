@@ -6,7 +6,6 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -86,7 +85,7 @@ try
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context.compile_time_ns = compile_time_ns;
-    LOG_DEBUG(log, "Compile dag request cost " << compile_time_ns / 1000000 << " ms");
+    LOG_FMT_DEBUG(log, "Compile dag request cost {} ms", compile_time_ns / 1000000);
 
     BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
@@ -149,11 +148,13 @@ try
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
-        LOG_DEBUG(
+        LOG_FMT_DEBUG(
             log,
-            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
-                                << " bytes.");
+            "{}: dag request without encode cost: {} seconds, produce {} rows, {} bytes.",
+            __PRETTY_FUNCTION__,
+            p_stream->getProfileInfo().execution_time / (double)1000000000,
+            p_stream->getProfileInfo().rows,
+            p_stream->getProfileInfo().bytes);
 
         if constexpr (!batch)
         {
@@ -175,29 +176,27 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n"
-                                       << e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "{}: {}\n{}", __PRETTY_FUNCTION__, e.standardText(), e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n"
-                                       << e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "{}: DB Exception: {}\n{}", __PRETTY_FUNCTION__, e.message(), e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
+    LOG_FMT_ERROR(log, "{}: KV Client Exception: {}", __PRETTY_FUNCTION__, e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
+    LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 catch (...)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+    LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 

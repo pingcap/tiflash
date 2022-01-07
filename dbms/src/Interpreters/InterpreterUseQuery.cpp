@@ -1,12 +1,11 @@
-#include <Parsers/ASTUseQuery.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterUseQuery.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ASTUseQuery.h>
 
 
 namespace DB
 {
-
 BlockIO InterpreterUseQuery::execute()
 {
     const String & new_database = typeid_cast<const ASTUseQuery &>(*query_ptr).database;
@@ -14,4 +13,4 @@ BlockIO InterpreterUseQuery::execute()
     return {};
 }
 
-}
+} // namespace DB

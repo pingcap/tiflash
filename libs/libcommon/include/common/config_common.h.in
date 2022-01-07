@@ -11,3 +11,5 @@
 #cmakedefine01 USE_LIBEDIT
 #cmakedefine01 HAVE_READLINE_HISTORY
 #cmakedefine01 ENABLE_FAILPOINTS
+#cmakedefine01 USE_UNWIND
+#cmakedefine01 USE_LLVM_LIBUNWIND

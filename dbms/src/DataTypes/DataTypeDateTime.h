@@ -7,7 +7,6 @@ class DateLUTImpl;
 
 namespace DB
 {
-
 /** DateTime stores time as unix timestamp.
   * The value itself is independent of time zone.
   *
@@ -60,4 +59,4 @@ private:
     const DateLUTImpl & time_zone;
 };
 
-}
+} // namespace DB

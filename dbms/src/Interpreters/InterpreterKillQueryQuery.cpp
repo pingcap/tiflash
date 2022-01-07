@@ -1,28 +1,28 @@
-#include <Interpreters/InterpreterKillQueryQuery.h>
-#include <Parsers/ASTKillQueryQuery.h>
-#include <Parsers/queryToString.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterKillQueryQuery.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
-#include <Columns/ColumnString.h>
-#include <Common/typeid_cast.h>
-#include <DataTypes/DataTypeString.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <thread>
-#include <iostream>
+#include <Parsers/ASTKillQueryQuery.h>
+#include <Parsers/queryToString.h>
+
 #include <cstddef>
+#include <iostream>
+#include <thread>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int READONLY;
-    extern const int LOGICAL_ERROR;
-}
+extern const int READONLY;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 using CancellationCode = ProcessList::CancellationCode;
@@ -31,16 +31,16 @@ static const char * cancellationCodeToStatus(CancellationCode code)
 {
     switch (code)
     {
-        case CancellationCode::NotFound:
-            return "finished";
-        case CancellationCode::QueryIsNotInitializedYet:
-            return "pending";
-        case CancellationCode::CancelCannotBeSent:
-            return "error";
-        case CancellationCode::CancelSent:
-            return "waiting";
-        default:
-            return "unknown_status";
+    case CancellationCode::NotFound:
+        return "finished";
+    case CancellationCode::QueryIsNotInitializedYet:
+        return "pending";
+    case CancellationCode::CancelCannotBeSent:
+        return "error";
+    case CancellationCode::CancelSent:
+        return "waiting";
+    default:
+        return "unknown_status";
     };
 }
 
@@ -53,7 +53,11 @@ struct QueryDescriptor
     bool processed = false;
 
     QueryDescriptor(String && query_id_, String && user_, size_t source_num_, bool processed_ = false)
-        : query_id(std::move(query_id_)), user(std::move(user_)), source_num(source_num_), processed(processed_) {}
+        : query_id(std::move(query_id_))
+        , user(std::move(user_))
+        , source_num(source_num_)
+        , processed(processed_)
+    {}
 };
 
 using QueryDescriptors = std::vector<QueryDescriptor>;
@@ -88,7 +92,7 @@ static QueryDescriptors extractQueriesExceptMeAndCheckAccess(const Block & proce
         if (context.getSettingsRef().readonly && my_client.current_user != user)
         {
             throw Exception("Readonly user " + my_client.current_user + " attempts to kill query created by " + user,
-                    ErrorCodes::READONLY);
+                            ErrorCodes::READONLY);
         }
 
         res.emplace_back(std::move(query_id), std::move(user), i, false);
@@ -98,16 +102,14 @@ static QueryDescriptors extractQueriesExceptMeAndCheckAccess(const Block & proce
 }
 
 
-
 class SyncKillQueryInputStream : public IProfilingBlockInputStream
 {
 public:
-    SyncKillQueryInputStream(ProcessList & process_list_, QueryDescriptors && processes_to_stop_, Block && processes_block_,
-                             const Block & res_sample_block_)
-        : process_list(process_list_),
-        processes_to_stop(std::move(processes_to_stop_)),
-        processes_block(std::move(processes_block_)),
-        res_sample_block(res_sample_block_)
+    SyncKillQueryInputStream(ProcessList & process_list_, QueryDescriptors && processes_to_stop_, Block && processes_block_, const Block & res_sample_block_)
+        : process_list(process_list_)
+        , processes_to_stop(std::move(processes_to_stop_))
+        , processes_block(std::move(processes_block_))
+        , res_sample_block(res_sample_block_)
     {
         addTotalRowsApprox(processes_to_stop.size());
     }
@@ -154,7 +156,7 @@ public:
             if (num_processed_queries < num_result_queries)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        /// Don't produce empty block
+            /// Don't produce empty block
         } while (columns.empty() || columns[0]->empty());
 
         return res_sample_block.cloneWithColumns(std::move(columns));
@@ -198,7 +200,10 @@ BlockIO InterpreterKillQueryQuery::execute()
     else
     {
         res_io.in = std::make_shared<SyncKillQueryInputStream>(
-            process_list, std::move(queries_to_stop), std::move(processes_block), header);
+            process_list,
+            std::move(queries_to_stop),
+            std::move(processes_block),
+            header);
     }
 
     return res_io;
@@ -219,4 +224,4 @@ Block InterpreterKillQueryQuery::getSelectFromSystemProcessesResult()
 }
 
 
-}
+} // namespace DB

@@ -12,6 +12,7 @@ void registerFunctionsComparison(FunctionFactory & factory)
     factory.registerFunction<FunctionGreater>();
     factory.registerFunction<FunctionLessOrEquals>();
     factory.registerFunction<FunctionGreaterOrEquals>();
+    factory.registerFunction<FunctionStrcmp>();
 }
 
 template <>
@@ -86,6 +87,17 @@ void FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>::executeTupleImp
     return executeTupleLessGreaterImpl<
         FunctionComparison<GreaterOp, NameGreater>,
         FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>>(block, result, x, y, tuple_size);
+}
+
+template <>
+void FunctionComparison<CmpOp, NameStrcmp>::executeTupleImpl(
+    [[maybe_unused]] Block & block,
+    [[maybe_unused]] size_t result,
+    [[maybe_unused]] const ColumnsWithTypeAndName & x,
+    [[maybe_unused]] const ColumnsWithTypeAndName & y,
+    [[maybe_unused]] size_t tuple_size) const
+{
+    throw DB::Exception("Strcmp can not be used with tuple");
 }
 
 } // namespace DB
