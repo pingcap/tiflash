@@ -152,10 +152,11 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             break;
         case WriteBatch::WriteType::REF:
         {
-            // We can't deal `REF` before another types
-            // Because `PUT` and `REF` may be in same writebatch
-            // Also we can't throw exception if we can't found origin page_id
-            // Because in this time, WAL already have apply the change
+            // We can't handle `REF` before other writes, because `PUT` and `REF`
+            // maybe in the same WriteBatch.
+            // Also we can't throw an exception if we can't find the origin page_id, 
+            // because WAL have already applied the change and there is no 
+            // mechanism to roll back changes in the WAL.
             auto iter = mvcc_table_directory.find(r.ori_page_id);
             if (iter == mvcc_table_directory.end())
             {
