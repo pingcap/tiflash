@@ -23,7 +23,7 @@ bool isScalarFunctionExpr(const tipb::Expr & expr);
 bool isAggFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
-const TiDB::AggregateFunctionMode & getAggFunctionMode(const tipb::Expr & expr);
+TiDB::AggregateFunctionMode getAggFunctionMode(const tipb::Expr & expr);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);

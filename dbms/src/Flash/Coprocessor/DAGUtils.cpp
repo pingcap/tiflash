@@ -747,14 +747,14 @@ const String & getFunctionName(const tipb::Expr & expr)
     }
 }
 
-const TiDB::AggregateFunctionMode & getAggFunctionMode(const tipb::Expr & expr)
+TiDB::AggregateFunctionMode getAggFunctionMode(const tipb::Expr & expr)
 {
     auto it = agg_func_mode_map.find(expr.aggfuncmode());
     if (it != agg_func_mode_map.end())
         return it->second;
 
     const auto errmsg = fmt::format(
-        "AggFunctionMode={} is not supported.",
+        "Unsupported AggFunctionMode : {}.",
         tipb::AggFunctionMode_Name(expr.aggfuncmode()));
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
