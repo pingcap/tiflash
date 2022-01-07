@@ -786,6 +786,15 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         if (!request_str.empty())
         {
+            TableID table_id = InvalidTableID;
+            if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
+            {
+                table_id = managed_storage->getTableInfo().id;
+            }
+            else
+            {
+                throw Exception("Not supported request on non-manageable storage");
+            }
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(request_str);
             auto obj = result.extract<Poco::JSON::Object::Ptr>();
@@ -803,6 +812,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 const auto & epoch = region.region_epoch();
                 info.version = epoch.version();
                 info.conf_version = epoch.conf_ver();
+                info.physical_table_id = table_id;
                 if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
                 {
                     // Extract the handle range according to current table

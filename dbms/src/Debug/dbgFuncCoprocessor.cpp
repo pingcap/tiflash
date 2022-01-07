@@ -2410,12 +2410,13 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     static Poco::Logger * log = &Poco::Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    RegionInfoMap regions;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getTableRegionsInfo();
 
-    regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
     DAGContext dag_context(dag_request);
-    dag_context.regions_for_local_read = regions;
+    dag_context.tables_regions_info = std::move(tables_regions_info);
     dag_context.log = std::make_shared<LogWithPrefix>(log, "");
     context.setDAGContext(&dag_context);
 

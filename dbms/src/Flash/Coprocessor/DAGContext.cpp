@@ -199,4 +199,14 @@ void DAGContext::attachBlockIO(const BlockIO & io_)
     io = io_;
 }
 
+bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+{
+    return tables_regions_info.containsRegionsInfoForTable(table_id);
+}
+
+const TableRegionsInfo & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+{
+    return tables_regions_info.getTableRegionInfoByTableID(table_id);
+}
+
 } // namespace DB

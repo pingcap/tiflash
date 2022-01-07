@@ -3,6 +3,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
@@ -41,7 +42,7 @@ public:
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -87,9 +88,7 @@ private:
 
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
-        const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-        ::tipb::DAGRequest & dag_req,
-        const DAGSchema & schema);
+        std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
     const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
@@ -103,8 +102,6 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 

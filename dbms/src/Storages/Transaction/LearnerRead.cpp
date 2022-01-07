@@ -101,7 +101,7 @@ class MvccQueryInfoWrap
     Base::RegionsQueryInfo * regions_info_ptr;
 
 public:
-    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id)
+    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID logical_table_id)
         : inner(mvcc_query_info)
     {
         if (likely(!inner.regions_query_info.empty()))
@@ -113,14 +113,15 @@ public:
             regions_info = Base::RegionsQueryInfo();
             regions_info_ptr = &*regions_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
-            auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
+            // todo support partition table
+            auto regions = tmt.getRegionTable().getRegionsByTable(logical_table_id);
             regions_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
                 if (region == nullptr)
                     continue;
                 regions_info_ptr->emplace_back(
-                    RegionQueryInfo{id, region->version(), region->confVer(), region->getRange()->rawKeys(), {}});
+                    RegionQueryInfo{id, region->version(), region->confVer(), logical_table_id, region->getRange()->rawKeys(), {}});
             }
         }
     }
@@ -142,7 +143,7 @@ public:
 };
 
 LearnerReadSnapshot doLearnerRead(
-    const TiDB::TableID table_id,
+    const TiDB::TableID logical_table_id,
     MvccQueryInfo & mvcc_query_info_,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
@@ -153,7 +154,7 @@ LearnerReadSnapshot doLearnerRead(
 
     auto & tmt = context.getTMTContext();
 
-    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
+    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, logical_table_id);
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
@@ -307,6 +308,7 @@ LearnerReadSnapshot doLearnerRead(
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
             const auto & region_to_query = regions_info[region_idx];
+            Int64 physical_table_id = region_to_query.physical_table_id;
 
             // if region is unavailable, skip wait index.
             if (unavailable_regions.contains(region_to_query.region_id))
@@ -348,7 +350,7 @@ LearnerReadSnapshot doLearnerRead(
             {
                 auto res = RegionTable::resolveLocksAndWriteRegion(
                     tmt,
-                    table_id,
+                    physical_table_id,
                     region,
                     mvcc_query_info->read_tso,
                     region_to_query.bypass_lock_ts,

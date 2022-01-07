@@ -25,7 +25,7 @@ struct TableScanImpl
 
     static bool isMatch(const tipb::Executor * executor)
     {
-        return executor->has_tbl_scan();
+        return executor->has_tbl_scan() || executor->has_partition_table_scan();
     }
 };
 using TableScanStatisticsBase = ExecutorStatistics<TableScanImpl>;

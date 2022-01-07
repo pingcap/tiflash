@@ -22,7 +22,8 @@ class Context;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
+        || root->tp() == tipb::ExecType::TypePartitionTableScan;
 }
 
 const static String SOURCE_NAME("source");
@@ -153,6 +154,10 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypePartitionTableScan)
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
     }
     fillOutputFieldTypes();
 }
@@ -290,9 +295,10 @@ void DAGQueryBlock::fillOutputFieldTypes()
             output_field_types.push_back(expr.field_type());
         }
     }
-    else
+    else if (source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan)
     {
-        for (const auto & ci : source->tbl_scan().columns())
+        const auto & columns = source->tp() == tipb::ExecType::TypeTableScan ? source->tbl_scan().columns() : source->partition_table_scan().columns();
+        for (const auto & ci : columns)
         {
             tipb::FieldType field_type;
             field_type.set_tp(ci.tp());

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct RegionQueryInfo
@@ -13,6 +12,7 @@ struct RegionQueryInfo
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
+    Int64 physical_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
@@ -42,7 +42,10 @@ struct MvccQueryInfo
     ReadIndexRes read_index_res;
 
 public:
-    MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0) : resolve_locks(resolve_locks_), read_tso(read_tso_) {}
+    MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0)
+        : resolve_locks(resolve_locks_)
+        , read_tso(read_tso_)
+    {}
 };
 
 } // namespace DB

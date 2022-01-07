@@ -19,7 +19,6 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
@@ -114,7 +113,7 @@ AnalysisResult analyzeExpressions(
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+    if (query_block.isTableScanSource())
     {
         auto original_source_columns = analyzer.getCurrentInputColumns();
         if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block))
@@ -134,7 +133,7 @@ AnalysisResult analyzeExpressions(
         res.filter_column_name = analyzer.appendWhere(chain, conditions);
         res.before_where = chain.getLastActions();
         chain.addStep();
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+        if (query_block.isTableScanSource())
         {
             NamesWithAliases project_cols;
             for (const auto & col : analyzer.getCurrentInputColumns())
@@ -253,52 +252,34 @@ ExpressionActionsPtr generateProjectExpressionActions(
 }
 
 // the flow is the same as executeFetchcolumns
-void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::executeTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (!ts.has_table_id())
+    bool has_region_to_read = false;
+    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
-        // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
+        const auto & table_regions_info = dagContext().getTableRegionsInfoByTableID(physical_table_id);
+        if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
+        {
+            has_region_to_read = true;
+            break;
+        }
     }
-    if (dagContext().getRegionsForLocalRead().empty() && dagContext().getRegionsForRemoteRead().empty())
-    {
-        throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
-    }
+    if (!has_region_to_read)
+        throw TiFlashException("Dag Request does not have region to read for table: " + std::to_string(table_scan.getLogicalTableID()), Errors::Coprocessor::BadRequest);
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
     need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
 
-    // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
-    // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
-    // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
-    std::tie(std::ignore, table_drop_lock) = std::move(storage_interpreter.table_structure_lock).release();
 
-    auto region_retry = std::move(storage_interpreter.region_retry);
-    auto dag_req = std::move(storage_interpreter.dag_request);
-    auto schema = std::move(storage_interpreter.dag_schema);
+    auto remote_requests = std::move(storage_interpreter.remote_requests);
     auto null_stream_if_empty = std::move(storage_interpreter.null_stream_if_empty);
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
-    if (!region_retry.empty())
-    {
-#ifndef NDEBUG
-        if (unlikely(!dag_req.has_value() || !schema.has_value()))
-            throw TiFlashException(
-                "Try to read from remote but can not build DAG request. Should not happen!",
-                Errors::Coprocessor::Internal);
-#endif
-        std::vector<pingcap::coprocessor::KeyRange> ranges;
-        for (auto & info : region_retry)
-        {
-            for (const auto & range : info.get().key_ranges)
-                ranges.emplace_back(*range.first, *range.second);
-        }
-        sort(ranges.begin(), ranges.end());
-        executeRemoteQueryImpl(pipeline, ranges, *dag_req, *schema);
-    }
+    if (!remote_requests.empty())
+        executeRemoteQueryImpl(pipeline, remote_requests);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
@@ -309,7 +290,10 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         pipeline.streams.emplace_back(null_stream_if_empty);
     }
 
-    pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
+    pipeline.transform([&](auto & stream) {
+        for (auto & lock : storage_interpreter.drop_locks)
+            stream->addTableLock(lock);
+    });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
@@ -864,10 +848,10 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     // parellel, so just disable this corner case.
     if (query_block.aggregation || query_block.limitOrTopN)
         throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
-    const auto & ts = query_block.source->tbl_scan();
+    const auto & table_scan = query_block.source->tbl_scan();
     std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    cop_key_ranges.reserve(ts.ranges_size());
-    for (const auto & range : ts.ranges())
+    cop_key_ranges.reserve(table_scan.ranges_size());
+    for (const auto & range : table_scan.ranges())
     {
         cop_key_ranges.emplace_back(range.low(), range.high());
     }
@@ -892,27 +876,35 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     }
 
     dag_req.set_collect_execution_summaries(dagContext().collect_execution_summaries);
-    executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
+    std::vector<RemoteRequest> requests;
+    requests.emplace_back(std::move(dag_req), std::move(schema), std::move(cop_key_ranges));
+
+    executeRemoteQueryImpl(pipeline, requests);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     DAGPipeline & pipeline,
-    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-    ::tipb::DAGRequest & dag_req,
-    const DAGSchema & schema)
+    std::vector<RemoteRequest> & remote_requests)
 {
-    pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-    dag_req.SerializeToString(&(req->data));
-    req->tp = pingcap::coprocessor::ReqType::DAG;
-    req->start_ts = context.getSettingsRef().read_tso;
-    bool has_enforce_encode_type = dag_req.has_force_encode_type() && dag_req.force_encode_type();
-
+    assert(!remote_requests.empty());
+    DAGSchema & schema = remote_requests[0].schema;
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+    std::vector<pingcap::coprocessor::copTask> all_tasks;
+    for (const auto & remote_request : remote_requests)
+    {
+        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_request.dag_request.SerializeToString(&(req->data));
+        req->tp = pingcap::coprocessor::ReqType::DAG;
+        req->start_ts = context.getSettingsRef().read_tso;
+
+        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+    }
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
@@ -1070,11 +1062,18 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeSourceProjection(pipeline, query_block.source->projection());
         recordProfileStreams(pipeline, query_block.source_name);
     }
-    else
+    else if (query_block.isTableScanSource())
     {
-        executeTS(query_block.source->tbl_scan(), pipeline);
+        TiDBTableScan table_scan(query_block.source, query_block.source->tp() == tipb::ExecType::TypePartitionTableScan, dagContext());
+        executeTableScan(table_scan, pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
         dagContext().table_scan_executor_id = query_block.source_name;
+    }
+    else
+    {
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Unsupported source node: " + query_block.source_name,
+            Errors::Coprocessor::BadRequest);
     }
 
     auto res = analyzeExpressions(
@@ -1107,7 +1106,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
-    dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
+    dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
 
     if (res.before_aggregation)
     {
