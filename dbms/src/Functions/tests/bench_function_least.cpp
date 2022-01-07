@@ -180,6 +180,24 @@ try
 CATCH
 BENCHMARK_REGISTER_F(LeastBench, benchVec)->Iterations(100);
 
+BENCHMARK_DEFINE_F(LeastBench, benchVec2Col)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbLeast";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            col1,
+            col2);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchVec2Col)->Iterations(100);
+
 BENCHMARK_DEFINE_F(LeastBench, benchVecWithNullable)
 (benchmark::State & state)
 try
@@ -217,6 +235,24 @@ try
 }
 CATCH
 BENCHMARK_REGISTER_F(LeastBench, benchNormal)->Iterations(100);
+
+BENCHMARK_DEFINE_F(LeastBench, benchNormal2Col)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbGreatest";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            col1,
+            col2);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchNormal2Col)->Iterations(100);
 
 BENCHMARK_DEFINE_F(LeastBench, benchNormalWithNullable)
 (benchmark::State & state)

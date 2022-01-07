@@ -361,11 +361,9 @@ struct BinaryGreatestSpecialCase
 };
 
 
-/**
-     * in TiDB:
-     * * if A or B is floating-point, least/Greatest(A, B) evalutes to Float64.
-     * * if A or B is Integer which is not unsigned, least/Greatest(A, B) evaluates to Int64.
-     */
+// in TiDB:
+// if A or B is floating-point, least/Greatest(A, B) evalutes to Float64.
+// if A or B is Integer which is not unsigned, least/Greatest(A, B) evaluates to Int64.
 template <typename A, typename B>
 struct ResultOfBinaryLeast
 {
