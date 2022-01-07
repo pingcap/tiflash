@@ -264,6 +264,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
+    if (ts.next_read_engine() != tipb::EngineType::Local)
+        throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
     DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
     storage_interpreter.execute(pipeline);
