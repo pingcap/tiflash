@@ -59,19 +59,18 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     snap->deletes = deletes;
     snap->column_files.reserve(column_files.size());
 
-    if (DM_RUN_CHECK)
+    size_t total_rows = 0;
+    size_t total_deletes = 0;
+    for (const auto & file : column_files)
     {
-        size_t total_rows = 0;
-        size_t total_deletes = 0;
-        for (const auto & file : column_files)
-        {
-            total_rows += file->getRows();
-            total_deletes += file->getDeletes();
-        }
-
-        if (unlikely(total_rows != rows || total_deletes != deletes))
-            throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
+        // TODO: check the thread safety of ColumnFile
+        snap->column_files.push_back(file);
+        total_rows += file->getRows();
+        total_deletes += file->getDeletes();
     }
+
+    if (unlikely(total_rows != rows || total_deletes != deletes))
+        throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
 
     return snap;
 }
