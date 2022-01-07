@@ -689,6 +689,7 @@ TEST_F(BlobStoreTest, GC)
     auto it = versioned_entries.begin();
     for (const auto & [page_id_, version_type, entry_] : copy_list)
     {
+        (void)version_type;
         ASSERT_EQ(page_id_, page_id);
         ASSERT_EQ(entry_.file_id, 1);
         ASSERT_EQ(it->second.checksum, entry_.checksum);

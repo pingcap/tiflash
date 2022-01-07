@@ -393,8 +393,8 @@ try
 }
 CATCH
 
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                 \
-    PageEntryV3 entry_v##VERSION{.file_id = BLOBID, .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                   \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
     entries.createNewVersion((VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                              \

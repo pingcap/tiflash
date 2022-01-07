@@ -275,9 +275,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 }
 
 
-void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
+void PageDirectory::gcApply(const VersionedPageIdAndEntryList & migrated_entries)
 {
-    for (const auto & [page_id, version, entry] : copy_list)
+    for (const auto & [page_id, version, entry] : migrated_entries)
     {
         auto iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())
@@ -294,7 +294,7 @@ void PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list)
 }
 
 std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize>
-PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
+PageDirectory::getEntriesFromBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 {
     std::map<BlobFileId, VersionedPageIdAndEntries> blob_versioned_entries;
 
@@ -302,7 +302,7 @@ PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
     {
         std::shared_lock read_lock(table_rw_mutex);
 
-        for (auto & blob_id : blob_need_gc)
+        for (const auto & blob_id : blob_need_gc)
         {
             VersionedPageIdAndEntries versioned_pageid_entries;
 
@@ -327,7 +327,7 @@ PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
             blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
         }
     }
-    return std::make_pair(blob_versioned_entries, total_page_size);
+    return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
 std::vector<PageEntriesV3> PageDirectory::gc()

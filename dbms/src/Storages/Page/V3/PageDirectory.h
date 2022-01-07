@@ -43,9 +43,9 @@ public:
 
     std::vector<PageEntriesV3> gc();
 
-    std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize> getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc);
+    std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize> getEntriesFromBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
-    void gcApply(const VersionedPageIdAndEntryList & copy_list);
+    void gcApply(const VersionedPageIdAndEntryList & migrated_entries);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
