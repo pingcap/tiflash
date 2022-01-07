@@ -45,6 +45,8 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DUSE_LLVM_COMPILER_RT=ON \
       -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
       -DRUN_HAVE_STD_REGEX=0 \
+      -DCMAKE_AR="/usr/local/bin/llvm-ar" \
+      -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
       -GNinja
 
 ninja tiflash
