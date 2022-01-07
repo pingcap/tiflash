@@ -19,10 +19,8 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using VersionedPageId = std::pair<PageId, PageVersionType>;
-using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
-using VersionedPageIdAndEntryList = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
-using VersionedPageIdAndEntries = std::vector<std::pair<PageId, VersionedEntries>>;
+using PageIdAndVersionedEntryList = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
 {
@@ -32,6 +30,7 @@ public:
         SettingUInt64 file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
         SettingUInt64 cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingDouble heavy_gc_valid_rate = 0.2;
     };
 
     class BlobStats
@@ -144,14 +143,14 @@ public:
 
     std::vector<BlobFileId> getGCStats();
 
-    VersionedPageIdAndEntryList gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
+    PageIdAndVersionedEntryList gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
                                    const PageSize & total_page_size,
                                    const WriteLimiterPtr & write_limiter = nullptr,
                                    const ReadLimiterPtr & read_limiter = nullptr);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void remove(PageEntriesV3 del_entries);
+    void remove(const PageEntriesV3 & del_entries);
 
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 

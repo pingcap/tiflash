@@ -171,7 +171,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     return edit;
 }
 
-void BlobStore::remove(PageEntriesV3 del_entries)
+void BlobStore::remove(const PageEntriesV3 & del_entries)
 {
     for (const auto & entry : del_entries)
     {
@@ -317,7 +317,7 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
 
 std::vector<BlobFileId> BlobStore::getGCStats()
 {
-    const auto & stats_list = blob_stats.getStats();
+    const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
 
     for (const auto & stat : stats_list)
@@ -329,9 +329,9 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         assert(stat->sm_valid_rate <= 1.0);
 
         // Check if GC is required
-        if (stat->sm_valid_rate <= 0.2)
+        if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
         {
-            LOG_FMT_DEBUG(log, "Current [BlobFileId={}] valid rate is {}, Need do compact GC", stat->id, stat->sm_valid_rate);
+            LOG_FMT_TRACE(log, "Current [BlobFileId={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
             stat->sm_total_size = stat->sm_valid_size;
             blob_need_gc.emplace_back(stat->id);
 
@@ -340,7 +340,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         }
         else
         {
-            LOG_FMT_DEBUG(log, "Current [BlobFileId={}] valid rate is {}, No need to GC.", stat->id, stat->sm_valid_rate);
+            LOG_FMT_TRACE(log, "Current [BlobFileId={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
         }
 
         if (right_margin != stat->sm_total_size)
@@ -354,12 +354,12 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     return blob_need_gc;
 }
 
-VersionedPageIdAndEntryList BlobStore::gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
+PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
                                           const PageSize & total_page_size,
                                           const WriteLimiterPtr & write_limiter,
                                           const ReadLimiterPtr & read_limiter)
 {
-    VersionedPageIdAndEntryList copy_list;
+    PageIdAndVersionedEntryList copy_list;
 
     PageEntriesEdit edit;
 
@@ -554,38 +554,32 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseNewStat()
 std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size)
 {
     BlobStatPtr stat_ptr = nullptr;
-    BlobFileId smallest_valid_rate = 2;
+    double smallest_valid_rate = 2;
 
-    do
+    // No stats exist
+    if (stats_map.empty())
     {
-        // No stats exist
-        if (stats_map.empty())
+        return chooseNewStat();
+    }
+
+    for (const auto & stat : stats_map)
+    {
+        if (stat->type == BlobStatType::NORMAL
+            && stat->sm_max_caps >= buf_size
+            && stat->sm_total_size + buf_size < file_limit_size
+            && stat->sm_valid_rate < smallest_valid_rate)
         {
-            break;
+            smallest_valid_rate = stat->sm_valid_size;
+            stat_ptr = stat;
         }
+    }
 
-        for (const auto & stat : stats_map)
-        {
-            if (stat->type == BlobStatType::NORMAL
-                && stat->sm_max_caps >= buf_size
-                && stat->sm_total_size + buf_size < file_limit_size
-                && stat->sm_valid_rate < smallest_valid_rate)
-            {
-                smallest_valid_rate = stat->sm_valid_size;
-                stat_ptr = stat;
-            }
-        }
+    if (!stat_ptr)
+    {
+        return chooseNewStat();
+    }
 
-        if (!stat_ptr)
-        {
-            break;
-        }
-
-        return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
-
-    } while (false);
-
-    return chooseNewStat();
+    return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
 BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)

@@ -951,7 +951,7 @@ try
     INSERT_ENTRY_TO(another_page_id, 6, 1);
 
     // FIXME: This will copy many outdate pages
-    // Full GC get entries 
+    // Full GC get entries
     auto candidate_entries_1 = dir.getEntriesFromBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
     EXPECT_EQ(candidate_entries_1.first[1].size(), 2); // 2 page entries list
@@ -963,7 +963,7 @@ try
     EXPECT_EQ(entries_in_file2.size(), 2); // 2 page entries list
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 page entries list
 
-    VersionedPageIdAndEntryList gc_migrate_entries;
+    PageIdAndVersionedEntryList gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         for (const auto & [page_id, version_entries] : entries)
@@ -1021,7 +1021,7 @@ try
     // `page_id` get removed
     EXPECT_EQ(dir.numPages(), 1);
 
-    VersionedPageIdAndEntryList gc_migrate_entries;
+    PageIdAndVersionedEntryList gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         for (const auto & [page_id, version_entries] : entries)

@@ -673,9 +673,9 @@ TEST_F(BlobStoreTest, GC)
         versioned_entries.emplace_back(1, record.entry);
     }
 
-    VersionedPageIdAndEntries versioned_pageid_entries;
+    PageIdAndVersionedEntries versioned_pageid_entries;
     versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
-    std::map<BlobFileId, VersionedPageIdAndEntries> gc_context;
+    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
     gc_context[0] = versioned_pageid_entries;
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
