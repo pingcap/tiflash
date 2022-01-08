@@ -11,8 +11,9 @@
 
 #if __SSE2__
 #include <emmintrin.h>
-#include <streamvbyte.h>
 #endif
+#include <lz4.h>
+#include <streamvbyte.h>
 
 
 namespace DB
@@ -81,15 +82,11 @@ double DataTypeString::serializeBinaryBulkWithCompression(const IColumn & column
     if (!size)
         return 0;
 
-
     if (offset == 0)
     {
         if (limit == 0 || offset + limit > size)
             limit = size - offset;
-        //#if SCALA
-        //        ostr.write(reinterpret_cast<const char *>(&offsets[offset]), sizeof(ColumnString::Offset) * limit);
-        //        ostr.write(reinterpret_cast<const char *>(&data[offset]), offsets[limit-1]);
-        //#else
+#if 0
         auto raw_size = sizeof(ColumnString::Offset) * limit + offsets[limit - 1] + 3;
         auto need_size = streamvbyte_max_compressedbytes(raw_size / 4 + 18);
         ostr.forceNext(need_size);
@@ -107,38 +104,33 @@ double DataTypeString::serializeBinaryBulkWithCompression(const IColumn & column
         *(size_t *)ostr.position() = compsize_data;
         ostr.position() += compsize_data + sizeof(size_t);
         return compsize_off / (n32_off * 4) * 10000 + compsize_data / offsets[limit - 1];
-        //#endif
+#else
+        auto need_size = sizeof(ColumnString::Offset) * limit + LZ4_COMPRESSBOUND(offsets[limit - 1]) + 4 * sizeof(size_t);
+        ostr.forceNext(need_size);
+        /// compress offsets
+        size_t n32_off = sizeof(ColumnString::Offset) * limit / 4.0;
+        size_t compsize_off = streamvbyte_encode(reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(&offsets[offset])), n32_off, reinterpret_cast<uint8_t *>(ostr.position() + sizeof(size_t))); // encoding
+        *(size_t *)ostr.position() = compsize_off;
+        ostr.position() += compsize_off + sizeof(size_t);
+        /// compress data
+        auto src_size = offsets[limit - 1];
+        size_t compsize_data = LZ4_compress_default(reinterpret_cast<const char *>(&data[offset]), reinterpret_cast<char *>(ostr.position() + sizeof(size_t)), src_size, LZ4_COMPRESSBOUND(src_size));
+        *(size_t *)ostr.position() = compsize_data;
+        ostr.position() += compsize_data + sizeof(size_t);
+        return compsize_off / (n32_off * 4.0) * 10000 + compsize_data * 1.0 / offsets[limit - 1];
+#endif
     }
     else
     {
         throw Exception("string compression does not start from 0!");
     }
-#if 0
-    size_t end = limit && offset + limit < size
-        ? offset + limit
-        : size;
-    if (offset == 0)
-    {
-        UInt64 str_size = offsets[0] - 1;
-        writeVarUInt(str_size, ostr);
-        ostr.write(reinterpret_cast<const char *>(&data[0]), str_size);
-
-        ++offset;
-    }
-
-    for (size_t i = offset; i < end; ++i)
-    {
-        UInt64 str_size = offsets[i] - offsets[i - 1] - 1;
-        writeVarUInt(str_size, ostr);
-        ostr.write(reinterpret_cast<const char *>(&data[offsets[i - 1]]), str_size);
-    }
-#endif
 }
 void DataTypeString::deserializeBinaryBulkWithCompression(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint [[maybe_unused]]) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
     ColumnString::Offsets & offsets = column_string.getOffsets();
+#if 0
     /// decompress offsets
     size_t initial_size = offsets.size();
     assert(initial_size == 0);
@@ -163,6 +155,32 @@ void DataTypeString::deserializeBinaryBulkWithCompression(IColumn & column, Read
     }
     istr.position() += compsize + sizeof(size_t);
     data.resize(offsets[limit - 1]);
+#else
+    /// decompress offsets
+    size_t initial_size = offsets.size();
+    assert(initial_size == 0);
+    offsets.resize(initial_size + limit);
+    size_t compsize = *(size_t *)istr.position();
+    size_t n32_off = limit * sizeof(ColumnString::Offset) / 4.0;
+    size_t compsize2 = streamvbyte_decode(reinterpret_cast<const uint8_t *>(istr.position() + sizeof(size_t)), reinterpret_cast<uint32_t *>(reinterpret_cast<char *>(&offsets[initial_size])), n32_off); // decoding (fast)
+    offsets.resize(initial_size + limit);
+    if (compsize != compsize2)
+    {
+        throw Exception("exchange compression size is not equal in DataTypeString->offsets");
+    }
+    istr.position() += compsize + sizeof(size_t);
+    /// decompress data
+    compsize = *(size_t *)istr.position();
+    size_t src_size = offsets[limit - 1];
+    data.resize(src_size);
+    compsize2 = LZ4_decompress_fast(reinterpret_cast<const char *>(istr.position() + sizeof(size_t)), reinterpret_cast<char *>(&data[initial_size]), src_size);
+    if (compsize != compsize2)
+    {
+        throw Exception("exchange compression size is not equal in DataTypeString->data");
+    }
+    istr.position() += compsize + sizeof(size_t);
+    data.resize(offsets[limit - 1]);
+#endif
 }
 
 void DataTypeString::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
