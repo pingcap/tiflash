@@ -27,6 +27,8 @@ public:
 
     void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
+    double serializeBinaryBulkWithCompression(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
+    void deserializeBinaryBulkWithCompression(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 
