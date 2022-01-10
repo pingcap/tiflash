@@ -61,7 +61,8 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
                 dagContext().getMPPTaskMeta(),
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                context.getSettings().enable_local_tunnel),
+                context.getSettings().enable_local_tunnel,
+                context.getSettings().enable_async_grpc),
             dag_query_block.source->exchange_receiver().encoded_task_meta_size(),
             max_streams,
             dagContext().log);

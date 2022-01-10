@@ -26,7 +26,248 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
     }
 }
 
-constexpr Int32 MAX_RETRY_TIMES = 10;
+struct ReactorTrigger
+{
+    MPMCQueue<size_t> * queue;
+    size_t source_index;
+
+    ReactorTrigger(
+        MPMCQueue<size_t> * queue_,
+        size_t source_index_)
+        : queue(queue_)
+        , source_index(source_index_)
+    {
+    }
+
+    void trigger()
+    {
+        queue->push(source_index);
+    }
+};
+
+enum class AsyncRequestStage
+{
+    NEED_INIT,
+    WAIT_MAKE_READER,
+    WAIT_BATCH_READ,
+    WAIT_FINISH,
+    WAIT_RETRY,
+    FINISHED,
+};
+
+using Clock = std::chrono::system_clock;
+using TimePoint = Clock::time_point;
+
+static constexpr Int32 MAX_RETRY_TIMES = 10;
+static constexpr Int32 BATCH_PACKET_COUNT = 16;
+
+template <typename RPCContext>
+struct AsyncRequestStat : public UnaryCallback<bool>
+{
+    using Status = typename RPCContext::Status;
+    using Request = typename RPCContext::Request;
+    using AsyncReader = typename RPCContext::AsyncReader;
+
+    std::shared_ptr<RPCContext> rpc_context;
+    const Request * request = nullptr;
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel = nullptr;
+
+    String req_info;
+    bool meet_error = false;
+    bool has_data = false;
+    String err_msg;
+    int retry_times = 0;
+    TimePoint start_waiting_retry_ts{Clock::duration::zero()};
+    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
+
+    ReactorTrigger trigger;
+    std::shared_ptr<AsyncReader> reader;
+    MPPDataPacketPtrs packets;
+    size_t read_packet_index = 0;
+    Status finish_status = RPCContext::getStatusOK();
+    LogWithPrefixPtr log;
+
+    AsyncRequestStat(
+        MPMCQueue<size_t> * queue,
+        MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
+        const std::shared_ptr<RPCContext> & context,
+        const Request & req,
+        const LogWithPrefixPtr & log_)
+        : rpc_context(context)
+        , request(&req)
+        , msg_channel(msg_channel_)
+        , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
+        , trigger(queue, req.source_index)
+        , log(getMPPTaskLog(log_, req_info))
+    {
+        packets.resize(BATCH_PACKET_COUNT);
+        for (auto & packet : packets)
+            packet = std::make_shared<MPPDataPacket>();
+    }
+
+    // execute will be called by RPC framework so it should be as light as possible.
+    void execute(bool & ok) override
+    {
+        switch (stage)
+        {
+        case AsyncRequestStage::WAIT_MAKE_READER:
+            if (!ok)
+                reader.reset();
+            trigger.trigger();
+            break;
+        case AsyncRequestStage::WAIT_BATCH_READ:
+            if (ok)
+                ++read_packet_index;
+            if (!ok || read_packet_index == BATCH_PACKET_COUNT || packets[read_packet_index - 1]->has_error())
+                trigger.trigger();
+            else
+                reader->read(packets[read_packet_index], this);
+            break;
+        case AsyncRequestStage::WAIT_FINISH:
+            trigger.trigger();
+            break;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    // handle will be called by ExchangeReceiver::reactor.
+    void handle()
+    {
+        LOG_FMT_TRACE(log, "Enter {}. stage: {}", __PRETTY_FUNCTION__, stage);
+        switch (stage)
+        {
+        case AsyncRequestStage::WAIT_MAKE_READER:
+            if (reader)
+            {
+                stage = AsyncRequestStage::WAIT_BATCH_READ;
+                read_packet_index = 0;
+                reader->read(packets[0], this);
+            }
+            else
+            {
+                LOG_FMT_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                waitForRetryOrDone("Exchange receiver meet error : send async stream request fail");
+            }
+            break;
+        case AsyncRequestStage::WAIT_BATCH_READ:
+            LOG_FMT_TRACE(log, "Received {} packets.", read_packet_index);
+            if (read_packet_index > 0)
+                has_data = true;
+
+            if (auto packet = getErrorPacket())
+                setDone("Exchange receiver meet error : " + packet->error().msg());
+            else if (!sendPackets())
+                setDone("Exchange receiver meet error : push packets fail");
+            else if (read_packet_index < BATCH_PACKET_COUNT)
+            {
+                stage = AsyncRequestStage::WAIT_FINISH;
+                reader->finish(finish_status, this);
+            }
+            else
+            {
+                read_packet_index = 0;
+                reader->read(packets[0], this);
+            }
+            break;
+        case AsyncRequestStage::WAIT_FINISH:
+            if (finish_status.ok())
+                setDone("");
+            else
+            {
+                LOG_FMT_WARNING(
+                    log,
+                    "Finish fail. err code: {}, err msg: {}, retry time {}",
+                    finish_status.error_code(),
+                    finish_status.error_message(),
+                    retry_times);
+                waitForRetryOrDone("Exchange receiver meet error : " + finish_status.error_message());
+            }
+            break;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    bool finished() const
+    {
+        return stage == AsyncRequestStage::FINISHED;
+    }
+
+    MPPDataPacketPtr getErrorPacket() const
+    {
+        // only the last packet may has error, see execute().
+        if (read_packet_index != 0 && packets[read_packet_index - 1]->has_error())
+            return packets[read_packet_index - 1];
+        return nullptr;
+    }
+
+    bool retriable() const
+    {
+        return !has_data && retry_times + 1 < MAX_RETRY_TIMES;
+    }
+
+    bool waitingForRetry() const
+    {
+        return stage == AsyncRequestStage::WAIT_RETRY;
+    }
+
+    void setDone(String msg)
+    {
+        if (!msg.empty())
+        {
+            meet_error = true;
+            err_msg = std::move(msg);
+        }
+        stage = AsyncRequestStage::FINISHED;
+    }
+
+    void start()
+    {
+        stage = AsyncRequestStage::WAIT_MAKE_READER;
+        rpc_context->makeAsyncReader(*request, reader, this);
+    }
+
+    bool retry()
+    {
+        if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
+        {
+            ++retry_times;
+            start();
+            return true;
+        }
+        return false;
+    }
+
+    void waitForRetryOrDone(String done_msg)
+    {
+        if (retriable())
+        {
+            start_waiting_retry_ts = Clock::now();
+            stage = AsyncRequestStage::WAIT_RETRY;
+            reader.reset();
+        }
+        else
+            setDone(done_msg);
+    }
+
+    bool sendPackets()
+    {
+        for (size_t i = 0; i < read_packet_index; ++i)
+        {
+            auto & packet = packets[i];
+            auto recv_msg = std::make_shared<ReceivedMessage>();
+            recv_msg->packet = std::move(packet);
+            recv_msg->source_index = request->source_index;
+            recv_msg->req_info = req_info;
+            if (!msg_channel->push(std::move(recv_msg)))
+                return false;
+            // can't reuse packet since it is sent to readers.
+            packet = std::make_shared<MPPDataPacket>();
+        }
+        return true;
+    }
+};
 } // namespace
 
 template <typename RPCContext>
@@ -69,10 +310,67 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    std::vector<Request> async_requests;
+
     for (size_t index = 0; index < source_num; ++index)
     {
         auto req = rpc_context->makeRequest(index);
-        thread_manager->schedule(true, "Receiver", [this, index, req = std::move(req)] { readLoop(req); });
+        if (rpc_context->supportAsync(req))
+            async_requests.push_back(std::move(req));
+        else
+            thread_manager->schedule(true, "Receiver", [this, index, req = std::move(req)] { readLoop(req); });
+    }
+
+    if (!async_requests.empty())
+        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] { reactor(async_requests); });
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
+{
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
+
+    size_t alive_async_connections = async_requests.size();
+    MPMCQueue<size_t> ready_requests(alive_async_connections * 2);
+    std::vector<size_t> waiting_for_retry_requests;
+
+    std::vector<AsyncRequestStat<RPCContext>> stats;
+    stats.reserve(alive_async_connections);
+    for (const auto & req : async_requests)
+    {
+        stats.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
+        stats.back().start();
+    }
+
+    static constexpr auto timeout = std::chrono::milliseconds(10);
+
+    while (alive_async_connections > 0)
+    {
+        size_t source_index = 0;
+        if (ready_requests.tryPop(source_index, timeout))
+        {
+            auto & stat = stats[source_index];
+            stat.handle();
+            if (stat.finished())
+            {
+                --alive_async_connections;
+                connectionDone(stat.meet_error, stat.err_msg, stat.log);
+            }
+            else if (stat.waitingForRetry())
+            {
+                waiting_for_retry_requests.push_back(source_index);
+            }
+        }
+        else if (!waiting_for_retry_requests.empty())
+        {
+            std::vector<size_t> tmp;
+            for (auto i : waiting_for_retry_requests)
+            {
+                if (!stats[i].retry())
+                    tmp.push_back(i);
+            }
+            waiting_for_retry_requests.swap(tmp);
+        }
     }
 }
 

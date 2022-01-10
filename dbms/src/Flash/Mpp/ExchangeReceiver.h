@@ -97,6 +97,7 @@ private:
 
     void setUpConnection();
     void readLoop(const Request & req);
+    void reactor(const std::vector<Request> & async_requests);
 
     void setState(ExchangeReceiverState new_state);
     ExchangeReceiverState getState();

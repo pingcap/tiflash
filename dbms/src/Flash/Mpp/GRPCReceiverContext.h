@@ -26,6 +26,16 @@ public:
 };
 using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 
+class AsyncExchangePacketReader
+{
+public:
+    virtual ~AsyncExchangePacketReader() = default;
+    virtual void init(UnaryCallback<bool> * callback) = 0;
+    virtual void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
+    virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+};
+using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
+
 struct ExchangeRecvRequest
 {
     Int64 source_index = -1;
@@ -43,17 +53,26 @@ public:
     using Status = ::grpc::Status;
     using Request = ExchangeRecvRequest;
     using Reader = ExchangePacketReader;
+    using AsyncReader = AsyncExchangePacketReader;
 
     explicit GRPCReceiverContext(
         const tipb::ExchangeReceiver & exchange_receiver_meta_,
         const mpp::TaskMeta & task_meta_,
         pingcap::kv::Cluster * cluster_,
         std::shared_ptr<MPPTaskManager> task_manager_,
-        bool enable_local_tunnel_);
+        bool enable_local_tunnel_,
+        bool enable_async_grpc_);
 
     ExchangeRecvRequest makeRequest(int index) const;
 
+    bool supportAsync(const ExchangeRecvRequest & request);
+
     ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
+
+    void makeAsyncReader(
+        const ExchangeRecvRequest & request,
+        AsyncExchangePacketReaderPtr & reader,
+        UnaryCallback<bool> * callback) const;
 
     static Status getStatusOK()
     {
@@ -68,5 +87,6 @@ private:
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
     bool enable_local_tunnel;
+    bool enable_async_grpc;
 };
 } // namespace DB
