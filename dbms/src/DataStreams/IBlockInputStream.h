@@ -79,6 +79,8 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
+    virtual int computeNewThreadCount() { return 0; }
+
     virtual ~IBlockInputStream() = default;
 
     /** To output the data stream transformation tree (query execution plan).

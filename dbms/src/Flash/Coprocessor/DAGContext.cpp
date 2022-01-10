@@ -198,5 +198,13 @@ void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
 }
+void DAGContext::setNewThreadCountOfExchangeReceiver(int newThreadCountOfExchangeReceiver)
+{
+    new_thread_count_of_exchange_receiver = newThreadCountOfExchangeReceiver;
+}
+int DAGContext::getNewThreadCountOfExchangeReceiver() const
+{
+    return new_thread_count_of_exchange_receiver;
+}
 
 } // namespace DB

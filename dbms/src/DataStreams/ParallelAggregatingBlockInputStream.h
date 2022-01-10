@@ -36,6 +36,15 @@ public:
 
     Block getHeader() const override;
 
+    virtual int computeNewThreadCount() override
+    {
+        //todo move codes into processor
+        int new_thread_count_of_children = 0;
+        for (size_t i = 0; i < children.size(); ++i)
+            new_thread_count_of_children += children[i]->computeNewThreadCount();
+        return processor.getMaxThreads() + new_thread_count_of_children + (temporary_data_merge_threads + max_threads);
+    }
+
 protected:
     /// Do nothing that preparation to execution of the query be done in parallel, in ParallelInputsProcessor.
     void readPrefix() override

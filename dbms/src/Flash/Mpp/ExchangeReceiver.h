@@ -104,6 +104,8 @@ public:
 
     size_t getSourceNum() const { return source_num; }
 
+    int computeNewThreadCount() const { return getSourceNum(); }
+
 private:
     void setUpConnection();
 

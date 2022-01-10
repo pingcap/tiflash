@@ -41,6 +41,16 @@ public:
 
     Block getHeader() const override;
 
+    virtual int computeNewThreadCount() override
+    {
+        int ret = 0;
+        for(auto &child: children) {
+            ret += child->computeNewThreadCount();
+        }
+        ret += 2;
+        return ret;
+    }
+
 protected:
     Block readImpl() override;
 

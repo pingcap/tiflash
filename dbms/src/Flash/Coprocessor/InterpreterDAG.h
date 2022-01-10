@@ -39,6 +39,8 @@ private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
     void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
 
+    int computeNewThreadCount();
+
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 
     Context & context;

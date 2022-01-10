@@ -149,6 +149,10 @@ public:
         return io;
     }
 
+    void setNewThreadCountOfExchangeReceiver(int newThreadCountOfExchangeReceiver);
+
+    int getNewThreadCountOfExchangeReceiver() const;
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -202,6 +206,7 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    int new_thread_count_of_exchange_receiver;
 };
 
 } // namespace DB

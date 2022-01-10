@@ -301,6 +301,10 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
+        //todo compute new-threads-count.
+        //todo add exchange receiver's threads
+        int new_thd_cnt = 1 + tunnel_map.size() + dag_context->getBlockIO().in->computeNewThreadCount()
+            + dag_context->getNewThreadCountOfExchangeReceiver();
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
