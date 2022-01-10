@@ -749,6 +749,8 @@ const String & getFunctionName(const tipb::Expr & expr)
 
 TiDB::AggregateFunctionMode getAggFunctionMode(const tipb::Expr & expr)
 {
+    if (!expr.has_aggfuncmode())
+        return TiDB::Partial1Mode;
     auto it = agg_func_mode_map.find(expr.aggfuncmode());
     if (it != agg_func_mode_map.end())
         return it->second;

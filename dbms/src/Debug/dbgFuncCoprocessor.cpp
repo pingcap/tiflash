@@ -136,7 +136,7 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"count", tipb::ExprType::Count},
     {"sum", tipb::ExprType::Sum},
     {"first_row", tipb::ExprType::First},
-    {uniq_raw_res_name, tipb::ExprType::ApproxCountDistinct},
+    {"uniqRawRes", tipb::ExprType::ApproxCountDistinct},
     {"group_concat", tipb::ExprType::GroupConcat},
 });
 
