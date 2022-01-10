@@ -1229,6 +1229,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
+    // check debug invoker
+    if (global_context->getSettingsRef().enable_debug_invoker)
+    {
+        LOG_FMT_WARNING(log, "!!!DANGEROUS!!! DBG Invoker is enabled, please keep it disabled in production env.");
+    }
+
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
