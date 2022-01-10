@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/UnaryCallback.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
