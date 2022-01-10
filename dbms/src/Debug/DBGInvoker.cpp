@@ -10,12 +10,18 @@
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 
 #include <thread>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int PERMISSION_DENIED;
+}
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     for (const auto & arg : args)
@@ -124,6 +130,10 @@ std::string & normalizeArg(std::string & arg)
 
 BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & ori_name, const ASTs & args)
 {
+    if (!context.getSettingsRef().enable_debug_invoker)
+    {
+        throw Exception("DBG Invoker is not allowed on this server", ErrorCodes::PERMISSION_DENIED);
+    }
     static const std::string prefix_not_print_res = "__";
     bool print_res = true;
     std::string name = ori_name;
