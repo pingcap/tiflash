@@ -1088,8 +1088,8 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             partition_col_id,
             collators,
             exchange_sender.tp(),
-            context.getSettings().dag_records_per_chunk,
-            context.getSettings().batch_send_min_limit,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext());
         stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), taskLogger());

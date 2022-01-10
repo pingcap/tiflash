@@ -24,7 +24,7 @@ int main(int, char **)
 try
 {
     Context context = Context::createGlobal();
-    Settings settings = context.getSettings();
+    const auto & settings = context.getSettingsRef();
 
     context.setPath("./");
 

@@ -488,7 +488,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
     , after_agg(false)
     , implicit_cast_count(0)
 {
-    settings = context.getSettings();
+    settings = context.getSettingsRef();
 }
 
 void DAGExpressionAnalyzer::buildGroupConcat(
