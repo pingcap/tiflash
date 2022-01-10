@@ -282,7 +282,7 @@ void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries
         auto iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())
         {
-            throw Exception(fmt::format("Can't found [pageid={}]", page_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", page_id), ErrorCodes::LOGICAL_ERROR);
         }
 
         auto versioned_page = iter->second;

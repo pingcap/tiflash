@@ -989,6 +989,7 @@ try
     dir.gcApply(gc_migrate_entries);
 }
 CATCH
+
 TEST_F(PageDirectoryGCTest, MVCCAndFullGCInConcurrent)
 try
 {
@@ -1044,7 +1045,7 @@ try
     }
 
     // 1.2 Full GC execute apply
-    dir.gcApply(gc_migrate_entries);
+    ASSERT_THROW({ dir.gcApply(gc_migrate_entries); }, DB::Exception);
 }
 CATCH
 
