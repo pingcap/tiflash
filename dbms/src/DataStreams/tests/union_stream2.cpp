@@ -1,21 +1,17 @@
-#include <iostream>
-#include <iomanip>
-
-#include <IO/WriteBufferFromFileDescriptor.h>
-
-#include <Storages/System/StorageSystemNumbers.h>
-#include <Storages/RegionQueryInfo.h>
-
-#include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/LimitBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
-
 #include <DataTypes/DataTypesNumber.h>
-
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/loadMetadata.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/System/StorageSystemNumbers.h>
+
+#include <iomanip>
+#include <iostream>
 
 
 using namespace DB;
@@ -41,8 +37,8 @@ try
     for (size_t i = 0, size = streams.size(); i < size; ++i)
         streams[i] = std::make_shared<AsynchronousBlockInputStream>(streams[i]);
 
-    BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, settings.max_threads);
-    stream = std::make_shared<LimitBlockInputStream>(stream, 10, 0);
+    BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, settings.max_threads, nullptr);
+    stream = std::make_shared<LimitBlockInputStream>(stream, 10, 0, nullptr);
 
     WriteBufferFromFileDescriptor wb(STDERR_FILENO);
     Block sample = table->getSampleBlock();
@@ -55,8 +51,8 @@ try
 catch (const Exception & e)
 {
     std::cerr << e.what() << ", " << e.displayText() << std::endl
-        << std::endl
-        << "Stack trace:" << std::endl
-        << e.getStackTrace().toString();
+              << std::endl
+              << "Stack trace:" << std::endl
+              << e.getStackTrace().toString();
     return 1;
 }

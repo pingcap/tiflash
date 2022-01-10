@@ -14,11 +14,10 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
     return packet;
 }
 
-#define SIZE2GB (1 << 31)
-
-inline void checkPacketSize(size_t size)
+void checkPacketSize(size_t size)
 {
-    if (size >= (size_t)SIZE2GB)
+    static constexpr size_t max_packet_size = 1u << 31;
+    if (size >= max_packet_size)
         throw Exception(fmt::format("Packet is too large to send, size : {}", size));
 }
 
