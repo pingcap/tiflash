@@ -84,6 +84,7 @@ grpc::Status CoprocessorHandler::execute()
             DAGContext dag_context(dag_request);
             dag_context.regions_for_local_read = std::move(regions);
             dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+            dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);

@@ -1297,7 +1297,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            LOG_FMT_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
+
+            // proxy update store-id before status set `RaftProxyStatus::Running`
+            assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
+            LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+
             WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
         SCOPE_EXIT({

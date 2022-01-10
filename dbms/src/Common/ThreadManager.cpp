@@ -59,11 +59,22 @@ public:
 
     void wait() override
     {
-        for (auto & worker : workers)
-            worker.join();
+        waitAndClear();
+    }
+
+    ~RawThreadManager()
+    {
+        waitAndClear();
     }
 
 protected:
+    void waitAndClear()
+    {
+        for (auto & worker : workers)
+            worker.join();
+        workers.clear();
+    }
+
     std::vector<std::thread> workers;
 };
 
