@@ -87,11 +87,11 @@ public:
     }
 
     template <typename Input, typename Output>
-    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const Input & input, const Output & output, int fraction)
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const Input & input, const MyDateTime & output, int fraction)
     {
         auto inner_test = [&](bool is_const) {
             ASSERT_COLUMN_EQ(
-                is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumnConst(1, output, fraction),
+                is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumn({output}, fraction),
                 executeFunction(
                     func_name,
                     {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
@@ -111,7 +111,37 @@ public:
                     func_name,
                     {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
                      createCastTypeConstColumn(fmt::format("Nullable({})", TypeName<Output>::get()))}),
-                     TiFlashException);
+                TiFlashException);
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<IsDecimal<Output>, void>::type testThrowException(const Input & input, const std::tuple<UInt32, UInt32> & meta)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_THROW(
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(Decimal({},{}))", std::get<0>(meta), std::get<1>(meta)))}),
+                TiFlashException);
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testThrowException(const Input & input, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_THROW(
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}),
+                TiFlashException);
         };
         inner_test(true);
         inner_test(false);
@@ -907,31 +937,31 @@ try
     testOnlyNull<Float32, String>();
     testOnlyNull<Float64, String>();
 
+    // TODO add tests after non-expected results fixed
+
     testNotOnlyNull<Float32, String>(0, "0");
     testNotOnlyNull<Float32, String>(12.213, "12.213");
     testNotOnlyNull<Float32, String>(-12.213, "-12.213");
-    // TODO add tests after fix results is not compatible with tidb/mysql
     // tiflash: 3.4028235e38
     // tidb: 340282350000000000000000000000000000000
     // mysql: 3.40282e38
-    //    testNotOnlyNull<Float32, String>(MAX_FLOAT32, "3.4028235e38");
+    // testNotOnlyNull<Float32, String>(MAX_FLOAT32, "3.4028235e38");
     // tiflash: 1.1754944e-38
     // tidb: 0.000000000000000000000000000000000000011754944
     // mysql: 1.17549e-38
-    //    testNotOnlyNull<Float32, String>(MIN_FLOAT32, "1.1754944e-38");
+    // testNotOnlyNull<Float32, String>(MIN_FLOAT32, "1.1754944e-38");
 
     testNotOnlyNull<Float64, String>(0, "0");
     testNotOnlyNull<Float64, String>(12.213, "12.213");
     testNotOnlyNull<Float64, String>(-12.213, "-12.213");
-    // TODO add tests after fix results is not compatible with tidb/mysql
     // tiflash: 1.7976931348623157e308
     // tidb: 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
     // mysql: 1.7976931348623157e308
-    //    testNotOnlyNull<Float64, String>(MAX_FLOAT64, "1.7976931348623157e308");
+    // testNotOnlyNull<Float64, String>(MAX_FLOAT64, "1.7976931348623157e308");
     // tiflash: 2.2250738585072014e-308
     // tidb: 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072014
     // mysql: 2.2250738585072014e-308
-    //    testNotOnlyNull<Float64, String>(MIN_FLOAT64, "2.2250738585072014e-308");
+    // testNotOnlyNull<Float64, String>(MIN_FLOAT64, "2.2250738585072014e-308");
 }
 CATCH
 
@@ -950,50 +980,50 @@ try
     testNotOnlyNull<Float32, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
     testNotOnlyNull<Float32, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
     testNotOnlyNull<Float32, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-//    testNotOnlyNull<Float32, Decimal32>(MAX_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-//    testNotOnlyNull<Float32, Decimal32>(MIN_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    testNotOnlyNull<Float32, Decimal32>(MAX_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    testNotOnlyNull<Float32, Decimal32>(MIN_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
 
     testNotOnlyNull<Float32, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
     testNotOnlyNull<Float32, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
     testNotOnlyNull<Float32, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-//    testNotOnlyNull<Float32, Decimal64>(MAX_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-//    testNotOnlyNull<Float32, Decimal64>(MIN_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    //    testNotOnlyNull<Float32, Decimal64>(MAX_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    //    testNotOnlyNull<Float32, Decimal64>(MIN_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
 
     testNotOnlyNull<Float32, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
     testNotOnlyNull<Float32, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
     testNotOnlyNull<Float32, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-//    testNotOnlyNull<Float32, Decimal128>(MAX_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-//    testNotOnlyNull<Float32, Decimal128>(MIN_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+    //    testNotOnlyNull<Float32, Decimal128>(MAX_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+    //    testNotOnlyNull<Float32, Decimal128>(MIN_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
 
     testNotOnlyNull<Float32, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
     testNotOnlyNull<Float32, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
     testNotOnlyNull<Float32, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-//    testNotOnlyNull<Float32, Decimal256>(MAX_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-//    testNotOnlyNull<Float32, Decimal256>(MIN_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+    //    testNotOnlyNull<Float32, Decimal256>(MAX_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+    //    testNotOnlyNull<Float32, Decimal256>(MIN_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
 
     testNotOnlyNull<Float64, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
     testNotOnlyNull<Float64, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
     testNotOnlyNull<Float64, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-//    testNotOnlyNull<Float64, Decimal32>(MAX_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-//    testNotOnlyNull<Float64, Decimal32>(MIN_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    //    testNotOnlyNull<Float64, Decimal32>(MAX_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    //    testNotOnlyNull<Float64, Decimal32>(MIN_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
 
     testNotOnlyNull<Float64, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
     testNotOnlyNull<Float64, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
     testNotOnlyNull<Float64, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-//    testNotOnlyNull<Float64, Decimal64>(MAX_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-//    testNotOnlyNull<Float64, Decimal64>(MIN_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    //    testNotOnlyNull<Float64, Decimal64>(MAX_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    //    testNotOnlyNull<Float64, Decimal64>(MIN_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
 
     testNotOnlyNull<Float64, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
     testNotOnlyNull<Float64, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
     testNotOnlyNull<Float64, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-//    testNotOnlyNull<Float64, Decimal128>(MAX_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
-//    testNotOnlyNull<Float64, Decimal128>(MIN_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
+    //    testNotOnlyNull<Float64, Decimal128>(MAX_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
+    //    testNotOnlyNull<Float64, Decimal128>(MIN_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
 
     testNotOnlyNull<Float64, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
     testNotOnlyNull<Float64, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
     testNotOnlyNull<Float64, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-//    testNotOnlyNull<Float64, Decimal256>(MAX_FLOAT64, DecimalField256(static_cast<Int256>(12213), 0), std::make_tuple(65, 0));
-//    testNotOnlyNull<Float64, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
+    //    testNotOnlyNull<Float64, Decimal256>(MAX_FLOAT64, DecimalField256(static_cast<Int256>(12213), 0), std::make_tuple(65, 0));
+    //    testNotOnlyNull<Float64, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
 }
 CATCH
 
@@ -1003,9 +1033,43 @@ try
     testOnlyNull<Float32, MyDateTime>();
     testOnlyNull<Float64, MyDateTime>();
 
-    testNotOnlyNull<Float32, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+    // TODO add tests after non-expected results fixed
 
-    testNotOnlyNull<Float64, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+    // mysql: null, warning.
+    // tiflash: null, no warning.
+    // tidb: 0000-00-00 00:00:00
+    // testThrowException<Float32, MyDateTime>(0, 6);
+    testThrowException<Float32, MyDateTime>(12.213, 6);
+    testThrowException<Float32, MyDateTime>(-12.213, 6);
+    testThrowException<Float32, MyDateTime>(MAX_FLOAT32, 6);
+    testThrowException<Float32, MyDateTime>(MIN_FLOAT32, 6);
+    // mysql: 2000-01-11 00:00:00
+    // tiflash / tidb: null, warnings
+    // testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testThrowException<Float32, MyDateTime>(-111, 6);
+    // mysql: 2000-01-11 00:00:00
+    // tiflash / tidb: null, warnings
+    // testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+
+    // mysql: null, warning.
+    // tiflash: null, no warning.
+    // tidb: 0000-00-00 00:00:00
+    // testThrowException<Float64, MyDateTime>(0, 6);
+    testThrowException<Float64, MyDateTime>(12.213, 6);
+    testThrowException<Float64, MyDateTime>(-12.213, 6);
+    testThrowException<Float64, MyDateTime>(MAX_FLOAT64, 6);
+    testThrowException<Float64, MyDateTime>(MIN_FLOAT64, 6);
+    // mysql: 2000-01-11 00:00:00
+    // tiflash / tidb: null, warnings
+    // testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testThrowException<Float64, MyDateTime>(-111, 6);
+    // mysql: 2000-01-11 00:00:00
+    // tiflash / tidb: null, warnings
+    // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    // mysql: 2021-02-01 00:00:00
+    // tiflash / tidb: 2021-02-01 01:00:00
+    // testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
 }
 CATCH
 

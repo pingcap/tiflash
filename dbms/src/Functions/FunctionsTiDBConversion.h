@@ -1378,6 +1378,9 @@ struct TiDBConvertToTime
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
+            auto handle_invalid_time = [&](const String & value_str_) {
+                context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str_ + "'", Errors::Types::WrongValue);
+            };
             for (size_t i = 0; i < size; i++)
             {
                 Float64 value = vec_from[i];
@@ -1409,7 +1412,13 @@ struct TiDBConvertToTime
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
-                        context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
+                        handle_invalid_time(value_str);
+                    }
+                    catch (const std::exception &)
+                    {
+                        // Fill NULL if cannot parse
+                        (*vec_null_map_to)[i] = 1;
+                        handle_invalid_time(value_str);
                     }
                 }
             }
