@@ -773,10 +773,7 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
         dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
 }
 
-void copyExecutorTreeWithLocalTableScan(
-    tipb::DAGRequest & dag_req,
-    const tipb::Executor * root,
-    const tipb::DAGRequest & org_req)
+void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::Executor * root)
 {
     const tipb::Executor * current = root;
     auto * exec = dag_req.mutable_root_executor();
@@ -848,10 +845,26 @@ void copyExecutorTreeWithLocalTableScan(
     /// force the encode type to be TypeCHBlock, so the receiver side does not need to handle the timezone related issues
     dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
     dag_req.set_force_encode_type(true);
-    if (org_req.has_time_zone_name() && !org_req.time_zone_name().empty())
-        dag_req.set_time_zone_name(org_req.time_zone_name());
-    else if (org_req.has_time_zone_offset())
-        dag_req.set_time_zone_offset(org_req.time_zone_offset());
+}
+
+void copyTimeZoneInfo(tipb::DAGRequest & to, const tipb::DAGRequest & from)
+{
+    if (from.has_time_zone_name() && !from.time_zone_name().empty())
+        to.set_time_zone_name(from.time_zone_name());
+    else if (from.has_time_zone_offset())
+        to.set_time_zone_offset(from.time_zone_offset());
+}
+
+std::vector<pingcap::coprocessor::KeyRange> getCopKeyRanges(const tipb::TableScan & ts)
+{
+    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
+    cop_key_ranges.reserve(ts.ranges_size());
+    for (const auto & range : ts.ranges())
+    {
+        cop_key_ranges.emplace_back(range.low(), range.high());
+    }
+    sort(cop_key_ranges.begin(), cop_key_ranges.end());
+    return cop_key_ranges;
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
@@ -861,18 +874,11 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     // parellel, so just disable this corner case.
     if (query_block.aggregation || query_block.limitOrTopN)
         throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
-    const auto & ts = query_block.source->tbl_scan();
-    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    cop_key_ranges.reserve(ts.ranges_size());
-    for (const auto & range : ts.ranges())
-    {
-        cop_key_ranges.emplace_back(range.low(), range.high());
-    }
-    sort(cop_key_ranges.begin(), cop_key_ranges.end());
 
     ::tipb::DAGRequest dag_req;
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root);
+    copyTimeZoneInfo(dag_req, *dagContext().dag_request);
 
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, *dagContext().dag_request);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
     BoolVec is_ts_column;
@@ -889,7 +895,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     }
 
     dag_req.set_collect_execution_summaries(dagContext().collect_execution_summaries);
-    executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
+    executeRemoteQueryImpl(pipeline, getCopKeyRanges(query_block.source->tbl_scan()), dag_req, schema);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }

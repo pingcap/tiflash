@@ -982,7 +982,7 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
              && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0));
 }
 
-bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
+bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & field_types, tipb::EncodeType encode_type)
 {
     const static std::unordered_map<tipb::EncodeType, std::unordered_set<Int32>> unsupported_types_map({
         {tipb::EncodeType::TypeCHBlock, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull, TiDB::TypeEnum, TiDB::TypeJSON, TiDB::TypeBit}},
@@ -992,9 +992,9 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
     auto unsupported_set = unsupported_types_map.find(encode_type);
     if (unsupported_set == unsupported_types_map.end())
         return false;
-    for (const auto & type : types)
+    for (const auto & field_type : field_types)
     {
-        if (unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
+        if (unsupported_set->second.find(field_type.tp()) != unsupported_set->second.end())
             return true;
     }
     return false;
