@@ -702,6 +702,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             taskLogger());
         pipeline.streams.resize(1);
+        // should record for agg before restore concurrency. See #3804.
+        recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
     }
     else
@@ -720,6 +722,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             context.getFileProvider(),
             true,
             taskLogger());
+        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     // add cast
 }
@@ -982,7 +985,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
-        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
 
     if (res.before_having)
