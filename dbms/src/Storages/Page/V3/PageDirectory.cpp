@@ -154,14 +154,14 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         {
             // We can't handle `REF` before other writes, because `PUT` and `REF`
             // maybe in the same WriteBatch.
-            // Also we can't throw an exception if we can't find the origin page_id, 
-            // because WAL have already applied the change and there is no 
+            // Also we can't throw an exception if we can't find the origin page_id,
+            // because WAL have already applied the change and there is no
             // mechanism to roll back changes in the WAL.
             auto iter = mvcc_table_directory.find(r.ori_page_id);
             if (iter == mvcc_table_directory.end())
             {
                 LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
-                continue;
+                break;
             }
 
             if (auto entry = iter->second->getEntry(last_sequence); entry)
