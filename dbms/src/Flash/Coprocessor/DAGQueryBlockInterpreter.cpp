@@ -768,6 +768,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
+    bool empty_result_for_empty_input = aggregate_descriptions.empty() || (aggregate_descriptions[0].mode != TiDB::CompleteMode && aggregate_descriptions[0].mode != TiDB::FinalMode);
 
     Aggregator::Params params(
         header,
@@ -779,7 +780,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
         settings.max_bytes_before_external_group_by,
-        aggregate_descriptions[0].mode == TiDB::Partial1Mode,
+        empty_result_for_empty_input,
         context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
 

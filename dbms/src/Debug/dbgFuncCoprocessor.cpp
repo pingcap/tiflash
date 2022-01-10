@@ -130,6 +130,16 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
 
 });
 
+std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
+    {"min", tipb::ExprType::Min},
+    {"max", tipb::ExprType::Max},
+    {"count", tipb::ExprType::Count},
+    {"sum", tipb::ExprType::Sum},
+    {"first_row", tipb::ExprType::First},
+    {uniq_raw_res_name, tipb::ExprType::ApproxCountDistinct},
+    {"group_concat", tipb::ExprType::GroupConcat},
+});
+
 std::pair<String, String> splitQualifiedName(String s)
 {
     std::pair<String, String> ret;
@@ -934,7 +944,7 @@ struct MPPCtx
     Int64 partition_num;
     Int64 next_task_id;
     std::vector<Int64> sender_target_task_ids;
-    std::vector<Int64> current_task_ids;
+    //std::vector<Int64> current_task_ids;
     std::vector<Int64> partition_keys;
     MPPCtx(Timestamp start_ts_, size_t partition_num_)
         : start_ts(start_ts_)
@@ -1250,61 +1260,49 @@ struct Aggregation : public Executor
                 tipb::Expr * arg_expr = agg_func->add_children();
                 astToPB(input_schema, arg, arg_expr, collator_id, context);
             }
+            auto agg_sig_it = agg_func_name_to_sig.find(func->name);
+            if (agg_sig_it == agg_func_name_to_sig.end())
+                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+            auto agg_sig = agg_sig_it->second;
+            agg_func->set_tp(agg_sig);
 
-            if (func->name == "count")
+            if (agg_sig == tipb::ExprType::Count)
             {
-                agg_func->set_tp(tipb::Count);
-                auto * ft = agg_func->mutable_field_type();
+                auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
-            else if (func->name == "sum")
+            else if (agg_sig == tipb::ExprType::Sum)
             {
-                agg_func->set_tp(tipb::Sum);
-                auto * ft = agg_func->mutable_field_type();
+                auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
-            else if (func->name == "max")
+            else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max || agg_sig == tipb::ExprType::First)
             {
-                agg_func->set_tp(tipb::Max);
                 if (agg_func->children_size() != 1)
-                    throw Exception("udaf max only accept 1 argument");
-                auto * ft = agg_func->mutable_field_type();
+                    throw Exception("udaf " + func->name + " only accept 1 argument");
+                auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
                 ft->set_decimal(agg_func->children(0).field_type().decimal());
-                ft->set_flag(agg_func->children(0).field_type().flag());
-                ft->set_collate(collator_id);
-            }
-            else if (func->name == "min")
-            {
-                agg_func->set_tp(tipb::Min);
-                if (agg_func->children_size() != 1)
-                    throw Exception("udaf min only accept 1 argument");
-                auto * ft = agg_func->mutable_field_type();
-                ft->set_tp(agg_func->children(0).field_type().tp());
-                ft->set_decimal(agg_func->children(0).field_type().decimal());
-                ft->set_flag(agg_func->children(0).field_type().flag());
+                ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
                 ft->set_collate(collator_id);
             }
             else if (func->name == uniq_raw_res_name)
             {
-                agg_func->set_tp(tipb::ApproxCountDistinct);
-                auto * ft = agg_func->mutable_field_type();
+                auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
                 ft->set_flag(1);
             }
             else if (func->name == "group_concat")
             {
-                agg_func->set_tp(tipb::GroupConcat);
-                auto * ft = agg_func->mutable_field_type();
+                auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
             }
-            // TODO: Other agg func.
+            if (is_final_mode)
+                agg_func->set_aggfuncmode(tipb::AggFunctionMode::FinalMode);
             else
-            {
-                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
-            }
+                agg_func->set_aggfuncmode(tipb::AggFunctionMode::Partial1Mode);
         }
 
         for (const auto & child : gby_exprs)
@@ -1353,8 +1351,6 @@ struct Aggregation : public Executor
         // todo support avg
         if (has_uniq_raw_res)
             throw Exception("uniq raw res not supported in mpp query");
-        if (gby_exprs.empty())
-            throw Exception("agg without group by columns not supported in mpp query");
         std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
             executor_index,
             output_schema_for_partial_agg,
@@ -1371,7 +1367,7 @@ struct Aggregation : public Executor
             partition_keys.push_back(i + agg_func_num);
         }
         std::shared_ptr<ExchangeSender> exchange_sender
-            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, tipb::Hash, partition_keys);
+            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
         exchange_sender->children.push_back(partial_agg);
 
         std::shared_ptr<ExchangeReceiver> exchange_receiver
@@ -1943,9 +1939,10 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
             }
-            else if (func->name == "max" || func->name == "min")
+            else if (func->name == "max" || func->name == "min" || func->name == "first_row")
             {
                 ci = children_ci[0];
+                ci.flag &= ~TiDB::ColumnFlagNotNull;
             }
             else if (func->name == uniq_raw_res_name)
             {
@@ -2173,17 +2170,21 @@ QueryFragments mppQueryToQueryFragments(
     root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
     TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
-    std::vector<Int64> current_task_ids = mpp_ctx->current_task_ids;
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    size_t current_task_num = properties.mpp_partition_num;
     for (auto & exchange : exchange_map)
     {
-        std::vector<Int64> task_ids;
-        for (size_t i = 0; i < static_cast<size_t>(mpp_ctx->partition_num); i++)
-            task_ids.push_back(mpp_ctx->next_task_id++);
+        if (exchange.second.second->type == tipb::ExchangeType::PassThrough)
+            current_task_num = 1;
+    }
+    std::vector<Int64> current_task_ids;
+    for (size_t i = 0; i < current_task_num; i++)
+        current_task_ids.push_back(mpp_ctx->next_task_id++);
+    for (auto & exchange : exchange_map)
+    {
         mpp_ctx->sender_target_task_ids = current_task_ids;
-        mpp_ctx->current_task_ids = task_ids;
-        receiver_source_task_ids_map[exchange.first] = task_ids;
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
+        receiver_source_task_ids_map[exchange.first] = sub_fragments.cbegin()->task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
     fragments.emplace_back(root_executor, table_id, for_root_fragment, std::move(sender_target_task_ids), std::move(receiver_source_task_ids_map), std::move(current_task_ids));
@@ -2200,8 +2201,6 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
-        for (size_t i = 0; i < static_cast<size_t>(properties.mpp_partition_num); i++)
-            mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
     else
