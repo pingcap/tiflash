@@ -980,50 +980,50 @@ try
     testNotOnlyNull<Float32, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
     testNotOnlyNull<Float32, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
     testNotOnlyNull<Float32, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-    testNotOnlyNull<Float32, Decimal32>(MAX_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-    testNotOnlyNull<Float32, Decimal32>(MIN_FLOAT32, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    testThrowException<Float32, Decimal32>(MAX_FLOAT32, std::make_tuple(9, 0));
+    testNotOnlyNull<Float32, Decimal32>(MIN_FLOAT64, DecimalField32(0, 9), std::make_tuple(9, 9));
 
     testNotOnlyNull<Float32, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
     testNotOnlyNull<Float32, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
     testNotOnlyNull<Float32, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-    //    testNotOnlyNull<Float32, Decimal64>(MAX_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-    //    testNotOnlyNull<Float32, Decimal64>(MIN_FLOAT32, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    testThrowException<Float32, Decimal64>(MAX_FLOAT32, std::make_tuple(18, 0));
+    testNotOnlyNull<Float32, Decimal64>(MIN_FLOAT64, DecimalField64(0, 18), std::make_tuple(18, 18));
 
     testNotOnlyNull<Float32, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
     testNotOnlyNull<Float32, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
     testNotOnlyNull<Float32, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-    //    testNotOnlyNull<Float32, Decimal128>(MAX_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-    //    testNotOnlyNull<Float32, Decimal128>(MIN_FLOAT32, DecimalField128(-12213, 3), std::make_tuple(38, 3));
+    testThrowException<Float32, Decimal128>(MAX_FLOAT32, std::make_tuple(38, 0));
+    testNotOnlyNull<Float32, Decimal128>(MIN_FLOAT64, DecimalField128(0, 30), std::make_tuple(38, 30));
 
     testNotOnlyNull<Float32, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
     testNotOnlyNull<Float32, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
     testNotOnlyNull<Float32, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-    //    testNotOnlyNull<Float32, Decimal256>(MAX_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-    //    testNotOnlyNull<Float32, Decimal256>(MIN_FLOAT32, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
+    testNotOnlyNull<Float32, Decimal256>(MAX_FLOAT32, DecimalField256(Int256("340282346638528860000000000000000000000"), 0), std::make_tuple(65, 0));
+    testNotOnlyNull<Float32, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(0), 30), std::make_tuple(65, 30));
 
     testNotOnlyNull<Float64, Decimal32>(0, DecimalField32(0, 0), std::make_tuple(9, 0));
     testNotOnlyNull<Float64, Decimal32>(12.213, DecimalField32(12213, 3), std::make_tuple(9, 3));
     testNotOnlyNull<Float64, Decimal32>(-12.213, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-    //    testNotOnlyNull<Float64, Decimal32>(MAX_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
-    //    testNotOnlyNull<Float64, Decimal32>(MIN_FLOAT64, DecimalField32(-12213, 3), std::make_tuple(9, 3));
+    testThrowException<Float64, Decimal32>(MAX_FLOAT64, std::make_tuple(9, 0));
+    testNotOnlyNull<Float64, Decimal32>(MIN_FLOAT64, DecimalField32(0, 9), std::make_tuple(9, 9));
 
     testNotOnlyNull<Float64, Decimal64>(0, DecimalField64(0, 0), std::make_tuple(18, 0));
     testNotOnlyNull<Float64, Decimal64>(12.213, DecimalField64(12213, 3), std::make_tuple(18, 3));
     testNotOnlyNull<Float64, Decimal64>(-12.213, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-    //    testNotOnlyNull<Float64, Decimal64>(MAX_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
-    //    testNotOnlyNull<Float64, Decimal64>(MIN_FLOAT64, DecimalField64(-12213, 3), std::make_tuple(18, 3));
+    testThrowException<Float64, Decimal64>(MAX_FLOAT64, std::make_tuple(18, 0));
+    testNotOnlyNull<Float64, Decimal64>(MIN_FLOAT64, DecimalField64(0, 18), std::make_tuple(18, 18));
 
     testNotOnlyNull<Float64, Decimal128>(0, DecimalField128(0, 0), std::make_tuple(38, 0));
     testNotOnlyNull<Float64, Decimal128>(12.213, DecimalField128(12213, 3), std::make_tuple(38, 3));
     testNotOnlyNull<Float64, Decimal128>(-12.213, DecimalField128(-12213, 3), std::make_tuple(38, 3));
-    //    testNotOnlyNull<Float64, Decimal128>(MAX_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
-    //    testNotOnlyNull<Float64, Decimal128>(MIN_FLOAT64, DecimalField128(12213, 3), std::make_tuple(38, 3));
+    testThrowException<Float64, Decimal128>(MAX_FLOAT64, std::make_tuple(38, 0));
+    testNotOnlyNull<Float64, Decimal128>(MIN_FLOAT64, DecimalField128(0, 30), std::make_tuple(38, 30));
 
     testNotOnlyNull<Float64, Decimal256>(0, DecimalField256(static_cast<Int256>(0), 0), std::make_tuple(65, 0));
     testNotOnlyNull<Float64, Decimal256>(12.213, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
     testNotOnlyNull<Float64, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-12213), 3), std::make_tuple(65, 3));
-    //    testNotOnlyNull<Float64, Decimal256>(MAX_FLOAT64, DecimalField256(static_cast<Int256>(12213), 0), std::make_tuple(65, 0));
-    //    testNotOnlyNull<Float64, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(12213), 3), std::make_tuple(65, 3));
+    testThrowException<Float64, Decimal256>(MAX_FLOAT64, std::make_tuple(65, 0));
+    testNotOnlyNull<Float64, Decimal256>(MIN_FLOAT64, DecimalField256(static_cast<Int256>(0), 30), std::make_tuple(65, 30));
 }
 CATCH
 
