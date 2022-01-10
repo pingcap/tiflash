@@ -21,10 +21,10 @@ extern const Event Seek;
 
 namespace DB
 {
-/*
+/**
  * A frame consists of a header and a body that conforms the following structure:
  *
- *
+ * \code
  * ---------------------------------
  * | > header                      |
  * |   - bytes                     |
@@ -35,7 +35,7 @@ namespace DB
  * |             ...               |
  * |             ...               |
  * ---------------------------------
- *
+ * \endcode
  *
  * When writing a frame, we maintain the buffer than is of the exact size of the data part.
  * Whenever the buffer is full, we digest the whole buffer and update the header info, write back
@@ -46,6 +46,8 @@ namespace DB
  * The `FramedChecksumWriteBuffer` should be used directly on the file; the stream's ending has no
  * special mark: that is it ends when the file reaches EOF mark.
  *
+ * To keep `PositionInFile` information and make sure the whole file is seekable by offset, one should
+ * never invoke `sync/next` by hand unless one knows that it is at the end of frame.
  */
 
 
@@ -54,10 +56,20 @@ class FramedChecksumWriteBuffer : public WriteBufferFromFileDescriptor
 {
 private:
     WritableFilePtr out;
-    size_t current_frame = 0;
+    size_t materialized_bytes = 0;
+    size_t frame_count = 0;
     const size_t frame_size;
+#ifndef NDEBUG
+    bool has_incomplete_frame = false;
+#endif
     void nextImpl() override
     {
+#ifndef NDEBUG
+        if (offset() != this->working_buffer.size())
+        {
+            has_incomplete_frame = true;
+        }
+#endif
         size_t len = this->offset();
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
@@ -88,17 +100,36 @@ private:
                 }
             }
             iter += count;
+            materialized_bytes += count;
             expected -= count;
         }
 
         ProfileEvents::increment(ProfileEvents::ChecksumBufferWriteBytes, len + sizeof(ChecksumFrame<Backend>));
-
-        current_frame++;
+        frame_count++;
     }
 
     off_t doSeek(off_t, int) override { throw Exception("framed file is not seekable in writing mode"); }
 
-    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
+    // For checksum buffer, this is the **faked** file size without checksum header.
+    // Statistics will be inaccurate after `sync/next` operation in the middle of a frame because it will
+    // generate a frame without a full length.
+    off_t getPositionInFile() override
+    {
+#ifndef NDEBUG
+        assert(has_incomplete_frame == false);
+#endif
+        return frame_count * frame_size + offset();
+    }
+
+    // For checksum buffer, this is the real bytes to be materialized to disk.
+    // We normally have `materialized bytes != position in file` in the sense that,
+    // materialized bytes are referring to the real files on disk whereas position
+    // in file are to make the underlying checksum implementation opaque to above layers
+    // so that above buffers can do seek/read without knowing the existence of frame headers
+    off_t getMaterializedBytes() override
+    {
+        return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
+    }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
@@ -175,7 +206,7 @@ public:
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
-        auto readHeader = [&]() -> bool {
+        auto read_header = [&]() -> bool {
             auto header_length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
             if (header_length == 0)
                 return false;
@@ -189,7 +220,7 @@ public:
             return true;
         };
 
-        auto readBody = [&]() {
+        auto read_body = [&]() {
             auto body_length = expectRead(buffer, frame.bytes);
             if (unlikely(body_length != frame.bytes))
             {
@@ -214,14 +245,14 @@ public:
         while (size >= frame_size)
         {
             // read the header to our own memory area
-            // if readHeader returns false, then we are at the end of file
-            if (!readHeader())
+            // if read_header returns false, then we are at the end of file
+            if (!read_header())
             {
                 return expected - size;
             }
 
             // read the body
-            readBody();
+            read_body();
 
             // check body
             if (!skip_checksum)

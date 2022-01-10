@@ -16,9 +16,9 @@ static constexpr char INSPECT_HELP[] =
     "Usage: inspect [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --config-file Tiflash config file.\n"
+    "  --config-file TiFlash config file.\n"
     "  --check       Iterate data files to check integrity.\n"
-    "  --file-id     Target DMFile ID.\n"
+    "  --file-id     Target DTFile ID.\n"
     "  --imitative   Use imitative context instead. (encryption is not supported in this mode)\n"
     "  --workdir     Target directory.";
 
@@ -179,7 +179,6 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
-        auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
 
         if (imitative)
@@ -189,6 +188,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         }
         else
         {
+            auto config_file = vm["config-file"].as<std::string>();
             CLIService service(inspectServiceMain, args, config_file, ffi_function);
             return service.run({""});
         }

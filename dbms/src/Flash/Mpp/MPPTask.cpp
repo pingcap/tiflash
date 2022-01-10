@@ -210,6 +210,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->regions_for_local_read = std::move(local_regions);
     dag_context->regions_for_remote_read = std::move(remote_regions);
+    dag_context->tidb_host = context->getClientInfo().current_address.toString();
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -319,7 +320,7 @@ void MPPTask::runImpl()
         from->readSuffix();
         finishWrite();
 
-        auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_FMT_DEBUG(
             log,
             "finish write with {} rows, {} blocks, {} bytes",

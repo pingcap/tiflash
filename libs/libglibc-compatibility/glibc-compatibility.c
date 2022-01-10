@@ -85,7 +85,14 @@ int __vasprintf_chk(char **s, int unused, const char *fmt, va_list ap)
     return vasprintf(s, fmt, ap);
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wbuiltin-requires-header"
+#endif
 size_t fread(void *ptr, size_t size, size_t nmemb, void *stream);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 size_t __fread_chk(void *ptr, size_t unused, size_t size, size_t nmemb, void *stream)
 {

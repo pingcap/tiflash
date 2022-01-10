@@ -73,6 +73,15 @@ std::string getEnabledFeatures()
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
             "sve",
 #endif
+
+// Unwind related
+#if USE_UNWIND
+#if USE_LLVM_LIBUNWIND
+            "llvm-unwind",
+#else
+            "unwind",
+#endif
+#endif
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
