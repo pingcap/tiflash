@@ -58,7 +58,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         if (finished)
             return;
         if (connected)
@@ -93,7 +93,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 {
     LOG_TRACE(log, "ready to write");
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         waitUntilConnectedOrFinished(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
@@ -156,7 +156,7 @@ void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: " << is_local);
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
         /// make sure to finish the tunnel after it is connected
@@ -182,7 +182,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
     {
-        std::lock_guard<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         if (connected)
             throw Exception("has connected");
 
@@ -193,6 +193,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         {
             writer = writer_;
             // communicate send_thread through `consumer_state`
+            // NOTE: if the thread creation failed, `connected` will still be `false`.
             newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
                 sendLoop();
             });
@@ -212,6 +213,12 @@ void MPPTunnelBase<Writer>::waitForFinish()
 template <typename Writer>
 void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
 {
+#ifndef NDEBUG
+    {
+        std::unique_lock lock(mu);
+        assert(connected);
+    }
+#endif
     String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
@@ -248,7 +255,7 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
     // must finish send_queue outside of the critical area to avoid deadlock with write.
     send_queue.finish();
 
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
     finished = true;
     // must call setError in the critical area to keep consistent with `finished` from outside.
     consumer_state.setError(err_msg);
