@@ -538,6 +538,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             if (idx == index)
             {
                 entries_del1.emplace_back(record.entry);
+                break;
             }
         }
 
@@ -546,6 +547,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             if (idx == index)
             {
                 entries_del2.emplace_back(record.entry);
+                break;
             }
         }
 
@@ -616,6 +618,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
             if (idx == index)
             {
                 entries_del.emplace_back(record.entry);
+                break;
             }
         }
 
