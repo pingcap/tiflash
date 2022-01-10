@@ -75,6 +75,11 @@ public:
 
             std::mutex sm_lock;
 
+            bool isReadOnly()
+            {
+                return type == BlobStatType::READ_ONLY;
+            }
+
             void changeToReadOnly()
             {
                 type = BlobStatType::READ_ONLY;
@@ -97,8 +102,6 @@ public:
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
         void eraseStat(BlobFileId blob_file_id);
-
-        void changeToReadOnly(BlobFileId blob_file_id);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.

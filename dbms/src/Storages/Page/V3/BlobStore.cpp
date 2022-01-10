@@ -322,6 +322,11 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
     for (const auto & stat : stats_list)
     {
+        if (stat->isReadOnly())
+        {
+            continue;
+        }
+
         auto lock = blob_stats.statLock(stat);
         auto right_margin = stat->smap->getRightMargin();
 
@@ -564,7 +569,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 
     for (const auto & stat : stats_map)
     {
-        if (stat->type == BlobStatType::NORMAL
+        if (!stat->isReadOnly()
             && stat->sm_max_caps >= buf_size
             && stat->sm_total_size + buf_size < file_limit_size
             && stat->sm_valid_rate < smallest_valid_rate)
