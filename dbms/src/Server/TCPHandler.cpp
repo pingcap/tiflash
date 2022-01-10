@@ -55,7 +55,7 @@ void TCPHandler::runImpl()
     connection_context = server.context();
     connection_context.setSessionContext(connection_context);
 
-    const auto & global_settings = connection_context.getSettingsRef();
+    Settings global_settings = connection_context.getSettings();
 
     socket().setReceiveTimeout(global_settings.receive_timeout);
     socket().setSendTimeout(global_settings.send_timeout);

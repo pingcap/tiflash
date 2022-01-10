@@ -32,7 +32,7 @@ public:
         : log(&Poco::Logger::get("UsersConfigParser_test"))
     {
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        origin_settings = global_ctx.getSettingsRef();
+        origin_settings = global_ctx.getSettings();
     }
 
     static void SetUpTestCase() {}
