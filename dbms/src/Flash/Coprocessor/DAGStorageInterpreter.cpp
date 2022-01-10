@@ -177,7 +177,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, tmt, log);
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, context, log);
 }
 
 /// Will assign region_retry
@@ -209,7 +209,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, tmt, log);
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, context, log);
         }
         catch (const LockException & e)
         {
@@ -315,10 +315,12 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             ++iter;
                         }
                     }
-                    LOG_WARNING(log,
-                                "RegionException after read from storage, regions ["
-                                    << buffer.toString() << "], message: " << e.message()
-                                    << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    LOG_FMT_WARNING(
+                        log,
+                        "RegionException after read from storage, regions [{}], message: {}{}",
+                        buffer.toString(),
+                        e.message(),
+                        (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
                     continue; // continue to retry read from local storage
@@ -335,7 +337,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             buffer.fmtAppend("{},", iter->first);
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << buffer.toString() << "], message: " << e.message());
+                    LOG_FMT_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
                     break; // break retry loop
                 }
             }
@@ -423,10 +425,15 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_INFO(
+        LOG_FMT_INFO(
             log,
-            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+            "{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].",
+            __PRETTY_FUNCTION__,
+            table_id,
+            result,
+            storage_schema_version,
+            global_schema_version,
+            query_schema_version);
     };
 
     auto sync_schema = [&] {
@@ -434,8 +441,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-
-        LOG_INFO(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.

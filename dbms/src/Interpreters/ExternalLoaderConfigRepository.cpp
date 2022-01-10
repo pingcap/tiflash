@@ -1,17 +1,14 @@
-#include <Interpreters/ExternalLoaderConfigRepository.h>
-
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/getMultipleKeysFromConfig.h>
-
-#include <Poco/Glob.h>
+#include <Interpreters/ExternalLoaderConfigRepository.h>
 #include <Poco/File.h>
+#include <Poco/Glob.h>
 #include <Poco/Path.h>
 
 
 namespace DB
 {
-
 ExternalLoaderConfigRepository::Files ExternalLoaderConfigRepository::list(
     const Poco::Util::AbstractConfiguration & config,
     const std::string & path_key) const
@@ -69,4 +66,4 @@ Poco::AutoPtr<Poco::Util::AbstractConfiguration> ExternalLoaderConfigRepository:
     return preprocessed.configuration;
 }
 
-}
+} // namespace DB

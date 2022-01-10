@@ -1,13 +1,11 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
-
 #include <DataTypes/IDataType.h>
 
 
 namespace DB
 {
-
 /** Type - the state of the aggregate function.
   * Type parameters is an aggregate function, the types of its arguments, and its parameters (for parametric aggregate functions).
   */
@@ -22,14 +20,16 @@ public:
     static constexpr bool is_parametric = true;
 
     DataTypeAggregateFunction(const AggregateFunctionPtr & function_, const DataTypes & argument_types_, const Array & parameters_)
-        : function(function_), argument_types(argument_types_), parameters(parameters_)
+        : function(function_)
+        , argument_types(argument_types_)
+        , parameters(parameters_)
     {
     }
 
     std::string getFunctionName() const { return function->getName(); }
     AggregateFunctionPtr getFunction() const { return function; }
 
-    TypeIndex getTypeId() const override {return TypeIndex::AggregateFunction;};
+    TypeIndex getTypeId() const override { return TypeIndex::AggregateFunction; };
 
     std::string getName() const override;
 
@@ -71,5 +71,4 @@ public:
 };
 
 
-}
-
+} // namespace DB

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class IDataType;
 
 /** Used to interpret expressions in a set in IN,
@@ -17,4 +16,4 @@ class IDataType;
   */
 Field convertFieldToType(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr);
 
-}
+} // namespace DB

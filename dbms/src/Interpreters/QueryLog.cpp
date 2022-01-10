@@ -1,71 +1,69 @@
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <Interpreters/QueryLog.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/ClickHouseRevision.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/QueryLog.h>
 #include <Poco/Net/IPAddress.h>
+
 #include <array>
 
 
 namespace DB
 {
-
-
 Block QueryLogElement::createBlock()
 {
-    return
-    {
-        {ColumnUInt8::create(),     std::make_shared<DataTypeUInt8>(),         "type"},
-        {ColumnUInt16::create(),     std::make_shared<DataTypeDate>(),         "event_date"},
-        {ColumnUInt32::create(),     std::make_shared<DataTypeDateTime>(),     "event_time"},
-        {ColumnUInt32::create(),     std::make_shared<DataTypeDateTime>(),     "query_start_time"},
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "query_duration_ms"},
+    return {
+        {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "type"},
+        {ColumnUInt16::create(), std::make_shared<DataTypeDate>(), "event_date"},
+        {ColumnUInt32::create(), std::make_shared<DataTypeDateTime>(), "event_time"},
+        {ColumnUInt32::create(), std::make_shared<DataTypeDateTime>(), "query_start_time"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "query_duration_ms"},
 
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "read_rows"},
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "read_bytes"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "read_rows"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "read_bytes"},
 
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "written_rows"},
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "written_bytes"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "written_rows"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "written_bytes"},
 
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "result_rows"},
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "result_bytes"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "result_rows"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "result_bytes"},
 
-        {ColumnUInt64::create(),     std::make_shared<DataTypeUInt64>(),     "memory_usage"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "memory_usage"},
 
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "query"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "exception"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "stack_trace"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "query"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "exception"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "stack_trace"},
 
-        {ColumnUInt8::create(),     std::make_shared<DataTypeUInt8>(),         "is_initial_query"},
+        {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "is_initial_query"},
 
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "user"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "query_id"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "user"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "query_id"},
         {ColumnFixedString::create(16), std::make_shared<DataTypeFixedString>(16), "address"},
-        {ColumnUInt16::create(),     std::make_shared<DataTypeUInt16>(),     "port"},
+        {ColumnUInt16::create(), std::make_shared<DataTypeUInt16>(), "port"},
 
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "initial_user"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "initial_query_id"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "initial_user"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "initial_query_id"},
         {ColumnFixedString::create(16), std::make_shared<DataTypeFixedString>(16), "initial_address"},
-        {ColumnUInt16::create(),     std::make_shared<DataTypeUInt16>(),     "initial_port"},
+        {ColumnUInt16::create(), std::make_shared<DataTypeUInt16>(), "initial_port"},
 
-        {ColumnUInt8::create(),     std::make_shared<DataTypeUInt8>(),         "interface"},
+        {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "interface"},
 
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "os_user"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "client_hostname"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "client_name"},
-        {ColumnUInt32::create(),     std::make_shared<DataTypeUInt32>(),     "client_revision"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "os_user"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "client_hostname"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "client_name"},
+        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "client_revision"},
 
-        {ColumnUInt8::create(),     std::make_shared<DataTypeUInt8>(),         "http_method"},
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "http_user_agent"},
+        {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "http_method"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "http_user_agent"},
 
-        {ColumnString::create(),     std::make_shared<DataTypeString>(),     "quota_key"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "quota_key"},
 
-        {ColumnUInt32::create(),     std::make_shared<DataTypeUInt32>(),     "revision"},
+        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "revision"},
     };
 }
 
@@ -149,4 +147,4 @@ void QueryLogElement::appendToBlock(Block & block) const
     block.setColumns(std::move(columns));
 }
 
-}
+} // namespace DB
