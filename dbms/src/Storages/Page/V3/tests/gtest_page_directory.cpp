@@ -966,6 +966,7 @@ try
     PageIdAndVersionedEntryList gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
+        (void)file_id;
         for (const auto & [page_id, version_entries] : entries)
         {
             for (const auto & [ver, entry] : version_entries)
@@ -976,6 +977,7 @@ try
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
+        (void)file_id;
         for (const auto & [page_id, version_entries] : entries)
         {
             for (const auto & [ver, entry] : version_entries)
@@ -1025,6 +1027,7 @@ try
     PageIdAndVersionedEntryList gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
+        (void)file_id;
         for (const auto & [page_id, version_entries] : entries)
         {
             for (const auto & [ver, entry] : version_entries)
@@ -1035,6 +1038,7 @@ try
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
+        (void)file_id;
         for (const auto & [page_id, version_entries] : entries)
         {
             for (const auto & [ver, entry] : version_entries)
