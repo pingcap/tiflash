@@ -1,5 +1,4 @@
 #include <Common/Exception.h>
-#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <tuple>
@@ -57,44 +56,6 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
     ::grpc::Status finish() override
     {
         return reader->Finish();
-    }
-};
-
-struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
-{
-    pingcap::kv::Cluster * cluster;
-    const ExchangeRecvRequest & request;
-    pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
-    grpc::ClientContext client_context;
-    std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
-
-    AsyncGrpcExchangePacketReader(
-        pingcap::kv::Cluster * cluster_,
-        const ExchangeRecvRequest & req)
-        : cluster(cluster_)
-        , request(req)
-        , call(req.req)
-    {
-    }
-
-    void init(UnaryCallback<bool> * callback) override
-    {
-        reader = cluster->rpc_client->sendStreamRequestAsync(
-            request.req->sender_meta().address(),
-            &client_context,
-            call,
-            GRPCCompletionQueuePool::global_instance->pickQueue(),
-            callback);
-    }
-
-    void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
-    {
-        reader->Read(packet.get(), callback);
-    }
-
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
-    {
-        reader->Finish(&status, callback);
     }
 };
 
@@ -164,14 +125,12 @@ GRPCReceiverContext::GRPCReceiverContext(
     const mpp::TaskMeta & task_meta_,
     pingcap::kv::Cluster * cluster_,
     std::shared_ptr<MPPTaskManager> task_manager_,
-    bool enable_local_tunnel_,
-    bool enable_async_grpc_)
+    bool enable_local_tunnel_)
     : exchange_receiver_meta(exchange_receiver_meta_)
     , task_meta(task_meta_)
     , cluster(cluster_)
     , task_manager(std::move(task_manager_))
     , enable_local_tunnel(enable_local_tunnel_)
-    , enable_async_grpc(enable_async_grpc_)
 {}
 
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
@@ -190,11 +149,6 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
     req.req->set_allocated_sender_meta(sender_task.release());
     return req;
-}
-
-bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request)
-{
-    return enable_async_grpc && !request.is_local;
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
@@ -217,15 +171,6 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
             *reader->call);
         return reader;
     }
-}
-
-void GRPCReceiverContext::makeAsyncReader(
-    const ExchangeRecvRequest & request,
-    AsyncExchangePacketReaderPtr & reader,
-    UnaryCallback<bool> * callback) const
-{
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
-    reader->init(callback);
 }
 
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
