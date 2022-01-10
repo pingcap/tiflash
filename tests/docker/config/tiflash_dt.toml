@@ -106,3 +106,4 @@ storage_engine = "dt"
 [profiles]
 [profiles.default]
 # max_memory_usage = 0
+enable_debug_invoker = true
