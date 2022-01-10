@@ -686,6 +686,7 @@ bool tryParseImpl(typename DataType::FieldType & x, ReadBuffer & rb)
         return tryReadIntText(x, rb);
     else if constexpr (std::is_floating_point_v<typename DataType::FieldType>)
         return tryReadFloatText(x, rb);
+    throw Exception("Illegal data type.", ErrorCodes::TYPE_MISMATCH);
     /// NOTE Need to implement for Date and DateTime too.
 }
 

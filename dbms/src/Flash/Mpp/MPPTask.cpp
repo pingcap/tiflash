@@ -210,6 +210,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->regions_for_local_read = std::move(local_regions);
     dag_context->regions_for_remote_read = std::move(remote_regions);
+    dag_context->tidb_host = context->getClientInfo().current_address.toString();
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
