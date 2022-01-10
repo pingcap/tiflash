@@ -42,8 +42,6 @@ public:
 
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
-    Int32 getImplicitCastCount() const { return implicit_cast_count; };
-
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
     String appendWhere(
@@ -54,15 +52,16 @@ public:
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
 
-    /// <aggregation_keys, collators, aggregate_descriptions>
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> appendAggregation(
+    /// <aggregation_keys, collators, aggregate_descriptions, aggregated_columns>
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, NamesAndTypes> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
     void appendAggSelect(
         ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg);
+        const tipb::Aggregation & agg,
+        const NamesAndTypes & aggregated_columns);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -106,7 +105,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const DAGQueryBlock & query_block);
+        const tipb::TableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -132,6 +131,7 @@ private:
         ExpressionActionsChain::Step & step,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
         bool result_is_nullable);
 
     void makeExplicitSet(
@@ -148,8 +148,7 @@ private:
     String appendCastIfNeeded(
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions,
-        const String & expr_name,
-        bool explicit_cast);
+        const String & expr_name);
 
     /**
      * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
@@ -193,14 +192,10 @@ private:
         ExpressionActionsPtr & actions);
 
     // all columns from table scan
-    std::vector<NameAndTypePair> source_columns;
-    // all columns after aggregation
-    std::vector<NameAndTypePair> aggregated_columns;
+    NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;
     const Context & context;
-    bool after_agg;
-    Int32 implicit_cast_count;
 
     friend class DAGExpressionAnalyzerHelper;
 };

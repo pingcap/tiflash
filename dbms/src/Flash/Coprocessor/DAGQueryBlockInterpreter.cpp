@@ -84,6 +84,7 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
+    NamesAndTypes aggregated_columns;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -91,7 +92,7 @@ bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     ExpressionActionsChain & chain,
-    const DAGQueryBlock & query_block)
+    const tipb::TableScan & table_scan)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
@@ -117,7 +118,7 @@ AnalysisResult analyzeExpressions(
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         auto original_source_columns = analyzer.getCurrentInputColumns();
-        if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block))
+        if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block.source->tbl_scan()))
         {
             res.extra_cast = chain.getLastActions();
             chain.addStep();
@@ -156,7 +157,8 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions) = analyzer.appendAggregation(
+        NamesAndTypes aggregated_columns;
+        std::tie(res.aggregation_keys, res.aggregation_collators, aggregate_descriptions) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
@@ -166,7 +168,7 @@ AnalysisResult analyzeExpressions(
         chain.clear();
 
         // add cast if type is not match
-        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation());
+        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation(), aggregated_columns);
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
