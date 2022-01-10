@@ -95,6 +95,8 @@ bool addExtraCastsAfterTs(
 bool isFinalAgg(const tipb::Expr & expr)
 {
     if (!expr.has_aggfuncmode())
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
         return true;
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
@@ -121,6 +123,8 @@ AnalysisResult analyzeExpressions(
     // There will be either Agg...
     if (query_block.aggregation)
     {
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
         res.is_final_agg = true;
         const auto & aggregation = query_block.aggregation->aggregation();
         if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))

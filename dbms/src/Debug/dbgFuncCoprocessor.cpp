@@ -941,14 +941,10 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 struct MPPCtx
 {
     Timestamp start_ts;
-    Int64 partition_num;
     Int64 next_task_id;
     std::vector<Int64> sender_target_task_ids;
-    //std::vector<Int64> current_task_ids;
-    std::vector<Int64> partition_keys;
-    MPPCtx(Timestamp start_ts_, size_t partition_num_)
+    MPPCtx(Timestamp start_ts_)
         : start_ts(start_ts_)
-        , partition_num(partition_num_)
         , next_task_id(1)
     {}
 };
@@ -2199,7 +2195,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
             = std::make_shared<mock::ExchangeSender>(executor_index, root_executor->output_schema, tipb::PassThrough);
         root_exchange_sender->children.push_back(root_executor);
         root_executor = root_exchange_sender;
-        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
+        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
