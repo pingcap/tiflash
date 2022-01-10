@@ -384,22 +384,4 @@ String genJsonNull();
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 
-// |-----------------------|--------------|--------------|
-// | AggregateFunctionMode | input        | output       |
-// |-----------------------|--------------|--------------|
-// | CompleteMode          | origin data  | final result |
-// | FinalMode             | partial data | final result |
-// | Partial1Mode          | origin data  | partial data |
-// | Partial2Mode          | partial data | partial data |
-// | DedupMode             | origin data  | origin data  |
-// |-----------------------|--------------|--------------|
-enum AggregateFunctionMode : int
-{
-    CompleteMode = 0,
-    FinalMode = 1,
-    Partial1Mode = 2,
-    Partial2Mode = 3,
-    DedupMode = 4
-};
-
 } // namespace TiDB

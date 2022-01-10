@@ -194,7 +194,6 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     ExpressionActionsChain::Step & step = chain.steps.back();
     std::unordered_set<String> agg_key_set;
 
-    int aggMode = -1;
     for (const tipb::Expr & expr : agg.agg_func())
     {
         String agg_func_name = getAggFuncName(expr, agg, settings);
@@ -205,16 +204,6 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         }
 
         AggregateDescription aggregate;
-        aggregate.mode = getAggFunctionMode(expr);
-        if (aggMode == -1)
-        {
-            aggMode = aggregate.mode;
-        }
-        else if (aggMode != aggregate.mode)
-        {
-            //should not reach here
-            throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-        }
         auto child_size = expr.children_size();
         DataTypes types(child_size);
         TiDB::TiDBCollators arg_collators;
