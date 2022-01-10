@@ -142,6 +142,7 @@ void MPPTunnelBase<Writer>::sendLoop()
     {
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
+
         while (!finished)
         {
             send_queue.pop(res);
