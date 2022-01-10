@@ -1,22 +1,24 @@
-#include <Parsers/ASTInsertQuery.h>
-#include <Interpreters/Context.h>
-#include <IO/ConcatReadBuffer.h>
-#include <IO/ReadBufferFromMemory.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
+#include <IO/ConcatReadBuffer.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTInsertQuery.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
 InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
-    const ASTPtr & ast, ReadBuffer & input_buffer_tail_part, const BlockIO & streams, Context & context)
+    const ASTPtr & ast,
+    ReadBuffer & input_buffer_tail_part,
+    const BlockIO & streams,
+    Context & context)
 {
     const ASTInsertQuery * ast_insert_query = dynamic_cast<const ASTInsertQuery *>(ast.get());
 
@@ -30,7 +32,8 @@ InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
     /// Data could be in parsed (ast_insert_query.data) and in not parsed yet (input_buffer_tail_part) part of query.
 
     input_buffer_ast_part = std::make_unique<ReadBufferFromMemory>(
-        ast_insert_query->data, ast_insert_query->data ? ast_insert_query->end - ast_insert_query->data : 0);
+        ast_insert_query->data,
+        ast_insert_query->data ? ast_insert_query->end - ast_insert_query->data : 0);
 
     ConcatReadBuffer::ReadBuffers buffers;
     if (ast_insert_query->data)
@@ -46,4 +49,4 @@ InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
     res_stream = context.getInputFormat(format, *input_buffer_contacenated, streams.out->getHeader(), context.getSettingsRef().max_insert_block_size);
 }
 
-}
+} // namespace DB

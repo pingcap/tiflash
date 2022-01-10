@@ -1,21 +1,17 @@
-#include <iostream>
-#include <iomanip>
-
-#include <IO/WriteBufferFromFileDescriptor.h>
-
-#include <Storages/System/StorageSystemNumbers.h>
-#include <Storages/RegionQueryInfo.h>
-
-#include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/LimitBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
-
 #include <DataTypes/DataTypesNumber.h>
-
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/loadMetadata.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/System/StorageSystemNumbers.h>
+
+#include <iomanip>
+#include <iostream>
 
 
 using namespace DB;
@@ -55,8 +51,8 @@ try
 catch (const Exception & e)
 {
     std::cerr << e.what() << ", " << e.displayText() << std::endl
-        << std::endl
-        << "Stack trace:" << std::endl
-        << e.getStackTrace().toString();
+              << std::endl
+              << "Stack trace:" << std::endl
+              << e.getStackTrace().toString();
     return 1;
 }
