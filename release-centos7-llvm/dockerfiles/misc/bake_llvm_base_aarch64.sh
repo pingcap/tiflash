@@ -51,7 +51,7 @@ function bake_llvm_base_aarch64() {
 
     # Python
     source $SCRIPTPATH/prepare_python.sh
-    CC=cc prepare_python "1.26.0"
+    prepare_python "1.26.0"
 }
 
 bake_llvm_base_aarch64
