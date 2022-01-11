@@ -75,14 +75,14 @@ try
 
 
     /*
+    std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<unsigned long long> dis(
+            std::numeric_limits<std::uint64_t>::min(),
+            std::numeric_limits<std::uint64_t>::max()
+    );
     size_t count = 100;
     std::vector<UINT64> v1(count), res(count);
     for (size_t i=0; i<count; ++i) {
-        std::mt19937 gen(std::random_device{}());
-        std::uniform_int_distribution<unsigned long long> dis(
-                std::numeric_limits<std::uint64_t>::min(),
-                std::numeric_limits<std::uint64_t>::max()
-        );
         v1[i] = dis(gen);
         res[i] = ~v1[i];
     }
