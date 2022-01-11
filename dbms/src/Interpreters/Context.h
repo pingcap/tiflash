@@ -146,6 +146,7 @@ private:
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
+    bool allow_debug_invoker = false;
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -161,7 +162,8 @@ public:
     String getFlagsPath() const;
     String getUserFilesPath() const;
     PathPool & getPathPool() const;
-
+    bool & debugInvokerState() { return allow_debug_invoker; };
+    const bool & debugInvokerState() const { return allow_debug_invoker; }
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);

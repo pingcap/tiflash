@@ -1,3 +1,4 @@
+allow_debug_invoker = true
 tmp_path = "/tmp/tiflash/data/tmp"
 display_name = "TiFlash"
 
@@ -106,4 +107,3 @@ storage_engine = "dt"
 [profiles]
 [profiles.default]
 # max_memory_usage = 0
-enable_debug_invoker = true

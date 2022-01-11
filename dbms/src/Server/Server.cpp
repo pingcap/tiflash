@@ -1230,7 +1230,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
     // check debug invoker
-    if (global_context->getSettingsRef().enable_debug_invoker)
+    global_context->debugInvokerState() = config().getBool("allow_debug_invoker", false);
+    if (global_context->debugInvokerState())
     {
         LOG_FMT_WARNING(log, "!!!DANGEROUS!!! DBG Invoker is enabled, please keep it disabled in production env.");
     }

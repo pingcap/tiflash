@@ -129,7 +129,7 @@ std::string & normalizeArg(std::string & arg)
 
 BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & ori_name, const ASTs & args)
 {
-    if (!context.getSettingsRef().enable_debug_invoker)
+    if (!context.debugInvokerState())
     {
         throw Exception("DBG Invoker is not allowed on this server", ErrorCodes::PERMISSION_DENIED);
     }

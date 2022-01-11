@@ -1,3 +1,4 @@
+allow_debug_invoker = true
 tmp_path = "/tmp/tiflash/data/tmp"
 display_name = "TiFlash"
 # specify paths used for store data, multiple path should be seperated by comma
