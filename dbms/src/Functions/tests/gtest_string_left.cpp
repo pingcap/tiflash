@@ -53,7 +53,6 @@ public:
         for (bool is_str_const : is_consts)
             for (bool is_length_const : is_consts)
                 inner_test(is_str_const, is_length_const);
-        //        inner_test(false, true);
     }
 };
 
