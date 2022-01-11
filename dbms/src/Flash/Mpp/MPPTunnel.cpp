@@ -30,7 +30,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , send_thread(nullptr)
+    , thread_manager(newThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -43,10 +43,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (nullptr != send_thread && send_thread->joinable())
+        if (!is_local && thread_manager)
         {
-            send_thread->join();
+            thread_manager->wait();
         }
+        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
     }
     catch (...)
@@ -105,6 +106,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
@@ -229,7 +232,9 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+        thread_manager->schedule(true, "MPPTunnel", [this] {
+            sendLoop();
+        });
     }
     connected = true;
     cv_for_connected.notify_all();

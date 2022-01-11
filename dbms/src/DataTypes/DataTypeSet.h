@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** The data type corresponding to the set of values in the IN section.
   * Used only as an intermediate when evaluating expressions.
   */
@@ -19,5 +18,4 @@ public:
     TypeIndex getTypeId() const override { return TypeIndex::Set; }
 };
 
-}
-
+} // namespace DB

@@ -56,7 +56,7 @@ TEST(IOSWrapper, MassiveStreaming)
     std::vector<int> data;
     {
         auto wrapper = OutputStreamWrapper{buffer};
-        for (auto i = 0; i < 1000'0000; ++i)
+        for (auto i = 0; i < 10000; ++i)
         {
             data.push_back(dist(eng));
             wrapper << data.back() << std::endl;

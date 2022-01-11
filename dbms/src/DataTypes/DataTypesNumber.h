@@ -1,12 +1,12 @@
 #pragma once
 
-#include <type_traits>
-#include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeNumberBase.h>
+
+#include <type_traits>
 
 namespace DB
 {
-
 template <typename T>
 class DataTypeNumber final : public DataTypeNumberBase<T>
 {
@@ -42,4 +42,4 @@ using DataTypeInt64 = DataTypeNumber<Int64>;
 using DataTypeFloat32 = DataTypeNumber<Float32>;
 using DataTypeFloat64 = DataTypeNumber<Float64>;
 
-}
+} // namespace DB

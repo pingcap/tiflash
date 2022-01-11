@@ -300,7 +300,7 @@ void registerStorageStripeLog(StorageFactory & factory)
             args.table_name,
             args.columns,
             args.attach,
-            args.context.getSettings().max_compress_block_size);
+            args.context.getSettingsRef().max_compress_block_size);
     });
 }
 

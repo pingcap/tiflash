@@ -1,13 +1,11 @@
+#include <AggregateFunctions/AggregateFunctionCount.h>
 #include <Common/TypeList.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/Aggregator.h>
-#include <AggregateFunctions/AggregateFunctionCount.h>
 
 
 namespace DB
 {
-
-
 /** An aggregation loop template that allows you to generate a custom variant for a specific combination of aggregate functions.
   * It differs from the usual one in that calls to aggregate functions should be inlined, and the update loop of the aggregate functions should be unrolled.
   *
@@ -26,10 +24,12 @@ struct AggregateFunctionsUpdater
         AggregateDataPtr & value_,
         size_t row_num_,
         Arena * arena_)
-        : aggregate_functions(aggregate_functions_),
-        offsets_of_aggregate_states(offsets_of_aggregate_states_),
-        aggregate_columns(aggregate_columns_),
-        value(value_), row_num(row_num_), arena(arena_)
+        : aggregate_functions(aggregate_functions_)
+        , offsets_of_aggregate_states(offsets_of_aggregate_states_)
+        , aggregate_columns(aggregate_columns_)
+        , value(value_)
+        , row_num(row_num_)
+        , arena(arena_)
     {
     }
 
@@ -47,10 +47,7 @@ struct AggregateFunctionsUpdater
 template <typename AggregateFunction, size_t column_num>
 void AggregateFunctionsUpdater::operator()()
 {
-    static_cast<AggregateFunction *>(aggregate_functions[column_num])->add(
-        value + offsets_of_aggregate_states[column_num],
-        &aggregate_columns[column_num][0],
-        row_num, arena);
+    static_cast<AggregateFunction *>(aggregate_functions[column_num])->add(value + offsets_of_aggregate_states[column_num], &aggregate_columns[column_num][0], row_num, arena);
 }
 
 struct AggregateFunctionsCreator
@@ -59,9 +56,9 @@ struct AggregateFunctionsCreator
         const Aggregator::AggregateFunctionsPlainPtrs & aggregate_functions_,
         const Sizes & offsets_of_aggregate_states_,
         AggregateDataPtr & aggregate_data_)
-        : aggregate_functions(aggregate_functions_),
-        offsets_of_aggregate_states(offsets_of_aggregate_states_),
-        aggregate_data(aggregate_data_)
+        : aggregate_functions(aggregate_functions_)
+        , offsets_of_aggregate_states(offsets_of_aggregate_states_)
+        , aggregate_data(aggregate_data_)
     {
     }
 
@@ -113,10 +110,26 @@ void NO_INLINE Aggregator::executeSpecialized(
 
     if (!no_more_keys)
         executeSpecializedCase<false, Method, AggregateFunctionsList>(
-            method, state, aggregates_pool, rows, key_columns, aggregate_columns, key_sizes, keys, overflow_row);
+            method,
+            state,
+            aggregates_pool,
+            rows,
+            key_columns,
+            aggregate_columns,
+            key_sizes,
+            keys,
+            overflow_row);
     else
         executeSpecializedCase<true, Method, AggregateFunctionsList>(
-            method, state, aggregates_pool, rows, key_columns, aggregate_columns, key_sizes, keys, overflow_row);
+            method,
+            state,
+            aggregates_pool,
+            rows,
+            key_columns,
+            aggregate_columns,
+            key_sizes,
+            keys,
+            overflow_row);
 }
 
 #pragma GCC diagnostic push
@@ -139,13 +152,13 @@ void NO_INLINE Aggregator::executeSpecializedCase(
     typename Method::Key prev_key;
     for (size_t i = 0; i < rows; ++i)
     {
-        bool inserted;            /// Inserted a new key, or was this key already?
-        bool overflow = false;    /// New key did not fit in the hash table because of no_more_keys.
+        bool inserted; /// Inserted a new key, or was this key already?
+        bool overflow = false; /// New key did not fit in the hash table because of no_more_keys.
 
         /// Get the key to insert into the hash table.
         typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool);
 
-        if (!no_more_keys)    /// Insert.
+        if (!no_more_keys) /// Insert.
         {
             /// Optimization for frequently repeating keys.
             if (!Method::no_consecutive_keys_optimization(params.collators))
@@ -156,7 +169,12 @@ void NO_INLINE Aggregator::executeSpecializedCase(
 
                     /// Add values into aggregate functions.
                     AggregateFunctionsList::forEach(AggregateFunctionsUpdater(
-                        aggregate_functions, offsets_of_aggregate_states, aggregate_columns, value, i, aggregates_pool));
+                        aggregate_functions,
+                        offsets_of_aggregate_states,
+                        aggregate_columns,
+                        value,
+                        i,
+                        aggregates_pool));
 
                     method.onExistingKey(key, keys, *aggregates_pool);
                     continue;
@@ -194,7 +212,9 @@ void NO_INLINE Aggregator::executeSpecializedCase(
             AggregateDataPtr place = aggregates_pool->alloc(total_size_of_aggregate_states);
 
             AggregateFunctionsList::forEach(AggregateFunctionsCreator(
-                aggregate_functions, offsets_of_aggregate_states, place));
+                aggregate_functions,
+                offsets_of_aggregate_states,
+                place));
 
             aggregate_data = place;
         }
@@ -205,7 +225,12 @@ void NO_INLINE Aggregator::executeSpecializedCase(
 
         /// Add values into the aggregate functions.
         AggregateFunctionsList::forEach(AggregateFunctionsUpdater(
-            aggregate_functions, offsets_of_aggregate_states, aggregate_columns, value, i, aggregates_pool));
+            aggregate_functions,
+            offsets_of_aggregate_states,
+            aggregate_columns,
+            value,
+            i,
+            aggregates_pool));
     }
 }
 
@@ -230,12 +255,17 @@ void NO_INLINE Aggregator::executeSpecializedWithoutKey(
         for (size_t i = 0; i < rows; ++i)
         {
             AggregateFunctionsList::forEach(AggregateFunctionsUpdater(
-                aggregate_functions, offsets_of_aggregate_states, aggregate_columns, res, i, arena));
+                aggregate_functions,
+                offsets_of_aggregate_states,
+                aggregate_columns,
+                res,
+                i,
+                arena));
         }
     }
 }
 
-}
+} // namespace DB
 
 
 /** The main code is compiled with gcc 7.
@@ -259,4 +289,7 @@ void NO_INLINE Aggregator::executeSpecializedWithoutKey(
   *
   * Therefore, we can work around the problem this way
   */
-extern "C" void __attribute__((__visibility__("default"), __noreturn__)) __cxa_pure_virtual() { abort(); };
+extern "C" void __attribute__((__visibility__("default"), __noreturn__)) __cxa_pure_virtual()
+{
+    abort();
+};

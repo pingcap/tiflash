@@ -7,6 +7,31 @@
 
 namespace DB::PS::V3
 {
+// `PageDirectory::apply` with create a version={directory.sequence, epoch=0}.
+// After data compaction and page entries need to be updated, will create
+// some entries with a version={old_sequence, epoch=old_epoch+1}.
+struct PageVersionType
+{
+    UInt64 sequence; // The write sequence
+    UInt64 epoch; // The GC epoch
+
+    explicit PageVersionType(UInt64 seq)
+        : sequence(seq)
+        , epoch(0)
+    {}
+
+    PageVersionType()
+        : PageVersionType(0)
+    {}
+
+    bool operator<(const PageVersionType & rhs) const
+    {
+        if (sequence == rhs.sequence)
+            return epoch < rhs.epoch;
+        return sequence < rhs.sequence;
+    }
+};
+
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
 {
@@ -73,6 +98,11 @@ public:
         PageEntryV3 entry;
     };
     using EditRecords = std::vector<EditRecord>;
+
+    void appendRecord(const EditRecord & rec)
+    {
+        records.emplace_back(rec);
+    }
 
     EditRecords & getRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
