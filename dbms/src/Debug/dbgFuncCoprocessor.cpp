@@ -329,7 +329,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                     root_tm,
                     context.getTMTContext().getKVCluster(),
                     context.getTMTContext().getMPPTaskManager(),
-                    context.getSettings().enable_local_tunnel),
+                    context.getSettingsRef().enable_local_tunnel),
                 tipb_exchange_receiver.encoded_task_meta_size(),
                 10,
                 nullptr);
