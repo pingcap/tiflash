@@ -234,6 +234,10 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
+# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
+target_include_directories (dbms PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -242,7 +246,7 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
-target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
+target_link_libraries (clickhouse_common_io PUBLIC ${TIFLASH_XXHASH_LIBRARY})
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
@@ -252,7 +256,7 @@ if (ENABLE_TESTS)
         add_subdirectory(${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
         target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
-        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/include)
+        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest/include)
     endif ()
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)
@@ -267,14 +271,12 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

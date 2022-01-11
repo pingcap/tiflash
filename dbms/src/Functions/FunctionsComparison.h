@@ -50,7 +50,7 @@ template <typename A, typename B, typename Op>
 struct NumComparisonImpl
 {
     /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
-    static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
     {
         /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
           * In this case, if you loop through the array index (the code will look simpler),
@@ -72,7 +72,7 @@ struct NumComparisonImpl
         }
     }
 
-    static void NO_INLINE vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
     {
         size_t size = a.size();
         const A * __restrict a_pos = &a[0];
@@ -87,12 +87,12 @@ struct NumComparisonImpl
         }
     }
 
-    static void constant_vector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static void constantVector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
     {
-        NumComparisonImpl<B, A, typename Op::SymmetricOp>::vector_constant(b, a, c);
+        NumComparisonImpl<B, A, typename Op::SymmetricOp>::vectorConstant(b, a, c);
     }
 
-    static void constant_constant(A a, B b, UInt8 & c)
+    static void constantConstant(A a, B b, UInt8 & c)
     {
         c = Op::apply(a, b);
     }
@@ -134,7 +134,7 @@ inline time_t dateToDateTime(UInt32 date_data)
 inline std::tuple<DayNum, bool> dateTimeToDate(time_t time_data)
 {
     // todo use timezone info
-    auto & date_lut = DateLUT::instance();
+    const auto & date_lut = DateLUT::instance();
     auto truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
     auto values = date_lut.getValues(time_data);
     auto day_num = date_lut.makeDayNum(values.year, values.month, values.day_of_month);
@@ -145,7 +145,7 @@ inline std::tuple<DayNum, bool> dateTimeToDate(time_t time_data)
 template <typename A, typename B, template <typename, typename> class Op, bool is_left_date>
 struct DateDateTimeComparisonImpl
 {
-    static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
     {
         size_t size = a.size();
         const A * a_pos = &a[0];
@@ -158,13 +158,13 @@ struct DateDateTimeComparisonImpl
             {
                 using OpType = B;
                 time_t date_time = dateToDateTime(*a_pos);
-                *c_pos = Op<OpType, OpType>::apply((OpType)date_time, *b_pos);
+                *c_pos = Op<OpType, OpType>::apply(static_cast<OpType>(date_time), *b_pos);
             }
             else
             {
                 using OpType = A;
                 time_t date_time = dateToDateTime(*b_pos);
-                *c_pos = Op<OpType, OpType>::apply(*a_pos, (OpType)date_time);
+                *c_pos = Op<OpType, OpType>::apply(*a_pos, static_cast<OpType>(date_time));
             }
             ++a_pos;
             ++b_pos;
@@ -172,14 +172,14 @@ struct DateDateTimeComparisonImpl
         }
     }
 
-    static void NO_INLINE vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
     {
         if (!is_left_date)
         {
             // datetime vector with date constant
             using OpType = A;
             time_t date_time = dateToDateTime(b);
-            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant(a, (OpType)date_time, c);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vectorConstant(a, static_cast<OpType>(date_time), c);
         }
         else
         {
@@ -191,7 +191,7 @@ struct DateDateTimeComparisonImpl
             if (!truncated)
             {
                 using OpType = A;
-                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant(a, (OpType)date_num, c);
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vectorConstant(a, static_cast<OpType>(date_num), c);
             }
             else
             {
@@ -204,7 +204,7 @@ struct DateDateTimeComparisonImpl
                 while (a_pos < a_end)
                 {
                     time_t date_time = dateToDateTime(*a_pos);
-                    *c_pos = Op<OpType, OpType>::apply((OpType)date_time, b);
+                    *c_pos = Op<OpType, OpType>::apply(static_cast<OpType>(date_time), b);
                     ++a_pos;
                     ++c_pos;
                 }
@@ -212,14 +212,14 @@ struct DateDateTimeComparisonImpl
         }
     }
 
-    static void constant_vector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static void constantVector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
     {
         if (is_left_date)
         {
             // date constant with datetime vector
             using OpType = B;
             time_t date_time = dateToDateTime(a);
-            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_vector((OpType)date_time, b, c);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constantVector(static_cast<OpType>(date_time), b, c);
         }
         else
         {
@@ -230,7 +230,7 @@ struct DateDateTimeComparisonImpl
             if (!truncated)
             {
                 using OpType = B;
-                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant((OpType)a, date_num, c);
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vectorConstant(static_cast<OpType>(a), date_num, c);
             }
             else
             {
@@ -243,7 +243,7 @@ struct DateDateTimeComparisonImpl
                 while (b_pos < b_end)
                 {
                     time_t date_time = dateToDateTime(*b_pos);
-                    *c_pos = Op<OpType, OpType>::apply(a, (OpType)date_time);
+                    *c_pos = Op<OpType, OpType>::apply(a, static_cast<OpType>(date_time));
                     ++b_pos;
                     ++c_pos;
                 }
@@ -251,33 +251,33 @@ struct DateDateTimeComparisonImpl
         }
     }
 
-    static void constant_constant(A a, B b, UInt8 & c)
+    static void constantConstant(A a, B b, UInt8 & c)
     {
         if (is_left_date)
         {
             using OpType = B;
             time_t date_time = dateToDateTime(a);
-            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_constant((OpType)date_time, b, c);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constantConstant(static_cast<OpType>(date_time), b, c);
         }
         else
         {
             using OpType = A;
             time_t date_time = dateToDateTime(b);
-            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_constant(a, (OpType)date_time, c);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constantConstant(a, static_cast<OpType>(date_time), c);
         }
     }
 };
 
-template <typename Op>
+template <typename Op, typename ResultType>
 struct StringComparisonWithCollatorImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE stringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
 
@@ -303,13 +303,13 @@ struct StringComparisonWithCollatorImpl
         }
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
+    static void NO_INLINE stringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -327,12 +327,12 @@ struct StringComparisonWithCollatorImpl
         }
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const std::string & b,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size();
@@ -353,24 +353,24 @@ struct StringComparisonWithCollatorImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
+    static void fixedStringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, collator, c);
+        StringComparisonWithCollatorImpl<typename Op::SymmetricOp, ResultType>::stringVectorFixedStringVector(b_data, b_offsets, a_data, a_n, collator, c);
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
+    static void NO_INLINE fixedStringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_data.size();
 
@@ -381,12 +381,12 @@ struct StringComparisonWithCollatorImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant(
+    static void NO_INLINE fixedStringVectorConstant(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const std::string & b,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         ColumnString::Offset b_n = b.size();
         size_t size = a_data.size();
@@ -398,31 +398,31 @@ struct StringComparisonWithCollatorImpl
         }
     }
 
-    static void constant_string_vector(
+    static void constantStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::string_vector_constant(b_data, b_offsets, a, collator, c);
+        StringComparisonWithCollatorImpl<typename Op::SymmetricOp, ResultType>::stringVectorConstant(b_data, b_offsets, a, collator, c);
     }
 
-    static void constant_fixed_string_vector(
+    static void constantFixedStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
         const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::fixed_string_vector_constant(b_data, b_n, a, collator, c);
+        StringComparisonWithCollatorImpl<typename Op::SymmetricOp, ResultType>::fixedStringVectorConstant(b_data, b_n, a, collator, c);
     }
 
-    static void constant_constant(
+    static void constantConstant(
         const std::string & a,
         const std::string & b,
         const TiDB::TiDBCollatorPtr & collator,
-        UInt8 & c)
+        ResultType & c)
     {
         size_t a_n = a.size();
         size_t b_n = b.size();
@@ -432,15 +432,15 @@ struct StringComparisonWithCollatorImpl
     }
 };
 
-template <typename Op>
+template <typename Op, typename ResultType>
 struct StringComparisonImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE stringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
 
@@ -469,12 +469,12 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
+    static void NO_INLINE stringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -492,11 +492,11 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const std::string & b,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size() + 1;
@@ -517,20 +517,20 @@ struct StringComparisonImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
+    static void fixedStringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonImpl<typename Op::SymmetricOp>::string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, c);
+        StringComparisonImpl<typename Op::SymmetricOp, ResultType>::stringVectorFixedStringVector(b_data, b_offsets, a_data, a_n, c);
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector_16(
+    static void NO_INLINE fixedStringVectorFixedStringVector16(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Chars_t & b_data,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_data.size();
 
@@ -538,10 +538,10 @@ struct StringComparisonImpl
             c[j] = Op::apply(memcmp16(&a_data[i], &b_data[i]), 0);
     }
 
-    static void NO_INLINE fixed_string_vector_constant_16(
+    static void NO_INLINE fixedStringVectorConstant16(
         const ColumnString::Chars_t & a_data,
         const std::string & b,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         size_t size = a_data.size();
 
@@ -549,19 +549,19 @@ struct StringComparisonImpl
             c[j] = Op::apply(memcmp16(&a_data[i], b.data()), 0);
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
+    static void NO_INLINE fixedStringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         /** Specialization if both sizes are 16.
           * To more efficient comparison of IPv6 addresses stored in FixedString(16).
           */
         if (a_n == 16 && b_n == 16)
         {
-            fixed_string_vector_fixed_string_vector_16(a_data, b_data, c);
+            fixedStringVectorFixedStringVector16(a_data, b_data, c);
         }
         else
         {
@@ -576,16 +576,16 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant(
+    static void NO_INLINE fixedStringVectorConstant(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const std::string & b,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
         ColumnString::Offset b_n = b.size();
         if (a_n == 16 && b_n == 16)
         {
-            fixed_string_vector_constant_16(a_data, b, c);
+            fixedStringVectorConstant16(a_data, b, c);
         }
         else
         {
@@ -599,28 +599,28 @@ struct StringComparisonImpl
         }
     }
 
-    static void constant_string_vector(
+    static void constantStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonImpl<typename Op::SymmetricOp>::string_vector_constant(b_data, b_offsets, a, c);
+        StringComparisonImpl<typename Op::SymmetricOp, ResultType>::stringVectorConstant(b_data, b_offsets, a, c);
     }
 
-    static void constant_fixed_string_vector(
+    static void constantFixedStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
-        PaddedPODArray<UInt8> & c)
+        PaddedPODArray<ResultType> & c)
     {
-        StringComparisonImpl<typename Op::SymmetricOp>::fixed_string_vector_constant(b_data, b_n, a, c);
+        StringComparisonImpl<typename Op::SymmetricOp, ResultType>::fixedStringVectorConstant(b_data, b_n, a, c);
     }
 
-    static void constant_constant(
+    static void constantConstant(
         const std::string & a,
         const std::string & b,
-        UInt8 & c)
+        ResultType & c)
     {
         size_t a_n = a.size();
         size_t b_n = b.size();
@@ -635,7 +635,7 @@ struct StringComparisonImpl
 template <bool positive>
 struct StringEqualsImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE stringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
@@ -647,7 +647,7 @@ struct StringEqualsImpl
             c[i] = positive == ((i == 0) ? (a_offsets[0] == b_offsets[0] && !memcmp(&a_data[0], &b_data[0], a_offsets[0] - 1)) : (a_offsets[i] - a_offsets[i - 1] == b_offsets[i] - b_offsets[i - 1] && !memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], a_offsets[i] - a_offsets[i - 1] - 1)));
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
+    static void NO_INLINE stringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
@@ -659,7 +659,7 @@ struct StringEqualsImpl
             c[i] = positive == ((i == 0) ? (a_offsets[0] == b_n + 1 && !memcmp(&a_data[0], &b_data[0], b_n)) : (a_offsets[i] - a_offsets[i - 1] == b_n + 1 && !memcmp(&a_data[a_offsets[i - 1]], &b_data[b_n * i], b_n)));
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const std::string & b,
@@ -673,7 +673,7 @@ struct StringEqualsImpl
     }
 
 #if __SSE2__
-    static void NO_INLINE fixed_string_vector_fixed_string_vector_16(
+    static void NO_INLINE fixedStringVectorFixedStringVector16(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Chars_t & b_data,
         PaddedPODArray<UInt8> & c)
@@ -695,7 +695,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant_16(
+    static void NO_INLINE fixedStringVectorConstant16(
         const ColumnString::Chars_t & a_data,
         const std::string & b,
         PaddedPODArray<UInt8> & c)
@@ -717,7 +717,7 @@ struct StringEqualsImpl
     }
 #endif
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
+    static void NO_INLINE fixedStringVectorFixedStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
@@ -730,7 +730,7 @@ struct StringEqualsImpl
 #if __SSE2__
         if (a_n == 16 && b_n == 16)
         {
-            fixed_string_vector_fixed_string_vector_16(a_data, b_data, c);
+            fixedStringVectorFixedStringVector16(a_data, b_data, c);
         }
         else
 #endif
@@ -741,7 +741,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant(
+    static void NO_INLINE fixedStringVectorConstant(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const std::string & b,
@@ -751,7 +751,7 @@ struct StringEqualsImpl
 #if __SSE2__
         if (a_n == 16 && b_n == 16)
         {
-            fixed_string_vector_constant_16(a_data, b, c);
+            fixedStringVectorConstant16(a_data, b, c);
         }
         else
 #endif
@@ -763,35 +763,35 @@ struct StringEqualsImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
+    static void fixedStringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
     {
-        string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, c);
+        stringVectorFixedStringVector(b_data, b_offsets, a_data, a_n, c);
     }
 
-    static void constant_string_vector(
+    static void constantStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
     {
-        string_vector_constant(b_data, b_offsets, a, c);
+        stringVectorConstant(b_data, b_offsets, a, c);
     }
 
-    static void constant_fixed_string_vector(
+    static void constantFixedStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
     {
-        fixed_string_vector_constant(b_data, b_n, a, c);
+        fixedStringVectorConstant(b_data, b_n, a, c);
     }
 
-    static void constant_constant(
+    static void constantConstant(
         const std::string & a,
         const std::string & b,
         UInt8 & c)
@@ -802,12 +802,12 @@ struct StringEqualsImpl
 
 
 template <typename A, typename B>
-struct StringComparisonImpl<EqualsOp<A, B>> : StringEqualsImpl<true>
+struct StringComparisonImpl<EqualsOp<A, B>, UInt8> : StringEqualsImpl<true>
 {
 };
 
 template <typename A, typename B>
-struct StringComparisonImpl<NotEqualsOp<A, B>> : StringEqualsImpl<false>
+struct StringComparisonImpl<NotEqualsOp<A, B>, UInt8> : StringEqualsImpl<false>
 {
 };
 
@@ -816,25 +816,25 @@ struct StringComparisonImpl<NotEqualsOp<A, B>> : StringEqualsImpl<false>
 template <typename Op>
 struct GenericComparisonImpl
 {
-    static void NO_INLINE vector_vector(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorVector(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
     {
         for (size_t i = 0, size = a.size(); i < size; ++i)
             c[i] = Op::apply(a.compareAt(i, i, b, 1), 0);
     }
 
-    static void NO_INLINE vector_constant(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorConstant(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
     {
         auto b_materialized = b.cloneResized(1)->convertToFullColumnIfConst();
         for (size_t i = 0, size = a.size(); i < size; ++i)
             c[i] = Op::apply(a.compareAt(i, 0, *b_materialized, 1), 0);
     }
 
-    static void constant_vector(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
+    static void constantVector(const IColumn & a, const IColumn & b, PaddedPODArray<UInt8> & c)
     {
-        GenericComparisonImpl<typename Op::SymmetricOp>::vector_constant(b, a, c);
+        GenericComparisonImpl<typename Op::SymmetricOp>::vectorConstant(b, a, c);
     }
 
-    static void constant_constant(const IColumn & a, const IColumn & b, UInt8 & c)
+    static void constantConstant(const IColumn & a, const IColumn & b, UInt8 & c)
     {
         c = Op::apply(a.compareAt(0, 0, b, 1), 0);
     }
@@ -865,7 +865,10 @@ struct NameGreaterOrEquals
 {
     static constexpr auto name = "greaterOrEquals";
 };
-
+struct NameStrcmp
+{
+    static constexpr auto name = "strcmp";
+};
 
 template <
     template <typename, typename>
@@ -887,7 +890,7 @@ private:
 
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->getData().size());
-            NumComparisonImpl<T0, T1, Op<T0, T1>>::vector_vector(col_left->getData(), col_right->getData(), vec_res);
+            NumComparisonImpl<T0, T1, Op<T0, T1>>::vectorVector(col_left->getData(), col_right->getData(), vec_res);
 
             block.getByPosition(result).column = std::move(col_res);
             return true;
@@ -898,7 +901,7 @@ private:
 
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->size());
-            NumComparisonImpl<T0, T1, Op<T0, T1>>::vector_constant(col_left->getData(), col_right->template getValue<T1>(), vec_res);
+            NumComparisonImpl<T0, T1, Op<T0, T1>>::vectorConstant(col_left->getData(), col_right->template getValue<T1>(), vec_res);
 
             block.getByPosition(result).column = std::move(col_res);
             return true;
@@ -916,7 +919,7 @@ private:
 
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->size());
-            NumComparisonImpl<T0, T1, Op<T0, T1>>::constant_vector(col_left->template getValue<T0>(), col_right->getData(), vec_res);
+            NumComparisonImpl<T0, T1, Op<T0, T1>>::constantVector(col_left->template getValue<T0>(), col_right->getData(), vec_res);
 
             block.getByPosition(result).column = std::move(col_res);
             return true;
@@ -924,7 +927,7 @@ private:
         else if (auto col_right = checkAndGetColumnConst<ColumnVector<T1>>(col_right_untyped))
         {
             UInt8 res = 0;
-            NumComparisonImpl<T0, T1, Op<T0, T1>>::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), res);
+            NumComparisonImpl<T0, T1, Op<T0, T1>>::constantConstant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), res);
 
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(col_left->size(), toField(res));
             return true;
@@ -976,6 +979,7 @@ private:
         return false;
     }
 
+    template <typename ResultColumnType>
     bool executeStringWithoutCollator(
         Block & block,
         size_t result,
@@ -988,69 +992,70 @@ private:
         const ColumnConst * c0_const,
         const ColumnConst * c1_const) const
     {
-        using StringImpl = StringComparisonImpl<Op<int, int>>;
+        using ResultType = typename ResultColumnType::value_type;
+        using StringImpl = StringComparisonImpl<Op<int, int>, ResultType>;
 
         if (c0_const && c1_const)
         {
-            UInt8 res = 0;
-            StringImpl::constant_constant(c0_const->getValue<String>(), c1_const->getValue<String>(), res);
+            ResultType res = 0;
+            StringImpl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
             return true;
         }
         else
         {
-            auto c_res = ColumnUInt8::create();
-            ColumnUInt8::Container & vec_res = c_res->getData();
+            auto c_res = ResultColumnType::create();
+            typename ResultColumnType::Container & vec_res = c_res->getData();
             vec_res.resize(c0->size());
 
             if (c0_string && c1_string)
-                StringImpl::string_vector_string_vector(
+                StringImpl::stringVectorStringVector(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     c_res->getData());
             else if (c0_string && c1_fixed_string)
-                StringImpl::string_vector_fixed_string_vector(
+                StringImpl::stringVectorFixedStringVector(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_fixed_string->getChars(),
                     c1_fixed_string->getN(),
                     c_res->getData());
             else if (c0_string && c1_const)
-                StringImpl::string_vector_constant(
+                StringImpl::stringVectorConstant(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_const->getValue<String>(),
                     c_res->getData());
             else if (c0_fixed_string && c1_string)
-                StringImpl::fixed_string_vector_string_vector(
+                StringImpl::fixedStringVectorStringVector(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     c_res->getData());
             else if (c0_fixed_string && c1_fixed_string)
-                StringImpl::fixed_string_vector_fixed_string_vector(
+                StringImpl::fixedStringVectorFixedStringVector(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_fixed_string->getChars(),
                     c1_fixed_string->getN(),
                     c_res->getData());
             else if (c0_fixed_string && c1_const)
-                StringImpl::fixed_string_vector_constant(
+                StringImpl::fixedStringVectorConstant(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_const->getValue<String>(),
                     c_res->getData());
             else if (c0_const && c1_string)
-                StringImpl::constant_string_vector(
+                StringImpl::constantStringVector(
                     c0_const->getValue<String>(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     c_res->getData());
             else if (c0_const && c1_fixed_string)
-                StringImpl::constant_fixed_string_vector(
+                StringImpl::constantFixedStringVector(
                     c0_const->getValue<String>(),
                     c1_fixed_string->getChars(),
                     c1_fixed_string->getN(),
@@ -1065,6 +1070,8 @@ private:
             return true;
         }
     }
+
+    template <typename ResultColumnType>
     bool executeStringWithCollator(
         Block & block,
         size_t result,
@@ -1077,23 +1084,24 @@ private:
         const ColumnConst * c0_const,
         const ColumnConst * c1_const) const
     {
-        using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>>;
+        using ResultType = typename ResultColumnType::value_type;
+        using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>, ResultType>;
 
         if (c0_const && c1_const)
         {
-            UInt8 res = 0;
-            StringImpl::constant_constant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
+            ResultType res = 0;
+            StringImpl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
             return true;
         }
         else
         {
-            auto c_res = ColumnUInt8::create();
-            ColumnUInt8::Container & vec_res = c_res->getData();
+            auto c_res = ResultColumnType::create();
+            typename ResultColumnType::Container & vec_res = c_res->getData();
             vec_res.resize(c0->size());
 
             if (c0_string && c1_string)
-                StringImpl::string_vector_string_vector(
+                StringImpl::stringVectorStringVector(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_string->getChars(),
@@ -1101,7 +1109,7 @@ private:
                     collator,
                     c_res->getData());
             else if (c0_string && c1_fixed_string)
-                StringImpl::string_vector_fixed_string_vector(
+                StringImpl::stringVectorFixedStringVector(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_fixed_string->getChars(),
@@ -1109,14 +1117,14 @@ private:
                     collator,
                     c_res->getData());
             else if (c0_string && c1_const)
-                StringImpl::string_vector_constant(
+                StringImpl::stringVectorConstant(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_const->getValue<String>(),
                     collator,
                     c_res->getData());
             else if (c0_fixed_string && c1_string)
-                StringImpl::fixed_string_vector_string_vector(
+                StringImpl::fixedStringVectorStringVector(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_string->getChars(),
@@ -1124,7 +1132,7 @@ private:
                     collator,
                     c_res->getData());
             else if (c0_fixed_string && c1_fixed_string)
-                StringImpl::fixed_string_vector_fixed_string_vector(
+                StringImpl::fixedStringVectorFixedStringVector(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_fixed_string->getChars(),
@@ -1132,21 +1140,21 @@ private:
                     collator,
                     c_res->getData());
             else if (c0_fixed_string && c1_const)
-                StringImpl::fixed_string_vector_constant(
+                StringImpl::fixedStringVectorConstant(
                     c0_fixed_string->getChars(),
                     c0_fixed_string->getN(),
                     c1_const->getValue<String>(),
                     collator,
                     c_res->getData());
             else if (c0_const && c1_string)
-                StringImpl::constant_string_vector(
+                StringImpl::constantStringVector(
                     c0_const->getValue<String>(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     collator,
                     c_res->getData());
             else if (c0_const && c1_fixed_string)
-                StringImpl::constant_fixed_string_vector(
+                StringImpl::constantFixedStringVector(
                     c0_const->getValue<String>(),
                     c1_fixed_string->getChars(),
                     c1_fixed_string->getN(),
@@ -1163,6 +1171,9 @@ private:
         }
     }
 
+    friend class FunctionStrcmp;
+
+    template <typename ReturnColumnType = ColumnUInt8>
     bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
@@ -1176,9 +1187,9 @@ private:
             return false;
 
         if (collator != nullptr)
-            return executeStringWithCollator(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
+            return executeStringWithCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
         else
-            return executeStringWithoutCollator(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
+            return executeStringWithoutCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
     }
 
     void executeDateOrDateTimeOrEnumWithConstString(
@@ -1419,7 +1430,7 @@ private:
         if (c0_const && c1_const)
         {
             UInt8 res = 0;
-            GenericComparisonImpl<Op<int, int>>::constant_constant(*c0, *c1, res);
+            GenericComparisonImpl<Op<int, int>>::constantConstant(*c0, *c1, res);
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(c0->size(), toField(res));
         }
         else
@@ -1429,11 +1440,11 @@ private:
             vec_res.resize(c0->size());
 
             if (c0_const)
-                GenericComparisonImpl<Op<int, int>>::constant_vector(*c0, *c1, vec_res);
+                GenericComparisonImpl<Op<int, int>>::constantVector(*c0, *c1, vec_res);
             else if (c1_const)
-                GenericComparisonImpl<Op<int, int>>::vector_constant(*c0, *c1, vec_res);
+                GenericComparisonImpl<Op<int, int>>::vectorConstant(*c0, *c1, vec_res);
             else
-                GenericComparisonImpl<Op<int, int>>::vector_vector(*c0, *c1, vec_res);
+                GenericComparisonImpl<Op<int, int>>::vectorVector(*c0, *c1, vec_res);
 
             block.getByPosition(result).column = std::move(c_res);
         }
@@ -1472,7 +1483,7 @@ private:
         if (c0_const && c1_const)
         {
             UInt8 res = 0;
-            DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constant_constant(
+            DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constantConstant(
                 checkAndGetColumnConst<ColumnVector<T0>>(c0)->template getValue<T0>(),
                 checkAndGetColumnConst<ColumnVector<T1>>(c1)->template getValue<T1>(),
                 res);
@@ -1485,21 +1496,21 @@ private:
             vec_res.resize(c0->size());
             if (c0_const)
             {
-                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constant_vector(
+                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constantVector(
                     checkAndGetColumnConst<ColumnVector<T0>>(c0)->template getValue<T0>(),
                     checkAndGetColumn<ColumnVector<T1>>(c1)->getData(),
                     vec_res);
             }
             else if (c1_const)
             {
-                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::vector_constant(
+                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::vectorConstant(
                     checkAndGetColumn<ColumnVector<T0>>(c0)->getData(),
                     checkAndGetColumnConst<ColumnVector<T1>>(c1)->template getValue<T1>(),
                     vec_res);
             }
             else
             {
-                DateDateTimeComparisonImpl<T0, T1, Op, true>::vector_vector(
+                DateDateTimeComparisonImpl<T0, T1, Op, true>::vectorVector(
                     checkAndGetColumn<ColumnVector<T0>>(c0)->getData(),
                     checkAndGetColumn<ColumnVector<T1>>(c1)->getData(),
                     vec_res);
@@ -1660,6 +1671,30 @@ public:
                 col_with_type_and_name_left.type,
                 col_with_type_and_name_right.type,
                 left_is_num);
+    }
+};
+
+class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp>
+{
+public:
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); };
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
+        const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
+        bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
+        if (!success)
+        {
+            throw Exception("Function " + getName() + " executed on invalid arguments "
+                            + "[col_left=" + col_left_untyped->getName() + "]"
+                            + "[col_right=" + col_right_untyped->getName() + "]");
+        }
+    }
+
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    {
+        return std::make_shared<DataTypeInt8>();
     }
 };
 

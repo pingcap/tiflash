@@ -1,12 +1,11 @@
-#include <Parsers/ASTDBGInvokeQuery.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterDBGInvokeQuery.h>
+#include <Parsers/ASTDBGInvokeQuery.h>
 
 namespace DB
 {
-
 BlockIO InterpreterDBGInvokeQuery::execute()
 {
     const ASTDBGInvokeQuery & ast = typeid_cast<const ASTDBGInvokeQuery &>(*query_ptr);
@@ -15,4 +14,4 @@ BlockIO InterpreterDBGInvokeQuery::execute()
     return res;
 }
 
-}
+} // namespace DB

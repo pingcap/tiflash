@@ -100,8 +100,8 @@ public:
                     const PageFieldOffsetChecksums & offsets)
     {
         Write w{WriteType::UPSERT, page_id, tag, read_buffer, size, 0, offsets, 0, 0, file_id};
-        // TODO: Do we need to add `total_data_size`?
         writes.emplace_back(std::move(w));
+        total_data_size += size;
     }
 
     // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and

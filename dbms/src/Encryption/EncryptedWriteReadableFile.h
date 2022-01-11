@@ -32,6 +32,11 @@ public:
         return file->fsync();
     }
 
+    int ftruncate(off_t length) override
+    {
+        return file->ftruncate(length);
+    }
+
     int getFd() const override
     {
         return file->getFd();

@@ -45,6 +45,8 @@ public:
 
     int fsync() override;
 
+    int ftruncate(off_t length) override;
+
     void hardLink(const std::string & existing_file) override;
 
 private:

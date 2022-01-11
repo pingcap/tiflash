@@ -1,34 +1,16 @@
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCheckQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTKillQueryQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
-#include <Parsers/ASTDBGInvokeQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
-#include <Parsers/ASTRenameQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ASTShowProcesslistQuery.h>
-#include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/ASTUseQuery.h>
-#include <Parsers/ASTTruncateQuery.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/ASTManageQuery.h>
-
+#include <Common/typeid_cast.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterDBGInvokeQuery.h>
+#include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterKillQueryQuery.h>
-#include <Interpreters/InterpreterDeleteQuery.h>
-#include <Interpreters/InterpreterDBGInvokeQuery.h>
+#include <Interpreters/InterpreterManageQuery.h>
 #include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -38,21 +20,37 @@
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
-#include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterTruncateQuery.h>
-#include <Interpreters/InterpreterManageQuery.h>
-
+#include <Interpreters/InterpreterUseQuery.h>
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTCheckQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDBGInvokeQuery.h>
+#include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTKillQueryQuery.h>
+#include <Parsers/ASTManageQuery.h>
+#include <Parsers/ASTOptimizeQuery.h>
+#include <Parsers/ASTRenameQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTSystemQuery.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ASTTruncateQuery.h>
+#include <Parsers/ASTUseQuery.h>
+#include <Parsers/TablePropertiesQueriesASTs.h>
 
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int READONLY;
-    extern const int UNKNOWN_TYPE_OF_QUERY;
-}
+extern const int READONLY;
+extern const int UNKNOWN_TYPE_OF_QUERY;
+} // namespace ErrorCodes
 
 
 static void throwIfReadOnly(Context & context)
@@ -62,7 +60,8 @@ static void throwIfReadOnly(Context & context)
         const auto & client_info = context.getClientInfo();
         if (client_info.interface == ClientInfo::Interface::HTTP && client_info.http_method == ClientInfo::HTTPMethod::GET)
             throw Exception("Cannot execute query in readonly mode. "
-                "For queries over HTTP, method GET implies readonly. You should use method POST for modifying queries.", ErrorCodes::READONLY);
+                            "For queries over HTTP, method GET implies readonly. You should use method POST for modifying queries.",
+                            ErrorCodes::READONLY);
         else
             throw Exception("Cannot execute query in readonly mode", ErrorCodes::READONLY);
     }
@@ -178,4 +177,4 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     else
         throw Exception("Unknown type of query: " + query->getID(), ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
 }
-}
+} // namespace DB

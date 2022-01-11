@@ -60,6 +60,7 @@ public:
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
+    const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;

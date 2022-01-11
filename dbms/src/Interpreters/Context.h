@@ -8,15 +8,6 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#include <grpc++/grpc++.h>
-#pragma clang diagnostic pop
-#else
-#include <grpc++/grpc++.h>
-#endif
-
 #include <chrono>
 #include <condition_variable>
 #include <functional>

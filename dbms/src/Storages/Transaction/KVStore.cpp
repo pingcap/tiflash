@@ -669,4 +669,31 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
     LOG_INFO(log, "finish to check " << total_regions_cnt << " regions, time cost " << region_check_watch.elapsedSeconds() << "s");
 }
 
+void KVStore::setStore(metapb::Store store_)
+{
+    getStore().update(std::move(store_));
+    LOG_FMT_INFO(log, "Set store info {}", getStore().base.ShortDebugString());
+}
+
+uint64_t KVStore::getStoreID(std::memory_order memory_order) const
+{
+    return getStore().store_id.load(memory_order);
+}
+
+KVStore::StoreMeta & KVStore::getStore()
+{
+    return this->store;
+}
+
+const KVStore::StoreMeta & KVStore::getStore() const
+{
+    return this->store;
+}
+
+void KVStore::StoreMeta::update(Base && base_)
+{
+    base = std::move(base_);
+    store_id = base.id();
+}
+
 } // namespace DB
