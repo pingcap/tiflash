@@ -152,10 +152,9 @@ public:
         {
             if (const auto * from = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[arg]).column.get()); from)
                 columns.push_back(from);
-            else 
-               throw Exception(fmt::format("Wrong column in function {}", getName()), ErrorCodes::LOGICAL_ERROR);
-                
-        }  
+            else
+                throw Exception(fmt::format("Wrong column in function {}", getName()), ErrorCodes::LOGICAL_ERROR);
+        }
 
         for (size_t row_num = 0; row_num < rows; ++row_num)
         {
@@ -203,7 +202,7 @@ public:
             dispatch<Float64>(block, arguments, result);
             break;
         default:
-            throw Exception(fmt::format("Illegal return type of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);    
+            throw Exception(fmt::format("Illegal return type of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
     }
 
