@@ -249,7 +249,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
         break;
     }
     default:
-        throw Exception(fmt::format("Illegal version{}", version), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Illegal version: {}", version), ErrorCodes::LOGICAL_ERROR);
     }
 
     readIntBinary(next_segment_id, buf);
@@ -1502,7 +1502,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     LOG_FMT_DEBUG(
         log,
-        "{}{} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
+        "{} {} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
         __FUNCTION__,
         simpleInfo(),
         DB::DM::toDebugString(read_ranges),
