@@ -1,7 +1,6 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -60,7 +59,7 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
             std::make_shared<GRPCReceiverContext>(
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                context.getSettings().enable_local_tunnel),
+                context.getSettingsRef().enable_local_tunnel),
             dag_query_block.source->exchange_receiver(),
             dagContext().getMPPTaskMeta(),
             max_streams,

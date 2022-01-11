@@ -608,6 +608,7 @@ try
 {
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -615,14 +616,17 @@ try
         dir.apply(std::move(edit));
     }
 
-    { // Ref 3-> 999
+    { // Ref 4-> 999
         PageEntriesEdit edit;
-        edit.ref(3, 999);
-        ASSERT_THROW({ dir.apply(std::move(edit)); }, DB::Exception);
+        edit.put(3, entry3);
+        edit.ref(4, 999);
+        dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry3, dir, 3, snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
 
     // TODO: restore, invalid ref page is filtered
 }
