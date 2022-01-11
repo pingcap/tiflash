@@ -337,11 +337,7 @@ struct ToInteger<Int128>
     using Type = Int128;
 };
 
-/**
- * If A and B's size is 8 bytes 
- * For greatest, returns unsigned result if there is at least one argument is unsigned.
- * For least, returns signed result if there is at least one argument is signed.
- */
+
 template <typename A, typename B>
 struct BinaryLeastSpecialCase
 {
@@ -363,14 +359,16 @@ struct BinaryGreatestSpecialCase
 
 // in TiDB:
 // if A or B is floating-point, least/Greatest(A, B) evalutes to Float64.
-// if A or B is Integer which is not unsigned, least/Greatest(A, B) evaluates to Int64.
+// If A and B's size is 8 bytes
+// For greatest, returns unsigned result if there is at least one argument is unsigned.
+// For least, returns signed result if there is at least one argument is signed.
 template <typename A, typename B>
 struct ResultOfBinaryLeast
 {
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<sizeof(A) == 8 && sizeof(A) == sizeof(B), typename BinaryLeastSpecialCase<A, B>::Type, Int64>>;
+        typename BinaryLeastSpecialCase<A, B>::Type>;
 };
 
 template <typename A, typename B>
@@ -379,7 +377,7 @@ struct ResultOfBinaryGreatest
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        std::conditional_t<sizeof(A) == 8 && sizeof(A) == sizeof(B), typename BinaryGreatestSpecialCase<A, B>::Type, Int64>>;
+        typename BinaryGreatestSpecialCase<A, B>::Type>;
 };
 
 } // namespace NumberTraits

@@ -34,6 +34,14 @@ try
             createColumn<Int64>({8, 9, 6, 3, 2})));
 
     ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({7, 2, 3, 3, 2}),
+        executeFunction(
+            func_name,
+            createColumn<UInt16>({10, 2, 3, 4, 5}),
+            createColumn<UInt16>({7, 6, 5, 3, 4}),
+            createColumn<UInt16>({8, 9, 6, 3, 2})));
+
+    ASSERT_COLUMN_EQ(
         createColumn<Int64>({7, 0, 1, 2, 6}),
         executeFunction(
             func_name,
@@ -141,9 +149,17 @@ try
         createColumn<Int64>({10, 9, 6, 4, 5}),
         executeFunction(
             func_name,
-            createColumn<Int16>({10, 2, 3, 4, 5}),
-            createColumn<Int32>({7, 6, 5, 3, 4}),
+            createColumn<Int64>({10, 2, 3, 4, 5}),
+            createColumn<Int64>({7, 6, 5, 3, 4}),
             createColumn<Int64>({8, 9, 6, 3, 2})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({10, 9, 6, 4, 5}),
+        executeFunction(
+            func_name,
+            createColumn<UInt16>({10, 2, 3, 4, 5}),
+            createColumn<UInt16>({7, 6, 5, 3, 4}),
+            createColumn<UInt16>({8, 9, 6, 3, 2})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Int64>({10, 6, 5, 5, 9}),
