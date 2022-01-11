@@ -103,10 +103,7 @@ std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
     std::map<FSID, DiskCapacity> disk_stats_map;
     for (auto & path_info : path_infos)
     {
-        struct statvfs vfs;
-        FsStats path_stat;
-
-        std::tie(path_stat, vfs) = path_info.getStats(log);
+        auto [path_stat, vfs] = path_info.getStats(log);
         if (!path_stat.ok)
         {
             // Disk may be hot remove, Ignore this disk.
