@@ -1,16 +1,17 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <PSBackground.h>
 #include <PSRunnable.h>
 #include <PSStressEnv.h>
 #include <Poco/ThreadPool.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <fmt/format.h>
 
+#include "PSBackground.h"
+
 #define NORMAL_WORKLOAD 0
-using namespace DB::PS::V2;
 template <typename Child>
 class StressWorkloadFunc
 {
@@ -47,7 +48,7 @@ public:
     virtual void onDumpResult();
 
 protected:
-    void initPageStorage(PageStorage::Config & config, String path_prefix = "");
+    void initPageStorage(DB::PageStorage::Config & config, String path_prefix = "");
 
     void startBackgroundTimer();
 
@@ -82,7 +83,6 @@ protected:
             pool.start(*reader, "reader" + DB::toString(i));
         }
     }
-
 
     StressEnv options;
     Poco::ThreadPool pool;

@@ -1,18 +1,17 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <fmt/format.h>
 
 #include <atomic>
 
-using namespace DB::PS::V2;
 namespace Poco
 {
 class Logger;
 }
 
-using PSPtr = std::shared_ptr<DB::PS::V2::PageStorage>;
+using PSPtr = std::shared_ptr<DB::PS::V3::PageStorageImpl>;
 
 enum StressEnvStat
 {
