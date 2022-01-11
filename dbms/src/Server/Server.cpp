@@ -1233,7 +1233,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
     {
-        TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
+        auto allow_client_connections = config().getBool("allow_client_connections", false);
+        std::unique_ptr<TcpHttpServersHolder> tcpHttpServersHolder = nullptr;
+        if (allow_client_connections)
+        {
+            LOG_FMT_WARNING(log, "!!!DANGEROUS!!! Remember to forbid client connections in production environment!");
+            tcpHttpServersHolder = std::make_unique<TcpHttpServersHolder>(*this, settings, log);
+        }
 
         main_config_reloader->start();
         users_config_reloader->start();
@@ -1253,7 +1259,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SCOPE_EXIT({
             is_cancelled = true;
 
-            tcpHttpServersHolder.onExit();
+            if (tcpHttpServersHolder)
+            {
+                tcpHttpServersHolder->onExit();
+            }
 
             main_config_reloader.reset();
             users_config_reloader.reset();
