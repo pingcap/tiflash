@@ -1,6 +1,5 @@
 #!/bin/bash
-
-set -ueox pipefail
+set -x
 source scl_source enable devtoolset-10
 export CC=gcc
 export CXX=g++
