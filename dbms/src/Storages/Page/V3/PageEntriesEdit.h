@@ -96,7 +96,6 @@ public:
         PageId page_id;
         PageId ori_page_id;
         PageEntryV3 entry;
-        PageVersionType version;
     };
     using EditRecords = std::vector<EditRecord>;
 
