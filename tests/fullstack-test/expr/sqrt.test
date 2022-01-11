@@ -6,11 +6,18 @@ mysql> insert into test.t values(1.21, 1.44, 0.25, 4)
 func> wait_table test t
 
 
-mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sqrt(ld)), sum(sqrt(bd)), sum(sqrt(f)), sum(sqrt(i)) from test.t;
+mysql> set @@tidb_enforce_mpp=on; select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sqrt(ld)), sum(sqrt(bd)), sum(sqrt(f)), sum(sqrt(i)) from test.t;
 +---------------+---------------+--------------+--------------+
 | sum(sqrt(ld)) | sum(sqrt(bd)) | sum(sqrt(f)) | sum(sqrt(i)) |
 +---------------+---------------+--------------+--------------+
 |           1.1 |           1.2 |          0.5 |            2 |
 +---------------+---------------+--------------+--------------+
+
+mysql> set @@tidb_enforce_mpp=on; select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ sqrt(f * -1.0) as v from test.t;
++------+
+| v    |
++------+
+| NULL |
++------+
 
 mysql> drop table if exists test.t
