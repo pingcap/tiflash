@@ -6,7 +6,6 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -93,7 +92,7 @@ try
     {
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
             dag_response,
-            context.getSettings().dag_records_per_chunk,
+            context.getSettingsRef().dag_records_per_chunk,
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
@@ -121,8 +120,8 @@ try
             std::vector<Int64>(),
             collators,
             tipb::ExchangeType::PassThrough,
-            context.getSettings().dag_records_per_chunk,
-            context.getSettings().batch_send_min_limit,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
             true,
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
