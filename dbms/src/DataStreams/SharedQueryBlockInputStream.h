@@ -67,9 +67,14 @@ public:
             throw Exception(exception_msg);
     }
 
-    virtual int computeNewThreadCount() override
+    virtual void computeNewThreadCount(int & ret) override
     {
-        return 1;
+        if (!visisted)
+        {
+            visisted = true;
+            ret++;
+            in->computeNewThreadCount(ret);
+        }
     }
 
 protected:

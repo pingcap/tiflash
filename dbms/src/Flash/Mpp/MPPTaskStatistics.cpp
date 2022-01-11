@@ -144,4 +144,12 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
         }
     }
 }
+int MPPTaskStatistics::getRemoteTunnelCnt() const
+{
+    return remote_tunnel_cnt;
+}
+void MPPTaskStatistics::incRemoteTunnelCnt()
+{
+    remote_tunnel_cnt++;
+}
 } // namespace DB

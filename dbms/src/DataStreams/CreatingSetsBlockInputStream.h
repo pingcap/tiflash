@@ -43,24 +43,28 @@ public:
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
-    virtual int computeNewThreadCount() override
-    {
-        int parallism = 0;
-        for (auto & subqueries_for_sets : subqueries_for_sets_list)
-        {
-            for (auto & elem : subqueries_for_sets)
-            {
-                if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
-                {
-                    parallism += elem.second.source->computeNewThreadCount() + 1;
-                }
-            }
-        }
-        return parallism;
-    }
-
     /// Takes `totals` only from the main source, not from subquery sources.
     Block getTotals() override;
+
+    virtual void computeNewThreadCount(int & ret) override
+    {
+        if (!visisted)
+        {
+            visisted = true;
+            for (auto & subqueries_for_sets : subqueries_for_sets_list)
+            {
+                for (auto & elem : subqueries_for_sets)
+                {
+                    if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                    {
+                        ret++;
+                        elem.second.source->computeNewThreadCount(ret);
+                    }
+                }
+            }
+            children.back()->computeNewThreadCount(ret);
+        }
+    }
 
 protected:
     Block readImpl() override;

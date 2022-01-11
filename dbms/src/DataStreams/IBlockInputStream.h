@@ -79,7 +79,13 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
-    virtual int computeNewThreadCount() { return 0; }
+    virtual int outputNewThreadCount()
+    {
+        int ret = 0;
+        resetNewThreadCountCompute();
+        computeNewThreadCount(ret);
+        return ret;
+    }
 
     virtual ~IBlockInputStream() = default;
 
@@ -120,9 +126,39 @@ public:
                 return;
     }
 
+    virtual void computeNewThreadCount(int & ret)
+    {
+        if (!visisted)
+        {
+            visisted = true;
+            computeNewThreadCountOfThisLevel(ret);
+            for (auto & child : children)
+            {
+                if (child)
+                    child->computeNewThreadCount(ret);
+            }
+        }
+    }
+
+    virtual void computeNewThreadCountOfThisLevel(int &) {}
+
+    virtual void resetNewThreadCountCompute()
+    {
+        if (visisted)
+        {
+            for (auto & child : children)
+            {
+                if (child)
+                    child->resetNewThreadCountCompute();
+            }
+            visisted = false;
+        }
+    }
+
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
+    bool visisted = false;
 
 private:
     TableLockHolders table_locks;

@@ -42,8 +42,10 @@ void DynamicThreadPool::init(size_t initial_size)
 
 void DynamicThreadPool::scheduleTask(TaskPtr task)
 {
+    task_cnt++;
     if (!scheduledToFixedThread(task) && !scheduledToExistedDynamicThread(task))
         scheduledToNewDynamicThread(task);
+    std::cerr<<"task_cnt: "<<task_cnt.load()<<std::endl;
 }
 
 bool DynamicThreadPool::scheduledToFixedThread(TaskPtr & task)

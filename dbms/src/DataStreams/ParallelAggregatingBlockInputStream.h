@@ -36,13 +36,11 @@ public:
 
     Block getHeader() const override;
 
-    virtual int computeNewThreadCount() override
+    virtual void computeNewThreadCountOfThisLevel(int & ret) override
     {
-        //todo move codes into processor
-        int new_thread_count_of_children = 0;
-        for (size_t i = 0; i < children.size(); ++i)
-            new_thread_count_of_children += children[i]->computeNewThreadCount();
-        return processor.getMaxThreads() + new_thread_count_of_children + (temporary_data_merge_threads + max_threads);
+        /// note: the thread count of [parallel_merge_data->thread_pool] and [] cant be estimated, since they are undefined unless some conditions are met at runtime.
+        /// We can see them as "extra soft threads", and the thread count of them is bounded. Since they will not exceed other threads created by that query.
+        ret += processor.getMaxThreads();
     }
 
 protected:
