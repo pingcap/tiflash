@@ -326,7 +326,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             = std::make_shared<ExchangeReceiver>(
                 std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
                                                       context.getTMTContext().getMPPTaskManager(),
-                                                      context.getSettings().enable_local_tunnel),
+                                                      context.getSettingsRef().enable_local_tunnel),
                 tipb_exchange_receiver,
                 root_tm,
                 10,
