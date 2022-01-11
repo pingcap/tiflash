@@ -273,7 +273,7 @@ public:
     void drop(bool recursive, bool must_success = true);
 
 private:
-    String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name);
+    String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name) const;
 
     void renamePath(const String & old_path, const String & new_path);
 
