@@ -101,7 +101,7 @@ bool addExtraCastsAfterTs(
     }
     if (!has_need_cast_column)
         return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, query_block);
+    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
 AnalysisResult analyzeExpressions(
@@ -157,8 +157,7 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        NamesAndTypes aggregated_columns;
-        std::tie(res.aggregation_keys, res.aggregation_collators, aggregate_descriptions) = analyzer.appendAggregation(
+        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.aggregated_columns) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
@@ -168,7 +167,7 @@ AnalysisResult analyzeExpressions(
         chain.clear();
 
         // add cast if type is not match
-        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation(), aggregated_columns);
+        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation(), res.aggregated_columns);
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
