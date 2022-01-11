@@ -15,6 +15,7 @@
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/castTypeToEither.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <common/types.h>
@@ -33,12 +34,12 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 struct LeastImpl
 {
     static constexpr auto name = "tidbLeast";
-    static bool apply(bool cmp_result) { return cmp_result == true; }
+    static bool apply(bool cmp_result) { return cmp_result; }
 };
 struct GreatestImpl
 {
     static constexpr auto name = "tidbGreatest";
-    static bool apply(bool cmp_result) { return cmp_result != true; }
+    static bool apply(bool cmp_result) { return !cmp_result; }
 };
 
 template <typename Impl, typename SpecializedFunction>
@@ -137,42 +138,6 @@ public:
         return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
 
-    template <typename T>
-    void dispatch(Block & block, const ColumnNumbers & arguments, size_t result) const
-    {
-        auto col_to = ColumnVector<T>::create(block.rows());
-        auto & vec_to = col_to->getData();
-        size_t num_arguments = arguments.size();
-        size_t rows = block.rows();
-
-        std::vector<const ColumnVector<T> *> columns;
-
-        // TODO need to convert the column
-        for (size_t arg = 0; arg < num_arguments; ++arg)
-        {
-            if (const auto * from = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[arg]).column.get()); from)
-                columns.push_back(from);
-            else
-                throw Exception(fmt::format("Wrong column in function {}", getName()), ErrorCodes::LOGICAL_ERROR);
-        }
-
-        for (size_t row_num = 0; row_num < rows; ++row_num)
-        {
-            size_t best_arg = arguments[0];
-            for (size_t arg = 1; arg < num_arguments; ++arg)
-            {
-                const auto & vec_from = columns[arguments[arg]]->getData();
-                const auto & vec_best = columns[arguments[best_arg]]->getData();
-                bool cmp_result = accurate::lessOp(vec_from[row_num], vec_best[row_num]);
-                if (Impl::apply(cmp_result))
-                    best_arg = arg;
-            }
-            const auto & vec_best = columns[arguments[best_arg]]->getData();
-            vec_to[row_num] = vec_best[row_num];
-        }
-        block.getByPosition(result).column = std::move(col_to);
-    }
-
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t num_arguments = arguments.size();
@@ -189,24 +154,56 @@ public:
 
         DataTypePtr result_type = getReturnTypeImpl(data_types);
 
-        TypeIndex type_index = result_type->getTypeId();
-        switch (type_index)
-        {
-        case TypeIndex::Int64:
-            dispatch<Int64>(block, arguments, result);
-            break;
-        case TypeIndex::UInt64:
-            dispatch<UInt64>(block, arguments, result);
-            break;
-        case TypeIndex::Float64:
-            dispatch<Float64>(block, arguments, result);
-            break;
-        default:
+        bool is_types_valid = getColumnType(result_type, [&](const auto & type, bool) {
+            using ColumnType = std::decay_t<decltype(type)>;
+            using ColumnFieldType = typename ColumnType::FieldType;
+            using ColVec = ColumnVector<ColumnFieldType>;
+            auto col_to = ColVec::create(block.rows());
+            auto & vec_to = col_to->getData();
+            size_t num_arguments = arguments.size();
+            size_t rows = block.rows();
+            std::vector<const ColVec *> columns;
+
+            // TODO need to convert the column
+            for (size_t arg = 0; arg < num_arguments; ++arg)
+            {
+                if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arguments[arg]).column.get()); from)
+                    columns.push_back(from);
+                else
+                    throw Exception(fmt::format("Wrong column in function {}", getName()), ErrorCodes::LOGICAL_ERROR);
+            }
+
+            for (size_t row_num = 0; row_num < rows; ++row_num)
+            {
+                size_t best_arg = arguments[0];
+                for (size_t arg = 1; arg < num_arguments; ++arg)
+                {
+                    const auto & vec_from = columns[arguments[arg]]->getData();
+                    const auto & vec_best = columns[arguments[best_arg]]->getData();
+                    bool cmp_result = accurate::lessOp(vec_from[row_num], vec_best[row_num]);
+                    if (Impl::apply(cmp_result))
+                        best_arg = arg;
+                }
+                const auto & vec_best = columns[arguments[best_arg]]->getData();
+                vec_to[row_num] = vec_best[row_num];
+            }
+            block.getByPosition(result).column = std::move(col_to);
+            return true;
+        });
+
+        if (!is_types_valid)
             throw Exception(fmt::format("Illegal return type of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        };
     }
 
 private:
+    template <typename F>
+    static bool getColumnType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt64,
+            DataTypeUInt64,
+            DataTypeFloat64>(type.get(), std::forward<F>(f));
+    }
     const Context & context;
 };
 
