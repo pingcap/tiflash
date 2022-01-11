@@ -391,6 +391,59 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             Errors::DeltaTree::Internal);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
+
+#ifndef NDEBUG
+    try
+    {
+        auto dmf_path = fmt::format("{}/stable/dmf_{}", path, file_id);
+        Poco::File dmf_file = {dmf_path};
+        if (dmf_file.isFile())
+        {
+            LOG_FMT_DEBUG(
+                pool.log,
+                "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
+                file_id,
+                path,
+                dmf_file.getSize(),
+                file_size);
+        }
+        else
+        {
+            size_t size_sum = 0;
+            auto get_folder_size = [](const Poco::File & target, size_t & counter) -> void {
+                auto get_folder_size_impl = [](const Poco::File & inner_target, size_t & inner_counter, auto & self) -> void {
+                    std::vector<Poco::File> files;
+                    inner_target.list(files);
+                    for (auto & i : files)
+                    {
+                        if (i.isFile())
+                        {
+                            inner_counter += i.getSize();
+                        }
+                        else
+                        {
+                            self(i, inner_counter, self);
+                        }
+                    }
+                };
+                get_folder_size_impl(target, counter, get_folder_size_impl);
+            };
+            get_folder_size(dmf_file, size_sum);
+            LOG_FMT_DEBUG(
+                pool.log,
+                "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
+                file_id,
+                path,
+                size_sum,
+                file_size);
+        }
+    }
+    catch (const Poco::Exception & exp)
+    {
+        LOG_FMT_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
+    }
+#endif
+
     // update global used size
     pool.global_capacity->addUsedSize(path, file_size);
 }
