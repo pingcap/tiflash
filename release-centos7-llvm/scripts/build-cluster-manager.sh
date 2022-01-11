@@ -1,6 +1,9 @@
 #!/bin/bash
 
 set -ueox pipefail
+source scl_source enable devtoolset-10
+export CC=gcc
+export CXX=g++
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}

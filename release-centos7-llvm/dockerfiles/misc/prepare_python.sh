@@ -5,6 +5,9 @@
 
 function prepare_python() {
     # $1: grpcio version
+    source scl_source enable devtoolset-10
+    export CC=gcc
+    export CXX=g++
     pip3 install wheel # this may be a dependency for other packages
     pip3 install \
         pybind11 \
