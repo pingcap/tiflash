@@ -346,23 +346,24 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             ++iter;
         }
     }
-
-    for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
     {
-        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
-        if (!del_entries.empty())
+        std::unique_lock write_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
         {
-            all_del_entries.emplace_back(std::move(del_entries));
-        }
+            const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
+            if (!del_entries.empty())
+            {
+                all_del_entries.emplace_back(std::move(del_entries));
+            }
 
-        if (all_deleted)
-        {
-            std::unique_lock write_lock(table_rw_mutex);
-            iter = mvcc_table_directory.erase(iter);
-        }
-        else
-        {
-            iter++;
+            if (all_deleted)
+            {
+                iter = mvcc_table_directory.erase(iter);
+            }
+            else
+            {
+                iter++;
+            }
         }
     }
 

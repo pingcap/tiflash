@@ -221,7 +221,9 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    blob_stats.fileIdToStat(blob_id)->removePosFromStat(offset, size);
+    const auto & stat = blob_stats.fileIdToStat(blob_id);
+    auto lock = blob_stats.statLock(stat);
+    stat->removePosFromStat(offset, size);
 
     // TBD : consider remove the empty file
 }

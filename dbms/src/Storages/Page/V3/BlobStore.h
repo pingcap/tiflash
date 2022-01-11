@@ -73,7 +73,7 @@ public:
             UInt64 sm_valid_size = 0;
             double sm_valid_rate = 1.0;
 
-            std::mutex sm_lock;
+            std::recursive_mutex sm_lock;
 
             bool isReadOnly()
             {
@@ -165,8 +165,17 @@ private:
 
     void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
+    /**
+     *  Ask BlobStats to get a span from BlobStat.
+     *  We will lock BlobStats until we get a BlobStat that can hold the size.
+     *  Then lock the BlobStat to get the span.
+     */
     std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
 
+    /**
+     *  Request a specific BlobStat to delete a certain span.
+     *  We will lock the BlobStat until it have been makefree in memory.
+     */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
     String getBlobFilePath(BlobFileId blob_id) const;

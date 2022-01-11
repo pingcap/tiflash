@@ -112,7 +112,7 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
 {
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    auto del_entries = page_directory.gc();
+    const auto & del_entries = page_directory.gc();
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
