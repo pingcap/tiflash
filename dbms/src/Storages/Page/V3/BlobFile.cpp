@@ -2,7 +2,14 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/BlobFile.h>
 
-namespace DB::PS::V3
+namespace DB {
+
+namespace FailPoints
+{
+extern const char exception_before_page_file_write_sync[];
+} // namespace FailPoints
+
+namespace PS::V3
 {
 BlobFile::BlobFile(String path_,
                    FileProviderPtr file_provider_,
@@ -40,9 +47,17 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
     if (unlikely(wrfile->isClosed()))
     {
-        throw Exception("Write failed, FD is closed which [path=" + path + "], BlobFile should also be closed",
+        throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", path),
                         ErrorCodes::LOGICAL_ERROR);
     }
+    
+    fiu_do_on(FailPoints::exception_before_page_file_write_sync,
+              { // Mock that exception happend before write and sync
+                  throw Exception(fmt::format("Fail point {} is triggered.",FailPoints::exception_before_page_file_write_sync),
+                                  ErrorCodes::FAIL_POINT_ERROR);
+              });
+
+
 #ifndef NDEBUG
     PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, true);
 #else
@@ -61,5 +76,5 @@ BlobFile::~BlobFile()
     wrfile->close();
 }
 
-
-} // namespace DB::PS::V3
+} // namespace DB
+} // namespace PS::V3
