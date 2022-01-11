@@ -202,7 +202,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     }
 
     // Get Postion from single stat
-    auto lock_stat = blob_stats.statLock(stat);
+    auto lock_stat = stat->lock();
     BlobFileOffset offset = stat->getPosFromStat(size);
 
     // Can't insert into this spacemap
@@ -222,7 +222,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
     const auto & stat = blob_stats.fileIdToStat(blob_id);
-    auto lock = blob_stats.statLock(stat);
+    auto lock = stat->lock();
     stat->removePosFromStat(offset, size);
 
     // TBD : consider remove the empty file
@@ -329,7 +329,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             continue;
         }
 
-        auto lock = blob_stats.statLock(stat);
+        auto lock = stat->lock();
         auto right_margin = stat->smap->getRightMargin();
 
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
@@ -463,11 +463,6 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock()
     return std::lock_guard(lock_stats);
 }
 
-std::lock_guard<std::mutex> BlobStore::BlobStats::statLock(BlobStatPtr stat)
-{
-    return std::lock_guard(stat->sm_lock);
-}
-
 
 BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 {
@@ -538,10 +533,8 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
     old_ids.emplace_back(blob_file_id);
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseNewStat()
+BlobFileId BlobStore::BlobStats::chooseNewStat()
 {
-    BlobStatPtr stat_ptr = nullptr;
-
     /**
      * If we do have any `old blob id` which may removed by GC.
      * Then we should get a `old blob id` rather than create a new blob id.
@@ -550,10 +543,10 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseNewStat()
      */
     if (old_ids.empty())
     {
-        return std::make_pair(stat_ptr, roll_id);
+        return roll_id;
     }
 
-    auto rv = std::make_pair(stat_ptr, old_ids.front());
+    auto rv = old_ids.front();
     old_ids.pop_front();
     return rv;
 }
@@ -566,7 +559,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     // No stats exist
     if (stats_map.empty())
     {
-        return chooseNewStat();
+        return std::make_pair(nullptr, chooseNewStat());
     }
 
     for (const auto & stat : stats_map)
@@ -583,7 +576,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 
     if (!stat_ptr)
     {
-        return chooseNewStat();
+        return std::make_pair(nullptr, chooseNewStat());
     }
 
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);

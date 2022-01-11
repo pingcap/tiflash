@@ -75,6 +75,11 @@ public:
 
             std::mutex sm_lock;
 
+            std::lock_guard<std::mutex> lock()
+            {
+                return std::lock_guard(sm_lock);
+            }
+
             bool isReadOnly()
             {
                 return type == BlobStatType::READ_ONLY;
@@ -97,8 +102,6 @@ public:
 
         std::lock_guard<std::mutex> lock();
 
-        std::lock_guard<std::mutex> statLock(BlobStatPtr stat);
-
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
         void eraseStat(BlobFileId blob_file_id);
@@ -119,7 +122,7 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
 
-        std::pair<BlobStatPtr, BlobFileId> chooseNewStat();
+        BlobFileId chooseNewStat();
 
         BlobStatPtr fileIdToStat(BlobFileId file_id);
 
