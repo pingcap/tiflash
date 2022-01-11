@@ -73,7 +73,7 @@ public:
             UInt64 sm_valid_size = 0;
             double sm_valid_rate = 1.0;
 
-            std::recursive_mutex sm_lock;
+            std::mutex sm_lock;
 
             bool isReadOnly()
             {
