@@ -1238,7 +1238,7 @@ private:
 
 public:
     static constexpr auto name = NameTiDBConcat::name;
-    FunctionTiDBConcat(const Context & context)
+    explicit FunctionTiDBConcat(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1253,19 +1253,21 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return true; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() < 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (arguments.empty())
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
             const auto & arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
@@ -3049,7 +3051,7 @@ public:
     // data_size/padding_size includes the tailing '\0'.
     // Return true if result is null.
     template <bool IsLeft>
-    static bool tidbPadOneRowUTF8(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    static bool tidbPadOneRowUTF8(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
     {
         ColumnString::Offset data_len = UTF8::countCodePoints(data, data_size - 1);
         ColumnString::Offset pad_len = UTF8::countCodePoints(padding, padding_size - 1);
@@ -3116,7 +3118,7 @@ public:
 
     // Same with tidbPadOneRowUTF8, but handling in byte instead of char.
     template <bool IsLeft>
-    static bool tidbPadOneRow(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset)
+    static bool tidbPadOneRow(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
     {
         ColumnString::Offset data_len = data_size - 1;
         ColumnString::Offset pad_len = padding_size - 1;
@@ -4136,10 +4138,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),

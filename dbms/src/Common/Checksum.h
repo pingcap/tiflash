@@ -4,7 +4,11 @@
 #include <Poco/Base64Decoder.h>
 #include <Poco/Base64Encoder.h>
 #include <common/crc64.h>
+#ifdef __x86_64__
+#include <xxh_x86dispatch.h>
+#else
 #include <xxh3.h>
+#endif
 #include <zlib.h>
 
 #include <cstddef>
@@ -100,7 +104,11 @@ public:
     void update(const void * src, size_t length)
     {
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
+#ifdef __x86_64__ // dispatched version can utilize hardware resource
+        state = XXH3_64bits_withSeed_dispatch(src, length, state);
+#else // use inlined version
         state = XXH_INLINE_XXH3_64bits_withSeed(src, length, state);
+#endif
     }
     [[nodiscard]] HashType checksum() const { return state; }
 
