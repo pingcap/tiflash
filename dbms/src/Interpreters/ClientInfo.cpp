@@ -1,20 +1,19 @@
-#include <Interpreters/ClientInfo.h>
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Core/Defines.h>
-#include <Common/getFQDNOrHostName.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/getFQDNOrHostName.h>
+#include <Core/Defines.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/ClientInfo.h>
 #include <port/unistd.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -104,7 +103,7 @@ void ClientInfo::fillOSUserHostNameAndVersionInfo()
     if (0 == getlogin_r(&os_user[0], os_user.size() - 1))
         os_user.resize(strlen(os_user.data()));
     else
-        os_user.clear();    /// Don't mind if we cannot determine user login.
+        os_user.clear(); /// Don't mind if we cannot determine user login.
 
     client_hostname = getFQDNOrHostName();
 
@@ -114,4 +113,4 @@ void ClientInfo::fillOSUserHostNameAndVersionInfo()
 }
 
 
-}
+} // namespace DB

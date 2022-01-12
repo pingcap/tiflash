@@ -10,11 +10,13 @@ struct MPPTunnelDetail : public ConnectionProfileInfo
 {
     String tunnel_id;
     Int64 sender_target_task_id;
+    String sender_target_host;
     bool is_local;
 
-    MPPTunnelDetail(String tunnel_id_, Int64 sender_target_task_id_, bool is_local_)
+    MPPTunnelDetail(String tunnel_id_, Int64 sender_target_task_id_, String sender_target_host_, bool is_local_)
         : tunnel_id(std::move(tunnel_id_))
         , sender_target_task_id(sender_target_task_id_)
+        , sender_target_host(std::move(sender_target_host_))
         , is_local(is_local_)
     {}
 

@@ -39,7 +39,6 @@ public:
     BlockInputStreams execute();
 
 private:
-    void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
@@ -81,7 +80,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr);
+    void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 

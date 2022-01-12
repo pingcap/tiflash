@@ -31,7 +31,7 @@ public:
     void initializeExecutorDAG(DAGContext * dag_context);
 
     /// return exchange sender runtime statistics
-    BaseRuntimeStatistics collectRuntimeStatistics();
+    const BaseRuntimeStatistics & collectRuntimeStatistics();
 
     void logTracingJson();
 
@@ -40,9 +40,11 @@ public:
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
 private:
+    void recordInputBytes(DAGContext & dag_context);
+
     const LogWithPrefixPtr logger;
 
-    /// common
+    // common
     const MPPTaskId id;
     const String host;
     Timestamp task_init_timestamp{Clock::duration::zero()};
@@ -55,11 +57,16 @@ private:
     TaskStatus status;
     String error_message;
 
-    /// executor dag
+    Int64 local_input_bytes = 0;
+    Int64 remote_input_bytes = 0;
+    Int64 output_bytes = 0;
+
+    // executor dag
+    bool is_root = false;
     String sender_executor_id;
     ExecutorStatisticsCollector executor_statistics_collector;
 
-    /// resource
+    // resource
     Int64 working_time = 0;
     Int64 memory_peak = 0;
 };

@@ -7,10 +7,9 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
 
@@ -22,7 +21,8 @@ private:
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeFixedString(size_t n_) : n(n_)
+    DataTypeFixedString(size_t n_)
+        : n(n_)
     {
         if (n == 0)
             throw Exception("FixedString size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -85,4 +85,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB

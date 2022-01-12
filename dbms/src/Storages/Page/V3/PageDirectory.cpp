@@ -108,38 +108,13 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
 
-    // stage 1, get the entry to be ref
     auto snap = createSnapshot();
-    for (auto & r : edit.getRecords())
-    {
-        // Set the version of inserted entries
-        r.version = PageVersionType(last_sequence + 1);
 
-        if (r.type != WriteBatch::WriteType::REF)
-        {
-            continue;
-        }
-        auto iter = mvcc_table_directory.find(r.ori_page_id);
-        if (iter == mvcc_table_directory.end())
-        {
-            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
-        }
-        if (auto entry = iter->second->getEntry(last_sequence); entry)
-        {
-            // copy the entry to be ref
-            r.entry = *entry;
-        }
-        else
-        {
-            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    // stage 2, persisted the changes to WAL
+    // stage 1, persisted the changes to WAL
     // wal.apply(edit);
 
-    // stage 3, create entry version list for pageId. nothing need to be rollback
-    std::unordered_map<PageId, PageLock> updating_locks;
+    // stage 2, create entry version list for pageId. nothing need to be rollback
+    std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
     for (const auto & r : edit.getRecords())
@@ -149,11 +124,21 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         {
             iter->second = std::make_shared<VersionedPageEntries>();
         }
-        updating_locks.emplace(r.page_id, iter->second->acquireLock());
+
+        auto update_it = updating_locks.find(r.page_id);
+        if (update_it == updating_locks.end())
+        {
+            updating_locks.emplace(r.page_id, std::make_pair(iter->second->acquireLock(), 1));
+        }
+        else
+        {
+            update_it->second.second += 1;
+        }
+
         updating_pages.emplace_back(iter->second);
     }
 
-    // stage 4, there are no rollback since we already persist `edit` to WAL, just ignore error if any
+    // stage 3, there are no rollback since we already persist `edit` to WAL, just ignore error if any
     const auto & records = edit.getRecords();
     for (size_t idx = 0; idx < records.size(); ++idx)
     {
@@ -163,21 +148,50 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         case WriteBatch::WriteType::PUT:
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
-            [[fallthrough]];
+            updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
+            break;
         case WriteBatch::WriteType::REF:
         {
-            // Put/upsert/ref all should append a new version for this page
-            updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
-            updating_locks.erase(records[idx].page_id);
+            // We can't handle `REF` before other writes, because `PUT` and `REF`
+            // maybe in the same WriteBatch.
+            // Also we can't throw an exception if we can't find the origin page_id,
+            // because WAL have already applied the change and there is no
+            // mechanism to roll back changes in the WAL.
+            auto iter = mvcc_table_directory.find(r.ori_page_id);
+            if (iter == mvcc_table_directory.end())
+            {
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+                break;
+            }
+
+            if (auto entry = iter->second->getEntry(last_sequence); entry)
+            {
+                // copy the entry to be ref
+                updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
+            }
+            else
+            {
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+            }
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
             updating_pages[idx]->createDelete(last_sequence + 1);
-            updating_locks.erase(records[idx].page_id);
             break;
         }
         }
+
+        auto locks_it = updating_locks.find(r.page_id);
+        locks_it->second.second -= 1;
+        if (locks_it->second.second == 0)
+            updating_locks.erase(r.page_id);
+    }
+
+    if (!updating_locks.empty())
+    {
+        throw Exception(fmt::format("`updating_locks` must be cleared. But there are some locks not been erased. [remain sizes={}]", updating_locks.size()),
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
     // The edit committed, incr the sequence number to publish changes for `createSnapshot`

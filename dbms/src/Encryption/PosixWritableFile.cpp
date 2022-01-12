@@ -122,6 +122,11 @@ int PosixWritableFile::fsync()
     return ::fsync(fd);
 }
 
+int PosixWritableFile::ftruncate(off_t length)
+{
+    return ::ftruncate(fd, length);
+}
+
 void PosixWritableFile::hardLink(const std::string & existing_file)
 {
     if (existing_file.empty())

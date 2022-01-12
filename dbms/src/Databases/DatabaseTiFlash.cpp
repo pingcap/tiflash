@@ -103,7 +103,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     std::sort(table_files.begin(), table_files.end());
 
     const auto total_tables = table_files.size();
-    LOG_INFO(log, "Total " << total_tables << " tables in database " << name);
+    LOG_FMT_INFO(log, "Total {} tables in database {}", total_tables, name);
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
@@ -114,7 +114,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_INFO(log, DB::toString(tables_processed * 100.0 / total_tables, 2) << "%");
+                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 
