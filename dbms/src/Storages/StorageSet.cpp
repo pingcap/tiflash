@@ -10,6 +10,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageSet.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -172,8 +173,13 @@ void StorageSetOrJoinBase::restoreFromFile(const String & file_path)
     backup_stream.readSuffix();
 
     /// TODO Add speed, compressed bytes, data volume in memory, compression ratio ... Generalize all statistics logging in project.
-    LOG_INFO(&Poco::Logger::get("StorageSetOrJoinBase"), std::fixed << std::setprecision(2) << "Loaded from backup file " << file_path << ". " << backup_stream.getProfileInfo().rows << " rows, " << backup_stream.getProfileInfo().bytes / 1048576.0 << " MiB. "
-                                                                    << "State has " << getSize() << " unique rows.");
+    LOG_FMT_INFO(
+        &Poco::Logger::get("StorageSetOrJoinBase"),
+        "Loaded from backup file {}. {} rows, {:.2f} MiB. State has {} unique rows",
+        file_path,
+        backup_stream.getProfileInfo().rows,
+        backup_stream.getProfileInfo().bytes / 1048576.0,
+        getSize());
 }
 
 
@@ -193,7 +199,7 @@ void registerStorageSet(StorageFactory & factory)
     factory.registerStorage("Set", [](const StorageFactory::Arguments & args) {
         if (!args.engine_args.empty())
             throw Exception(
-                "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
+                fmt::format("Engine {} doesn't support any arguments ({} given)", args.engine_name, args.engine_args.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return StorageSet::create(args.data_path, args.table_name, args.columns);
