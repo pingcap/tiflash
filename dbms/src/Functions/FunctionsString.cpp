@@ -1592,28 +1592,25 @@ public:
                         throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
                 }
 
+                // for const zero start or const zero length, return const blank string.
                 if (start_abs == 0 || (!implicit_length && length == 0))
                 {
                     block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
                     return true;
                 }
 
-                if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-                {
-                    auto col_res = ColumnString::create();
-                    getVectorConstConstFunc(implicit_length, is_positive)(col->getChars(), col->getOffsets(), start_abs, length, col_res->getChars(), col_res->getOffsets());
-                    block.getByPosition(result).column = std::move(col_res);
-                }
-                else
-                    throw Exception(
-                        fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
-                        ErrorCodes::ILLEGAL_COLUMN);
+                const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get());
+                assert(col);
+                auto col_res = ColumnString::create();
+                getVectorConstConstFunc(implicit_length, is_positive)(col->getChars(), col->getOffsets(), start_abs, length, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
             }
-            else // convert to vector vector vector
+            else // all other cases are converted to vector vector vector
             {
                 std::function<std::pair<bool, size_t>(size_t)> get_start_func;
                 if (column_start->isColumnConst())
                 {
+                    // func always return const value
                     auto start_const = getValueFromStartField<StartFieldType>((*column_start)[0]);
                     get_start_func = [start_const](size_t) {
                         return start_const;
@@ -1626,6 +1623,7 @@ public:
                     };
                 }
 
+                // if implicit_length, get_length_func be nil is ok.
                 std::function<size_t(size_t)> get_length_func;
                 if (!implicit_length)
                 {
@@ -1636,6 +1634,7 @@ public:
                         using LengthFieldType = typename LengthType::FieldType;
                         if (column_length->isColumnConst())
                         {
+                            // func always return const value
                             auto length_const = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
                             get_length_func = [length_const](size_t) {
                                 return length_const;
@@ -1654,24 +1653,20 @@ public:
                         throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
                 }
 
+                // convert to vector if string is const.
                 ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
-                if (const ColumnString * col = checkAndGetColumn<ColumnString>(full_column_string.get()))
+                const ColumnString * col = checkAndGetColumn<ColumnString>(full_column_string.get());
+                assert(col);
+                auto col_res = ColumnString::create();
+                if (implicit_length)
                 {
-                    auto col_res = ColumnString::create();
-                    if (implicit_length)
-                    {
-                        SubstringUTF8Impl::vectorVectorVector<true>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
-                    }
-                    else
-                    {
-                        SubstringUTF8Impl::vectorVectorVector<false>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
-                    }
-                    block.getByPosition(result).column = std::move(col_res);
+                    SubstringUTF8Impl::vectorVectorVector<true>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
                 }
                 else
-                    throw Exception(
-                        fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
-                        ErrorCodes::ILLEGAL_COLUMN);
+                {
+                    SubstringUTF8Impl::vectorVectorVector<false>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
+                }
+                block.getByPosition(result).column = std::move(col_res);
             }
 
             return true;
@@ -1717,6 +1712,7 @@ private:
         }
     }
 
+    // return {is_positive, abs}
     template <typename Integer>
     static std::pair<bool, size_t> getValueFromStartField(const Field & start_field)
     {
