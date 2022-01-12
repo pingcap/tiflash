@@ -178,9 +178,9 @@ AnalysisResult analyzeExpressions(
         }
     }
     // Or TopN, not both.
-    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
+    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
-        res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
+        res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
     // Append final project results if needed.
@@ -732,9 +732,9 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_columns, query_block.limitOrTopN->topn().order_by());
+    SortDescription order_descr = getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by());
     const Settings & settings = context.getSettingsRef();
-    Int64 limit = query_block.limitOrTopN->topn().limit();
+    Int64 limit = query_block.limit_or_topn->topn().limit();
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), limit);
@@ -859,7 +859,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     // remote query containing agg/limit/topN can not running
     // in parellel, but current remote query is running in
     // parellel, so just disable this corner case.
-    if (query_block.aggregation || query_block.limitOrTopN)
+    if (query_block.aggregation || query_block.limit_or_topn)
         throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
     const auto & ts = query_block.source->tbl_scan();
     std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
@@ -1129,23 +1129,23 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute topN
         executeOrder(pipeline, res.order_columns);
-        recordProfileStreams(pipeline, query_block.limitOrTopN_name);
+        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
     // execute projection
     executeProject(pipeline, final_project);
 
     // execute limit
-    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
+    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
-        recordProfileStreams(pipeline, query_block.limitOrTopN_name);
+        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
     restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
-    if (query_block.exchangeSender)
+    if (query_block.exchange_sender)
     {
         executeExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
@@ -1163,10 +1163,10 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 {
     size_t limit = 0;
-    if (query_block.limitOrTopN->tp() == tipb::TypeLimit)
-        limit = query_block.limitOrTopN->limit().limit();
+    if (query_block.limit_or_topn->tp() == tipb::TypeLimit)
+        limit = query_block.limit_or_topn->limit().limit();
     else
-        limit = query_block.limitOrTopN->topn().limit();
+        limit = query_block.limit_or_topn->topn().limit();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, taskLogger(), false); });
     if (pipeline.hasMoreThanOneStream())
     {
@@ -1180,7 +1180,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
     /// only run in MPP
     assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
     /// exchange sender should be at the top of operators
-    const auto & exchange_sender = query_block.exchangeSender->exchange_sender();
+    const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
     /// get partition column ids
     const auto & part_keys = exchange_sender.partition_keys();
     std::vector<Int64> partition_col_id;

@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Parsers/makeDummyQuery.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -23,14 +24,13 @@ DAGQuerySource::DAGQuerySource(Context & context_)
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(getDAGContext().getQBIdToJoinAliasMap());
-    for (Int32 i : dag_request.output_offsets())
-        root_query_block->output_offsets.push_back(i);
     for (UInt32 i : dag_request.output_offsets())
     {
+        root_query_block->output_offsets.push_back(i);
         if (unlikely(i >= root_query_block->output_field_types.size()))
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
-                                       + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
-                                   Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                fmt::format("{}: Invalid output offset(schema has {} columns, access index {}", __PRETTY_FUNCTION__, root_query_block->output_field_types.size(), i),
+                Errors::Coprocessor::BadRequest);
         getDAGContext().result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     auto encode_type = analyzeDAGEncodeType();
@@ -38,7 +38,7 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     getDAGContext().keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
-tipb::EncodeType DAGQuerySource::analyzeDAGEncodeType()
+tipb::EncodeType DAGQuerySource::analyzeDAGEncodeType() const
 {
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     const tipb::EncodeType encode_type = dag_request.encode_type();

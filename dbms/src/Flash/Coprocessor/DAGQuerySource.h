@@ -32,7 +32,7 @@ public:
     std::string getExecutorNames() const;
 
 private:
-    tipb::EncodeType analyzeDAGEncodeType();
+    tipb::EncodeType analyzeDAGEncodeType() const;
 
     Context & context;
     std::shared_ptr<DAGQueryBlock> root_query_block;
