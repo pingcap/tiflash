@@ -62,6 +62,18 @@ public:
                 createColumn<Nullable<String>>({""}),
                 createColumn<Nullable<Integer>>({0})),
             Exception);
+        auto inner_test = [&](bool is_str_const, bool is_length_const) {
+            ASSERT_THROW(
+                executeFunction(
+                    func_name,
+                    is_str_const ? createConstColumn<Nullable<String>>(1, "") : createColumn<Nullable<String>>({""}),
+                    is_length_const ? createConstColumn<Nullable<Integer>>(1, 0) : createColumn<Nullable<Integer>>({0})),
+                Exception);
+        };
+        std::vector<bool> is_consts = {true, false};
+        for (bool is_str_const : is_consts)
+            for (bool is_length_const : is_consts)
+                inner_test(is_str_const, is_length_const);
     }
 };
 
