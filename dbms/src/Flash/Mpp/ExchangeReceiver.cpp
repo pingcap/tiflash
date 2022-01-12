@@ -72,7 +72,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     for (size_t index = 0; index < source_num; ++index)
     {
         auto req = rpc_context->makeRequest(index);
-        thread_manager->schedule(true, "Receiver", [this, index, req = std::move(req)] { readLoop(req); });
+        thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
     }
 }
 
