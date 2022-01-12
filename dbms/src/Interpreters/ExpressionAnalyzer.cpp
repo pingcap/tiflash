@@ -137,7 +137,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     const SubqueriesForSets & subqueries_for_set_)
     : ast(ast_)
     , context(context_)
-    , settings(context.getSettings())
+    , settings(context.getSettingsRef())
     , subquery_depth(subquery_depth_)
     , source_columns(source_columns_)
     , required_result_columns(required_result_columns_.begin(), required_result_columns_.end())
