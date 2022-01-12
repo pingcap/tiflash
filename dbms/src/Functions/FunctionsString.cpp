@@ -873,14 +873,7 @@ private:
         while (current < end_flag)
         {
             start_offsets.push_back(current);
-            if (data[current] < 0xBF)
-                current += 1;
-            else if (data[current] < 0xE0)
-                current += 2;
-            else if (data[current] < 0xF0)
-                current += 3;
-            else
-                current += 1;
+            current += UTF8::seqLength(data[current]);
         }
         if (start_offsets.empty())
         {
