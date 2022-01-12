@@ -131,7 +131,7 @@ AnalysisResult analyzeExpressions(
             res.is_final_agg = false;
         for (int i = 1; i < aggregation.agg_func_size(); i++)
         {
-            if (res.is_final_agg ^ isFinalAgg(aggregation.agg_func(i)))
+            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
                 throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
         }
         // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive

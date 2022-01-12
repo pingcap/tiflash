@@ -943,7 +943,7 @@ struct MPPCtx
     Timestamp start_ts;
     Int64 next_task_id;
     std::vector<Int64> sender_target_task_ids;
-    MPPCtx(Timestamp start_ts_)
+    explicit MPPCtx(Timestamp start_ts_)
         : start_ts(start_ts_)
         , next_task_id(1)
     {}
@@ -1262,13 +1262,7 @@ struct Aggregation : public Executor
             auto agg_sig = agg_sig_it->second;
             agg_func->set_tp(agg_sig);
 
-            if (agg_sig == tipb::ExprType::Count)
-            {
-                auto ft = agg_func->mutable_field_type();
-                ft->set_tp(TiDB::TypeLongLong);
-                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-            }
-            else if (agg_sig == tipb::ExprType::Sum)
+            if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
             {
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
@@ -1284,13 +1278,13 @@ struct Aggregation : public Executor
                 ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
                 ft->set_collate(collator_id);
             }
-            else if (func->name == uniq_raw_res_name)
+            else if (agg_sig == tipb::ExprType::ApproxCountDistinct)
             {
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
                 ft->set_flag(1);
             }
-            else if (func->name == "group_concat")
+            else if (agg_sig == tipb::ExprType::GroupConcat)
             {
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);

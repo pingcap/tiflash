@@ -3,7 +3,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Names.h>
-#include <Storages/Transaction/TiDB.h>
 
 
 namespace DB
