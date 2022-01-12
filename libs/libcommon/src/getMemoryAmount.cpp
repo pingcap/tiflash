@@ -14,6 +14,7 @@
 
 #include "common/getMemoryAmount.h"
 
+#include <fmt/format.h>
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -47,15 +48,36 @@ uint64_t getMemoryAmount()
     uint64_t memory_amount = num_pages * page_size;
 
 #if defined(__linux__)
-    // Try to lookup at the Cgroup limit
-    std::ifstream cgroup_limit("/sys/fs/cgroup/memory/memory.limit_in_bytes");
-    if (cgroup_limit.is_open())
+    std::string memory_filter = "memory:";
+
+    // Find which Cgroup limit the `memory`.
+    std::ifstream cgroup_mem_info("/proc/self/cgroup");
+    if (cgroup_mem_info.is_open())
     {
-        uint64_t memory_limit = 0; // in case of read error
-        cgroup_limit >> memory_limit;
-        if (memory_limit > 0 && memory_limit < memory_amount)
-            memory_amount = memory_limit;
+        std::string line;
+        while (std::getline(cgroup_mem_info, line))
+        {
+            std::string::size_type mem_str_idx = line.find(memory_filter);
+            if (mem_str_idx != std::string::npos)
+            {
+                // Try to lookup at the Cgroup limit
+                line = line.substr(mem_str_idx + memory_filter.length(), line.length());
+                std::ifstream cgroup_limit(fmt::format("/sys/fs/cgroup/memory{}/memory.limit_in_bytes", getpid()));
+                if (cgroup_limit.is_open())
+                {
+                    uint64_t memory_limit = 0; // in case of read error
+                    cgroup_limit >> memory_limit;
+                    if (memory_limit > 0 && memory_limit < memory_amount)
+                        memory_amount = memory_limit;
+                }
+                cgroup_limit.close();
+                break;
+            }
+        }
     }
+
+    cgroup_mem_info.close();
+
 #endif // __linux__
 
     return memory_amount;
