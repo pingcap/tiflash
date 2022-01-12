@@ -131,7 +131,7 @@ bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet
     return reader->Read(packet.get());
 }
 
-::grpc::Status GrpcExchangePacketReader::finish() const
+::grpc::Status GrpcExchangePacketReader::finish()
 {
     return reader->Finish();
 }
@@ -146,8 +146,9 @@ bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packe
     return success;
 }
 
-::grpc::Status LocalExchangePacketReader::finish() const
+::grpc::Status LocalExchangePacketReader::finish()
 {
+    tunnel.reset();
     return ::grpc::Status::OK;
 }
 
