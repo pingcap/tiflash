@@ -56,12 +56,6 @@ public:
     void testInvalidLengthType()
     {
         static_assert(!std::is_same_v<Integer, Int64> && !std::is_same_v<Integer, UInt64>);
-        ASSERT_THROW(
-            executeFunction(
-                func_name,
-                createColumn<Nullable<String>>({""}),
-                createColumn<Nullable<Integer>>({0})),
-            Exception);
         auto inner_test = [&](bool is_str_const, bool is_length_const) {
             ASSERT_THROW(
                 executeFunction(
