@@ -1683,7 +1683,7 @@ public:
         if (!success)
         {
             throw Exception(
-                fmt::format("Function {} executed on invalid arguments [col_left={}][col_right={}]", getName(), col_left_untyped->getName(), col_right_untyped->getName()));
+                fmt::format("Function {} executed on invalid arguments [col_left={}] [col_right={}]", getName(), col_left_untyped->getName(), col_right_untyped->getName()));
         }
     }
 
