@@ -756,14 +756,7 @@ private:
             while (current < offsets[column_index] - 1)
             {
                 start_offsets.push_back(current);
-                if (data[current] < 0xBF)
-                    current += 1;
-                else if (data[current] < 0xE0)
-                    current += 2;
-                else if (data[current] < 0xF0)
-                    current += 3;
-                else
-                    current += 1;
+                current += DB::UTF8::seqLength(data[current]);
             }
             if (original_start_abs > start_offsets.size())
             {
@@ -783,14 +776,7 @@ private:
             if (pos == start)
                 bytes_start = j - prev_offset + 1;
 
-            if (data[j] < 0xBF)
-                j += 1;
-            else if (data[j] < 0xE0)
-                j += 2;
-            else if (data[j] < 0xF0)
-                j += 3;
-            else
-                j += 1;
+            j += DB::UTF8::seqLength(data[j]);
 
             if constexpr (implicit_length)
             {
