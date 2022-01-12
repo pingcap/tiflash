@@ -103,7 +103,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     if (file.exists())
     {
         file.remove(true);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << path);
+        LOG_FMT_WARNING(log, "{}: Existing dmfile, removed: {}", __PRETTY_FUNCTION__, path);
     }
     if (single_file_mode)
     {
@@ -606,13 +606,13 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     Poco::File file(new_path);
     if (file.exists())
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removing: " << new_path);
+        LOG_FMT_WARNING(log, "{}: Existing dmfile, removing: {}", __PRETTY_FUNCTION__, new_path);
         const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
         // no need to delete the encryption info associated with the dmfile path here.
         // because this dmfile path is still a valid path and no obsolete encryption info will be left.
         file.renameTo(deleted_path);
         file.remove(true);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
+        LOG_FMT_WARNING(log, "{}: Existing dmfile, removed: {}", __PRETTY_FUNCTION__, deleted_path);
     }
     old_file.renameTo(new_path);
     initializeSubFileStatsForFolderMode();
@@ -645,7 +645,7 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     writeIntBinary(static_cast<std::underlying_type_t<DMSingleFileFormatVersion>>(footer.file_format_version), buffer);
     buffer.next();
     if (status != Status::WRITING)
-        throw Exception("Expected WRITING status, now " + statusString(status));
+        throw Exception(fmt::format("Expected WRITING status, now {}", statusString(status)));
     Poco::File old_file(path());
     Poco::File old_ngc_file(ngcPath());
 
@@ -698,7 +698,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File temp_file(full_path); temp_file.exists())
                     temp_file.remove(true);
-                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing temporary dmfile, removed: " << full_path);
+                LOG_FMT_WARNING(log, "{}: Existing temporary dmfile, removed: {}", __PRETTY_FUNCTION__, full_path);
                 continue;
             }
             else if (startsWith(name, details::FOLDER_PREFIX_DROPPED))
@@ -707,7 +707,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 auto res = try_parse_file_id(name);
                 if (!res)
                 {
-                    LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+                    LOG_FMT_INFO(log, "Unrecognized dropped DM file, ignored: {}", name);
                     continue;
                 }
                 UInt64 file_id = *res;
@@ -718,7 +718,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File del_file(full_path); del_file.exists())
                     del_file.remove(true);
-                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dropped dmfile, removed: " << full_path);
+                LOG_FMT_WARNING(log, "{}: Existing dropped dmfile, removed: {}", __PRETTY_FUNCTION__, full_path);
                 continue;
             }
         }
@@ -731,7 +731,7 @@ std::set<UInt64> DMFile::listAllInPath(
         auto res = try_parse_file_id(name);
         if (!res)
         {
-            LOG_INFO(log, "Unrecognized DM file, ignored: " + name);
+            LOG_FMT_INFO(log, "Unrecognized DM file, ignored: {}", name);
             continue;
         }
         UInt64 file_id = *res;

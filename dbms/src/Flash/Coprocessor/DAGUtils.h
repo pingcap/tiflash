@@ -14,6 +14,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 bool isLiteralExpr(const tipb::Expr & expr);
 Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
@@ -76,5 +78,6 @@ public:
 };
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
+tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 
 } // namespace DB
