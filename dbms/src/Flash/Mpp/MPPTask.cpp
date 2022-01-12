@@ -226,19 +226,14 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     tunnel_set = std::make_shared<MPPTunnelSet>();
     std::chrono::seconds timeout(task_request.timeout());
 
-    auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
-        auto sp = task.lock();
-        return sp && sp->getStatus() == CANCELLED;
-    };
-
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        bool is_local = context->getSettings().enable_local_tunnel && meta.address() == task_meta.address();
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context->getSettings().max_threads, is_local, log);
+        bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, log);
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
