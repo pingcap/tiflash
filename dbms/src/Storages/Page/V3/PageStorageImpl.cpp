@@ -134,7 +134,7 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     // 4. Filter out entries in MVCC by BlobId.
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
-    auto [blob_gc_info, total_page_size] = page_directory.getEntriesFromBlobIds(blob_need_gc);
+    auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_need_gc);
 
     if (blob_gc_info.empty())
     {

@@ -75,7 +75,7 @@ public:
      * Take out the `VersionedEntries` which exist in the `BlobFileId`.
      * Also return the total size of entries.
      */
-    std::pair<VersionedEntries, PageSize> getEntriesFromBlobId(BlobFileId blob_id);
+    std::pair<VersionedEntries, PageSize> getEntriesByBlobId(BlobFileId blob_id);
 
     /**
      * GC will give a `lowest_seq`.
@@ -141,7 +141,7 @@ public:
 
     std::vector<PageEntriesV3> gc();
 
-    std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesFromBlobIds(const std::vector<BlobFileId> & blob_need_gc);
+    std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
     void gcApply(const PageIdAndVersionedEntryList & migrated_entries);
 

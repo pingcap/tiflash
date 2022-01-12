@@ -326,6 +326,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     {
         if (stat->isReadOnly())
         {
+            LOG_FMT_TRACE(log, "Current [BlobFileId={}] is read-only", stat->id);
             continue;
         }
 
@@ -375,7 +376,8 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
 
-    // TBD : consider wheather total_page_size > 512M
+    // TBD : consider whether total_page_size > `file_limit_size`
+    // We should make the memory consumption smooth during GC.
     char * data_buf = static_cast<char *>(alloc(total_page_size));
     SCOPE_EXIT({
         free(data_buf, total_page_size);

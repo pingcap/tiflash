@@ -33,7 +33,7 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 }
 
 
-std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
+std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
 {
     PageSize single_page_size = 0;
     VersionedEntries versioned_entries;
@@ -294,7 +294,7 @@ void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
-PageDirectory::getEntriesFromBlobIds(const std::vector<BlobFileId> & blob_need_gc)
+PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 {
     std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
 
@@ -310,7 +310,7 @@ PageDirectory::getEntriesFromBlobIds(const std::vector<BlobFileId> & blob_need_g
             {
                 VersionedEntries versioned_entries;
                 PageSize page_size;
-                std::tie(versioned_entries, page_size) = version_entries->getEntriesFromBlobId(blob_id);
+                std::tie(versioned_entries, page_size) = version_entries->getEntriesByBlobId(blob_id);
                 if (page_size != 0)
                 {
                     versioned_pageid_entries.emplace_back(

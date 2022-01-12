@@ -536,7 +536,7 @@ try
 }
 CATCH
 
-TEST(VersionedEntriesTest, getEntriesFromBlobId)
+TEST(VersionedEntriesTest, getEntriesByBlobId)
 {
     VersionedPageEntries entries;
 
@@ -549,7 +549,7 @@ TEST(VersionedEntriesTest, getEntriesFromBlobId)
     INSERT_BLOBID_ENTRY(3, 8);
     INSERT_BLOBID_ENTRY(1, 11);
 
-    const auto & [versioned_entries1, total_size1] = entries.getEntriesFromBlobId(1);
+    const auto & [versioned_entries1, total_size1] = entries.getEntriesByBlobId(1);
 
     ASSERT_EQ(versioned_entries1.size(), 4);
     ASSERT_EQ(total_size1, 1 + 2 + 5 + 11);
@@ -570,7 +570,7 @@ TEST(VersionedEntriesTest, getEntriesFromBlobId)
     ASSERT_EQ(it->first.sequence, 11);
     ASSERT_TRUE(isSameEntry(it->second, entry_v11));
 
-    const auto & [versioned_entries2, total_size2] = entries.getEntriesFromBlobId(2);
+    const auto & [versioned_entries2, total_size2] = entries.getEntriesByBlobId(2);
 
     ASSERT_EQ(versioned_entries2.size(), 2);
     ASSERT_EQ(total_size2, 3 + 4);
@@ -583,7 +583,7 @@ TEST(VersionedEntriesTest, getEntriesFromBlobId)
     ASSERT_EQ(it->first.sequence, 4);
     ASSERT_TRUE(isSameEntry(it->second, entry_v4));
 
-    const auto & [versioned_entries3, total_size3] = entries.getEntriesFromBlobId(3);
+    const auto & [versioned_entries3, total_size3] = entries.getEntriesByBlobId(3);
 
     ASSERT_EQ(versioned_entries3.size(), 2);
     ASSERT_EQ(total_size3, 6 + 8);
@@ -952,11 +952,11 @@ try
 
     // FIXME: This will copy many outdate pages
     // Full GC get entries
-    auto candidate_entries_1 = dir.getEntriesFromBlobIds({1});
+    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
     EXPECT_EQ(candidate_entries_1.first[1].size(), 2); // 2 page entries list
 
-    auto candidate_entries_2_3 = dir.getEntriesFromBlobIds({2, 3});
+    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
@@ -1008,11 +1008,11 @@ try
     EXPECT_EQ(dir.numPages(), 2);
 
     // 1.1 Full GC get entries
-    auto candidate_entries_1 = dir.getEntriesFromBlobIds({1});
+    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
     EXPECT_EQ(candidate_entries_1.first[1].size(), 2);
 
-    auto candidate_entries_2_3 = dir.getEntriesFromBlobIds({2, 3});
+    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
