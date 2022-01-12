@@ -1220,7 +1220,7 @@ private:
 
 public:
     static constexpr auto name = NameTiDBConcat::name;
-    FunctionTiDBConcat(const Context & context)
+    explicit FunctionTiDBConcat(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1235,19 +1235,21 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return true; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() < 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (arguments.empty())
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
             const auto & arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
@@ -4193,10 +4195,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),

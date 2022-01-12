@@ -28,7 +28,7 @@ bool GCManager::work()
         return false;
     }
 
-    LOG_INFO(log, "Start GC with table id: " << next_table_id);
+    LOG_FMT_INFO(log, "Start GC with table id: {}", next_table_id);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
@@ -64,7 +64,7 @@ bool GCManager::work()
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit);
             gc_segments_limit = gc_segments_limit - gc_segments_num;
-            LOG_TRACE(log, "GCManager gc " << gc_segments_num << " segments of table " << storage->getTableInfo().id);
+            LOG_FMT_TRACE(log, "GCManager gc {} segments of table {}", gc_segments_num, storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
@@ -83,7 +83,7 @@ bool GCManager::work()
     if (iter == storages.end())
         iter = storages.begin();
     next_table_id = iter->first;
-    LOG_INFO(log, "End GC and next gc will start with table id: " << next_table_id);
+    LOG_FMT_INFO(log, "End GC and next gc will start with table id: {}", next_table_id);
     gc_check_stop_watch.restart();
     // Always return false
     return false;
