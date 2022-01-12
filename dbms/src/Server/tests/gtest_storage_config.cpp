@@ -19,11 +19,11 @@ namespace DB
 {
 namespace tests
 {
-class StorageConfig_test : public ::testing::Test
+class StorageConfigTest : public ::testing::Test
 {
 public:
-    StorageConfig_test()
-        : log(&Poco::Logger::get("StorageConfig_test"))
+    StorageConfigTest()
+        : log(&Poco::Logger::get("StorageConfigTest"))
     {}
 
     static void SetUpTestCase() {}
@@ -32,7 +32,7 @@ protected:
     Poco::Logger * log;
 };
 
-TEST_F(StorageConfig_test, MultiSSDSettings)
+TEST_F(StorageConfigTest, MultiSSDSettings)
 try
 {
     Strings tests = {
@@ -56,7 +56,7 @@ dir=["/data0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -79,7 +79,7 @@ dir=["/data0/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, SSD_HDD_Settings)
+TEST_F(StorageConfigTest, SSDHDDSettings)
 try
 {
     Strings tests = {
@@ -103,7 +103,7 @@ dir=["/ssd0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -125,7 +125,7 @@ dir=["/ssd0/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, ParseMaybeBrokenCases)
+TEST_F(StorageConfigTest, ParseMaybeBrokenCases)
 try
 {
     Strings tests = {
@@ -177,7 +177,7 @@ capacity = [ 10737418240 ]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -186,7 +186,7 @@ capacity = [ 10737418240 ]
 }
 CATCH
 
-TEST(PathCapacityMetrics_test, Quota)
+TEST(PathCapacityMetricsTest, Quota)
 try
 {
     Strings tests = {
@@ -228,7 +228,7 @@ capacity=[ 1024 ]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -270,7 +270,7 @@ capacity=[ 1024 ]
 }
 CATCH
 
-TEST_F(StorageConfig_test, CompatibilityWithIORateLimitConfig)
+TEST_F(StorageConfigTest, CompatibilityWithIORateLimitConfig)
 try
 {
     Strings tests = {
@@ -302,7 +302,7 @@ max_bytes_per_sec=1024000
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
         std::ignore = global_capacity_quota;
         Strings paths;
@@ -325,7 +325,7 @@ max_bytes_per_sec=1024000
 }
 CATCH
 
-TEST(StorageIORateLimitConfig_test, StorageIORateLimitConfig)
+TEST(StorageIORateLimitConfigTest, StorageIORateLimitConfig)
 try
 {
     Strings tests = {
@@ -375,7 +375,7 @@ background_read_weight=2
         )",
     };
 
-    Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfig_test");
+    Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfigTest");
 
     auto verifyDefault = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
@@ -478,7 +478,7 @@ background_read_weight=2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         ASSERT_TRUE(config->has("storage.io_rate_limit"));
 
         StorageIORateLimitConfig io_config;
