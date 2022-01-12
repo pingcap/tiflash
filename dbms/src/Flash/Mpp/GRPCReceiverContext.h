@@ -77,10 +77,10 @@ public:
 
     explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_);
 
-    ExchangeRecvRequest makeRequest(
+    static ExchangeRecvRequest makeRequest(
         int index,
         const tipb::ExchangeReceiver & pb_exchange_receiver,
-        const ::mpp::TaskMeta & task_meta) const;
+        const ::mpp::TaskMeta & task_meta);
 
     std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr = "") const;
 

@@ -45,7 +45,7 @@ GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::s
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(
     int index,
     const tipb::ExchangeReceiver & pb_exchange_receiver,
-    const ::mpp::TaskMeta & task_meta) const
+    const ::mpp::TaskMeta & task_meta)
 {
     const auto & meta_raw = pb_exchange_receiver.encoded_task_meta(index);
     auto sender_task = std::make_unique<mpp::TaskMeta>();
@@ -119,8 +119,7 @@ GrpcExchangePacketReader::GrpcExchangePacketReader(const ExchangeRecvRequest & r
     call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
 }
 
-GrpcExchangePacketReader::~GrpcExchangePacketReader()
-{}
+GrpcExchangePacketReader::~GrpcExchangePacketReader() = default;
 
 void GrpcExchangePacketReader::initialize() const
 {
