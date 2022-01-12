@@ -45,7 +45,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
 namespace tests
 {
 // Simple test suit for DeltaMergeStore.
-class DeltaMergeStore_test : public DB::base::TiFlashStorageTestBasic
+class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     void SetUp() override
@@ -69,7 +69,7 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "DeltaMergeStore_test",
+                                                                 "DeltaMergeStoreTest",
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,
@@ -111,7 +111,7 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 // Read write test suit for DeltaMergeStore.
 // We will instantiate test cases for different `TestMode`
 // to test with different pack types.
-class DeltaMergeStore_RWTest
+class DeltaMergeStoreRWTest
     : public DB::base::TiFlashStorageTestBasic
     , public testing::WithParamInterface<TestMode>
 {
@@ -151,7 +151,7 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "DeltaMergeStore_RWTest",
+                                                                 "DeltaMergeStoreRWTest",
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,
@@ -192,7 +192,7 @@ protected:
     DeltaMergeStorePtr store;
 };
 
-TEST_F(DeltaMergeStore_test, Create)
+TEST_F(DeltaMergeStoreTest, Create)
 try
 {
     // create table
@@ -200,21 +200,21 @@ try
 
     {
         // check handle column of store
-        auto & h = store->getHandle();
+        const auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
         ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
     }
     {
         // check column structure of store
-        auto & cols = store->getTableColumns();
+        const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
     }
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, OpenWithExtraColumns)
+TEST_F(DeltaMergeStoreTest, OpenWithExtraColumns)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -242,10 +242,10 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, AddExtraColumn)
+TEST_F(DeltaMergeStoreTest, AddExtraColumn)
 try
 {
-    auto log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
+    auto * log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
     for (const auto & pk_type : {
              DMTestEnv::PkType::HiddenTiDBRowID,
              DMTestEnv::PkType::CommonHandle,
@@ -253,7 +253,7 @@ try
              DMTestEnv::PkType::PkIsHandleInt32,
          })
     {
-        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " begin.");
+        LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
@@ -316,13 +316,13 @@ try
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, nrows + nrows_2);
 
-        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " done.");
+        LOG_FMT_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
     }
 }
 CATCH
 
 
-TEST_P(DeltaMergeStore_RWTest, SimpleWriteRead)
+TEST_P(DeltaMergeStoreRWTest, SimpleWriteRead)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -470,7 +470,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DeleteRead)
+TEST_P(DeltaMergeStoreRWTest, DeleteRead)
 try
 {
     const size_t num_rows_write = 128;
@@ -563,7 +563,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlock)
+TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlock)
 try
 {
     const size_t num_write_rows = 32;
@@ -763,7 +763,7 @@ CATCH
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-TEST_P(DeltaMergeStore_RWTest, DISABLED_WriteLargeBlock)
+TEST_P(DeltaMergeStoreRWTest, DISABLED_WriteLargeBlock)
 try
 {
     DB::Settings settings = db_context->getSettings();
@@ -858,7 +858,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, ReadWithSpecifyTso)
+TEST_P(DeltaMergeStoreRWTest, ReadWithSpecifyTso)
 try
 {
     const UInt64 tso1 = 4;
@@ -967,7 +967,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, Ingest)
+TEST_P(DeltaMergeStoreRWTest, Ingest)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1148,7 +1148,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, IngestWithFail)
+TEST_P(DeltaMergeStoreRWTest, IngestWithFail)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1281,7 +1281,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, IngestEmptyFileLists)
+TEST_P(DeltaMergeStoreRWTest, IngestEmptyFileLists)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1372,7 +1372,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, Split)
+TEST_P(DeltaMergeStoreRWTest, Split)
 try
 {
     // set some params to smaller threshold so that we can trigger split more frequently
@@ -1447,7 +1447,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1," << num_rows_write_in_total << "]");
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
             size_t num_rows_read = 0;
             in->readPrefix();
@@ -1476,7 +1476,7 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write_in_total);
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -1486,7 +1486,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLChangeInt8ToInt32)
+TEST_P(DeltaMergeStoreRWTest, DDLChangeInt8ToInt32)
 try
 {
     const String col_name_ddl = "i8";
@@ -1536,8 +1536,8 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
-        store->applyAlters(commands, std::nullopt, _ignored, *db_context);
+        ColumnID ignored = 0;
+        store->applyAlters(commands, std::nullopt, ignored, *db_context);
     }
 
     {
@@ -1593,7 +1593,7 @@ try
 CATCH
 
 
-TEST_P(DeltaMergeStore_RWTest, DDLDropColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLDropColumn)
 try
 {
     const String col_name_to_drop = "i8";
@@ -1687,7 +1687,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumn)
 try
 {
     const String col_name_c1 = "i8";
@@ -1729,8 +1729,8 @@ try
             com.column_name = col_name_to_add;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     {
@@ -1795,7 +1795,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat64)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat64)
 try
 {
     const String col_name_to_add = "f64";
@@ -1823,7 +1823,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Float64)1.123456));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Float64>(1.123456)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -1832,8 +1832,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -1870,7 +1870,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloatDecimal64)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloatDecimal64)
 try
 {
     const String col_name_to_add = "f64";
@@ -1907,8 +1907,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -1945,7 +1945,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat32)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat32)
 try
 {
     const String col_name_to_add = "f32";
@@ -1982,8 +1982,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2020,7 +2020,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnInt8)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnInt8)
 try
 {
     const String col_name_to_add = "Int8";
@@ -2048,7 +2048,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Int64)1));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Int64>(1)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2057,8 +2057,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2095,7 +2095,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnUInt8)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnUInt8)
 try
 {
     const String col_name_to_add = "UInt8";
@@ -2123,7 +2123,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((UInt64)1));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2132,8 +2132,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2170,7 +2170,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnMyDateTime)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnDateTime)
 try
 {
     const String col_name_to_add = "dt";
@@ -2205,8 +2205,8 @@ try
             );
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2240,7 +2240,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnString)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnString)
 try
 {
     const String col_name_to_add = "string";
@@ -2268,7 +2268,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((String) "test_add_string_col"));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(String("test_add_string_col")));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2277,8 +2277,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2314,7 +2314,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLRenameColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLRenameColumn)
 try
 {
     const String col_name_before_ddl = "i8";
@@ -2365,8 +2365,8 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
-        store->applyAlters(commands, std::nullopt, _ignored, *db_context);
+        ColumnID ignored = 0;
+        store->applyAlters(commands, std::nullopt, ignored, *db_context);
     }
 
     {
@@ -2424,7 +2424,7 @@ try
 CATCH
 
 // Test rename pk column when pk_is_handle = true.
-TEST_P(DeltaMergeStore_RWTest, DDLRenamePKColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLRenamePKColumn)
 try
 {
     const String col_name_before_ddl = "pk1";
@@ -2482,7 +2482,7 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
+        ColumnID ignored = 0;
         TiDB::TableInfo table_info;
         {
             static const String json_table_info = R"(
@@ -2491,7 +2491,7 @@ try
             table_info.deserialize(json_table_info);
             ASSERT_TRUE(table_info.pk_is_handle);
         }
-        store->applyAlters(commands, table_info, _ignored, *db_context);
+        store->applyAlters(commands, table_info, ignored, *db_context);
     }
 
     {
@@ -2611,7 +2611,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDL_issue1341)
+TEST_P(DeltaMergeStoreRWTest, DDLIssue1341)
 try
 {
     // issue 1341: Background task may use a wrong schema to compact data
@@ -2657,8 +2657,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2743,7 +2743,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, CreateWithCommonHandle)
+TEST_F(DeltaMergeStoreTest, CreateWithCommonHandle)
 try
 {
     auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
@@ -2765,7 +2765,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, SimpleWriteReadCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, SimpleWriteReadCommonHandle)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -2908,7 +2908,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlockWithCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlockWithCommonHandle)
 try
 {
     const size_t num_write_rows = 32;
@@ -3091,7 +3091,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DeleteReadWithCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write = 128;
@@ -3202,7 +3202,7 @@ try
 CATCH
 
 INSTANTIATE_TEST_CASE_P(TestMode, //
-                        DeltaMergeStore_RWTest,
+                        DeltaMergeStoreRWTest,
                         testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
                         testModeToString);
 
