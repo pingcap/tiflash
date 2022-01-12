@@ -756,7 +756,7 @@ private:
             while (current < offsets[column_index] - 1)
             {
                 start_offsets.push_back(current);
-                current += DB::UTF8::seqLength(data[current]);
+                current += UTF8::seqLength(data[current]);
             }
             if (original_start_abs > start_offsets.size())
             {
@@ -776,7 +776,7 @@ private:
             if (pos == start)
                 bytes_start = j - prev_offset + 1;
 
-            j += DB::UTF8::seqLength(data[j]);
+            j += UTF8::seqLength(data[j]);
 
             if constexpr (implicit_length)
             {
