@@ -170,7 +170,7 @@ public:
                 if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arguments[arg]).column.get()); from)
                     columns.push_back(from);
                 else
-                    throw Exception(fmt::format("Wrong column in function {}", getName()), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(fmt::format("Illegal column type {} of  arguments of function {}", block.getByPosition(arguments[arg]).type->getName(), getName()), ErrorCodes::LOGICAL_ERROR);
             }
 
             for (size_t row_num = 0; row_num < rows; ++row_num)
