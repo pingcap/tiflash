@@ -2419,7 +2419,7 @@ public:
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}.Should be MyDateTime", arguments[0].type->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}. Should be MyDateTime", arguments[0].type->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[1].type->isInteger())
             throw Exception(
