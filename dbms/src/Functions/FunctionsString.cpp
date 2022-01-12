@@ -1710,6 +1710,7 @@ public:
             {
                 if (column_length->isColumnConst())
                 {
+                    // vector const
                     size_t length = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
 
                     // for const 0, return const blank string.
@@ -1723,35 +1724,29 @@ public:
                 }
                 else
                 {
+                    // vector vector
                     auto get_length_func = [&column_length](size_t i) {
                         return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
                     };
                     RightUTF8Impl::vectorVector(col_string->getChars(), col_string->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
                 }
             }
+            else if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
+            {
+                // const vector
+                const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
+                assert(col_string_from_const);
+                // When useDefaultImplementationForConstants is true, string and length are not both constants
+                assert(!column_length->isColumnConst());
+                auto get_length_func = [&column_length](size_t i) {
+                    return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                };
+                RightUTF8Impl::constVector(column_length->size(), col_string_from_const->getChars(), col_string_from_const->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
+            }
             else
             {
-                if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
-                {
-                    const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
-                    assert(col_string_from_const);
-                    if (column_length->isColumnConst())
-                    {
-                        throw Exception(
-                            fmt::format("It is illegal for both parameters to be constants of function {}", getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
-                    }
-                    auto get_length_func = [&column_length](size_t i) {
-                        return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
-                    };
-                    RightUTF8Impl::constVector(column_length->size(), col_string_from_const->getChars(), col_string_from_const->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
-                }
-                else
-                {
-                    throw Exception(
-                        fmt::format("Illegal column {} of first argument of function {}", column_string->getName(), getName()),
-                        ErrorCodes::ILLEGAL_COLUMN);
-                }
+                // Impossible to reach here
+                return false;
             }
             block.getByPosition(result).column = std::move(col_res);
             return true;
@@ -1763,7 +1758,8 @@ public:
 
 private:
     template <typename F>
-    static bool getLengthType(DataTypePtr type, F && f)
+    static bool
+    getLengthType(DataTypePtr type, F && f)
     {
         return castTypeToEither<
             DataTypeInt64,

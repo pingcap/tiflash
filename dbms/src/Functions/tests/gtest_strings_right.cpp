@@ -9,7 +9,7 @@
 
 namespace DB::tests
 {
-class StringRight : public DB::tests::FunctionTest
+class StringRightTest : public DB::tests::FunctionTest
 {
 public:
     static constexpr auto func_name = "rightUTF8";
@@ -43,7 +43,7 @@ public:
             auto expected_res_column = is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result});
             auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
             auto length_column = is_length_const ? createConstColumn<Nullable<Integer>>(1, length) : createColumn<Nullable<Integer>>({length});
-            auto actual_res_column = executeFunction(StringRight::func_name, str_column, length_column);
+            auto actual_res_column = executeFunction(func_name, str_column, length_column);
             ASSERT_COLUMN_EQ(expected_res_column, actual_res_column);
         };
         std::vector<bool> is_consts = {true, false};
@@ -51,14 +51,31 @@ public:
             for (bool is_length_const : is_consts)
                 inner_test(is_str_const, is_length_const);
     }
+
+    template <typename Integer>
+    void testInvalidLengthType()
+    {
+        static_assert(!std::is_same_v<Integer, Int64> && !std::is_same_v<Integer, UInt64>);
+        ASSERT_THROW(
+            executeFunction(
+                func_name,
+                createColumn<Nullable<String>>({""}),
+                createColumn<Nullable<Integer>>({0})),
+            Exception);
+    }
 };
 
-TEST_F(StringRight, UnitTest)
+TEST_F(StringRightTest, testBoundary)
 try
 {
     testBoundary<Int64>();
     testBoundary<UInt64>();
+}
+CATCH
 
+TEST_F(StringRightTest, testMoreCases)
+try
+{
     // test big string
     // big_string.size() > length
     String big_string;
@@ -89,7 +106,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({unit_string, origin_str, origin_str, english_str}),
         executeFunction(
-            StringRight::func_name,
+            func_name,
             createColumn<Nullable<String>>({big_string, origin_str, origin_str, mixed_language_str}),
             createColumn<Nullable<Int64>>({22, 12, 22, english_str.size()})));
     // case 2
@@ -97,15 +114,27 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "c", "", "c", "", "", "c", "c"}),
         executeFunction(
-            StringRight::func_name,
+            func_name,
             createColumn<Nullable<String>>({second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string}),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "c", "", "c", "", "", "c", "c"}),
         executeFunction(
-            StringRight::func_name,
+            func_name,
             createConstColumn<Nullable<String>>(8, second_case_string),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
+}
+CATCH
+
+TEST_F(StringRightTest, testInvalidLengthType)
+try
+{
+    testInvalidLengthType<Int8>();
+    testInvalidLengthType<Int16>();
+    testInvalidLengthType<Int32>();
+    testInvalidLengthType<UInt8>();
+    testInvalidLengthType<UInt16>();
+    testInvalidLengthType<UInt32>();
 }
 CATCH
 
