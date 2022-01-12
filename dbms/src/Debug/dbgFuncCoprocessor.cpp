@@ -2165,7 +2165,10 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         if (exchange.second.second->type == tipb::ExchangeType::PassThrough)
+        {
             current_task_num = 1;
+            break;
+        }
     }
     std::vector<Int64> current_task_ids;
     for (size_t i = 0; i < current_task_num; i++)
