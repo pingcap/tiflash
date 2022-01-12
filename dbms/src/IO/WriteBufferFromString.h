@@ -34,9 +34,10 @@ public:
         : WriteBufferFromString(value)
     {}
 
-    void resize(size_t approx_size)
+    void resizeAndRestart(size_t approx_size)
     {
         value.resize(approx_size);
+        restart();
     }
 
     WriteBufferFromOwnString(WriteBufferFromOwnString && rhs) = delete;

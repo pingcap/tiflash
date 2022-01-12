@@ -25,13 +25,13 @@ public:
         return output->releaseStr();
     }
 
-    void resizeStr(size_t size)
+    void resizeAndRestart(size_t size)
     {
         if (nullptr == output)
         {
             throw Exception("the output of CHBlockChunkCodecStream should not be null when resizing");
         }
-        output->resize(size);
+        output->resizeAndRestart(size);
     }
 
     void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
