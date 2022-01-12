@@ -37,7 +37,7 @@ void DynamicThreadPool::init(size_t initial_size)
     fixed_threads.reserve(initial_size);
     for (size_t i = 0; i < initial_size; ++i)
         fixed_queues.emplace_back(std::make_unique<Queue>(1)); // each Queue will only contain at most 1 task.
-        idle_fixed_queues(fixed_queues.back().get());
+        idle_fixed_queues.push(fixed_queues.back().get());
         fixed_threads.emplace_back(ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
     }
 }
