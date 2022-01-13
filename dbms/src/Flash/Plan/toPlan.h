@@ -38,7 +38,7 @@ PlanPtr arrayToPlan(const tipb::DAGRequest & dag_request)
         }
     };
 
-    size_t iter = dag_request.executors_size() - 1;
+    int iter = dag_request.executors_size() - 1;
     assert(iter >= 0);
     PlanPtr next;
     PlanPtr cur = to_plan(dag_request.executors(iter), iter);

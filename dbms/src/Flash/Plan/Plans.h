@@ -86,7 +86,7 @@ using JoinPlan = Plan<JoinImpl>;
 
 struct ExchangeReceiverImpl
 {
-    static constexpr size_t children_size = 1;
+    static constexpr size_t children_size = 0;
 
     using Executor = tipb::ExchangeReceiver;
 
