@@ -115,11 +115,11 @@ try
             createConstColumn<Nullable<Int64>>(1, -3)));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt64>>({9223372036854775818U}),
+        createColumn<Nullable<UInt64>>({18446744073709551614U}),
         executeFunction(
             func_name,
-            createColumn<Nullable<UInt64>>({9223372036854775818U}),
-            createColumn<Nullable<UInt64>>({9223372036854775820U})));
+            createColumn<Nullable<UInt64>>({18446744073709551615U}),
+            createColumn<Nullable<UInt64>>({18446744073709551614U})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({92233720368547720}),
@@ -235,11 +235,11 @@ try
             createConstColumn<Nullable<Int64>>(1, -3)));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt64>>({9223372036854775820U}),
+        createColumn<Nullable<UInt64>>({18446744073709551615U}),
         executeFunction(
             func_name,
-            createColumn<Nullable<UInt64>>({9223372036854775818U}),
-            createColumn<Nullable<UInt64>>({9223372036854775820U})));
+            createColumn<Nullable<UInt64>>({18446744073709551615U}),
+            createColumn<Nullable<UInt64>>({18446744073709551614U})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({9223372036854775818U}),

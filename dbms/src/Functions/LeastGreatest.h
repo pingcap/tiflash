@@ -244,16 +244,8 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (std::is_same_v<Impl, GreatestImpl>) //YWQ: A hack, make Greatest use non-vectorized implementation. Will remove it when the code review is done.
-        {
-            auto function = FunctionRowbasedLeastGreatest<Impl, SpecializedFunction>::create(context);
-            return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
-        }
-        else
-        {
-            auto function = FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context);
-            return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
-        }
+        auto function = FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context);
+        return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
     }
 
 private:

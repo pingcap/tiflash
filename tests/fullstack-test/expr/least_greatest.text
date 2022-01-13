@@ -1,0 +1,192 @@
+
+mysql> drop table if exists test.t1
+mysql> create table test.t1 (id int, id1 TINYINT, id2 SMALLINT, id3 MEDIUMINT, id4 BIGINT, id5 FLOAT, id6 DOUBLE, id7 TINYINT UNSIGNED, id8 SMALLINT UNSIGNED, id9 BIGINT UNSIGNED)
+mysql> alter table test.t1 set tiflash replica 1
+mysql> insert into test.t1 values (1, 10, 20, 30, 40, 50, 60, 70, 80, 90), (90, 80, 70, 60, 50, 40, 30, 20, 10, 0), (1278, 127, 1297, 878, 127319, 17281.3278, 227183.1231823618, 121, 17319, 123128)
+mysql> drop table if exists test.t2
+mysql> create table test.t2 (id1 BIGINT UNSIGNED, id2 BIGINT UNSIGNED, id3 BIGINT)
+mysql> alter table test.t2 set tiflash replica 1
+mysql> insert into test.t2 values (18446744073709551615, 18446744073709551615, 9223372036854775807)
+
+
+func> wait_table test t1
+
+# least tests
+mysql> set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
++------+---------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9 ) |
++------+---------------------------------------------------------+
+|    1 |                                                       1 |
+|   90 |                                                       0 |
+| 1278 |                                                     121 |
++------+---------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, least(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
++------+--------------------------------------------------------------+
+| id   | least(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) |
++------+--------------------------------------------------------------+
+|    1 |                                                         NULL |
+|   90 |                                                         NULL |
+| 1278 |                                                         NULL |
++------+--------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, least(id1, id2, id8) from test.t1
++------+----------------------+
+| id   | least(id1, id2, id8) |
++------+----------------------+
+|    1 |                   10 |
+|   90 |                   10 |
+| 1278 |                  127 |
++------+----------------------+
+
+# least(unsigned, unsigned) 
+mysql> set tidb_enforce_mpp=1; select id, least(id8, id8) from test.t1
++------+-----------------+
+| id   | least(id8, id8) |
++------+-----------------+
+|    1 |              80 |
+|   90 |              10 |
+| 1278 |           17319 |
++------+-----------------+
+
+# least(signed, unsigned)
+mysql> set tidb_enforce_mpp=1; select id, least(id4, id9) from test.t1
++------+-----------------+
+| id   | least(id4, id9) |
++------+-----------------+
+|    1 |              40 |
+|   90 |               0 |
+| 1278 |          123128 |
++------+-----------------+
+
+# least(double, float)
+mysql> set tidb_enforce_mpp=1; select id, least(id5, id6) from test.t1
++------+-----------------+
+| id   | least(id5, id6) |
++------+-----------------+
+|    1 |              50 |
+|   90 |              30 |
+| 1278 |    17281.328125 |
++------+-----------------+
+
+# least(double, const)
+mysql> set tidb_enforce_mpp=1; select least(id6, -1717139878917397319) from test.t1
++----------------------------------+
+| least(id6, -1717139878917397319) |
++----------------------------------+
+|           -1.7171398789173972e18 |
+|           -1.7171398789173972e18 |
+|           -1.7171398789173972e18 |
++----------------------------------+
+
+# least(UInt64, UInt64)
+mysql> set tidb_enforce_mpp=1; select least(id1, id2) from test.t2
++----------------------+
+| least(id1, id2)      |
++----------------------+
+| 18446744073709551615 |
++----------------------+
+
+# least(UInt64, Int64)
+mysql> set tidb_enforce_mpp=1; select least(id1, id3) from test.t2
++---------------------+
+| least(id1, id3)     |
++---------------------+
+| 9223372036854775807 |
++---------------------+
+
+
+# greatest tests
+mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
++------+------------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9 ) |
++------+------------------------------------------------------------+
+|    1 |                                                         90 |
+|   90 |                                                         90 |
+| 1278 |                                          227183.1231823618 |
++------+------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
++------+-----------------------------------------------------------------+
+| id   | greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) |
++------+-----------------------------------------------------------------+
+|    1 |                                                            NULL |
+|   90 |                                                            NULL |
+| 1278 |                                                            NULL |
++------+-----------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, greatest(id1, id2, id8) from test.t1
++------+-------------------------+
+| id   | greatest(id1, id2, id8) |
++------+-------------------------+
+|    1 |                      80 |
+|   90 |                      80 |
+| 1278 |                   17319 |
++------+-------------------------+
+
+# greatest(unsigned, unsigned) 
+mysql> set tidb_enforce_mpp=1; select id, greatest(id8, id8) from test.t1
++------+--------------------+
+| id   | greatest(id8, id8) |
++------+--------------------+
+|    1 |                 80 |
+|   90 |                 10 |
+| 1278 |              17319 |
++------+--------------------+
+
+# greatest(signed, unsigned)
+mysql> set tidb_enforce_mpp=1; select id, greatest(id4, id9) from test.t1
++------+--------------------+
+| id   | greatest(id4, id9) |
++------+--------------------+
+|    1 |                 90 |
+|   90 |                 50 |
+| 1278 |             127319 |
++------+--------------------+
+
+# greatest(double, float)
+mysql> set tidb_enforce_mpp=1; select id, greatest(id5, id6) from test.t1
++------+--------------------+
+| id   | greatest(id5, id6) |
++------+--------------------+
+|    1 |                 60 |
+|   90 |                 40 |
+| 1278 |  227183.1231823618 |
++------+--------------------+
+
+# greatest(double, const)
+mysql> set tidb_enforce_mpp=1; select greatest(id6, 1717139878917397319) from test.t1
++------------------------------------+
+| greatest(id6, 1717139878917397319) |
++------------------------------------+
+|              1.7171398789173972e18 |
+|              1.7171398789173972e18 |
+|              1.7171398789173972e18 |
++------------------------------------+
+
+# greatest(UInt64, UInt64)
+mysql> set tidb_enforce_mpp=1; select greatest(id1, id2) from test.t2
++----------------------+
+| greatest(id1, id2)   |
++----------------------+
+| 18446744073709551615 |
++----------------------+
+
+# greatest(UInt64, Int64)
+mysql> set tidb_enforce_mpp=1; select greatest(id1, id3) from test.t2
++----------------------+
+| greatest(id1, id3)   |
++----------------------+
+| 18446744073709551615 |
++----------------------+
+
+# greatest(Int64, Int64)
+mysql> set tidb_enforce_mpp=1; select greatest(id3, id3) from test.t2
++---------------------+
+| greatest(id3, id3)  |
++---------------------+
+| 9223372036854775807 |
++---------------------+
+
+
+
