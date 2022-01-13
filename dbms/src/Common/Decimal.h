@@ -382,7 +382,7 @@ private:
 };
 
 template <typename T>
-inline typename T::NativeType getScaleMultiplier(ScaleType scale)
+__attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
     return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
 }
