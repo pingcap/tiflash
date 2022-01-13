@@ -32,7 +32,7 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
@@ -46,7 +46,7 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
 }
 
 
-std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEntriesFromBlobId(BlobFileId blob_id)
+std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
 {
     PageSize single_page_size = 0;
     VersionedEntries versioned_entries;
@@ -71,7 +71,7 @@ std::pair<VersionedEntries, PageSize> PageDirectory::VersionedPageEntries::getEn
     return std::make_pair(std::move(versioned_entries), single_page_size);
 }
 
-std::pair<PageEntriesV3, bool> PageDirectory::VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
+std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
 {
     PageEntriesV3 del_entries;
 
@@ -261,37 +261,12 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
 
-    // stage 1, get the entry to be ref
     auto snap = createSnapshot();
-    for (auto & r : edit.getRecords())
-    {
-        // Set the version of inserted entries
-        r.version = PageVersionType(last_sequence + 1);
 
-        if (r.type != WriteBatch::WriteType::REF)
-        {
-            continue;
-        }
-        auto iter = mvcc_table_directory.find(r.ori_page_id);
-        if (iter == mvcc_table_directory.end())
-        {
-            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
-        }
-        if (auto entry = iter->second->getEntry(last_sequence); entry)
-        {
-            // copy the entry to be ref
-            r.entry = *entry;
-        }
-        else
-        {
-            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    // stage 2, persisted the changes to WAL
+    // stage 1, persisted the changes to WAL
     // wal.apply(edit);
 
-    // stage 3, create entry version list for pageId. nothing need to be rollback
+    // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
@@ -316,7 +291,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         updating_pages.emplace_back(iter->second);
     }
 
-    // stage 4, there are no rollback since we already persist `edit` to WAL, just ignore error if any
+    // stage 3, there are no rollback since we already persist `edit` to WAL, just ignore error if any
     const auto & records = edit.getRecords();
     for (size_t idx = 0; idx < records.size(); ++idx)
     {
@@ -326,11 +301,31 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         case WriteBatch::WriteType::PUT:
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
-            [[fallthrough]];
+            updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
+            break;
         case WriteBatch::WriteType::REF:
         {
-            // Put/upsert/ref all should append a new version for this page
-            updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
+            // We can't handle `REF` before other writes, because `PUT` and `REF`
+            // maybe in the same WriteBatch.
+            // Also we can't throw an exception if we can't find the origin page_id,
+            // because WAL have already applied the change and there is no
+            // mechanism to roll back changes in the WAL.
+            auto iter = mvcc_table_directory.find(r.ori_page_id);
+            if (iter == mvcc_table_directory.end())
+            {
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+                break;
+            }
+
+            if (auto entry = iter->second->getEntry(last_sequence); entry)
+            {
+                // copy the entry to be ref
+                updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
+            }
+            else
+            {
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+            }
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -356,14 +351,15 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids)
+
+std::set<PageId> PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries, bool need_scan_page_ids)
 {
-    for (const auto & [page_id, version, entry] : copy_list)
+    for (const auto & [page_id, version, entry] : migrated_entries)
     {
         auto iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())
         {
-            throw Exception(fmt::format("Can't found [pageid={}]", page_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", page_id), ErrorCodes::LOGICAL_ERROR);
         }
 
         auto versioned_page = iter->second;
@@ -389,24 +385,24 @@ std::set<PageId> PageDirectory::gcApply(const VersionedPageIdAndEntryList & copy
     return page_ids;
 }
 
-std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize>
-PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
+std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
+PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 {
-    std::map<BlobFileId, VersionedPageIdAndEntries> blob_versioned_entries;
+    std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
 
     PageSize total_page_size = 0;
     {
         std::shared_lock read_lock(table_rw_mutex);
 
-        for (auto & blob_id : blob_need_gc)
+        for (const auto & blob_id : blob_need_gc)
         {
-            VersionedPageIdAndEntries versioned_pageid_entries;
+            PageIdAndVersionedEntries versioned_pageid_entries;
 
             for (const auto & [page_id, version_entries] : mvcc_table_directory)
             {
                 VersionedEntries versioned_entries;
                 PageSize page_size;
-                std::tie(versioned_entries, page_size) = version_entries->getEntriesFromBlobId(blob_id);
+                std::tie(versioned_entries, page_size) = version_entries->getEntriesByBlobId(blob_id);
                 if (page_size != 0)
                 {
                     versioned_pageid_entries.emplace_back(
@@ -423,7 +419,7 @@ PageDirectory::getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc)
             blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
         }
     }
-    return std::make_pair(blob_versioned_entries, total_page_size);
+    return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
 std::vector<PageEntriesV3> PageDirectory::gc()
@@ -442,23 +438,24 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             ++iter;
         }
     }
-
-    for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
     {
-        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
-        if (!del_entries.empty())
+        std::unique_lock write_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
         {
-            all_del_entries.emplace_back(std::move(del_entries));
-        }
+            const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
+            if (!del_entries.empty())
+            {
+                all_del_entries.emplace_back(std::move(del_entries));
+            }
 
-        if (all_deleted)
-        {
-            std::unique_lock write_lock(table_rw_mutex);
-            iter = mvcc_table_directory.erase(iter);
-        }
-        else
-        {
-            iter++;
+            if (all_deleted)
+            {
+                iter = mvcc_table_directory.erase(iter);
+            }
+            else
+            {
+                iter++;
+            }
         }
     }
 

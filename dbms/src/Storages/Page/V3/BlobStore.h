@@ -19,10 +19,8 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using VersionedPageId = std::pair<PageId, PageVersionType>;
-using VersionedPageIdAndEntry = std::tuple<PageId, PageVersionType, PageEntryV3>;
-using VersionedPageIdAndEntryList = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
-using VersionedPageIdAndEntries = std::vector<std::pair<PageId, VersionedEntries>>;
+using PageIdAndVersionedEntryList = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
 {
@@ -32,6 +30,7 @@ public:
         SettingUInt64 file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
         SettingUInt64 cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingDouble heavy_gc_valid_rate = 0.2;
     };
 
     class BlobStats
@@ -76,6 +75,16 @@ public:
 
             std::mutex sm_lock;
 
+            std::lock_guard<std::mutex> lock()
+            {
+                return std::lock_guard(sm_lock);
+            }
+
+            bool isReadOnly()
+            {
+                return type == BlobStatType::READ_ONLY;
+            }
+
             void changeToReadOnly()
             {
                 type = BlobStatType::READ_ONLY;
@@ -92,8 +101,6 @@ public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
         std::lock_guard<std::mutex> lock();
-
-        std::lock_guard<std::mutex> statLock(BlobStatPtr stat);
 
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
@@ -117,7 +124,7 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
 
-        std::pair<BlobStatPtr, BlobFileId> chooseNewStat();
+        BlobFileId chooseNewStat();
 
         BlobStatPtr fileIdToStat(BlobFileId file_id);
 
@@ -145,14 +152,14 @@ public:
 
     std::vector<BlobFileId> getGCStats();
 
-    VersionedPageIdAndEntryList gc(std::map<BlobFileId, VersionedPageIdAndEntries> & entries_need_gc,
+    PageIdAndVersionedEntryList gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
                                    const PageSize & total_page_size,
                                    const WriteLimiterPtr & write_limiter = nullptr,
                                    const ReadLimiterPtr & read_limiter = nullptr);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void remove(PageEntriesV3 del_entries);
+    void remove(const PageEntriesV3 & del_entries);
 
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -182,8 +189,17 @@ private:
 
     void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
+    /**
+     *  Ask BlobStats to get a span from BlobStat.
+     *  We will lock BlobStats until we get a BlobStat that can hold the size.
+     *  Then lock the BlobStat to get the span.
+     */
     std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
 
+    /**
+     *  Request a specific BlobStat to delete a certain span.
+     *  We will lock the BlobStat until it have been makefree in memory.
+     */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
     String getBlobFilePath(BlobFileId blob_id) const;

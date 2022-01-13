@@ -538,6 +538,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             if (idx == index)
             {
                 entries_del1.emplace_back(record.entry);
+                break;
             }
         }
 
@@ -546,6 +547,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             if (idx == index)
             {
                 entries_del2.emplace_back(record.entry);
+                break;
             }
         }
 
@@ -616,6 +618,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
             if (idx == index)
             {
                 entries_del.emplace_back(record.entry);
+                break;
             }
         }
 
@@ -673,9 +676,9 @@ TEST_F(BlobStoreTest, GC)
         versioned_entries.emplace_back(1, record.entry);
     }
 
-    VersionedPageIdAndEntries versioned_pageid_entries;
+    PageIdAndVersionedEntries versioned_pageid_entries;
     versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
-    std::map<BlobFileId, VersionedPageIdAndEntries> gc_context;
+    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
     gc_context[0] = versioned_pageid_entries;
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
@@ -689,6 +692,7 @@ TEST_F(BlobStoreTest, GC)
     auto it = versioned_entries.begin();
     for (const auto & [page_id_, version_type, entry_] : copy_list)
     {
+        (void)version_type;
         ASSERT_EQ(page_id_, page_id);
         ASSERT_EQ(entry_.file_id, 1);
         ASSERT_EQ(it->second.checksum, entry_.checksum);

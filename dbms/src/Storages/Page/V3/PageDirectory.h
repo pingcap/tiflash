@@ -68,6 +68,104 @@ private:
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
+class VersionedPageEntries;
+using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
+
+struct EntryOrDelete
+{
+    bool is_delete;
+    PageEntryV3 entry;
+
+    explicit EntryOrDelete(bool del)
+        : is_delete(del)
+    {
+        assert(del == true);
+    }
+    explicit EntryOrDelete(const PageEntryV3 & entry_)
+        : is_delete(false)
+        , entry(entry_)
+    {}
+};
+using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
+class VersionedPageEntries
+{
+public:
+    PageLock acquireLock() const
+    {
+        return std::make_unique<std::lock_guard<std::mutex>>(m);
+    }
+
+    void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
+    {
+        entries.emplace(PageVersionType(seq), entry);
+    }
+
+    void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
+    {
+        entries.emplace(PageVersionType(seq, epoch), entry);
+    }
+
+    void createDelete(UInt64 seq)
+    {
+        entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
+    }
+
+    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+
+    /**
+     * Take out the `VersionedEntries` which exist in the `BlobFileId`.
+     * Also return the total size of entries.
+     */
+    std::pair<VersionedEntries, PageSize> getEntriesByBlobId(BlobFileId blob_id);
+
+    /**
+     * GC will give a `lowest_seq`.
+     * We will find the second entry which `LE` than `lowest_seq`.
+     * And reclaim all entries before that one.
+     * If we can't found any entry less than `lowest_seq`.
+     * Then all entries will be remained.
+     * 
+     * Ex1. 
+     *    entry 1 : seq 2 epoch 0
+     *    entry 2 : seq 2 epoch 1
+     *    entry 3 : seq 3 epoch 0
+     *    entry 4 : seq 4 epoch 0
+     * 
+     *    lowest_seq : 3
+     *    Then (entry 1, entry 2) will be delete.
+     * 
+     * Ex2. 
+     *    entry 1 : seq 2 epoch 0
+     *    entry 2 : seq 2 epoch 1
+     *    entry 3 : seq 4 epoch 0
+     *    entry 4 : seq 4 epoch 1
+     * 
+     *    lowest_seq : 3
+     *    Then (entry 1) will be delete
+     * 
+     * Ex3. 
+     *    entry 1 : seq 2 epoch 0
+     *    entry 2 : seq 2 epoch 1
+     *    entry 3 : seq 4 epoch 0
+     *    entry 4 : seq 4 epoch 1
+     * 
+     *    lowest_seq : 1
+     *    Then no entry should be delete.
+     */
+    std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
+
+    size_t size() const
+    {
+        auto lock = acquireLock();
+        return entries.size();
+    }
+
+private:
+    mutable std::mutex m;
+    // Entries sorted by version
+    std::map<PageVersionType, EntryOrDelete> entries;
+};
+
 class PageDirectory
 {
 public:
@@ -93,105 +191,15 @@ public:
 
     std::vector<PageEntriesV3> gc();
 
-    std::pair<std::map<BlobFileId, VersionedPageIdAndEntries>, PageSize> getEntriesFromBlobIds(std::vector<BlobFileId> blob_need_gc);
+    std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
-    std::set<PageId> gcApply(const VersionedPageIdAndEntryList & copy_list, bool need_scan_page_ids = true);
+    std::set<PageId> gcApply(const PageIdAndVersionedEntryList & migrated_entries, bool need_scan_page_ids);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
-
-    struct EntryOrDelete
+    size_t numPages() const
     {
-        bool is_delete;
-        PageEntryV3 entry;
-
-        explicit EntryOrDelete(bool del)
-            : is_delete(del)
-        {
-            assert(del == true);
-        }
-        explicit EntryOrDelete(const PageEntryV3 & entry_)
-            : is_delete(false)
-            , entry(entry_)
-        {}
-    };
-
-    using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
-    class VersionedPageEntries
-    {
-    public:
-        PageLock acquireLock() const
-        {
-            return std::make_unique<std::lock_guard<std::mutex>>(m);
-        }
-
-        void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
-        {
-            entries.emplace(PageVersionType(seq), entry);
-        }
-
-        void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
-        {
-            entries.emplace(PageVersionType(seq, epoch), entry);
-        }
-
-        void createDelete(UInt64 seq)
-        {
-            entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
-        }
-
-        std::optional<PageEntryV3> getEntry(UInt64 seq) const;
-
-        /**
-         * Take out the `VersionedEntries` which exist in the `BlobFileId`.
-         * Also return the total size of entries.
-         */
-        std::pair<VersionedEntries, PageSize> getEntriesFromBlobId(BlobFileId blob_id);
-
-        /**
-         * GC will give a `lowest_seq`.
-         * We will find the second entry which `LE` than `lowest_seq`.
-         * And reclaim all entries before that one.
-         * If we can't found any entry less than `lowest_seq`.
-         * Then all entries will be remained.
-         * 
-         * Ex1. 
-         *    entry 1 : seq 2 epoch 0
-         *    entry 2 : seq 2 epoch 1
-         *    entry 3 : seq 3 epoch 0
-         *    entry 4 : seq 4 epoch 0
-         * 
-         *    lowest_seq : 3
-         *    Then (entry 1, entry 2) will be delete.
-         * 
-         * Ex2. 
-         *    entry 1 : seq 2 epoch 0
-         *    entry 2 : seq 2 epoch 1
-         *    entry 3 : seq 4 epoch 0
-         *    entry 4 : seq 4 epoch 1
-         * 
-         *    lowest_seq : 3
-         *    Then (entry 1) will be delete
-         * 
-         * Ex3. 
-         *    entry 1 : seq 2 epoch 0
-         *    entry 2 : seq 2 epoch 1
-         *    entry 3 : seq 4 epoch 0
-         *    entry 4 : seq 4 epoch 1
-         * 
-         *    lowest_seq : 1
-         *    Then no entry should be delete.
-         */
-        std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
-#ifndef DBMS_PUBLIC_GTEST
-    private:
-#endif
-        mutable std::mutex m;
-        // Entries sorted by version
-        std::map<PageVersionType, EntryOrDelete> entries;
-    };
-    using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
+        std::shared_lock read_lock(table_rw_mutex);
+        return mvcc_table_directory.size();
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

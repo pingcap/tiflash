@@ -2,8 +2,8 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/BlobFile.h>
 
-namespace DB {
-
+namespace DB
+{
 namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];
@@ -50,10 +50,10 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
         throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", path),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    
+
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that exception happend before write and sync
-                  throw Exception(fmt::format("Fail point {} is triggered.",FailPoints::exception_before_page_file_write_sync),
+                  throw Exception(fmt::format("Fail point {} is triggered.", FailPoints::exception_before_page_file_write_sync),
                                   ErrorCodes::FAIL_POINT_ERROR);
               });
 
@@ -76,5 +76,5 @@ BlobFile::~BlobFile()
     wrfile->close();
 }
 
-} // namespace DB
 } // namespace PS::V3
+} // namespace DB

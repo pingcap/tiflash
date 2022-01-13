@@ -20,6 +20,7 @@ PageStorageImpl::PageStorageImpl(
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
+    // TBD: init blob_store ptr.
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
@@ -174,26 +175,40 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
         external_pages = external_pages_scanner();
     }
 
-    auto del_entries = page_directory.gc();
+    // 1. Do the MVCC gc, clean up expired snapshot.
+    // And get the expired entries.
+    const auto & del_entries = page_directory.gc();
 
+    // 2. Remove the expired entries in BlobStore.
+    // It won't delete the data on the disk.
+    // It will only update the SpaceMap which in memory.
     for (const auto & del_version_entry : del_entries)
     {
         blob_store.remove(del_version_entry);
     }
 
+    // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
+    // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.
     const auto & blob_need_gc = blob_store.getGCStats();
+
     if (blob_need_gc.empty())
     {
         return true;
     }
 
-    auto [blob_gc_info, total_page_size] = page_directory.getEntriesFromBlobIds(blob_need_gc);
+    // 4. Filter out entries in MVCC by BlobId.
+    // We also need to filter the version of the entry.
+    // So that the `gc_apply` can proceed smoothly.
+    auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_need_gc);
 
     if (blob_gc_info.empty())
     {
         return true;
     }
 
+    // 5. Do the BlobStore GC
+    // After BlobStore GC, these entries will be migrated to a new blob.
+    // Then we should notify MVCC apply the change.
     const auto & copy_list = blob_store.gc(blob_gc_info, total_page_size);
 
     if (copy_list.empty())
@@ -201,6 +216,12 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
         throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
     }
 
+
+    // 6. MVCC gc apply
+    // MVCC will apply the migrated entries.
+    // Also it will generate a new version for these entries.
+    // If we do have external_pages_scanner and external_pages_remover.
+    // Then we need filter all alive entries.
     const auto & page_ids = page_directory.gcApply(copy_list, external_pages_scanner != nullptr);
     if (external_pages_remover)
     {
