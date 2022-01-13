@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <fmt/format.h>
 
 #include <thread>
 
@@ -98,7 +99,7 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
             if (cpu_str_idx != std::string::npos)
             {
                 line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
-                int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line), -2);
+                int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -2);
 
                 // If can't read cgroup_quota here
                 // It means current process may in docker
@@ -106,8 +107,8 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                 {
                     return getCGroupDefaultLimitedCPUCores(default_cpu_count);
                 }
-                int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line), -1);
-                int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line), -1);
+                int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -1);
+                int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line).c_str(), -1);
 
                 return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
             }
