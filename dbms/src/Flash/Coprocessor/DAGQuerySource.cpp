@@ -17,7 +17,7 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     PlanPtr plan = toPlan(dag_request);
     foreachDown(plan, [](const PlanPtr & p) {
-        std::cout << plan->executor_id << std::endl;
+        std::cout << p->executor_id << std::endl;
     });
     if (dag_request.has_root_executor())
     {
