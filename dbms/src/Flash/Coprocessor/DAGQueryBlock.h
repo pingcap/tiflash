@@ -43,6 +43,8 @@ public:
     String selection_name;
     const tipb::Executor * aggregation = nullptr;
     String aggregation_name;
+    const tipb::Executor * window = nullptr;
+    String window_name;
     const tipb::Executor * having = nullptr;
     String having_name;
     const tipb::Executor * limitOrTopN = nullptr;

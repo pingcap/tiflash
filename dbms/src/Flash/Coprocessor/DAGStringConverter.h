@@ -36,6 +36,7 @@ protected:
     void buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
     void buildProjString(const tipb::Projection & proj, std::stringstream & ss);
     void buildAggString(const tipb::Aggregation & agg, std::stringstream & ss);
+    void buildWindowString(const tipb::Window & window, std::stringstream & ss);
     void buildTopNString(const tipb::TopN & topN, std::stringstream & ss);
     void buildString(const tipb::Executor & executor, std::stringstream & ss);
 
@@ -44,7 +45,9 @@ protected:
     const tipb::DAGRequest & dag_request;
     std::vector<NameAndTypePair> columns_from_ts;
     std::vector<NameAndTypePair> columns_from_agg;
+    std::vector<NameAndTypePair> columns_from_window;
     bool afterAgg;
+    bool afterWindow;
 };
 
 } // namespace DB

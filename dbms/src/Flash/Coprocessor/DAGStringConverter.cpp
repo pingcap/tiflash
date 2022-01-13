@@ -135,6 +135,44 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
     }
     afterAgg = true;
 }
+
+void DAGStringConverter::buildWindowString(const tipb::Window & window, std::stringstream & ss)
+{
+    for (auto & agg_func : window.agg_func())
+    {
+        if (!agg_func.has_field_type())
+            throw TiFlashException("Window agg func without field type", Errors::Coprocessor::BadRequest);
+        columns_from_window.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldTypeForComputingLayer(agg_func.field_type()));
+    }
+
+    for (auto & window_func : window.window_func())
+    {
+        if (!window_func.has_field_type())
+            throw TiFlashException("Window window func without field type", Errors::Coprocessor::BadRequest);
+        columns_from_window.emplace_back(exprToString(window_func, getCurrentColumns()), getDataTypeByFieldTypeForComputingLayer(window_func.field_type()));
+    }
+
+    if (window.group_by_size() != 0)
+    {
+        ss << "PARTITION BY ";
+        bool first = true;
+        for (auto & group_by : window.group_by())
+        {
+            if (first)
+                first = false;
+            else
+                ss << ", ";
+            auto name = exprToString(group_by, getCurrentColumns());
+            ss << name;
+            if (!group_by.has_field_type())
+                throw TiFlashException("partition by expr without field type", Errors::Coprocessor::BadRequest);
+            columns_from_window.emplace_back(name, getDataTypeByFieldTypeForComputingLayer(group_by.field_type()));
+        }
+    }
+    afterWindow = true;
+}
+
+
 void DAGStringConverter::buildTopNString(const tipb::TopN & topN, std::stringstream & ss)
 {
     ss << "ORDER BY ";
@@ -168,6 +206,8 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
         // stream agg is not supported, treated as normal agg
     case tipb::ExecType::TypeStreamAgg:
         return buildAggString(executor.aggregation(), ss);
+    case tipb::ExecType::TypeWindow:
+        return buildWindowString(executor.window(), ss);
     case tipb::ExecType::TypeTopN:
         return buildTopNString(executor.topn(), ss);
     case tipb::ExecType::TypeLimit:

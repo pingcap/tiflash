@@ -28,6 +28,7 @@ bool isSourceNode(const tipb::Executor * root)
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String WINDOW_NAME("window");
 const static String HAVING_NAME("having");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
@@ -42,7 +43,8 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
     *to = from;
 }
 
-void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
+template <typename T = tipb::Aggregation>
+void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const T & agg)
 {
     for (const auto & expr : agg.agg_func())
     {
@@ -102,6 +104,12 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             aggregation_name = current->executor_id();
             collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
             current = &current->aggregation().child();
+            break;
+        case tipb::ExecType::TypeWindow:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+            assignOrThrowException(&window, current, WINDOW_NAME);
+            window_name = current->executor_id();
+            collectOutPutFieldTypesFromAgg<tipb::Window>(output_field_types, current->window());
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
@@ -198,6 +206,15 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             else
                 aggregation_name = std::to_string(i) + "_aggregation";
             collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
+            break;
+        case tipb::ExecType::TypeWindow:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+            assignOrThrowException(&window, &executors[i], WINDOW_NAME);
+            if (executors[i].has_executor_id())
+                window_name = executors[i].executor_id();
+            else
+                window_name = std::to_string(i) + "_window";
+            collectOutPutFieldTypesFromAgg<tipb::Window>(output_field_types, executors[i].window());
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();

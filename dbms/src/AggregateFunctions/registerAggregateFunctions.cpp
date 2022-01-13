@@ -30,6 +30,8 @@ void registerAggregateFunctionCombinatorState(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorMerge(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory &);
 
+void registerWindowFunctions(AggregateFunctionFactory & factory);
+
 
 void registerAggregateFunctions()
 {
@@ -53,6 +55,8 @@ void registerAggregateFunctions()
         registerAggregateFunctionTopK(factory);
         registerAggregateFunctionsBitwise(factory);
         registerAggregateFunctionsMaxIntersections(factory);
+
+        registerWindowFunctions(factory);
     }
 
     {

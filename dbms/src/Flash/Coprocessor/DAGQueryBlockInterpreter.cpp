@@ -183,6 +183,11 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
 
+    if (query_block.window && query_block.window->tp() == tipb::ExecType::TypeWindow)
+    {
+
+    }
+
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(

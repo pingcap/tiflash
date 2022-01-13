@@ -74,6 +74,9 @@ public:
     Hash getTreeHash() const;
     void getTreeHashImpl(SipHash & hash_state) const;
 
+    void dumpTree(WriteBuffer & ostr, size_t indent = 0) const;
+    std::string dumpTree(size_t indent = 0) const;
+
     void dumpTree(std::ostream & ostr, size_t indent = 0) const
     {
         String indent_str(indent, '-');

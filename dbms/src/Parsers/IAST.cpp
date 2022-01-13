@@ -94,4 +94,24 @@ size_t IAST::checkDepthImpl(size_t max_depth, size_t level) const
     return res;
 }
 
+void IAST::dumpTree(WriteBuffer & ostr, size_t indent) const
+{
+    String indent_str(indent, '-');
+    ostr << indent_str << getID() << ", ";
+    writePointerHex(this, ostr);
+    writeChar('\n', ostr);
+    for (const auto & child : children)
+    {
+        if (!child) throw Exception("Can't dump nullptr child", ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
+        child->dumpTree(ostr, indent + 1);
+    }
+}
+
+std::string IAST::dumpTree(size_t indent) const
+{
+    WriteBufferFromOwnString wb;
+    dumpTree(wb, indent);
+    return wb.str();
+}
+
 }
