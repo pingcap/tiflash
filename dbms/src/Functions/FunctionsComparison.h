@@ -1544,7 +1544,7 @@ public:
         bool left_is_fixed_string = false;
         const DataTypeTuple * left_tuple = nullptr;
 
-        left_is_date = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get())
+        (left_is_date = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get()))
             || (left_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[0].get()))
             || (left_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[0].get()))
             || (left_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[0].get()))
@@ -1562,7 +1562,7 @@ public:
         bool right_is_fixed_string = false;
         const DataTypeTuple * right_tuple = nullptr;
 
-        right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get())
+        (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get()))
             || (right_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[1].get()))
             || (right_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[1].get()))
             || (right_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[1].get()))
