@@ -551,7 +551,7 @@ void registerStorageLog(StorageFactory & factory)
             args.data_path,
             args.table_name,
             args.columns,
-            args.context.getSettings().max_compress_block_size);
+            args.context.getSettingsRef().max_compress_block_size);
     });
 }
 

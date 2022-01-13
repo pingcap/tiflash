@@ -1323,7 +1323,7 @@ struct DateTimeAddIntervalImpl
         else
         {
             throw Exception(
-                fmt::format("Illegal column {} of first argument of function ", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -1426,7 +1426,7 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
         else
         {
             throw Exception(
-                fmt::format("Illegal column {} of first argument of function ", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -2419,7 +2419,7 @@ public:
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}.Should be MyDateTime", arguments[0].type->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}. Should be MyDateTime", arguments[0].type->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[1].type->isInteger())
             throw Exception(

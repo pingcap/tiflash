@@ -973,7 +973,7 @@ private:
                 return true;
             else
                 throw Exception(
-                    fmt::format("Illegal column {} of second argument of function ", col_right_untyped->getName(), getName()),
+                    fmt::format("Illegal column {} of second argument of function {}", col_right_untyped->getName(), getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -1683,7 +1683,7 @@ public:
         if (!success)
         {
             throw Exception(
-                fmt::format("Function {} executed on invalid arguments [col_left={}][col_right={}]", getName(), col_left_untyped->getName(), col_right_untyped->getName()));
+                fmt::format("Function {} executed on invalid arguments [col_left={}] [col_right={}]", getName(), col_left_untyped->getName(), col_right_untyped->getName()));
         }
     }
 
