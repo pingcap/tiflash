@@ -1,4 +1,3 @@
-
 mysql> drop table if exists test.t1
 mysql> create table test.t1 (id int, id1 TINYINT, id2 SMALLINT, id3 MEDIUMINT, id4 BIGINT, id5 FLOAT, id6 DOUBLE, id7 TINYINT UNSIGNED, id8 SMALLINT UNSIGNED, id9 BIGINT UNSIGNED)
 mysql> alter table test.t1 set tiflash replica 1
@@ -8,18 +7,17 @@ mysql> create table test.t2 (id1 BIGINT UNSIGNED, id2 BIGINT UNSIGNED, id3 BIGIN
 mysql> alter table test.t2 set tiflash replica 1
 mysql> insert into test.t2 values (18446744073709551615, 18446744073709551615, 9223372036854775807)
 
-
-func> wait_table test t1
+func> wait_table test t1, t2
 
 # least tests
 mysql> set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
-+------+---------------------------------------------------------+
-| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9 ) |
-+------+---------------------------------------------------------+
-|    1 |                                                       1 |
-|   90 |                                                       0 |
-| 1278 |                                                     121 |
-+------+---------------------------------------------------------+
++------+--------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) |
++------+--------------------------------------------------------+
+|    1 |                                                      1 |
+|   90 |                                                      0 |
+| 1278 |                                                    121 |
++------+--------------------------------------------------------+
 
 mysql> set tidb_enforce_mpp=1; select id, least(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
 +------+--------------------------------------------------------------+
@@ -98,13 +96,14 @@ mysql> set tidb_enforce_mpp=1; select least(id1, id3) from test.t2
 
 # greatest tests
 mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
-+------+------------------------------------------------------------+
-| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9 ) |
-+------+------------------------------------------------------------+
-|    1 |                                                         90 |
-|   90 |                                                         90 |
-| 1278 |                                          227183.1231823618 |
-+------+------------------------------------------------------------+
++------+-----------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) |
++------+-----------------------------------------------------------+
+|    1 |                                                        90 |
+|   90 |                                                        90 |
+| 1278 |                                         227183.1231823618 |
++------+-----------------------------------------------------------+
+
 
 mysql> set tidb_enforce_mpp=1; select id, greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
 +------+-----------------------------------------------------------------+
@@ -187,6 +186,3 @@ mysql> set tidb_enforce_mpp=1; select greatest(id3, id3) from test.t2
 +---------------------+
 | 9223372036854775807 |
 +---------------------+
-
-
-
