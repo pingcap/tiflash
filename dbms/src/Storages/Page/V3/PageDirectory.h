@@ -185,6 +185,8 @@ public:
     PageIDAndEntriesV3 get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
 
+    PageId getMaxId() const;
+
     std::set<PageId> getAllPageIds();
 
     void apply(PageEntriesEdit && edit);
@@ -214,6 +216,8 @@ private:
     WALStore wal;
 
     LogWithPrefixPtr log;
+
+    std::atomic<PageId> max_page_id;
 };
 
 } // namespace DB::PS::V3

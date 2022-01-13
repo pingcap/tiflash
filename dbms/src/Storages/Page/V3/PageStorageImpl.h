@@ -57,9 +57,6 @@ private:
 
     PageDirectory page_directory;
 
-    // Used to `getMaxId`
-    std::mutex pageid_mutex;
-
     BlobStore::Config blob_config;
 
     BlobStore blob_store;

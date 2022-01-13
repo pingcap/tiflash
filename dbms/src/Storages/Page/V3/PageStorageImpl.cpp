@@ -20,7 +20,6 @@ PageStorageImpl::PageStorageImpl(
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
-    // TBD: init blob_store ptr.
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
@@ -38,11 +37,8 @@ void PageStorageImpl::drop()
 
 PageId PageStorageImpl::getMaxId()
 {
-    std::lock_guard<std::mutex> write_lock(pageid_mutex);
-    // return page_directory.getSnapshot()->version()->maxId();
-    return 0;
+    return page_directory.getMaxId();
 }
-
 
 // FIXME: enable -Wunused-parameter
 #pragma GCC diagnostic push

@@ -244,6 +244,16 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     return id_entries;
 }
 
+PageId PageDirectory::getMaxId() const
+{
+    std::unique_lock write_lock(table_rw_mutex);
+    PageId max_page_id;
+    for (auto & [page_id, versioned] : mvcc_table_directory)
+    {
+        max_page_id = std::max(max_page_id, page_id);
+    }
+    return max_page_id;
+}
 
 std::set<PageId> PageDirectory::getAllPageIds()
 {
