@@ -14,6 +14,10 @@ using PlanPtr = std::shared_ptr<PlanBase>;
 class PlanBase
 {
 public:
+    PlanBase(String executor_id_)
+        : executor_id(executor_id_)
+    {}
+
     virtual ~PlanBase() = default;
 
     virtual PlanPtr children(size_t) const = 0;
@@ -31,6 +35,8 @@ public:
         assert(impl_ptr);
         ff(*impl_ptr);
     }
+
+    const String executor_id;
 };
 
 template <typename PlanImpl>
@@ -40,8 +46,8 @@ public:
     static constexpr size_t children_size = PlanImpl::children_size;
 
     Plan(const typename PlanImpl::Executor & executor_, String executor_id_)
-        : executor(executor_)
-        , executor_id(executor_id_)
+        : PlanBase(executor_id_)
+        , executor(executor_)
     {}
 
     PlanPtr children(size_t i) const override
@@ -88,7 +94,6 @@ public:
     }
 
     const typename PlanImpl::Executor & executor;
-    const String executor_id;
 
 private:
     PlanPtr left;

@@ -2,8 +2,8 @@
 
 #include <Flash/Plan/Plan.h>
 #include <Flash/Plan/Plans.h>
-#include <tipb/select.pb.h>
 #include <fmt/format.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
