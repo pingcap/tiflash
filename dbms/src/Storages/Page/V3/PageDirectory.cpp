@@ -246,8 +246,9 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
 
 PageId PageDirectory::getMaxId() const
 {
-    std::unique_lock write_lock(table_rw_mutex);
     PageId max_page_id;
+    std::unique_lock write_lock(table_rw_mutex);
+
     for (auto & [page_id, versioned] : mvcc_table_directory)
     {
         max_page_id = std::max(max_page_id, page_id);
@@ -258,6 +259,8 @@ PageId PageDirectory::getMaxId() const
 std::set<PageId> PageDirectory::getAllPageIds()
 {
     std::set<PageId> page_ids;
+    std::unique_lock write_lock(table_rw_mutex);
+
     for (auto & [page_id, versioned] : mvcc_table_directory)
     {
         (void)versioned;
@@ -384,15 +387,8 @@ std::set<PageId> PageDirectory::gcApply(const PageIdAndVersionedEntryList & migr
         return {};
     }
 
-    std::set<PageId> page_ids;
-    std::unique_lock write_lock(table_rw_mutex);
-
-    for (const auto & [page_id, versioned_entries] : mvcc_table_directory)
-    {
-        page_ids.insert(page_id);
-    }
-
-    return page_ids;
+    // Write lock inside
+    return getAllPageIds();
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
