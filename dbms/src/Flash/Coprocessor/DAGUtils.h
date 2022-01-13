@@ -30,7 +30,7 @@ tipb::Expr constructStringLiteralTiExpr(const String & value);
 tipb::Expr constructInt64LiteralTiExpr(Int64 value);
 tipb::Expr constructDateTimeLiteralTiExpr(UInt64 packed_value);
 tipb::Expr constructNULLLiteralTiExpr();
-DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
+std::tuple<Field, DataTypePtr, DataTypePtr> inferDataTypeForLiteral(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,
     const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);

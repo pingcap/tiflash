@@ -1000,7 +1000,7 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
     return false;
 }
 
-DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
+std::tuple<Field, DataTypePtr, DataTypePtr> inferDataTypeForLiteral(const tipb::Expr & expr)
 {
     Field value = decodeLiteral(expr);
     DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
@@ -1047,7 +1047,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
         target_type = removeNullable(target_type);
     }
-    return target_type;
+    return std::make_tuple(value, flash_type, target_type);
 }
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp)

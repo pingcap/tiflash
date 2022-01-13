@@ -227,8 +227,8 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        DataTypePtr type = inferDataType4Literal(child);
-        argument_types.push_back(type);
+        auto [value, flash_type, target_type] = inferDataTypeForLiteral(child);
+        argument_types.push_back(target_type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
     if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
@@ -995,9 +995,9 @@ void DAGExpressionAnalyzer::appendJoin(
 
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & join_keys,
     const DataTypes & key_types,
-    Names & key_names,
+    Names & key_names_out, // output variable
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -1008,9 +1008,9 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
     UniqueNameGenerator unique_name_generator;
 
-    for (int i = 0; i < keys.size(); i++)
+    for (int i = 0; i < join_keys.size(); i++)
     {
-        const auto & key = keys.at(i);
+        const auto & key = join_keys.at(i);
         bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
 
         String key_name = getActions(key, actions);
@@ -1025,8 +1025,8 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         {
             /// if the join key is a columnRef, then add a new column as the join key if needed.
             /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
-            /// where left_columns and right_columns don't include the join keys if they are ColumnRef
-            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join keys
+            /// where left_columns and right_columns don't include the join join_keys if they are ColumnRef
+            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join join_keys
             /// are ColumnRef, they will be included in both left_columns and right_columns
             /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
             /// In ClickHouse, it returns id,t1_value,t2_value
@@ -1052,7 +1052,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
                 has_actions = true;
             }
         }
-        key_names.push_back(key_name);
+        key_names_out.push_back(key_name);
         ret |= has_actions;
     }
 
@@ -1086,7 +1086,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
-        for (const auto & s : key_names)
+        for (const auto & s : key_names_out)
             needed_columns.insert(s);
         if (!filter_column_name.empty())
             needed_columns.insert(filter_column_name);
@@ -1369,30 +1369,29 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type)
+// construct actions according to tipb::Expr, and add into actions_out
+String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions_out, bool output_as_uint8_type)
 {
     String ret;
     if (isLiteralExpr(expr))
     {
-        Field value = decodeLiteral(expr);
-        DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-        DataTypePtr target_type = inferDataType4Literal(expr);
+        auto [value, flash_type, target_type] = inferDataTypeForLiteral(expr);
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
-        if (!actions->getSampleBlock().has(ret))
+        if (!actions_out->getSampleBlock().has(ret))
         {
             ColumnWithTypeAndName column;
             column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
             column.name = ret;
             column.type = target_type;
-            actions->add(ExpressionAction::addColumn(column));
+            actions_out->add(ExpressionAction::addColumn(column));
         }
         if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
         {
             /// append timezone cast for timestamp literal
             tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffsetFromUTC";
-            String tz_col = getActions(tz_expr, actions);
-            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
+            String tz_col = getActions(tz_expr, actions_out);
+            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions_out);
             ret = casted_name;
         }
     }
@@ -1405,19 +1404,19 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         const String & func_name = getFunctionName(expr);
         if (DAGExpressionAnalyzerHelper::function_builder_map.count(func_name) != 0)
         {
-            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions);
+            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions_out);
         }
         else
         {
-            ret = buildFunction(expr, actions);
+            ret = buildFunction(expr, actions_out);
         }
     }
     else
     {
-        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
+        throw TiFlashException("Unsupported tipb::Expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
     }
 
-    ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
+    ret = alignReturnType(expr, actions_out, ret, output_as_uint8_type);
     return ret;
 }
 
