@@ -12,9 +12,9 @@ static constexpr char MAIN_HELP[] =
     "Usage: dttool <subcommand> [args]\n"
     "Available Subcommands:\n"
     "  help        Print help message and exit.\n"
-    "  migrate     Migrate dmfile version.\n"
-    "  inspect     Inspect dmfile info.\n"
-    "  bench       Benchmark dmfile IO performance.";
+    "  migrate     Migrate dtfile version.\n"
+    "  inspect     Inspect dtfile info.\n"
+    "  bench       Benchmark dtfile IO performance.";
 // clang-format on
 
 extern "C" {

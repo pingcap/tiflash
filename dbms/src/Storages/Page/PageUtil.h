@@ -73,7 +73,7 @@ namespace PageUtil
 // (2G - 4k) is the best value. The reason for subtracting 4k instead of 1byte is that both vfs and disks need to be aligned.
 #define MAX_IO_SIZE ((2ULL * 1024 * 1024 * 1024) - (1024 * 4))
 
-UInt32 randInt(const UInt32 min, const UInt32 max);
+UInt32 randInt(UInt32 min, UInt32 max);
 
 // =========================================================
 // Helper functions
