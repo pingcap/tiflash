@@ -63,14 +63,27 @@ uint64_t getMemoryAmount()
                 // Try to lookup at the Cgroup limit
                 line = line.substr(mem_str_idx + memory_filter.length(), line.length());
                 std::ifstream cgroup_limit(fmt::format("/sys/fs/cgroup/memory{}/memory.limit_in_bytes", getpid()));
+                uint64_t memory_limit = 0;
                 if (cgroup_limit.is_open())
                 {
-                    uint64_t memory_limit = 0; // in case of read error
                     cgroup_limit >> memory_limit;
-                    if (memory_limit > 0 && memory_limit < memory_amount)
-                        memory_amount = memory_limit;
+                }
+                else
+                {
+                    // If process in docker, the cgroup file will on host.
+                    // Then we just read global cgroup file
+                    std::ifstream default_cgroup_limit("/sys/fs/cgroup/memory/memory.limit_in_bytes");
+                    if (default_cgroup_limit.is_open())
+                    {
+                        default_cgroup_limit >> memory_limit;
+                    }
+                    default_cgroup_limit.close();
                 }
                 cgroup_limit.close();
+
+                if (memory_limit > 0 && memory_limit < memory_amount)
+                    memory_amount = memory_limit;
+
                 break;
             }
         }
