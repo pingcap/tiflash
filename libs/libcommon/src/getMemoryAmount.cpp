@@ -61,8 +61,8 @@ uint64_t getMemoryAmount()
             if (mem_str_idx != std::string::npos)
             {
                 // Try to lookup at the Cgroup limit
-                line = line.substr(mem_str_idx + memory_filter.length(), line.length());
-                std::ifstream cgroup_limit(fmt::format("/sys/fs/cgroup/memory{}/memory.limit_in_bytes", getpid()));
+                std::ifstream cgroup_limit(fmt::format("/sys/fs/cgroup/memory{}/memory.limit_in_bytes",
+                                                       line.substr(mem_str_idx + memory_filter.length(), line.length())));
                 uint64_t memory_limit = 0;
                 if (cgroup_limit.is_open())
                 {

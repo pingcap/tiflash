@@ -34,35 +34,31 @@ extern const int CPUID_ERROR;
 } // namespace DB
 
 #if defined(__linux__)
-unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
-{
-    // Try to look at cgroups limit if it is available.
-    auto read_from = [](const char * filename, int default_value) -> int {
-        std::ifstream infile(filename);
-        if (!infile.is_open())
-        {
-            return default_value;
-        }
-        int idata;
-        if (infile >> idata)
-            return idata;
-        else
-            return default_value;
-    };
 
+// Try to look at cgroups limit if it is available.
+static inline int read_int_from(const char * filename, int default_value)
+{
+    std::ifstream infile(filename);
+    if (!infile.is_open())
+    {
+        return default_value;
+    }
+    int idata;
+    if (infile >> idata)
+        return idata;
+    else
+        return default_value;
+}
+
+unsigned calCPUCores(int cgroup_quota, int cgroup_period, int cgroup_share, unsigned default_cpu_count)
+{
     unsigned quota_count = default_cpu_count;
-    // Return the number of milliseconds per period process is guaranteed to run.
-    // -1 for no quota
-    int cgroup_quota = read_from("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
-    int cgroup_period = read_from("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
+
     if (cgroup_quota > -1 && cgroup_period > 0)
     {
         quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
     }
 
-    // Share number (typically a number relative to 1024) (2048 typically expresses 2 CPUs worth of processing)
-    // -1 for no share setup
-    int cgroup_share = read_from("/sys/fs/cgroup/cpu/cpu.shares", -1);
     // Convert 1024 to no shares setup
     if (cgroup_share == 1024)
         cgroup_share = -1;
@@ -75,6 +71,50 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
     }
 
     return std::min(default_cpu_count, std::min(share_count, quota_count));
+}
+
+unsigned getCGroupDefaultLimitedCPUCores(unsigned default_cpu_count)
+{
+    // Return the number of milliseconds per period process is guaranteed to run.
+    // -1 for no quota
+    int cgroup_quota = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
+    int cgroup_period = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
+    // Share number (typically a number relative to 1024) (2048 typically expresses 2 CPUs worth of processing)
+    int cgroup_share = read_int_from("/sys/fs/cgroup/cpu/cpu.shares", -1);
+
+    return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+}
+
+unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
+{
+    std::string cpu_filter = "cpuset:";
+    std::ifstream cgroup_cpu_info("/proc/self/cgroup");
+    if (cgroup_cpu_info.is_open())
+    {
+        std::string line;
+        while (std::getline(cgroup_cpu_info, line))
+        {
+            std::string::size_type cpu_str_idx = line.find(cpu_filter);
+            if (cpu_str_idx != std::string::npos)
+            {
+                line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
+                int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line), -2);
+
+                // If can't read cgroup_quota here
+                // It means current process may in docker
+                if (cgroup_quota == -2)
+                {
+                    return getCGroupDefaultLimitedCPUCores(default_cpu_count);
+                }
+                int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line), -1);
+                int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line), -1);
+
+                return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+            }
+        }
+    }
+
+    return getCGroupDefaultLimitedCPUCores(default_cpu_count);
 }
 #endif // __linux__
 
