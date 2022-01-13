@@ -1,6 +1,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -192,10 +193,10 @@ TEST_F(BlobStoreTest, testWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -284,10 +285,10 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size, field_sizes);
     }
 
@@ -342,7 +343,7 @@ TEST_F(BlobStoreTest, testWrite)
         for (size_t i = 0; i < buff_size; ++i)
         {
             c_buff1[i] = i & 0xff;
-            c_buff2[i] = (char)((i & 0xff) + 1);
+            c_buff2[i] = static_cast<char>((i & 0xff) + 1);
         }
 
         ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, buff_size);
@@ -448,7 +449,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         WriteBatch wb;
         char c_buff[buff_size];
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)c_buff, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
         wb.putPage(50, /*tag*/ 0, buff, buff_size);
 
         bool catch_exception = false;
@@ -474,8 +475,8 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         char c_buff1[buf_size];
         char c_buff2[buf_size];
 
-        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff1, buf_size);
-        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff2, buf_size);
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), buf_size);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), buf_size);
 
         wb.putPage(50, /*tag*/ 0, buff1, buf_size);
 
@@ -503,6 +504,208 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         ASSERT_EQ(record.entry.size, buf_size);
         ASSERT_EQ(record.entry.file_id, 1);
     }
+}
+
+TEST_F(BlobStoreTest, testBlobStoreGcStats)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    size_t buff_size = 1024;
+    size_t buff_nums = 10;
+    PageId page_id = 50;
+    auto blob_store = BlobStore(file_provider, path, config);
+    std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
+    std::list<size_t> remove_entries_idx2 = {6, 8};
+
+    WriteBatch wb;
+    {
+        char c_buff[buff_size];
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        }
+    }
+
+    auto edit = blob_store.write(wb, nullptr);
+
+    size_t idx = 0;
+    PageEntriesV3 entries_del1, entries_del2;
+    for (auto & record : edit.getRecords())
+    {
+        for (size_t index : remove_entries_idx1)
+        {
+            if (idx == index)
+            {
+                entries_del1.emplace_back(record.entry);
+                break;
+            }
+        }
+
+        for (size_t index : remove_entries_idx2)
+        {
+            if (idx == index)
+            {
+                entries_del2.emplace_back(record.entry);
+                break;
+            }
+        }
+
+        idx++;
+    }
+
+    // After remove `entries_del1`.
+    // Remain entries index [0, 2, 5, 6, 8]
+    blob_store.remove(entries_del1);
+    ASSERT_EQ(entries_del1.begin()->file_id, 0);
+
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.5);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 5);
+
+    // After remove `entries_del2`.
+    // Remain entries index [0, 2, 5].
+    // But file size still is 10 * 1024
+    blob_store.remove(entries_del2);
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.3);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
+
+    const auto & gc_stats = blob_store.getGCStats();
+    ASSERT_TRUE(gc_stats.empty());
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.5);
+    ASSERT_EQ(stat->sm_total_size, buff_size * 6);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
+
+    // Check disk file have been truncate to right margin
+    String path = blob_store.getBlobFilePath(0);
+    Poco::File blob_file_in_disk(path);
+    ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
+}
+
+TEST_F(BlobStoreTest, testBlobStoreGcStats2)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    size_t buff_size = 1024;
+    size_t buff_nums = 10;
+    PageId page_id = 50;
+    auto blob_store = BlobStore(file_provider, path, config);
+    std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
+
+    WriteBatch wb;
+    {
+        char c_buff[buff_size];
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        }
+    }
+
+    auto edit = blob_store.write(wb, nullptr);
+
+    size_t idx = 0;
+    PageEntriesV3 entries_del;
+    for (auto & record : edit.getRecords())
+    {
+        for (size_t index : remove_entries_idx)
+        {
+            if (idx == index)
+            {
+                entries_del.emplace_back(record.entry);
+                break;
+            }
+        }
+
+        idx++;
+    }
+
+    // After remove `entries_del`.
+    // Remain entries index [8, 9].
+    blob_store.remove(entries_del);
+
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+
+    const auto & gc_stats = blob_store.getGCStats();
+    ASSERT_FALSE(gc_stats.empty());
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.2);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
+
+    // Then we must do heavy GC
+    ASSERT_EQ(*gc_stats.begin(), 0);
+}
+
+
+TEST_F(BlobStoreTest, GC)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId page_id = 50;
+    size_t buff_nums = 21;
+    size_t buff_size = 123;
+
+    auto blob_store = BlobStore(file_provider, path, config);
+    char c_buff[buff_size * buff_nums];
+
+    WriteBatch wb;
+
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
+    }
+
+    ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
+    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    ASSERT_EQ(edit.size(), buff_nums);
+
+    VersionedEntries versioned_entries;
+    for (const auto & record : edit.getRecords())
+    {
+        versioned_entries.emplace_back(1, record.entry);
+    }
+
+    PageIdAndVersionedEntries versioned_pageid_entries;
+    versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
+    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
+    gc_context[0] = versioned_pageid_entries;
+
+    // Before we do BlobStore we need change BlobFile0 to Read-Only
+    auto stat = blob_store.blob_stats.fileIdToStat(0);
+    stat->changeToReadOnly();
+
+    const auto & copy_list = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+
+    // Check copy_list which will apply fo Mvcc
+    ASSERT_EQ(copy_list.size(), buff_nums);
+    auto it = versioned_entries.begin();
+    for (const auto & [page_id_, version_type, entry_] : copy_list)
+    {
+        (void)version_type;
+        ASSERT_EQ(page_id_, page_id);
+        ASSERT_EQ(entry_.file_id, 1);
+        ASSERT_EQ(it->second.checksum, entry_.checksum);
+        ASSERT_EQ(it->second.size, entry_.size);
+        it++;
+    }
+
+    // Check blobfile1
+    Poco::File file0(blob_store.getBlobFilePath(0));
+    Poco::File file1(blob_store.getBlobFilePath(1));
+    ASSERT_TRUE(file0.exists());
+    ASSERT_TRUE(file1.exists());
+    ASSERT_EQ(file0.getSize(), file1.getSize());
 }
 
 } // namespace DB::PS::V3::tests
