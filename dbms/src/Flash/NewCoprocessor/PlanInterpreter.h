@@ -2,10 +2,10 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
-#include <Flash/Plan/PlanBase.h>
+#include <Flash/NewCoprocessor/PlanQuerySource.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -20,6 +20,29 @@ namespace DB
 {
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
+class TableScanPlan;
+
+struct MiniQueryBlock
+{
+    PlanPtr source;
+    PlanPtr selection;
+    PlanPtr aggregation;
+    PlanPtr having;
+    PlanPtr limit;
+    PlanPtr top_n;
+    PlanPtr exchange_sender;
+
+    void reset()
+    {
+        source = nullptr;
+        selection = nullptr;
+        aggregation = nullptr;
+        having = nullptr;
+        limit = nullptr;
+        top_n = nullptr;
+        exchange_sender = nullptr;
+    }
+};
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
@@ -28,7 +51,7 @@ class PlanInterpreter
 public:
     PlanInterpreter(
         Context & context_,
-        const PlanPtr & root_plan_,
+        const PlanQuerySource & plan_query_source_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_,
@@ -38,9 +61,10 @@ public:
 
     BlockInputStreams execute();
 
+    static constexpr auto qb_column_prefix = "__QB_";
+
 private:
-    void executeImpl(DAGPipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeTS(const TableScanPlan & ts, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -51,7 +75,7 @@ private:
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    void executeExchangeReceiver(DAGPipeline & pipeline);
+    void executeExchangeReceiver(DAGPipeline & pipeline, String receiver_executor_id);
     void executeSourceProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void executeExtraCastAndSelection(
         DAGPipeline & pipeline,
@@ -80,8 +104,6 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
-
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
     void executeRemoteQueryImpl(
@@ -90,12 +112,14 @@ private:
         ::tipb::DAGRequest & dag_req,
         const DAGSchema & schema);
 
+    void executeNonSources(DAGPipeline & pipeline, bool is_root);
+
     DAGContext & dagContext() const { return *context.getDAGContext(); }
     const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
-    const PlanPtr & root_plan;
+    const PlanQuerySource & plan_query_source;
     const bool keep_session_timezone_info;
 
     NamesWithAliases final_project;
@@ -113,5 +137,7 @@ private:
     std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
     LogWithPrefixPtr log;
+
+    MiniQueryBlock query_block;
 };
 } // namespace DB

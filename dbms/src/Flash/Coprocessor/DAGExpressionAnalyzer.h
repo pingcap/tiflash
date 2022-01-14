@@ -106,7 +106,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const DAGQueryBlock & query_block);
+        const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(

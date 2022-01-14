@@ -8,20 +8,17 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int COP_BAD_DAG_REQUEST;
-} // namespace ErrorCodes
-
 PlanQuerySource::PlanQuerySource(Context & context_)
     : context(context_)
 {
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     root_plan = toPlan(dag_request);
 
-    std::vector<tipb::FieldType> output_field_types;
+    for (Int32 i : dag_request.output_offsets())
+        output_offsets.push_back(i);
+
     assert(root_plan->tp() == tipb::TypeExchangeSender);
-    root_plan->toImpl<ExchangeSenderPlan>([&output_field_types](const ExchangeSenderPlan & sender) {
+    root_plan->toImpl<ExchangeSenderPlan>([&](const ExchangeSenderPlan & sender) {
         assert(!sender.impl.all_field_types().empty());
         for (const auto & field_type : sender.impl.all_field_types())
         {

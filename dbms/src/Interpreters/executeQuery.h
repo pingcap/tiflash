@@ -39,6 +39,6 @@ BlockIO executeQuery(
 );
 
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
+BlockIO executeQuery(IQuerySource & query_source, Context & context, bool internal, QueryProcessingStage::Enum stage);
 
 } // namespace DB

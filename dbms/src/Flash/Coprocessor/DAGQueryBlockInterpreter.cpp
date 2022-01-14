@@ -100,7 +100,7 @@ bool addExtraCastsAfterTs(
     }
     if (!has_need_cast_column)
         return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, query_block);
+    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, query_block.source->tbl_scan().columns());
 }
 
 AnalysisResult analyzeExpressions(
@@ -267,7 +267,9 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     if (ts.next_read_engine() != tipb::EngineType::Local)
         throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
+
+    const tipb::Selection * pushed_down_selection = query_block.selection ? &query_block.selection->selection() : nullptr;
+    DAGStorageInterpreter storage_interpreter(context, pushed_down_selection, query_block.selection_name, ts, query_block.source_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);

@@ -21,6 +21,10 @@ public:
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
+    std::vector<tipb::FieldType> output_field_types;
+    // kinds of project
+    std::vector<Int32> output_offsets;
+
 private:
     Context & context;
     PlanPtr root_plan;

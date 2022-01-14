@@ -3,8 +3,6 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -33,8 +31,10 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const DAGQueryBlock & query_block_,
-        const tipb::TableScan & ts,
+        const tipb::Selection * sel_,
+        const String & sel_executor_id_,
+        const tipb::TableScan & ts_,
+        const String & ts_executor_id_,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_);
 
@@ -74,8 +74,10 @@ private:
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const DAGQueryBlock & query_block;
+    const tipb::Selection * selection;
+    String sel_executor_id;
     const tipb::TableScan & table_scan;
+    String ts_executor_id;
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
     LogWithPrefixPtr log;

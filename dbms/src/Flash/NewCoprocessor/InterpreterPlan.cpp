@@ -34,7 +34,7 @@ BlockInputStreams InterpreterPlan::executePlan(std::vector<SubqueriesForSets> & 
 {
     return PlanInterpreter(
                context,
-               plan_query_source.getRootPlan(),
+               plan_query_source,
                max_streams,
                dagContext().keep_session_timezone_info,
                subqueries_for_sets,

@@ -1,6 +1,5 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Flash/NewCoprocessor/PlanQuerySource.h>
 #include <Parsers/makeDummyQuery.h>
 
 namespace DB
@@ -13,7 +12,6 @@ extern const int COP_BAD_DAG_REQUEST;
 DAGQuerySource::DAGQuerySource(Context & context_)
     : context(context_)
 {
-    auto plan_query_source = PlanQuerySource{context_};
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     if (dag_request.has_root_executor())
     {

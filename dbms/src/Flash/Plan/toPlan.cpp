@@ -52,18 +52,15 @@ PlanPtr arrayToPlan(const tipb::DAGRequest & dag_request)
     for (; iter >= 0; --iter)
     {
         next = to_plan(dag_request.executors(iter), iter);
+        // TODO remove pushed down filter
         if (cur->tp() == tipb::TypeTableScan && next->tp() == tipb::TypeSelection)
         {
             cur->toImpl<TableScanPlan>([&next](TableScanPlan & table_scan) {
                 table_scan.pushDownFilter(std::dynamic_pointer_cast<FilterPlan>(next));
             });
-            next = cur;
         }
-        else
-        {
-            next->appendChild(cur);
-            cur = next;
-        }
+        next->appendChild(cur);
+        cur = next;
     }
     return cur;
 }
@@ -95,18 +92,15 @@ PlanPtr treeToPlan(const tipb::Executor & executor)
     {
         std::shared_ptr<FilterPlan> sel = std::make_shared<FilterPlan>(executor.selection(), executor.executor_id());
         PlanPtr sel_child = treeToPlan(executor.selection().child());
+        // TODO remove pushed down filter
         if (sel_child->tp() == tipb::TypeTableScan)
         {
             sel_child->toImpl<TableScanPlan>([&sel](TableScanPlan & table_scan) {
                 table_scan.pushDownFilter(sel);
             });
-            return sel_child;
         }
-        else
-        {
-            sel->appendChild(treeToPlan(executor.selection().child()));
-            return sel;
-        }
+        sel->appendChild(sel_child);
+        return sel;
     }
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:

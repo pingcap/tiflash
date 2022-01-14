@@ -119,17 +119,21 @@ MakeRegionQueryInfos(
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const DAGQueryBlock & query_block_,
-    const tipb::TableScan & ts,
+    const tipb::Selection * sel_,
+    const String & sel_executor_id_,
+    const tipb::TableScan & ts_,
+    const String & ts_executor_id_,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_)
     : context(context_)
-    , query_block(query_block_)
-    , table_scan(ts)
+    , selection(sel_)
+    , sel_executor_id(sel_executor_id_)
+    , table_scan(ts_)
+    , ts_executor_id(ts_executor_id_)
     , conditions(conditions_)
     , max_streams(max_streams_)
     , log(getMPPTaskLog(*context.getDAGContext(), "DAGStorageInterpreter"))
-    , table_id(ts.table_id())
+    , table_id(ts_.table_id())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
@@ -536,12 +540,12 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     DAGSchema schema;
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
-    if (query_block.selection != nullptr)
+    if (selection != nullptr)
     {
         executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(query_block.selection->executor_id());
+        executor->set_executor_id(sel_executor_id);
         auto * selection = executor->mutable_selection();
-        for (auto & condition : query_block.selection->selection().conditions())
+        for (auto & condition : selection->conditions())
             *selection->add_conditions() = condition;
         executor = selection->mutable_child();
     }
@@ -550,7 +554,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         const auto & table_info = storage->getTableInfo();
         tipb::Executor * ts_exec = executor;
         ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-        ts_exec->set_executor_id(query_block.source->executor_id());
+        ts_exec->set_executor_id(ts_executor_id);
         *(ts_exec->mutable_tbl_scan()) = table_scan;
 
         for (int i = 0; i < table_scan.columns().size(); ++i)
