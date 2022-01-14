@@ -3,6 +3,7 @@ include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 add_headers_and_sources(flash_service .)
 add_headers_and_sources(flash_service ./Coprocessor)
 add_headers_and_sources(flash_service ./Mpp)
+add_headers_and_sources(flash_service ./NewCoprocessor)
 add_headers_and_sources(flash_service ./Plan)
 add_headers_and_sources(flash_service ./Statistics)
 

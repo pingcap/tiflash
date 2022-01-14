@@ -78,8 +78,17 @@ PlanPtr treeToPlan(const tipb::Executor & executor)
     case tipb::ExecType::TypeJoin:
     {
         PlanPtr join = std::make_shared<JoinPlan>(executor.join(), executor.executor_id());
-        join->appendChild(treeToPlan(executor.join().children(0)));
-        join->appendChild(treeToPlan(executor.join().children(1)));
+
+        // split left query block
+        PlanPtr join_left_place = std::make_shared<PlacePlan>();
+        join_left_place->appendChild(treeToPlan(executor.join().children(0)));
+        join->appendChild(join_left_place);
+
+        // split right query block
+        PlanPtr join_right_place = std::make_shared<PlacePlan>();
+        join_right_place->appendChild(treeToPlan(executor.join().children(1)));
+        join->appendChild(join_right_place);
+
         return join;
     }
     case tipb::ExecType::TypeSelection:
@@ -121,7 +130,10 @@ PlanPtr treeToPlan(const tipb::Executor & executor)
     case tipb::ExecType::TypeProjection:
     {
         PlanPtr proj = std::make_shared<ProjectPlan>(executor.projection(), executor.executor_id());
-        proj->appendChild(treeToPlan(executor.projection().child()));
+        PlanPtr proj_place = std::make_shared<PlacePlan>();
+        // split query block
+        proj_place->appendChild(treeToPlan(executor.projection().child()));
+        proj->appendChild(proj_place);
         return proj;
     }
     case tipb::ExecType::TypeExchangeSender:

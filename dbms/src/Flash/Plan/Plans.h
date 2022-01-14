@@ -140,4 +140,26 @@ public:
         pushed_down_filter = filter;
     }
 };
+
+// just for place, to split query block.
+struct PlaceImpl
+{
+    static constexpr size_t children_size = 1;
+
+    // hack
+    using Executor = tipb::Kill;
+
+    static tipb::ExecType tp()
+    {
+        return tipb::ExecType::TypeKill;
+    }
+};
+using PlacePlanBase = Plan<PlaceImpl>;
+class PlacePlan : public PlacePlanBase
+{
+public:
+    PlacePlan()
+        : PlacePlanBase(tipb::Kill{}, "place")
+    {}
+};
 } // namespace DB

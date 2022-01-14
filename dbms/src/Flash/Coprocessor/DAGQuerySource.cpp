@@ -1,7 +1,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Flash/Plan/foreach.h>
-#include <Flash/Plan/toPlan.h>
+#include <Flash/NewCoprocessor/PlanQuerySource.h>
 #include <Parsers/makeDummyQuery.h>
 
 namespace DB
@@ -14,11 +13,8 @@ extern const int COP_BAD_DAG_REQUEST;
 DAGQuerySource::DAGQuerySource(Context & context_)
     : context(context_)
 {
+    auto plan_query_source = PlanQuerySource{context_};
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
-    PlanPtr plan = toPlan(dag_request);
-    foreachDown(plan, [](const PlanPtr & p) {
-        std::cout << p->executor_id << std::endl;
-    });
     if (dag_request.has_root_executor())
     {
         QueryBlockIDGenerator id_generator;
