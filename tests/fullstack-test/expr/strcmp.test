@@ -59,7 +59,7 @@ mysql> set @@tidb_enforce_mpp = 1; select strcmp(a, NULL) from test.t;
 
 mysql> set @@tidb_enforce_mpp = 1; select strcmp(NULL, a) from test.t;
 +-----------------+
-| strcmp(a, NULL) |
+| strcmp(NULL, a) |
 +-----------------+
 |            NULL |
 |            NULL |
