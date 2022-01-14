@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Flash/Plan/Plan.h>
+#include <Flash/Plan/PlanBase.h>
 
 namespace DB
 {

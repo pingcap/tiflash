@@ -125,10 +125,19 @@ using TableScanPlanBase = Plan<TableScanImpl>;
 class TableScanPlan : public TableScanPlanBase
 {
 public:
-    TableScanPlan(const TableScanImpl::Executor & executor_, String executor_id_)
+    TableScanPlan(const TableScanImpl::Executor & executor_, const String & executor_id_)
         : TableScanPlanBase(executor_, executor_id_)
     {}
 
-    std::shared_ptr<FilterPlan> push_down_filter;
+    std::shared_ptr<FilterPlan> pushed_down_filter;
+
+    void pushDownFilter(const std::shared_ptr<FilterPlan> & filter)
+    {
+        if (pushed_down_filter)
+            throw TiFlashException("table scan already has a push-down filter", Errors::Coprocessor::Internal);
+        if (!filter)
+            throw TiFlashException("pushed down filter is nullptr", Errors::Coprocessor::Internal);
+        pushed_down_filter = filter;
+    }
 };
 } // namespace DB

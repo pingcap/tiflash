@@ -2,52 +2,25 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
+#include <Flash/Plan/PlanBase.h>
+#include <common/types.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>
 
 namespace DB
 {
-class PlanBase;
-using PlanPtr = std::shared_ptr<PlanBase>;
-
-class PlanBase
-{
-public:
-    PlanBase(String executor_id_)
-        : executor_id(executor_id_)
-    {}
-
-    virtual ~PlanBase() = default;
-
-    virtual PlanPtr children(size_t) const = 0;
-
-    virtual tipb::ExecType tp() const = 0;
-
-    virtual void appendChild(const PlanPtr &) = 0;
-
-    virtual size_t childrenSize() const = 0;
-
-    template <typename PlanImpl, typename FF>
-    void cast(FF && ff)
-    {
-        PlanImpl * impl_ptr = dynamic_cast<PlanImpl *>(this);
-        assert(impl_ptr);
-        ff(*impl_ptr);
-    }
-
-    const String executor_id;
-};
-
 template <typename PlanImpl>
 class Plan : public PlanBase
 {
 public:
     static constexpr size_t children_size = PlanImpl::children_size;
+    // tipb::executor.children().size() <= 2
+    static_assert(children_size <= 2);
 
     Plan(const typename PlanImpl::Executor & executor_, String executor_id_)
         : PlanBase(executor_id_)
-        , executor(executor_)
+        , impl(executor_)
     {}
 
     PlanPtr children(size_t i) const override
@@ -60,12 +33,12 @@ public:
     {
         if constexpr (0 == children_size)
         {
-            throw Exception("");
+            throw TiFlashException("can't append child to plan that children_size == 0", Errors::Coprocessor::Internal);
         }
         else if constexpr (1 == children_size)
         {
             if (left)
-                throw Exception("");
+                throw TiFlashException("can't append second child to plan that children_size == 1", Errors::Coprocessor::Internal);
             left = child;
         }
         else
@@ -73,7 +46,7 @@ public:
             if (left)
             {
                 if (right)
-                    throw Exception("");
+                    throw TiFlashException("can't append third child to plan that children_size == 2", Errors::Coprocessor::Internal);
                 right = child;
             }
             else
@@ -93,7 +66,7 @@ public:
         return children_size;
     }
 
-    const typename PlanImpl::Executor & executor;
+    const typename PlanImpl::Executor & impl;
 
 private:
     PlanPtr left;
