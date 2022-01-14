@@ -6,6 +6,8 @@ namespace DB
 {
 namespace DM
 {
+class ColumnTinyFile;
+using ColumnTinyFilePtr = std::shared_ptr<ColumnTinyFile>;
 class ColumnTinyFileReader;
 
 class ColumnTinyFile : public ColumnStableFile
@@ -13,9 +15,6 @@ class ColumnTinyFile : public ColumnStableFile
     friend class ColumnTinyFileReader;
 private:
     BlockPtr schema;
-    // TODO: figure out the concurrency problem with this cache
-    BlockPtr cache;
-    mutable std::mutex mutex;
 
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -25,6 +24,8 @@ private:
 
     // The members below are not serialized.
 
+    // The cache data in memory.
+    CachePtr cache;
     // Used to map column id to column instance in a Block.
     ColIdToOffset colid_to_offset;
 
@@ -44,12 +45,12 @@ private:
     }
 
 public:
-    ColumnTinyFile(const BlockPtr & schema_, const BlockPtr & cache_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_)
+    ColumnTinyFile(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_,  const CachePtr & cache_ = nullptr)
         : schema(schema_),
-          cache(cache_),
           rows(rows_),
           bytes(bytes_),
-          data_page_id(data_page_id_)
+          data_page_id(data_page_id_),
+          cache(cache_)
     {
         colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
@@ -59,31 +60,46 @@ public:
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
-    void clearCache()
+    Type getType() const override { return Type::TINY_FILE; }
+
+    ColumnTinyFilePtr cloneWithoutCache()
     {
-        std::scoped_lock lock(mutex);
-        cache = {};
+        return std::make_shared<ColumnTinyFile>(schema, rows, bytes, data_page_id);
     }
 
     /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
     BlockPtr getSchema() const { return schema; }
-    /// Update the schema object. It is used to reduce the serialization/deserialization of schema objects.
-    /// Note that the caller must make sure that the new schema instance is identical to the current one.
-    void setSchema(const BlockPtr & v) { schema = v; }
-    /// Replace the schema with a new schema, and the new schema intance should be exactly the same as the previous one.
-    void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
+
+    PageId getDataPageId() const { return data_page_id; }
 
     void removeData(WriteBatches & wbs) const override
     {
         wbs.removed_log.delPage(data_page_id);
     }
 
+    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
+
+    static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
+
     ColumnFileReaderPtr
     getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
-    void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
-};
+    Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
+    void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+
+    static std::tuple<ColumnStableFilePtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
+
+    String toString() const override
+    {
+        String s = "{tiny file,rows:" + DB::toString(rows) //
+                   + ",bytes:" + DB::toString(bytes) //
+                   + ",data_page_id:" + DB::toString(data_page_id) //
+                   + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+                   + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
+        return s;
+    }
+};
 
 class ColumnTinyFileReader : public ColumnFileReader
 {

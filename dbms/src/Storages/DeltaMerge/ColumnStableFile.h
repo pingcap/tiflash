@@ -9,18 +9,9 @@ namespace DM
 class ColumnStableFile : public ColumnFile
 {
 public:
-    // distinguish metadata between different kinds of `ColumnFile`
-    enum Type : UInt32
-    {
-        DELETE_RANGE = 1,
-        TINY_FILE = 2,
-        BIG_FILE = 3,
-    };
-
-    virtual Type getType() const = 0;
     /// Put the data's page id into the corresponding WriteBatch.
     /// The actual remove will be done later.
-    virtual void removeData(WriteBatches &) const = 0;
+    virtual void removeData(WriteBatches &) const {};
 
     virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 };
@@ -30,5 +21,20 @@ BlockPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
+
+/// Serialize those packs' metadata into buf.
+/// Note that this method stop at the first unsaved pack.
+void serializeColumnStableFiles(WriteBuffer & buf, const ColumnStableFiles & column_files);
+/// Recreate pack instances from buf.
+ColumnStableFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+
+void serializeColumnStableFiles_V2(WriteBuffer & buf, const ColumnStableFiles & column_files);
+ColumnStableFiles deserializeColumnStableFiles_V2(ReadBuffer & buf, UInt64 version);
+
+void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnStableFiles & column_files);
+ColumnStableFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
+
+/// Debugging string
+String columnFilesToString(const ColumnFiles & column_files);
 }
 }

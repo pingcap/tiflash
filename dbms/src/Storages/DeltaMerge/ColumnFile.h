@@ -11,7 +11,19 @@ namespace DB
 {
 namespace DM
 {
+static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
+
 struct DMContext;
+class ColumnFile;
+class ColumnInMemoryFile;
+class ColumnTinyFile;
+class ColumnDeleteRangeFile;
+class ColumnBigFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+using ColumnFiles = std::vector<ColumnFilePtr>;
+class ColumnStableFile;
+using ColumnStableFilePtr = std::shared_ptr<ColumnStableFile>;
+using ColumnStableFiles = std::vector<ColumnStableFilePtr>;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
@@ -20,8 +32,30 @@ class ColumnFile
 protected:
     virtual ~ColumnFile() = default;
 
-protected:
+public:
+    struct Cache
+    {
+        Cache(const Block & header)
+            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
+        {}
+        Cache(Block && block)
+            : block(std::move(block))
+        {}
+
+        std::mutex mutex;
+        Block block;
+    };
+    using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
+
+    // distinguish metadata between different kinds of `ColumnFile`
+    enum Type : UInt32
+    {
+        DELETE_RANGE = 1,
+        TINY_FILE = 2,
+        BIG_FILE = 3,
+        INMEMORY_FILE = 4,
+    };
 
 public:
     virtual bool isAppendable() const { return false; }
@@ -35,12 +69,33 @@ public:
     virtual size_t getBytes() const { return 0; };
     virtual size_t getDeletes() const { return 0; };
 
+    virtual Type getType() const = 0;
+
+    /// Is a DeltaPackBlock or not.
+    bool isInMemoryFile() const { return getType() == Type::INMEMORY_FILE; }
+    /// Is a DeltaPackFile or not.
+    bool isTinyFile() const { return getType() == Type::TINY_FILE; }
+    /// Is a DeltaPackDeleteRange or not.
+    bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
+
+    bool isBigFile() const { return getType() == Type::BIG_FILE; };
+
+    ColumnInMemoryFile * tryToInMemoryFile();
+    ColumnTinyFile * tryToTinyFile();
+    ColumnDeleteRangeFile * tryToDeleteRange();
+    ColumnBigFile * tryToBigFile();
+
+    virtual ColumnStableFilePtr flush()
+    {
+        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
+    }
+
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+
+    virtual String toString() const = 0;
 };
 
-using ColumnFilePtr = std::shared_ptr<ColumnFile>;
-using ColumnFiles = std::vector<ColumnFilePtr>;
 
 class ColumnFileReader
 {

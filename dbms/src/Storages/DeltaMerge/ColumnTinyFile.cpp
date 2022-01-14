@@ -9,7 +9,6 @@ namespace DM
 {
 Columns ColumnTinyFile::readFromCache(const ColumnDefines & column_defines, size_t col_start, size_t col_end) const
 {
-    std::scoped_lock lock(mutex);
     if (!cache)
         return {};
 
@@ -23,7 +22,7 @@ Columns ColumnTinyFile::readFromCache(const ColumnDefines & column_defines, size
             // Copy data from cache
             const auto & type = getDataType(cd.id);
             auto col_data = type->createColumn();
-            col_data->insertRangeFrom(*cache->getByPosition(col_offset).column, 0, rows);
+            col_data->insertRangeFrom(*cache->block.getByPosition(col_offset).column, 0, rows);
             // Cast if need
             auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
             columns.push_back(std::move(col_converted));
@@ -117,6 +116,93 @@ void ColumnTinyFile::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(data_page_id, buf);
     writeIntBinary(rows, buf);
     writeIntBinary(bytes, buf);
+}
+
+std::tuple<ColumnStableFilePtr, BlockPtr> ColumnTinyFile::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
+{
+    auto schema = deserializeSchema(buf);
+    if (!schema)
+        schema = last_schema;
+    if (unlikely(!schema))
+        throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
+
+    PageId data_page_id;
+    size_t rows, bytes;
+
+    readIntBinary(data_page_id, buf);
+    readIntBinary(rows, buf);
+    readIntBinary(bytes, buf);
+
+    return {std::make_shared<ColumnTinyFile>(schema, rows, bytes, data_page_id), std::move(schema)};
+}
+
+Block ColumnTinyFile::readBlockForMinorCompaction(const PageReader & page_reader) const
+{
+    if (cache)
+    {
+        std::scoped_lock lock(cache->mutex);
+
+        auto & cache_block = cache->block;
+        MutableColumns columns = cache_block.cloneEmptyColumns();
+        for (size_t i = 0; i < cache_block.columns(); ++i)
+            columns[i]->insertRangeFrom(*cache_block.getByPosition(i).column, 0, rows);
+        return cache_block.cloneWithColumns(std::move(columns));
+    }
+    else
+    {
+        auto & schema_ = *schema;
+
+        PageStorage::PageReadFields fields;
+        fields.first = data_page_id;
+        for (size_t i = 0; i < schema_.columns(); ++i)
+            fields.second.push_back(i);
+
+        auto page_map = page_reader.read({fields});
+        auto page = page_map[data_page_id];
+
+        auto columns = schema_.cloneEmptyColumns();
+
+        if (unlikely(columns.size() != page.fieldSize()))
+            throw Exception("Column size and field size not the same");
+
+        for (size_t index = 0; index < schema_.columns(); ++index)
+        {
+            auto data_buf = page.getFieldData(index);
+            auto & type = schema_.getByPosition(index).type;
+            auto & column = columns[index];
+            deserializeColumn(*column, type, data_buf, rows);
+        }
+
+        return schema_.cloneWithColumns(std::move(columns));
+    }
+}
+
+ColumnTinyFilePtr ColumnTinyFile::writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema, const CachePtr & cache)
+{
+    auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
+    auto new_column_file_schema = schema ? schema : std::make_shared<Block>(block.cloneEmpty());
+    auto bytes = block.bytes(offset, limit);
+    return std::make_shared<ColumnTinyFile>(new_column_file_schema, limit, bytes, page_id, cache);
+}
+
+PageId ColumnTinyFile::writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+{
+    auto page_id = context.storage_pool.newLogPageId();
+
+    MemoryWriteBuffer write_buf;
+    PageFieldSizes col_data_sizes;
+    for (auto & col : block)
+    {
+        auto last_buf_size = write_buf.count();
+        serializeColumn(write_buf, *col.column, col.type, offset, limit, true);
+        col_data_sizes.push_back(write_buf.count() - last_buf_size);
+    }
+
+    auto data_size = write_buf.count();
+    auto buf = write_buf.tryGetReadBuffer();
+    wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
+
+    return page_id;
 }
 
 

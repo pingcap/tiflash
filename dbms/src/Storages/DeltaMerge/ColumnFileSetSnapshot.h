@@ -6,10 +6,41 @@ namespace DB
 {
 namespace DM
 {
+class ColumnFileSetSnapshot;
+using ColumnFileSetSnapshotPtr = std::shared_ptr<ColumnFileSetSnapshot>;
+class ColumnFileSetReader;
+using ColumnFileSetReaderPtr = std::shared_ptr<ColumnFileSetReader>;
+
+class BlockOrDelete
+{
+private:
+    Block block;
+    size_t block_offset;
+
+    RowKeyRange delete_range;
+
+public:
+    BlockOrDelete(Block && block_, size_t offset_)
+        : block(block_)
+        , block_offset(offset_)
+    {}
+    BlockOrDelete(const RowKeyRange & delete_range_)
+        : delete_range(delete_range_)
+    {}
+
+    bool isBlock() { return (bool)block; }
+    auto & getBlock() { return block; };
+    auto getBlockOffset() { return block_offset; }
+    auto & getDeleteRange() { return delete_range; }
+};
+
+using BlockOrDeletes = std::vector<BlockOrDelete>;
+
 class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetSnapshot>
     , private boost::noncopyable
 {
     friend class MemTableSet;
+    friend class ColumnStableFileSet;
 private:
     StorageSnapshotPtr storage_snap;
 
@@ -26,6 +57,20 @@ public:
         :storage_snap{storage_snap_}
     {}
 
+    ColumnFileSetSnapshotPtr clone()
+    {
+        auto c = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
+        c->storage_snap = storage_snap;
+        c->column_files = column_files;
+        c->rows = rows;
+        c->bytes = bytes;
+        c->deletes = deletes;
+        c->is_common_handle = is_common_handle;
+        c->rowkey_column_size = rowkey_column_size;
+
+        return c;
+    }
+
     ColumnFiles & getColumnFiles() { return column_files; }
 
     size_t getColumnFilesCount() const { return column_files.size(); }
@@ -33,10 +78,10 @@ public:
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
 
+    RowKeyRange getSquashDeleteRange() const;
+
     const auto & getStorageSnapshot() { return storage_snap; }
 };
-
-using ColumnFileSetSnapshotPtr = std::shared_ptr<ColumnFileSetSnapshot>;
 
 class ColumnFileSetReader
 {
@@ -54,6 +99,9 @@ private:
 
     std::vector<ColumnFileReaderPtr> column_file_readers;
 
+private:
+    Block readPKVersion(size_t offset, size_t limit);
+
 public:
     ColumnFileSetReader(const DMContext & context_,
                    const ColumnFileSetSnapshotPtr & snapshot_,
@@ -63,6 +111,13 @@ public:
     // Use for DeltaMergeBlockInputStream to read rows from MemTableSet to do full compaction with other layer.
     // This method will check whether offset and limit are valid. It only return those valid rows.
     size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range);
+
+    void getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
+
+    bool shouldPlace(const DMContext & context,
+                     const RowKeyRange & relevant_range,
+                     UInt64 max_version,
+                     size_t placed_rows);
 };
 }
 }

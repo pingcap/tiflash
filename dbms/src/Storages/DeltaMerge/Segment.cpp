@@ -276,10 +276,10 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-bool Segment::writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack)
+bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << pack->getRows() << ", isFile" << pack->isFile());
-    return delta->appendPack(dm_context, pack);
+    LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << column_file->getRows() << ", isFile" << column_file->isBigFile());
+    return delta->appendColumnFile(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
@@ -295,10 +295,10 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto pack = DeltaPackBlock::writePack(dm_context, block, 0, block.rows(), wbs);
+    auto column_file = ColumnTinyFile::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
-    if (delta->appendPack(dm_context, pack))
+    if (delta->appendColumnFile(dm_context, column_file))
     {
         flushCache(dm_context);
         return true;

@@ -16,7 +16,7 @@ public:
         : delete_range(delete_range_)
     {}
     explicit ColumnDeleteRangeFile(RowKeyRange && delete_range_)
-    : delete_range(std::move(delete_range_))
+        : delete_range(std::move(delete_range_))
     {}
     ColumnDeleteRangeFile(const ColumnDeleteRangeFile &) = default;
 
@@ -28,7 +28,13 @@ public:
 
     size_t getDeletes() const override { return 1; };
 
+    Type getType() const override { return Type::DELETE_RANGE; }
+
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+
+    static ColumnStableFilePtr deserializeMetadata(ReadBuffer & buf);
+
+    String toString() const override { return "{delete_range:" + delete_range.toString() + ", saved: " + DB::toString(saved) + "}"; }
 };
 
 class ColumnFileEmptyReader : public ColumnFileReader

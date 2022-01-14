@@ -10,6 +10,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/MemTableSet.h>
+#include <Storages/DeltaMerge/ColumnStableFileSet.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -32,11 +34,16 @@ using Segments = std::vector<SegmentPtr>;
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot : private boost::noncopyable
 {
-    DeltaSnapshotPtr delta;
+    ColumnFileSetSnapshotPtr mem_table;
+    ColumnStableFileSetSnapshotPtr stable_file_set;
     StableSnapshotPtr stable;
 
-    SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_)
-        : delta(std::move(delta_))
+    SegmentSnapshot(
+        ColumnFileSetSnapshotPtr && mem_table_,
+        ColumnStableFileSetSnapshotPtr && stable_file_set_,
+        StableSnapshotPtr && stable_)
+        : mem_table(std::move(mem_table_))
+        , stable_file_set(std::move(stable_file_set_))
         , stable(std::move(stable_))
     {}
 
@@ -122,7 +129,7 @@ public:
 
     void serialize(WriteBatch & wb);
 
-    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
+    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);

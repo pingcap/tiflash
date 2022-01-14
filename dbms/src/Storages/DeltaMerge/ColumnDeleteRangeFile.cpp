@@ -16,6 +16,11 @@ void ColumnDeleteRangeFile::serializeMetadata(WriteBuffer & buf, bool /*save_sch
     delete_range.serialize(buf);
 }
 
+ColumnStableFilePtr ColumnDeleteRangeFile::deserializeMetadata(ReadBuffer & buf)
+{
+    return std::make_shared<ColumnDeleteRangeFile>(RowKeyRange::deserialize(buf));
+}
+
 ColumnFileReaderPtr ColumnFileEmptyReader::createNewReader(const ColumnDefinesPtr &)
 {
     return std::make_shared<ColumnFileEmptyReader>();

@@ -1,15 +1,39 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnDeleteRangeFile.h>
 
 namespace DB
 {
 namespace DM
 {
+ColumnInMemoryFile * ColumnFile::tryToInMemoryFile()
+{
+    return !isInMemoryFile() ? nullptr : static_cast<ColumnInMemoryFile *>(this);
+}
+
+ColumnTinyFile * ColumnFile::tryToTinyFile()
+{
+    return !isTinyFile() ? nullptr : static_cast<ColumnTinyFile *>(this);
+}
+
+ColumnDeleteRangeFile * ColumnFile::tryToDeleteRange()
+{
+    return !isDeleteRange() ? nullptr : static_cast<ColumnDeleteRangeFile *>(this);
+}
+
+ColumnBigFile * ColumnFile::tryToBigFile()
+{
+//    return !isBigFile() ? nullptr : static_cast<ColumnBigFile *>(this);
+        return nullptr;
+}
+
+
 /// ======================================================
 /// Helper methods.
 /// ======================================================
-
 size_t copyColumnsData(
     const Columns & from,
     const ColumnPtr & pk_col,
@@ -57,5 +81,6 @@ size_t copyColumnsData(
         return rows_limit;
     }
 }
+
 }
 }

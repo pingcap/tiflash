@@ -15,6 +15,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/DeltaMerge/MemTableSet.h>
+#include <Storages/DeltaMerge/ColumnStableFileSet.h>
 
 namespace DB
 {
@@ -40,30 +42,7 @@ class StoragePool;
 
 static std::atomic_uint64_t NEXT_PACK_ID{0};
 
-class BlockOrDelete
-{
-private:
-    Block block;
-    size_t block_offset;
 
-    RowKeyRange delete_range;
-
-public:
-    BlockOrDelete(Block && block_, size_t offset_)
-        : block(block_)
-        , block_offset(offset_)
-    {}
-    BlockOrDelete(const RowKeyRange & delete_range_)
-        : delete_range(delete_range_)
-    {}
-
-    bool isBlock() { return (bool)block; }
-    auto & getBlock() { return block; };
-    auto getBlockOffset() { return block_offset; }
-    auto & getDeleteRange() { return delete_range; }
-};
-
-using BlockOrDeletes = std::vector<BlockOrDelete>;
 
 class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
     , private boost::noncopyable
@@ -74,21 +53,12 @@ public:
     using Lock = std::unique_lock<std::mutex>;
 
 private:
-    PageId id;
-    DeltaPacks packs;
+    MemTableSetPtr mem_table_set;
 
-    std::atomic<size_t> rows = 0;
-    std::atomic<size_t> bytes = 0;
-    std::atomic<size_t> deletes = 0;
-
-    std::atomic<size_t> unsaved_rows = 0;
-    std::atomic<size_t> unsaved_bytes = 0;
-    std::atomic<size_t> unsaved_deletes = 0;
+    ColumnStableFileSetPtr column_stable_file_set;
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
     std::atomic_bool abandoned = false;
-    /// We need to run compact.
-    std::atomic_bool shouldCompact = false;
     /// Current segment is being compacted, split, merged or merged delta.
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
@@ -109,27 +79,12 @@ private:
 
     Poco::Logger * log;
 
-private:
-    BlockPtr lastSchema();
-
-    void checkPacks(const DeltaPacks & new_packs);
-
-    void appendPackInner(const DeltaPackPtr & pack);
-
 public:
-    DeltaValueSpace(PageId id_, const DeltaPacks & packs_ = {});
+    explicit DeltaValueSpace(PageId id_, const ColumnStableFiles & column_stable_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
-
-    String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
-    String info() const
-    {
-        return "{Delta [" + DB::toString(id) + "]: " + DB::toString(packs.size()) + " packs, " + DB::toString(rows.load()) + " rows, "
-            + DB::toString(unsaved_rows.load()) + " unsaved_rows, " + DB::toString(unsaved_bytes.load()) + " unsaved_bytes, "
-            + DB::toString(deletes.load()) + " deletes, " + DB::toString(unsaved_deletes.load()) + " unsaved_deletes}";
-    }
 
     bool getLock(Lock & lock) const
     {
@@ -147,33 +102,13 @@ public:
 
     void saveMeta(WriteBatches & wbs) const;
 
-    void recordRemovePacksPages(WriteBatches & wbs) const;
-
-    /// First check whether 'head_packs' is exactly the head of packs in this instance.
-    ///   If yes, then clone the tail of packs, using ref pages.
-    ///   Otherwise, throw an exception.
-    ///
-    /// Note that this method is expected to be called by some one who already have lock on this instance.
-    DeltaPacks
-    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const DeltaPacks & head_packs, WriteBatches & wbs) const;
-
-    PageId getId() const { return id; }
-
-    size_t getPackCount() const { return packs.size(); }
-    size_t getRows(bool use_unsaved = true) const { return use_unsaved ? rows.load() : rows - unsaved_rows; }
-    size_t getBytes(bool use_unsaved = true) const { return use_unsaved ? bytes.load() : bytes - unsaved_bytes; }
-    size_t getDeletes() const { return deletes; }
-
-    size_t getUnsavedRows() const { return unsaved_rows; }
-    size_t getUnsavedBytes() const { return unsaved_bytes; }
-    size_t getUnsavedDeletes() const { return unsaved_deletes; }
+    PageId getId() const { return column_stable_file_set->getId(); }
 
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
 
     bool isUpdating() const { return is_updating; }
-    bool isShouldCompact() const { return shouldCompact; }
 
     bool tryLockUpdating()
     {
@@ -236,14 +171,13 @@ public:
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
-
-    bool appendPack(DMContext & context, const DeltaPackPtr & pack);
+    bool appendColumnFile(DMContext & context, const ColumnFilePtr & column_file);
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
     bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
-    bool ingestPacks(DMContext & context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);
@@ -268,15 +202,9 @@ private:
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
 
-    StorageSnapshotPtr storage_snap;
+    ColumnFileSetSnapshotPtr mem_table_snap;
 
-    DeltaPacks packs;
-    size_t rows;
-    size_t bytes;
-    size_t deletes;
-
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    ColumnStableFileSetSnapshotPtr column_stable_file_set_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
@@ -292,13 +220,8 @@ public:
         auto c = std::make_shared<DeltaValueSnapshot>(type);
         c->is_update = is_update;
         c->shared_delta_index = shared_delta_index;
-        c->storage_snap = storage_snap;
-        c->packs = packs;
-        c->rows = rows;
-        c->bytes = bytes;
-        c->deletes = deletes;
-        c->is_common_handle = is_common_handle;
-        c->rowkey_column_size = rowkey_column_size;
+        c->mem_table_snap = mem_table_snap->clone();
+        c->column_stable_file_set_snap = column_stable_file_set_snap->clone();
 
         c->_delta = _delta;
 
@@ -318,16 +241,17 @@ public:
         CurrentMetrics::sub(type);
     }
 
-    DeltaPacks & getPacks() { return packs; }
+    size_t getColumnFilesCount() const { return mem_table_snap->getColumnFilesCount() + column_stable_file_set_snap->getColumnFilesCount(); }
+    size_t getRows() const { return mem_table_snap->getRows() + column_stable_file_set_snap->getRows(); }
+    size_t getBytes() const { return mem_table_snap->getBytes() + column_stable_file_set_snap->getBytes(); }
+    size_t getDeletes() const { return mem_table_snap->getDeletes() + column_stable_file_set_snap->getDeletes(); }
 
-    size_t getPackCount() const { return packs.size(); }
-    size_t getRows() const { return rows; }
-    size_t getBytes() const { return bytes; }
-    size_t getDeletes() const { return deletes; }
+    size_t getMemTableRowsOffset() const { column_stable_file_set_snap->getRows(); }
+    size_t getMemTableDeletesOffset() const { column_stable_file_set_snap->getDeletes(); }
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return storage_snap; }
+    const auto & getStorageSnapshot() { return column_stable_file_set_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
 
@@ -339,23 +263,18 @@ private:
     DeltaSnapshotPtr delta_snap;
     // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
     // We only keep this member here to prevent it from being released.
-    DeltaIndexCompactedPtr _compacted_delta_index;
+    DeltaIndexCompactedPtr compacted_delta_index;
+
+    ColumnStableFileSetReaderPtr stable_files_reader;
+
+    ColumnFileSetReaderPtr mem_table_reader;
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
     ColumnDefinesPtr col_defs;
     RowKeyRange segment_range;
 
-    // The row count of each pack. Cache here to speed up checking.
-    std::vector<size_t> pack_rows;
-    // The cumulative rows of packs. Used to fast locate specific packs according to rows offset by binary search.
-    std::vector<size_t> pack_rows_end;
-
-    std::vector<DeltaPackReaderPtr> pack_readers;
-
 private:
     DeltaValueReader() = default;
-
-    Block readPKVersion(size_t offset, size_t limit);
 
 public:
     DeltaValueReader(const DMContext & context_,
@@ -367,7 +286,7 @@ public:
     // This method create a new reader based on then current one. It will reuse some cachees in the current reader.
     DeltaValueReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
 
-    void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { _compacted_delta_index = delta_index_; }
+    void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { compacted_delta_index = delta_index_; }
 
     const auto & getDeltaSnap() { return delta_snap; }
 
