@@ -1,8 +1,9 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-#include <Flash/NewCoprocessor/InterpreterPlan.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/NewCoprocessor/InterpreterPlan.h>
+#include <Flash/NewCoprocessor/PlanInterpreter.h>
 #include <Flash/Plan/Plans.h>
 #include <Flash/Plan/foreach.h>
 #include <Interpreters/Aggregator.h>
@@ -29,10 +30,16 @@ InterpreterPlan::InterpreterPlan(Context & context_, const PlanQuerySource & pla
 /** executeQueryBlock recursively converts all the children of the DAGQueryBlock and itself (Coprocessor DAG request)
   * into an array of IBlockInputStream (element of physical executing plan of TiFlash)
   */
-BlockInputStreams InterpreterPlan::executePlan(std::vector<SubqueriesForSets> &)
+BlockInputStreams InterpreterPlan::executePlan(std::vector<SubqueriesForSets> & subqueries_for_sets)
 {
-    std::vector<BlockInputStreams> input_streams_vec;
-    return input_streams_vec[0];
+    return PlanInterpreter(
+               context,
+               plan_query_source.getRootPlan(),
+               max_streams,
+               dagContext().keep_session_timezone_info,
+               subqueries_for_sets,
+               mpp_exchange_receiver_maps)
+        .execute();
 }
 
 void InterpreterPlan::initMPPExchangeReceiver()
@@ -46,10 +53,10 @@ void InterpreterPlan::initMPPExchangeReceiver()
                         context.getTMTContext().getKVCluster(),
                         context.getTMTContext().getMPPTaskManager(),
                         context.getSettingsRef().enable_local_tunnel),
-                        receiver.impl,
-                        dagContext().getMPPTaskMeta(),
-                        max_streams,
-                        dagContext().log);
+                    receiver.impl,
+                    dagContext().getMPPTaskMeta(),
+                    max_streams,
+                    dagContext().log);
             });
         }
     });
