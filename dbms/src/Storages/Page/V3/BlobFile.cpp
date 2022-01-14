@@ -45,8 +45,9 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
     }
 #ifndef NDEBUG
     PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, true);
-#endif
+#else
     PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, false);
+#endif
     PageUtil::syncFile(wrfile);
 }
 
