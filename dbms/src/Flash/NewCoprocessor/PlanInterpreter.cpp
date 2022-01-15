@@ -994,7 +994,9 @@ void PlanInterpreter::executeNonSources(DAGPipeline & pipeline, bool is_root)
     }
 
     input_streams_vec.push_back(std::move(pipeline.streams));
+
     pipeline = DAGPipeline{};
+    query_block.reset();
 }
 
 // To execute a query block, you have to:
@@ -1027,7 +1029,8 @@ BlockInputStreams PlanInterpreter::execute()
                 subquries[plan->executor_id] = right_query;
                 subqueries_for_sets.emplace_back(subquries);
             });
-            input_streams_vec.clear();
+            input_streams_vec.pop_back();
+            input_streams_vec.pop_back();
             break;
         }
         case tipb::ExecType::TypeExchangeReceiver:
@@ -1045,7 +1048,7 @@ BlockInputStreams PlanInterpreter::execute()
                 executeSourceProjection(pipeline, proj.impl);
                 recordProfileStreams(pipeline, proj.executor_id);
             });
-            input_streams_vec.clear();
+            input_streams_vec.pop_back();
             break;
         }
         case tipb::ExecType::TypeTableScan:
