@@ -520,8 +520,13 @@ struct TiDBConvertToInteger
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                StringRef string_value(&(*chars)[current_offset], string_size);
+                size_t string_size = next_offset - current_offset;
+                StringRef string_value;
+                if (string_size > 0)
+                {
+                    string_value.data = reinterpret_cast<const char *>(&(*chars)[current_offset]);
+                    string_value.size = string_size - 1;
+                }
                 vec_to[i] = strToInt<ToFieldType>(string_value, context);
                 current_offset = next_offset;
             }
@@ -779,8 +784,13 @@ struct TiDBConvertToFloat
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                StringRef string_value(&(*chars)[current_offset], string_size);
+                size_t string_size = next_offset - current_offset;
+                StringRef string_value;
+                if (string_size > 0)
+                {
+                    string_value.data = reinterpret_cast<const char*>(&(*chars)[current_offset]);
+                    string_value.size = string_size - 1;
+                }
                 vec_to[i] = strToFloat(string_value, need_truncate, shift, max_f, context);
                 current_offset = next_offset;
             }
@@ -1179,8 +1189,13 @@ struct TiDBConvertToDecimal
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                StringRef string_value(&(*chars)[current_offset], string_size);
+                size_t string_size = next_offset - current_offset;
+                StringRef string_value;
+                if (string_size > 0)
+                {
+                    string_value.data = reinterpret_cast<const char*>(&(*chars)[current_offset]);
+                    string_value.size = string_size - 1;
+                }
                 vec_to[i] = strToTiDBDecimal<ToFieldType>(string_value, prec, scale, context);
                 current_offset = next_offset;
             }
@@ -1259,9 +1274,13 @@ struct TiDBConvertToTime
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                StringRef string_ref(&(*chars)[current_offset], string_size);
-                String string_value = string_ref.toString();
+                size_t string_size = next_offset - current_offset;
+                String string_value;
+                if (string_size > 0)
+                {
+                    StringRef string_ref(&(*chars)[current_offset], string_size - 1);
+                    string_value = std::move(string_ref.toString());
+                }
                 try
                 {
                     Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
