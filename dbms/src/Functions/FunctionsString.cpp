@@ -3241,9 +3241,9 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -3258,8 +3258,6 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
@@ -3273,9 +3271,11 @@ public:
                 per_pad_offset += pad_bytes;
                 ++left;
             }
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
@@ -3311,9 +3311,9 @@ public:
                     ++res_offset;
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -3333,17 +3333,17 @@ public:
                     ++res_offset;
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
         {
             copyResult(res, res_offset, data, 0, tmp_target_len);
             res_offset += tmp_target_len;
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
