@@ -1,6 +1,6 @@
 
-#include <Storages/DeltaMerge/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 

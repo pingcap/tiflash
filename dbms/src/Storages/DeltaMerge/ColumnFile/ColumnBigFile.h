@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 

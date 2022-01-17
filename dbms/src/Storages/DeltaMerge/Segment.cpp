@@ -322,12 +322,12 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
 
-    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
+    return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
@@ -571,7 +571,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
     LOG_FMT_INFO(log,
                  "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}, delta total size: {}",
                  segment_id,
-                 segment_snap->delta->getPackCount(),
+                 segment_snap->delta->getColumnFilesCount(),
                  segment_snap->delta->getRows(),
                  segment_snap->delta->getBytes());
 

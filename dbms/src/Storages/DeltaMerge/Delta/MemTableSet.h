@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ColumnFile.h"
-#include "ColumnFileSetSnapshot.h"
 #include "FlushColumnFileTask.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h"
 
 
 namespace DB
@@ -29,7 +29,12 @@ private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    MemTableSet(): log(&Poco::Logger::get("MemTableSet")) {}
+    MemTableSet(const ColumnFiles & in_memory_files = {})
+        : column_files(in_memory_files)
+        , log(&Poco::Logger::get("MemTableSet"))
+    {}
+
+    ColumnFiles cloneColumnFiles() { return column_files; }
 
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.

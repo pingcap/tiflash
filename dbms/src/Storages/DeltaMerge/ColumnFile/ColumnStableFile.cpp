@@ -1,12 +1,11 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/DeltaMerge/ColumnStableFile.h>
-#include <Storages/DeltaMerge/RowKeyFilter.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/ColumnDeleteRangeFile.h>
-#include <Storages/DeltaMerge/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnStableFileSet.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
 namespace DB

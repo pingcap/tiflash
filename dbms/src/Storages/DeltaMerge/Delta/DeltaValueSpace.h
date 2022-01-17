@@ -4,10 +4,12 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/Delta/DeltaPack.h>
 #include <Storages/DeltaMerge/Delta/DeltaPackBlock.h>
 #include <Storages/DeltaMerge/Delta/DeltaPackDeleteRange.h>
 #include <Storages/DeltaMerge/Delta/DeltaPackFile.h>
+#include <Storages/DeltaMerge/Delta/MemTableSet.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -15,8 +17,6 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/DeltaMerge/MemTableSet.h>
-#include <Storages/DeltaMerge/ColumnStableFileSet.h>
 
 namespace DB
 {
@@ -53,9 +53,9 @@ public:
     using Lock = std::unique_lock<std::mutex>;
 
 private:
-    MemTableSetPtr mem_table_set;
-
     ColumnStableFileSetPtr column_stable_file_set;
+
+    MemTableSetPtr mem_table_set;
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
     std::atomic_bool abandoned = false;
@@ -80,7 +80,7 @@ private:
     Poco::Logger * log;
 
 public:
-    explicit DeltaValueSpace(PageId id_, const ColumnStableFiles & column_stable_files = {});
+    explicit DeltaValueSpace(PageId id_, const ColumnStableFiles & stable_files = {}, const ColumnFiles & in_memory_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
@@ -103,6 +103,14 @@ public:
     void saveMeta(WriteBatches & wbs) const;
 
     PageId getId() const { return column_stable_file_set->getId(); }
+
+    /// First check whether 'head_packs' is exactly the head of packs in this instance.
+    ///   If yes, then clone the tail of packs, using ref pages.
+    ///   Otherwise, throw an exception.
+    ///
+    /// Note that this method is expected to be called by some one who already have lock on this instance.
+    std::pair<ColumnStableFiles, ColumnFiles>
+    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;
@@ -195,7 +203,8 @@ class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapsho
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
-
+    friend class DeltaValueReader;
+    friend class DeltaValueInputStream;
 private:
     bool is_update;
 
@@ -204,7 +213,7 @@ private:
 
     ColumnFileSetSnapshotPtr mem_table_snap;
 
-    ColumnStableFileSetSnapshotPtr column_stable_file_set_snap;
+    ColumnFileSetSnapshotPtr stable_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
@@ -221,7 +230,7 @@ public:
         c->is_update = is_update;
         c->shared_delta_index = shared_delta_index;
         c->mem_table_snap = mem_table_snap->clone();
-        c->column_stable_file_set_snap = column_stable_file_set_snap->clone();
+        c->stable_files_snap = stable_files_snap->clone();
 
         c->_delta = _delta;
 
@@ -241,33 +250,33 @@ public:
         CurrentMetrics::sub(type);
     }
 
-    size_t getColumnFilesCount() const { return mem_table_snap->getColumnFilesCount() + column_stable_file_set_snap->getColumnFilesCount(); }
-    size_t getRows() const { return mem_table_snap->getRows() + column_stable_file_set_snap->getRows(); }
-    size_t getBytes() const { return mem_table_snap->getBytes() + column_stable_file_set_snap->getBytes(); }
-    size_t getDeletes() const { return mem_table_snap->getDeletes() + column_stable_file_set_snap->getDeletes(); }
+    ColumnFiles & getStableColumnFiles() const { return stable_files_snap->getColumnFiles(); }
 
-    size_t getMemTableRowsOffset() const { column_stable_file_set_snap->getRows(); }
-    size_t getMemTableDeletesOffset() const { column_stable_file_set_snap->getDeletes(); }
+    size_t getColumnFilesCount() const { return mem_table_snap->getColumnFilesCount() + stable_files_snap->getColumnFilesCount(); }
+    size_t getRows() const { return mem_table_snap->getRows() + stable_files_snap->getRows(); }
+    size_t getBytes() const { return mem_table_snap->getBytes() + stable_files_snap->getBytes(); }
+    size_t getDeletes() const { return mem_table_snap->getDeletes() + stable_files_snap->getDeletes(); }
+
+    size_t getMemTableRowsOffset() const { stable_files_snap->getRows(); }
+    size_t getMemTableDeletesOffset() const { stable_files_snap->getDeletes(); }
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return column_stable_file_set_snap->getStorageSnapshot(); }
+    const auto & getStorageSnapshot() { return stable_files_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
 
 class DeltaValueReader
 {
-    friend class DeltaValueInputStream;
-
 private:
     DeltaSnapshotPtr delta_snap;
     // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
     // We only keep this member here to prevent it from being released.
     DeltaIndexCompactedPtr compacted_delta_index;
 
-    ColumnStableFileSetReaderPtr stable_files_reader;
-
     ColumnFileSetReaderPtr mem_table_reader;
+
+    ColumnFileSetReaderPtr stable_files_reader;
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
     ColumnDefinesPtr col_defs;
@@ -283,7 +292,7 @@ public:
                      const RowKeyRange & segment_range_);
 
     // If we need to read columns besides pk and version, a DeltaValueReader can NOT be used more than once.
-    // This method create a new reader based on then current one. It will reuse some cachees in the current reader.
+    // This method create a new reader based on then current one. It will reuse some caches in the current reader.
     DeltaValueReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
 
     void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { compacted_delta_index = delta_index_; }
@@ -309,51 +318,36 @@ public:
 class DeltaValueInputStream : public IBlockInputStream
 {
 private:
-    DeltaValueReader reader;
-    DeltaPacks & packs;
-    size_t pack_count;
+    ColumnFileSetInputStream mem_table_input_stream;
+    ColumnFileSetInputStream stable_files_input_stream;
 
-    DeltaPackReaderPtr cur_pack_reader = {};
-    size_t next_pack_index = 0;
+    bool stable_files_done = false;
 
 public:
     DeltaValueInputStream(const DMContext & context_,
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
-        : reader(context_, delta_snap_, col_defs_, segment_range_)
-        , packs(reader.delta_snap->getPacks())
-        , pack_count(packs.size())
-    {
-    }
+        : mem_table_input_stream(context_, delta_snap_->mem_table_snap, col_defs_, segment_range_)
+        , stable_files_input_stream(context_, delta_snap_->stable_files_snap, col_defs_, segment_range_)
+    {}
 
     String getName() const override { return "DeltaValue"; }
-    Block getHeader() const override { return toEmptyBlock(*(reader.col_defs)); }
+    Block getHeader() const override { return stable_files_input_stream.getHeader(); }
 
     Block read() override
     {
-        while (cur_pack_reader || next_pack_index < pack_count)
+        if (stable_files_done)
+            return mem_table_input_stream.read();
+
+        Block block = stable_files_input_stream.read();
+        if (block)
+            return block;
+        else
         {
-            if (!cur_pack_reader)
-            {
-                if (packs[next_pack_index]->isDeleteRange())
-                {
-                    ++next_pack_index;
-                    continue;
-                }
-                else
-                {
-                    cur_pack_reader = reader.pack_readers[next_pack_index];
-                    ++next_pack_index;
-                }
-            }
-            Block block = cur_pack_reader->readNextBlock();
-            if (block)
-                return block;
-            else
-                cur_pack_reader = {};
+            stable_files_done = true;
+            return mem_table_input_stream.read();
         }
-        return {};
     }
 };
 

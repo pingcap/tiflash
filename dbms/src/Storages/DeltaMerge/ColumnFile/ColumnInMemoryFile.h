@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB
 {

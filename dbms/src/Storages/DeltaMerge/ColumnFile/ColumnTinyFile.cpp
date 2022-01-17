@@ -1,5 +1,5 @@
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 

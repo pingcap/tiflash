@@ -23,7 +23,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     auto snap = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update = for_update;
     snap->_delta = this->shared_from_this();
-    snap->column_stable_file_set_snap = column_stable_file_set->createSnapshot(context);
+    snap->stable_files_snap = column_stable_file_set->createSnapshot(context);
     snap->shared_delta_index = delta_index;
 
     if (for_update)
@@ -36,7 +36,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
 RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 {
     auto delete_range1 = mem_table_snap->getSquashDeleteRange();
-    auto delete_range2 = column_stable_file_set_snap->getSquashDeleteRange();
+    auto delete_range2 = stable_files_snap->getSquashDeleteRange();
     return delete_range1.merge(delete_range2);
 }
 
@@ -50,8 +50,8 @@ DeltaValueReader::DeltaValueReader(
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)
     : delta_snap(delta_snap_)
-    , stable_files_reader()
-    , mem_table_reader()
+    , mem_table_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->mem_table_snap, col_defs_, segment_range_))
+    , stable_files_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->stable_files_snap, col_defs_, segment_range_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {}
@@ -61,8 +61,8 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
     auto new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
     new_reader->compacted_delta_index = compacted_delta_index;
-    new_reader->stable_files_reader = stable_files_reader;
-    new_reader->mem_table_reader = mem_table_reader;
+    new_reader->stable_files_reader = stable_files_reader->createNewReader(new_col_defs);
+    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
 
@@ -109,62 +109,23 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     /// Note that we merge the consecutive DeltaPackBlock together, which are seperated in groups by DeltaPackDelete and DeltePackFile.
 
     BlockOrDeletes res;
+    auto mem_table_rows_offset = delta_snap->getMemTableRowsOffset();
+    auto mem_table_deletes_offset = delta_snap->getMemTableDeletesOffset();
+    auto total_delta_rows = delta_snap->getRows();
+    auto total_delta_deletes = delta_snap->getDeletes();
 
-    auto & packs = delta_snap->getPacks();
+    auto stable_files_rows_begin = std::min(rows_begin, mem_table_rows_offset);
+    auto stable_files_deletes_begin = std::min(deletes_begin, mem_table_deletes_offset);
+    auto stable_files_rows_end = std::min(rows_end, mem_table_rows_offset);
+    auto stable_files_deletes_end = std::min(deletes_end, mem_table_deletes_offset);
 
-    auto [start_pack_index, rows_start_in_start_pack] = findPack(packs, rows_begin, deletes_begin);
-    auto [end_pack_index, rows_end_in_end_pack] = findPack(packs, rows_end, deletes_end);
+    auto mem_table_rows_begin = rows_begin <= mem_table_rows_offset ? 0 : std::min(rows_begin - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
+    auto mem_table_deletes_begin = deletes_begin <= mem_table_deletes_offset ? 0 : std::min(deletes_begin - mem_table_deletes_offset, total_delta_deletes - mem_table_deletes_offset);
+    auto mem_table_rows_end = rows_end <= mem_table_rows_offset ? 0 : std::min(rows_end - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
+    auto mem_table_deletes_end = deletes_end <= mem_table_deletes_offset ? 0 : std::min(deletes_end - mem_table_deletes_offset, total_delta_deletes - mem_table_deletes_offset);
 
-    size_t block_rows_start = rows_begin;
-    size_t block_rows_end = rows_begin;
-
-    for (size_t pack_index = start_pack_index; pack_index < packs.size() && pack_index <= end_pack_index; ++pack_index)
-    {
-        auto & pack = *packs[pack_index];
-
-        if (pack.isDeleteRange() || pack.isFile())
-        {
-            // First, compact the DeltaPackBlocks before this pack into one block.
-            if (block_rows_end != block_rows_start)
-            {
-                auto block = readPKVersion(block_rows_start, block_rows_end - block_rows_start);
-                res.emplace_back(std::move(block), block_rows_start);
-            }
-
-            // Second, take current pack.
-            if (auto pack_delete = pack.tryToDeleteRange(); pack_delete)
-            {
-                res.emplace_back(pack_delete->getDeleteRange());
-            }
-            else if (pack.isFile() && pack.getRows())
-            {
-                auto block = readPKVersion(block_rows_end, pack.getRows());
-                res.emplace_back(std::move(block), block_rows_end);
-            }
-
-            block_rows_end += pack.getRows();
-            block_rows_start = block_rows_end;
-        }
-        else
-        {
-            // It is a DeltaPackBlock.
-            size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
-            size_t rows_end_in_pack = pack_index == end_pack_index ? rows_end_in_end_pack : pack.getRows();
-
-            block_rows_end += rows_end_in_pack - rows_start_in_pack;
-
-            if (pack_index == packs.size() - 1 || pack_index == end_pack_index)
-            {
-                // It is the last pack.
-                if (block_rows_end != block_rows_start)
-                {
-                    auto block = readPKVersion(block_rows_start, block_rows_end - block_rows_start);
-                    res.emplace_back(std::move(block), block_rows_start);
-                }
-                block_rows_start = block_rows_end;
-            }
-        }
-    }
+    stable_files_reader->getPlaceItems(res, stable_files_rows_begin, stable_files_deletes_begin, stable_files_rows_end, stable_files_deletes_end);
+    mem_table_reader->getPlaceItems(res, mem_table_rows_begin, mem_table_deletes_begin, mem_table_rows_end, mem_table_deletes_end);
 
     return res;
 }
@@ -176,7 +137,6 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
                                    UInt64 max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-    auto & packs = delta_snap->getPacks();
 
     // Already placed.
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
@@ -187,37 +147,8 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
         || placed_delete_ranges != delta_snap->getDeletes())
         return true;
 
-    auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(pack_rows_end, placed_rows);
-
-    for (size_t pack_index = start_pack_index; pack_index < delta_snap->getPackCount(); ++pack_index)
-    {
-        auto & pack = packs[pack_index];
-
-        // Always do place index if DeltaPackFile exists.
-        if (pack->isFile())
-            return true;
-        if (unlikely(pack->isDeleteRange()))
-            throw Exception("pack is delete range", ErrorCodes::LOGICAL_ERROR);
-
-        size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
-        size_t rows_end_in_pack = pack_rows[pack_index];
-
-        auto & pack_reader = pack_readers[pack_index];
-        auto & dpb_reader = typeid_cast<DPBlockReader &>(*pack_reader);
-        auto pk_column = dpb_reader.getPKColumn();
-        auto version_column = dpb_reader.getVersionColumn();
-
-        auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
-        auto & version_col_data = toColumnVectorData<UInt64>(version_column);
-
-        for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
-        {
-            if (version_col_data[i] <= max_version && relevant_range.check(rkcc.getRowKeyValue(i)))
-                return true;
-        }
-    }
-
-    return false;
+    return stable_files_reader->shouldPlace(context, relevant_range, max_version, placed_rows)
+        || mem_table_reader->shouldPlace(context, relevant_range, max_version, placed_rows);
 }
 
 } // namespace DB::DM

@@ -1,9 +1,9 @@
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/DeltaMerge/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
-#include <Storages/DeltaMerge/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/ColumnDeleteRangeFile.h>
 
 namespace DB
 {

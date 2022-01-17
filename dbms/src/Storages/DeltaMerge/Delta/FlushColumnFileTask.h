@@ -6,9 +6,10 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageDefines.h>
-#include "ColumnFile.h"
-#include "ColumnStableFileSet.h"
 #include <common/logger_useful.h>
+
+#include "Storages/DeltaMerge/ColumnFile/ColumnFile.h"
+#include "Storages/DeltaMerge/Delta/ColumnStableFileSet.h"
 
 namespace DB
 {

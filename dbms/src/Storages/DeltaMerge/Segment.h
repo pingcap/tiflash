@@ -2,7 +2,9 @@
 
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/Delta/MemTableSet.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
@@ -10,8 +12,6 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
-#include <Storages/DeltaMerge/MemTableSet.h>
-#include <Storages/DeltaMerge/ColumnStableFileSet.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -34,16 +34,13 @@ using Segments = std::vector<SegmentPtr>;
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot : private boost::noncopyable
 {
-    ColumnFileSetSnapshotPtr mem_table;
-    ColumnStableFileSetSnapshotPtr stable_file_set;
+    DeltaSnapshotPtr delta;
     StableSnapshotPtr stable;
 
     SegmentSnapshot(
-        ColumnFileSetSnapshotPtr && mem_table_,
-        ColumnStableFileSetSnapshotPtr && stable_file_set_,
+        DeltaSnapshotPtr && delta_,
         StableSnapshotPtr && stable_)
-        : mem_table(std::move(mem_table_))
-        , stable_file_set(std::move(stable_file_set_))
+        : delta(std::move(delta_))
         , stable(std::move(stable_))
     {}
 
@@ -133,7 +130,7 @@ public:
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 

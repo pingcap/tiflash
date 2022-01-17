@@ -1,9 +1,11 @@
-#include "ColumnFileSetSnapshot.h"
-#include "ColumnDeleteRangeFile.h"
-#include "ColumnInMemoryFile.h"
-#include "ColumnBigFile.h"
-#include "ColumnTinyFile.h"
+#include "ColumnFileSetReader.h"
+
 #include <Storages/DeltaMerge/DMContext.h>
+
+#include "ColumnInMemoryFile.h"
+#include "ColumnTinyFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnBigFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h"
 
 namespace DB
 {
@@ -57,18 +59,6 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
     return {column_file_index, 0};
 }
 
-RowKeyRange ColumnFileSetSnapshot::getSquashDeleteRange() const
-{
-    RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
-    for (auto iter = column_files.cbegin(); iter != column_files.cend(); ++iter)
-    {
-        const auto & column_file = *iter;
-        if (auto f_delete = column_file->tryToDeleteRange(); f_delete)
-            squashed_delete_range = squashed_delete_range.merge(f_delete->getDeleteRange());
-    }
-    return squashed_delete_range;
-}
-
 ColumnFileSetReader::ColumnFileSetReader(
     const DMContext & context,
     const ColumnFileSetSnapshotPtr & snapshot_,
@@ -86,6 +76,21 @@ ColumnFileSetReader::ColumnFileSetReader(
         column_file_rows_end.push_back(total_rows);
         column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
     }
+}
+
+ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+{
+    auto new_reader = new ColumnFileSetReader();
+    new_reader->snapshot = snapshot;
+    new_reader->col_defs = new_col_defs;
+    new_reader->segment_range = segment_range;
+    new_reader->column_file_rows = column_file_rows;
+    new_reader->column_file_rows_end = column_file_rows_end;
+
+    for (auto & fr : column_file_readers)
+        new_reader->column_file_readers.push_back(fr->createNewReader(new_col_defs));
+
+    return std::shared_ptr<ColumnFileSetReader>(new_reader);
 }
 
 Block ColumnFileSetReader::readPKVersion(size_t offset, size_t limit)
@@ -204,9 +209,9 @@ void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t row
 }
 
 bool ColumnFileSetReader::shouldPlace(const DMContext & context,
-                 const RowKeyRange & relevant_range,
-                 UInt64 max_version,
-                 size_t placed_rows)
+                                      const RowKeyRange & relevant_range,
+                                      UInt64 max_version,
+                                      size_t placed_rows)
 {
     auto & column_files = snapshot->getColumnFiles();
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(column_file_rows_end, placed_rows);

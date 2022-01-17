@@ -1,10 +1,10 @@
 #include "MinorCompaction.h"
-#include <Storages/DeltaMerge/DMContext.h>
+
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/ColumnStableFileSet.h>
 #include <Storages/Page/PageStorage.h>
 
 namespace DB

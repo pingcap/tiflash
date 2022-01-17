@@ -18,9 +18,9 @@ namespace DM
 // Public methods
 // ================================================
 
-DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnStableFiles & column_stable_files)
-    : mem_table_set(std::make_shared<MemTableSet>())
-    , column_stable_file_set(std::make_shared<ColumnStableFileSet>(id_, column_stable_files))
+DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnStableFiles & stable_files, const ColumnFiles & in_memory_files)
+    : column_stable_file_set(std::make_shared<ColumnStableFileSet>(id_, stable_files))
+    , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
     , log(&Poco::Logger::get("DeltaValueSpace"))
 {}
@@ -46,6 +46,14 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
     column_stable_file_set->saveMeta(wbs);
+}
+
+std::pair<ColumnStableFiles, ColumnFiles>
+DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const
+{
+    auto stable_files = column_stable_file_set->checkHeadAndCloneTail(context, target_range, head_column_files, wbs);
+    auto memory_files = mem_table_set->cloneColumnFiles();
+    return std::make_pair(std::move(stable_files), std::move(memory_files));
 }
 
 size_t DeltaValueSpace::getTotalCacheRows() const

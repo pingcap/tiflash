@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB
 {
@@ -53,8 +53,12 @@ private:
     size_t rowkey_column_size;
 
 public:
-    ColumnFileSetSnapshot(StorageSnapshotPtr storage_snap_)
+    ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
         :storage_snap{storage_snap_}
+    {}
+
+    ColumnFileSetSnapshot(StorageSnapshotPtr && storage_snap_)
+        :storage_snap{std::move(storage_snap_)}
     {}
 
     ColumnFileSetSnapshotPtr clone()
@@ -83,41 +87,6 @@ public:
     const auto & getStorageSnapshot() { return storage_snap; }
 };
 
-class ColumnFileSetReader
-{
-private:
-    ColumnFileSetSnapshotPtr snapshot;
 
-    // The columns expected to read. Note that we will do reading exactly in this column order.
-    ColumnDefinesPtr col_defs;
-    RowKeyRange segment_range;
-
-    // The row count of each pack. Cache here to speed up checking.
-    std::vector<size_t> column_file_rows;
-    // The cumulative rows of packs. Used to fast locate specific packs according to rows offset by binary search.
-    std::vector<size_t> column_file_rows_end;
-
-    std::vector<ColumnFileReaderPtr> column_file_readers;
-
-private:
-    Block readPKVersion(size_t offset, size_t limit);
-
-public:
-    ColumnFileSetReader(const DMContext & context_,
-                   const ColumnFileSetSnapshotPtr & snapshot_,
-                   const ColumnDefinesPtr & col_defs_,
-                   const RowKeyRange & segment_range_);
-
-    // Use for DeltaMergeBlockInputStream to read rows from MemTableSet to do full compaction with other layer.
-    // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range);
-
-    void getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
-
-    bool shouldPlace(const DMContext & context,
-                     const RowKeyRange & relevant_range,
-                     UInt64 max_version,
-                     size_t placed_rows);
-};
 }
 }

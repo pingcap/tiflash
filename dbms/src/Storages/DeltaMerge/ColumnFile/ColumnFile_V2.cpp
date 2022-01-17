@@ -1,8 +1,8 @@
-#include <Storages/DeltaMerge/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnStableFile.h>
-#include <Storages/DeltaMerge/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/ColumnDeleteRangeFile.h>
-#include <Storages/DeltaMerge/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 
 namespace DB
 {

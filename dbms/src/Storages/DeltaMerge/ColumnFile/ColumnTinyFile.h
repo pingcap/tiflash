@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
 
 namespace DB
 {
@@ -45,7 +45,7 @@ private:
     }
 
 public:
-    ColumnTinyFile(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_,  const CachePtr & cache_ = nullptr)
+    ColumnTinyFile(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
         : schema(schema_),
           rows(rows_),
           bytes(bytes_),
@@ -57,6 +57,8 @@ public:
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
     }
 
+    ColumnTinyFile(const ColumnTinyFile &) = default;
+
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
@@ -65,6 +67,11 @@ public:
     ColumnTinyFilePtr cloneWithoutCache()
     {
         return std::make_shared<ColumnTinyFile>(schema, rows, bytes, data_page_id);
+    }
+
+    ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
+    {
+        return std::make_shared<ColumnTinyFile>(schema, rows, bytes, new_data_page_id, cache);
     }
 
     /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.

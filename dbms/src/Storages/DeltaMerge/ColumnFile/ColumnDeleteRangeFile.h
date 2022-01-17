@@ -1,11 +1,14 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
 
 namespace DB
 {
 namespace DM
 {
+class ColumnDeleteRangeFile;
+using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnDeleteRangeFile>;
+
 class ColumnDeleteRangeFile : public ColumnStableFile
 {
 private:
@@ -25,6 +28,13 @@ public:
                                  const ColumnDefinesPtr & /*col_defs*/) const override;
 
     const auto & getDeleteRange() { return delete_range; }
+
+    ColumnDeleteRangeFilePtr cloneWith(const RowKeyRange & range)
+    {
+        auto new_dpdr = new ColumnDeleteRangeFile(*this);
+        new_dpdr->delete_range = range;
+        return std::shared_ptr<ColumnDeleteRangeFile>(new_dpdr);
+    }
 
     size_t getDeletes() const override { return 1; };
 

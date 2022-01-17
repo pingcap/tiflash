@@ -2,7 +2,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/ColumnStableFileSet.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
@@ -58,6 +58,94 @@ ColumnStableFileSetPtr ColumnStableFileSet::restore(DMContext & context, const R
 void ColumnStableFileSet::saveMeta(WriteBatches & wbs) const
 {
     serializeColumnStableFileLevels(wbs, metadata_id, column_stable_file_levels);
+}
+
+ColumnStableFiles
+ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const
+{
+    if (head_column_files.size() > getColumnFileCount())
+    {
+//        LOG_ERROR(log,
+//                  info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
+//                         << ", packs: " << packsToString(packs));
+        throw Exception("Check head packs failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto it_1 = head_column_files.begin();
+    auto level_it = column_stable_file_levels.rbegin();
+    auto it_2 = level_it->begin();
+    while (it_1 != head_column_files.end() && level_it != column_stable_file_levels.rend())
+    {
+        if (it_2 == level_it->end())
+        {
+            level_it++;
+            if (level_it == column_stable_file_levels.rend())
+                throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
+            it_2 = level_it->begin();
+            continue;
+        }
+        if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
+        {
+//            LOG_ERROR(log,
+//                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
+//                                   << ", packs: " << packsToString(packs));
+            throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    ColumnStableFiles cloned_tail;
+    while (level_it != column_stable_file_levels.rend() || it_2 != level_it->end())
+    {
+        if (it_2 == level_it->end())
+        {
+            level_it++;
+            if (level_it == column_stable_file_levels.rend())
+                break;
+
+            it_2 = level_it->begin();
+        }
+        const auto & column_file = *it_2;
+        if (auto * cr = column_file->tryToDeleteRange(); cr)
+        {
+            auto new_dr = cr->getDeleteRange().shrink(target_range);
+            if (!new_dr.none())
+            {
+                // Only use the available delete_range pack.
+                cloned_tail.push_back(cr->cloneWith(new_dr));
+            }
+        }
+        else if (auto * tf = column_file->tryToTinyFile(); tf)
+        {
+            PageId new_data_page_id = 0;
+            if (tf->getDataPageId())
+            {
+                // Use a newly created page_id to reference the data page_id of current pack.
+                new_data_page_id = context.storage_pool.newLogPageId();
+                wbs.log.putRefPage(new_data_page_id, tf->getDataPageId());
+            }
+
+            auto new_column_file = tf->cloneWith(new_data_page_id);
+            cloned_tail.push_back(new_column_file);
+        }
+        else if (auto * f = column_file->tryToBigFile(); f)
+        {
+            auto delegator = context.path_pool.getStableDiskDelegator();
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto file_id = f->getFile()->fileId();
+            wbs.data.putRefPage(new_ref_id, file_id);
+            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+
+            auto new_big_file = f->cloneWith(context, new_file, target_range);
+            cloned_tail.push_back(new_big_file);
+        }
+        else
+        {
+            throw Exception("Meet unknown type of column file", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    return cloned_tail;
 }
 
 void ColumnStableFileSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
@@ -173,7 +261,7 @@ MinorCompactionPtr ColumnStableFileSet::pickUpMinorCompaction(DMContext & contex
     return nullptr;
 }
 
-bool ColumnStableFileSet::installCompactionResults(const MinorCompactionPtr & compaction)
+bool ColumnStableFileSet::installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs)
 {
     if (compaction->current_compaction_version != minor_compaction_version)
     {
@@ -213,22 +301,20 @@ bool ColumnStableFileSet::installCompactionResults(const MinorCompactionPtr & co
     }
 
     /// Save the new metadata of packs to disk.
-    serializeColumnStableFileLevels(compaction->wbs, metadata_id, new_column_stable_file_levels);
-    compaction->wbs.writeMeta();
+    serializeColumnStableFileLevels(wbs, metadata_id, new_column_stable_file_levels);
+    wbs.writeMeta();
 
     /// Update packs in memory.
     column_stable_file_levels.swap(new_column_stable_file_levels);
 }
 
-ColumnStableFileSetSnapshotPtr ColumnStableFileSet::createSnapshot(const DMContext & context)
+ColumnFileSetSnapshotPtr ColumnStableFileSet::createSnapshot(const DMContext & context)
 {
-    auto snap = std::make_shared<ColumnStableFileSetSnapshot>();
-    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
-
-    snap->column_file_set_snapshot = std::make_shared<ColumnFileSetSnapshot>(snap->storage_snap);
-    snap->column_file_set_snapshot->rows = rows;
-    snap->column_file_set_snapshot->bytes = bytes;
-    snap->column_file_set_snapshot->deletes = deletes;
+    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(std::move(storage_snap));
+    snap->rows = rows;
+    snap->bytes = bytes;
+    snap->deletes = deletes;
 
     size_t total_rows = 0;
     size_t total_deletes = 0;
@@ -236,7 +322,7 @@ ColumnStableFileSetSnapshotPtr ColumnStableFileSet::createSnapshot(const DMConte
     {
         for (const auto & file : level)
         {
-            snap->column_file_set_snapshot->column_files.push_back(file);
+            snap->column_files.push_back(file);
             total_rows += file->getRows();
             total_deletes += file->getDeletes();
         }

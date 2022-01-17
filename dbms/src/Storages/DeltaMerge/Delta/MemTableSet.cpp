@@ -1,5 +1,5 @@
-#include <Storages/DeltaMerge/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/MemTableSet.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
 namespace DB
 {

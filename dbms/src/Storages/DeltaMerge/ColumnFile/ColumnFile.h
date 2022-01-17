@@ -27,9 +27,17 @@ using ColumnStableFiles = std::vector<ColumnStableFilePtr>;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
+static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
+
 class ColumnFile
 {
 protected:
+    UInt64 id;
+
+    ColumnFile()
+        : id(++MAX_COLUMN_FILE_ID)
+    {}
+
     virtual ~ColumnFile() = default;
 
 public:
@@ -58,6 +66,9 @@ public:
     };
 
 public:
+    /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
+    bool getId() const { return id; }
+
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
     virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
