@@ -216,8 +216,6 @@ private:
     WALStore wal;
 
     LogWithPrefixPtr log;
-
-    std::atomic<PageId> max_page_id;
 };
 
 } // namespace DB::PS::V3
