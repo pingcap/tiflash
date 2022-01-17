@@ -1,3 +1,5 @@
+#pragma once
+
 #include <IO/CompressedStream.h>
 #include <IO/CompressionSettings.h>
 #include <IO/ReadHelpers.h>

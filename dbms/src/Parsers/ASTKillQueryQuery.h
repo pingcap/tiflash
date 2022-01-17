@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Parsers/IAST.h>
 #include <Parsers/ASTQueryWithOutput.h>
 
