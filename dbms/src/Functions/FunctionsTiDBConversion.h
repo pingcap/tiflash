@@ -788,7 +788,7 @@ struct TiDBConvertToFloat
                 StringRef string_value;
                 if (string_size > 0)
                 {
-                    string_value.data = reinterpret_cast<const char*>(&(*chars)[current_offset]);
+                    string_value.data = reinterpret_cast<const char *>(&(*chars)[current_offset]);
                     string_value.size = string_size - 1;
                 }
                 vec_to[i] = strToFloat(string_value, need_truncate, shift, max_f, context);
@@ -1193,7 +1193,7 @@ struct TiDBConvertToDecimal
                 StringRef string_value;
                 if (string_size > 0)
                 {
-                    string_value.data = reinterpret_cast<const char*>(&(*chars)[current_offset]);
+                    string_value.data = reinterpret_cast<const char *>(&(*chars)[current_offset]);
                     string_value.size = string_size - 1;
                 }
                 vec_to[i] = strToTiDBDecimal<ToFieldType>(string_value, prec, scale, context);
