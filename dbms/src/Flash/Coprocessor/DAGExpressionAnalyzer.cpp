@@ -628,7 +628,7 @@ static String getAggFuncName(
     return agg_func_name;
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, NamesAndTypes> DAGExpressionAnalyzer::appendAggregation(
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
     bool group_by_collation_sensitive)
@@ -771,7 +771,12 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, NamesAndTypes> DAG
         }
     }
     source_columns = aggregated_columns;
-    return {aggregation_keys, collators, aggregate_descriptions, aggregated_columns};
+
+    auto before_agg = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+    appendAggSelect(chain, agg);
+    return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
 bool isUInt8Type(const DataTypePtr & type)
@@ -1103,8 +1108,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
 
 void DAGExpressionAnalyzer::appendAggSelect(
     ExpressionActionsChain & chain,
-    const tipb::Aggregation & aggregation,
-    const NamesAndTypes & aggregated_columns)
+    const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_source_columns = false;
@@ -1112,7 +1116,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
     ExpressionActionsChain::Step & step = chain.steps.back();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        const String & name = aggregated_columns[i].name;
+        const String & name = source_columns[i].name;
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
         if (name != updated_name)
         {
@@ -1123,14 +1127,14 @@ void DAGExpressionAnalyzer::appendAggSelect(
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
+            updated_aggregated_columns.emplace_back(name, source_columns[i].type);
             step.required_output.push_back(name);
         }
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
         Int32 output_column_index = i + aggregation.agg_func_size();
-        const String & name = aggregated_columns[output_column_index].name;
+        const String & name = source_columns[output_column_index].name;
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
         if (name != updated_name)
         {
@@ -1141,7 +1145,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns[output_column_index].type);
+            updated_aggregated_columns.emplace_back(name, source_columns[output_column_index].type);
             step.required_output.push_back(name);
         }
     }

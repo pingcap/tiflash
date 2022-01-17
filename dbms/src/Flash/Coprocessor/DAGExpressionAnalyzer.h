@@ -52,16 +52,11 @@ public:
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
 
-    /// <aggregation_keys, collators, aggregate_descriptions, aggregated_columns>
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, NamesAndTypes> appendAggregation(
+    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
-
-    void appendAggSelect(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        const NamesAndTypes & aggregated_columns);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -119,6 +114,10 @@ public:
         String & filter_column_name);
 
 private:
+    void appendAggSelect(
+        ExpressionActionsChain & chain,
+        const tipb::Aggregation & agg);
+
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,

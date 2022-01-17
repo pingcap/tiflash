@@ -84,7 +84,6 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
-    NamesAndTypes aggregated_columns;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -157,17 +156,11 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.aggregated_columns) = analyzer.appendAggregation(
+        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
-        res.before_aggregation = chain.getLastActions();
 
-        chain.finalize();
-        chain.clear();
-
-        // add cast if type is not match
-        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation(), res.aggregated_columns);
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
