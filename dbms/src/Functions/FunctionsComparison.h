@@ -23,6 +23,7 @@
 #include <Functions/IFunction.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
+#include <fmt/core.h>
 
 #include <limits>
 #include <type_traits>
@@ -953,9 +954,9 @@ private:
                 || executeNumRightType<T0, Float64>(block, result, col_left, col_right_untyped))
                 return true;
             else
-                throw Exception("Illegal column " + col_right_untyped->getName()
-                                    + " of second argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of second argument of function {}", col_right_untyped->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (auto col_left = checkAndGetColumnConst<ColumnVector<T0>>(col_left_untyped))
         {
@@ -971,9 +972,9 @@ private:
                 || executeNumConstRightType<T0, Float64>(block, result, col_left, col_right_untyped))
                 return true;
             else
-                throw Exception("Illegal column " + col_right_untyped->getName()
-                                    + " of second argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of second argument of function {}", col_right_untyped->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
 
         return false;
@@ -1061,10 +1062,9 @@ private:
                     c1_fixed_string->getN(),
                     c_res->getData());
             else
-                throw Exception("Illegal columns "
-                                    + c0->getName() + " and " + c1->getName()
-                                    + " of arguments of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal columns {} and {} of arguments of function {}", c0->getName(), c1->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             block.getByPosition(result).column = std::move(c_res);
             return true;
@@ -1161,10 +1161,9 @@ private:
                     collator,
                     c_res->getData());
             else
-                throw Exception("Illegal columns "
-                                    + c0->getName() + " and " + c1->getName()
-                                    + " of arguments of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal columns {} and {} of arguments of function {}", c0->getName(), c1->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             block.getByPosition(result).column = std::move(c_res);
             return true;
@@ -1220,12 +1219,11 @@ private:
             || (is_enum8 = checkAndGetDataType<DataTypeEnum8>(number_type))
             || (is_enum16 = checkAndGetDataType<DataTypeEnum16>(number_type));
 
-        const auto column_string = checkAndGetColumnConst<ColumnString>(column_string_untyped);
+        const auto * column_string = checkAndGetColumnConst<ColumnString>(column_string_untyped);
         if (!column_string || !legal_types)
-            throw Exception{
-                "Illegal columns " + col_left_untyped->getName() + " and " + col_right_untyped->getName()
-                    + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(
+                fmt::format("Illegal columns {} and {} of arguments of function {}", col_left_untyped->getName(), col_right_untyped->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         StringRef string_value = column_string->getDataAt(0);
 
@@ -1235,7 +1233,7 @@ private:
             ReadBufferFromMemory in(string_value.data, string_value.size);
             readDateText(date, in);
             if (!in.eof())
-                throw Exception("String is too long for Date: " + string_value.toString());
+                throw Exception(fmt::format("String is too long for Date: {}", string_value));
 
             ColumnPtr parsed_const_date_holder = DataTypeDate().createColumnConst(block.rows(), UInt64(date));
             const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
@@ -1255,7 +1253,7 @@ private:
             ReadBufferFromMemory in(string_value.data, string_value.size);
             readDateTimeText(date_time, in);
             if (!in.eof())
-                throw Exception("String is too long for DateTime: " + string_value.toString());
+                throw Exception(fmt::format("String is too long for DateTime: {}", string_value));
 
             ColumnPtr parsed_const_date_time_holder = DataTypeDateTime().createColumnConst(block.rows(), UInt64(date_time));
             const ColumnConst * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
@@ -1310,8 +1308,8 @@ private:
         ColumnsWithTypeAndName x(tuple_size);
         ColumnsWithTypeAndName y(tuple_size);
 
-        auto x_const = checkAndGetColumnConst<ColumnTuple>(c0.column.get());
-        auto y_const = checkAndGetColumnConst<ColumnTuple>(c1.column.get());
+        const auto * x_const = checkAndGetColumnConst<ColumnTuple>(c0.column.get());
+        const auto * y_const = checkAndGetColumnConst<ColumnTuple>(c1.column.get());
 
         Columns x_columns;
         Columns y_columns;
@@ -1546,8 +1544,7 @@ public:
         bool left_is_fixed_string = false;
         const DataTypeTuple * left_tuple = nullptr;
 
-        false
-            || (left_is_date = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get()))
+        (left_is_date = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get()))
             || (left_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[0].get()))
             || (left_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[0].get()))
             || (left_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[0].get()))
@@ -1565,8 +1562,7 @@ public:
         bool right_is_fixed_string = false;
         const DataTypeTuple * right_tuple = nullptr;
 
-        false
-            || (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get()))
+        (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get()))
             || (right_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[1].get()))
             || (right_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[1].get()))
             || (right_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[1].get()))
@@ -1589,10 +1585,9 @@ public:
               || (left_is_string && right_is_enum)
               || (left_tuple && right_tuple && left_tuple->getElements().size() == right_tuple->getElements().size())
               || (arguments[0]->equals(*arguments[1]))))
-            throw Exception("Illegal types of arguments (" + arguments[0]->getName() + ", " + arguments[1]->getName() + ")"
-                                                                                                                        " of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal types of arguments ({}, {}) of function {}", arguments[0]->getName(), arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (left_tuple && right_tuple)
         {
@@ -1623,8 +1618,9 @@ public:
         };
 
         if (!callOnBasicTypes<true, true, true, false>(left_number, right_number, call))
-            throw Exception("Wrong call for " + getName() + " with " + col_left.type->getName() + " and " + col_right.type->getName(),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Wrong call for {} with {} and {}", getName(), col_left.type->getName(), col_right.type->getName()),
+                ErrorCodes::LOGICAL_ERROR);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1650,9 +1646,9 @@ public:
                   || executeNumLeftType<Int64>(block, result, col_left_untyped, col_right_untyped)
                   || executeNumLeftType<Float32>(block, result, col_left_untyped, col_right_untyped)
                   || executeNumLeftType<Float64>(block, result, col_left_untyped, col_right_untyped)))
-                throw Exception("Illegal column " + col_left_untyped->getName()
-                                    + " of first argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of first argument of function {}", col_left_untyped->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (IsDecimalDataType(col_with_type_and_name_left.type) || IsDecimalDataType(col_with_type_and_name_right.type))
             executeDecimal(block, result, col_with_type_and_name_left, col_with_type_and_name_right);
@@ -1687,9 +1683,8 @@ public:
         bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {
-            throw Exception("Function " + getName() + " executed on invalid arguments "
-                            + "[col_left=" + col_left_untyped->getName() + "]"
-                            + "[col_right=" + col_right_untyped->getName() + "]");
+            throw Exception(
+                fmt::format("Function {} executed on invalid arguments [col_left={}] [col_right={}]", getName(), col_left_untyped->getName(), col_right_untyped->getName()));
         }
     }
 
