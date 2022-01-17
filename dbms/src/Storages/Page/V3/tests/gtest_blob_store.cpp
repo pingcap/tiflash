@@ -34,18 +34,19 @@ TEST_F(BlobStoreTest, testStats)
 {
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
-    auto stat = stats.createStat(0);
+
+    auto stat = stats.createStat(0, stats.lock());
 
     ASSERT_TRUE(stat);
     ASSERT_TRUE(stat->smap);
-    stats.createStat(1);
-    stats.createStat(2);
+    stats.createStat(1, stats.lock());
+    stats.createStat(2, stats.lock());
 
     ASSERT_EQ(stats.stats_map.size(), 3);
     ASSERT_EQ(stats.roll_id, 3);
 
-    stats.eraseStat(0);
-    stats.eraseStat(1);
+    stats.eraseStat(0, stats.lock());
+    stats.eraseStat(1, stats.lock());
     ASSERT_EQ(stats.stats_map.size(), 1);
     ASSERT_EQ(stats.roll_id, 3);
     ASSERT_EQ(stats.old_ids.size(), 2);
@@ -65,17 +66,17 @@ TEST_F(BlobStoreTest, testStat)
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 
     // still 0
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 
-    stats.createStat(0);
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
+    stats.createStat(0, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
 
@@ -138,7 +139,7 @@ TEST_F(BlobStoreTest, testFullStats)
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
-    stat = stats.createStat(0);
+    stat = stats.createStat(0, stats.lock());
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
     ASSERT_EQ(offset, 0);
 
@@ -152,17 +153,17 @@ TEST_F(BlobStoreTest, testFullStats)
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Won't choose full one
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     // A new stat can use
-    stat = stats.createStat(blob_file_id);
+    stat = stats.createStat(blob_file_id, stats.lock());
     offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, 0);
 
     // Remove the stat which id is 0 , now remain the stat which id is 1
-    stats.eraseStat(0);
+    stats.eraseStat(0, stats.lock());
 
     // Then full the stat which id 1
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100);
@@ -171,7 +172,7 @@ TEST_F(BlobStoreTest, testFullStats)
     // Then choose stat , it should return the stat id 0
     // cause in this time , stat which id is 1 have been earsed,
     // and stat which id is 1 is full.
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 }
@@ -207,7 +208,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     char c_buff_read[buff_size * buff_nums];
 
     size_t index = 0;
-    for (auto & record : edit.getRecords())
+    for (const auto & record : edit.getRecords())
     {
         ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
@@ -229,7 +230,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     page_id = 50;
     PageIDAndEntriesV3 entries = {};
 
-    for (auto & record : edit.getRecords())
+    for (const auto & record : edit.getRecords())
     {
         entries.emplace_back(std::make_pair(page_id++, record.entry));
     }
@@ -299,7 +300,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     char c_buff_read[buff_size * buff_nums];
 
     size_t index = 0;
-    for (auto & record : edit.getRecords())
+    for (const auto & record : edit.getRecords())
     {
         ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
@@ -307,7 +308,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         ASSERT_EQ(record.entry.file_id, 0);
 
         PageFieldSizes check_field_sizes;
-        for (auto & [field_offset, crc] : record.entry.field_offsets)
+        for (const auto & [field_offset, crc] : record.entry.field_offsets)
         {
             check_field_sizes.emplace_back(field_offset);
             ASSERT_TRUE(crc);
@@ -329,6 +330,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 }
 
 TEST_F(BlobStoreTest, testWrite)
+try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     auto blob_store = BlobStore(file_provider, path, config);
@@ -437,6 +439,7 @@ TEST_F(BlobStoreTest, testWrite)
         ASSERT_EQ(record.page_id, page_id);
     }
 }
+CATCH
 
 TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 {
@@ -518,7 +521,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     WriteBatch wb;
     {
-        char c_buff[buff_size];
+        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             c_buff[i * buff_size] = static_cast<char>((0xff) + i);
@@ -598,7 +601,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     WriteBatch wb;
     {
-        char c_buff[buff_size];
+        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             c_buff[i * buff_size] = static_cast<char>((0xff) + i);

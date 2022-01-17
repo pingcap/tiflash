@@ -100,11 +100,11 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
-        std::lock_guard<std::mutex> lock();
+        std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStat(BlobFileId blob_file_id);
+        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        void eraseStat(BlobFileId blob_file_id);
+        void eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.
@@ -120,7 +120,7 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
+        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
 
         BlobFileId chooseNewStat();
 
@@ -128,6 +128,7 @@ public:
 
         std::list<BlobStatPtr> getStats() const
         {
+            auto guard = lock();
             return stats_map;
         }
 
@@ -140,7 +141,7 @@ public:
         BlobFileId roll_id = 0;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
-        std::mutex lock_stats;
+        mutable std::mutex lock_stats;
     };
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);

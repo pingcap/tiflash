@@ -4,6 +4,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 
 #include <ext/scope_guard.h>
+#include <mutex>
 
 namespace ProfileEvents
 {
@@ -192,12 +193,12 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
-        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size);
+        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size, lock_stats);
 
         // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
         {
-            stat = blob_stats.createStat(blob_file_id);
+            stat = blob_stats.createStat(blob_file_id, lock_stats);
         }
     }
 
@@ -460,13 +461,13 @@ BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
 {
 }
 
-std::lock_guard<std::mutex> BlobStore::BlobStats::lock()
+std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
 {
     return std::lock_guard(lock_stats);
 }
 
 
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat = nullptr;
 
@@ -508,7 +509,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
+void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat = nullptr;
     bool found = false;
@@ -553,7 +554,7 @@ BlobFileId BlobStore::BlobStats::chooseNewStat()
     return rv;
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size)
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
     double smallest_valid_rate = 2;
@@ -638,6 +639,7 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
 
 BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
 {
+    auto guard = lock();
     for (auto & stat : stats_map)
     {
         if (stat->id == file_id)
