@@ -104,6 +104,7 @@ public:
         WriteBatch::WriteType type;
         PageId page_id;
         PageId ori_page_id;
+        PageVersionType version;
         PageEntryV3 entry;
     };
     using EditRecords = std::vector<EditRecord>;

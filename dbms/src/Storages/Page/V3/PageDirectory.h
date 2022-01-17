@@ -160,7 +160,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    WALStore wal;
+    WALStorePtr wal;
 
     LogWithPrefixPtr log;
 };

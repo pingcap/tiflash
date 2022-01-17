@@ -153,7 +153,10 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     // 6. MVCC gc apply
     // MVCC will apply the migrated entries.
     // Also it will generate a new version for these entries.
-    // TODO: What will happen if the process crash between step 5 and step 6?
+    // Note that if the process crash between step 5 and step 6, the stats in BlobStore will
+    // be reset to correct state during restore. If any exception thrown, then some BlobFiles
+    // will be remained as "read-only" files while entries in them are useless in actual.
+    // Those BlobFiles should be cleaned during next restore.
     page_directory.gcApply(std::move(gc_edit));
     return true;
 }

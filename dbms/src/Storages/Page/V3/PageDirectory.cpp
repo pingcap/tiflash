@@ -19,9 +19,9 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-/*********************************
-  * VersionedPageEntries methods *
-  ********************************/
+/********************************
+ * VersionedPageEntries methods *
+ ********************************/
 
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
@@ -106,9 +106,9 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
     return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
-/*************************
-  * PageDirectory methods
-  ************************/
+/**************************
+  * PageDirectory methods *
+  *************************/
 
 PageDirectory::PageDirectory()
     : sequence(0)
@@ -297,7 +297,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit)
         versioned_entries->createNewVersion(record.version.sequence, record.version.epoch + 1, record.entry);
     }
 
-    // Apply migrate edit into WAL
+    // Apply migrate edit into WAL with the increased epoch version
     // wal->apply(migrated_edit);
 }
 

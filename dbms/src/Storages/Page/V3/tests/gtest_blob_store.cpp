@@ -352,12 +352,7 @@ try
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, buff_size);
 
         wb.putPage(page_id, /*tag*/ 0, buff1, buff_size);
-        wb.upsertPage(page_id,
-                      /*tag*/ 0,
-                      /*PageFileIdAndLevel*/ {},
-                      buff2,
-                      buff_size,
-                      /*PageFieldOffsetChecksums*/ {});
+        wb.putPage(page_id, /*tag*/ 0, buff2, buff_size);
 
         PageEntriesEdit edit = blob_store.write(wb, nullptr);
         ASSERT_EQ(edit.size(), 2);
@@ -372,7 +367,7 @@ try
         ASSERT_EQ(record.entry.file_id, 0);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::UPSERT);
+        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
