@@ -77,7 +77,7 @@ public:
 
     ColumnFiles & getColumnFiles() { return column_files; }
 
-    size_t getColumnFilesCount() const { return column_files.size(); }
+    size_t getColumnFileCount() const { return column_files.size(); }
     size_t getRows() const { return rows; }
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }

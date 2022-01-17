@@ -36,15 +36,14 @@ public:
         return std::shared_ptr<ColumnDeleteRangeFile>(new_dpdr);
     }
 
-    size_t getDeletes() const override { return 1; };
-
     Type getType() const override { return Type::DELETE_RANGE; }
+    size_t getDeletes() const override { return 1; };
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
     static ColumnStableFilePtr deserializeMetadata(ReadBuffer & buf);
 
-    String toString() const override { return "{delete_range:" + delete_range.toString() + ", saved: " + DB::toString(saved) + "}"; }
+    String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };
 
 class ColumnFileEmptyReader : public ColumnFileReader

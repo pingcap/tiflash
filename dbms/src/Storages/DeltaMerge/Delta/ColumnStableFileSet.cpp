@@ -162,12 +162,15 @@ void ColumnStableFileSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 size_t ColumnStableFileSet::getTotalCacheRows() const
 {
     size_t cache_rows = 0;
-    for (auto & pack : packs)
+    for (const auto & level : column_stable_file_levels)
     {
-        if (auto p = pack->tryToBlock(); p)
+        for (const auto & file : level)
         {
-            if (auto && c = p->getCache(); c)
-                cache_rows += c->block.rows();
+            if (auto * tf = file->tryToTinyFile(); tf)
+            {
+                if (auto && c = tf->getCache(); c)
+                    cache_rows += c->block.rows();
+            }
         }
     }
     return cache_rows;
@@ -175,12 +178,36 @@ size_t ColumnStableFileSet::getTotalCacheRows() const
 
 size_t ColumnStableFileSet::getTotalCacheBytes() const
 {
-
+    size_t cache_bytes = 0;
+    for (const auto & level : column_stable_file_levels)
+    {
+        for (const auto & file : level)
+        {
+            if (auto * tf = file->tryToTinyFile(); tf)
+            {
+                if (auto && c = tf->getCache(); c)
+                    cache_bytes += c->block.allocatedBytes();
+            }
+        }
+    }
+    return cache_bytes;
 }
 
 size_t ColumnStableFileSet::getValidCacheRows() const
 {
-
+    size_t cache_rows = 0;
+    for (const auto & level : column_stable_file_levels)
+    {
+        for (const auto & file : level)
+        {
+            if (auto * tf = file->tryToTinyFile(); tf)
+            {
+                if (auto && c = tf->getCache(); c)
+                    cache_rows += tf->getRows();
+            }
+        }
+    }
+    return cache_rows;
 }
 
 bool ColumnStableFileSet::appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnStableFiles & column_files, WriteBatches & wbs)
@@ -306,6 +333,7 @@ bool ColumnStableFileSet::installCompactionResults(const MinorCompactionPtr & co
 
     /// Update packs in memory.
     column_stable_file_levels.swap(new_column_stable_file_levels);
+    return true;
 }
 
 ColumnFileSetSnapshotPtr ColumnStableFileSet::createSnapshot(const DMContext & context)

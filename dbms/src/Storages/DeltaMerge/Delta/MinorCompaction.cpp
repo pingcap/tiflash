@@ -15,29 +15,6 @@ MinorCompaction::MinorCompaction(size_t compaction_src_level_)
     : compaction_src_level{compaction_src_level_}
 {}
 
-inline bool MinorCompaction::packUpTask(Task && task)
-{
-    if (unlikely(task.to_compact.empty()))
-        throw Exception("task shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
-
-    bool is_trivial_move = false;
-    if (task.to_compact.size() == 1)
-    {
-        // Maybe this column file is small, but it cannot be merged with other packs, so also remove it's cache.
-        for (auto & f : task.to_compact)
-        {
-            if (auto * t_file = f->tryToTinyFile(); t_file)
-            {
-                t_file->clearCache();
-            }
-        }
-        is_trivial_move = true;
-    }
-    task.is_trivial_move = is_trivial_move;
-    tasks.push_back(std::move(task));
-    return is_trivial_move;
-}
-
 void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader)
 {
     for (auto & task : tasks)
@@ -74,9 +51,9 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
     }
 }
 
-bool MinorCompaction::commit()
+bool MinorCompaction::commit(WriteBatches & wbs)
 {
-    return column_stable_file_set->installCompactionResults(shared_from_this());
+    return column_stable_file_set->installCompactionResults(shared_from_this(), wbs);
 }
 
 }

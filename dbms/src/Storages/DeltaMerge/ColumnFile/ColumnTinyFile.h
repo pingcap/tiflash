@@ -8,11 +8,11 @@ namespace DM
 {
 class ColumnTinyFile;
 using ColumnTinyFilePtr = std::shared_ptr<ColumnTinyFile>;
-class ColumnTinyFileReader;
 
 class ColumnTinyFile : public ColumnStableFile
 {
     friend class ColumnTinyFileReader;
+
 private:
     BlockPtr schema;
 
@@ -57,49 +57,45 @@ public:
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
     }
 
-    ColumnTinyFile(const ColumnTinyFile &) = default;
+    Type getType() const override { return Type::TINY_FILE; }
 
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
-    Type getType() const override { return Type::TINY_FILE; }
+    auto getCache() const { return cache; }
+    void clearCache() { cache = {}; }
 
-    ColumnTinyFilePtr cloneWithoutCache()
-    {
-        return std::make_shared<ColumnTinyFile>(schema, rows, bytes, data_page_id);
-    }
+    /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
+    BlockPtr getSchema() const { return schema; }
 
     ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
     {
         return std::make_shared<ColumnTinyFile>(schema, rows, bytes, new_data_page_id, cache);
     }
 
-    /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
-    BlockPtr getSchema() const { return schema; }
-
-    PageId getDataPageId() const { return data_page_id; }
+    ColumnFileReaderPtr
+    getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
     void removeData(WriteBatches & wbs) const override
     {
         wbs.removed_log.delPage(data_page_id);
     }
 
-    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
+    void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
-
-    ColumnFileReaderPtr
-    getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    PageId getDataPageId() const { return data_page_id; }
 
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
-    void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+    static ColumnTinyFilePtr writeColumnFile(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const BlockPtr & schema = nullptr, const CachePtr & cache = nullptr);
+
+    static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     static std::tuple<ColumnStableFilePtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
 
     String toString() const override
     {
-        String s = "{tiny file,rows:" + DB::toString(rows) //
+        String s = "{tiny_file,rows:" + DB::toString(rows) //
                    + ",bytes:" + DB::toString(bytes) //
                    + ",data_page_id:" + DB::toString(data_page_id) //
                    + ",schema:" + (schema ? schema->dumpStructure() : "none") //

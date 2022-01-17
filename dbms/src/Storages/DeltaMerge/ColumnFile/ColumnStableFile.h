@@ -6,6 +6,8 @@ namespace DB
 {
 namespace DM
 {
+/// ColumnStableFile is saved on disk(include the content data and the metadata).
+/// It can be recovered after reboot.
 class ColumnStableFile : public ColumnFile
 {
 public:

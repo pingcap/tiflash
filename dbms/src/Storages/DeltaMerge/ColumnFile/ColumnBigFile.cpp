@@ -66,8 +66,8 @@ void ColumnBigFileReader::initStream()
         return;
 
     file_stream = std::make_shared<DMFileBlockInputStream>(context.db_context,
-        /*max_version*/ MAX_UINT64,
-        /*clean_read*/ false,
+                                                           /*max_version*/ MAX_UINT64,
+                                                           /*clean_read*/ false,
                                                            context.hash_salt,
                                                            column_file.getFile(),
                                                            *col_defs,

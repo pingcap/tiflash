@@ -1,17 +1,19 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 
 namespace DB
 {
 namespace DM
 {
+class DMFileBlockInputStream;
+using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
+
 class ColumnBigFile;
 using ColumnBigFilePtr = std::shared_ptr<ColumnBigFile>;
 
-/// A delta pack which contains a DMFile. The DMFile could have many Blocks.
+
+/// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnBigFile : public ColumnStableFile
 {
     friend class ColumnBigFileReader;
@@ -40,12 +42,12 @@ public:
 
     ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
-        auto new_pack = new ColumnBigFile(*this);
-        new_pack->file = new_file;
-        new_pack->segment_range = new_segment_range;
+        auto new_column_file = new ColumnBigFile(*this);
+        new_column_file->file = new_file;
+        new_column_file->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
-        new_pack->calculateStat(context);
-        return std::shared_ptr<ColumnBigFile>(new_pack);
+        new_column_file->calculateStat(context);
+        return std::shared_ptr<ColumnBigFile>(new_column_file);
     }
 
     Type getType() const override { return Type::BIG_FILE; }
@@ -76,7 +78,7 @@ public:
 
     String toString() const override
     {
-        String s = "{file,rows:" + DB::toString(getRows()) //
+        String s = "{big_file,rows:" + DB::toString(getRows()) //
             + ",bytes:" + DB::toString(getBytes()) + "}"; //
         return s;
     }

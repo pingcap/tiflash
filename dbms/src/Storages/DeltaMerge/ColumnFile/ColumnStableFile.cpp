@@ -5,7 +5,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
 namespace DB
@@ -77,7 +76,7 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
                                                    {});
 }
 
-void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnStableFiles & column_files)
+void serializeColumnStableFiles(WriteBuffer & buf, const ColumnStableFiles & column_files)
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.delta, buf); // Add binary version
     switch (STORAGE_FORMAT_CURRENT.delta)
@@ -95,7 +94,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnStableFiles & colu
     }
 }
 
-ColumnStableFiles deserializeColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnStableFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;

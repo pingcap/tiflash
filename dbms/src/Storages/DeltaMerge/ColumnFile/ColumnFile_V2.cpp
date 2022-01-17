@@ -24,10 +24,14 @@ using ColumnStableFiles_V2 = std::vector<ColumnStableFile_V2Ptr>;
 inline ColumnStableFiles transform_V2_to_V3(const ColumnStableFiles_V2 & column_files_v2)
 {
     ColumnStableFiles column_files_v3;
-    for (auto & f : column_files_v2)
+    for (const auto & f : column_files_v2)
     {
-        ColumnStableFilePtr f_v3 = f->isDeleteRange() ? std::make_shared<ColumnDeleteRangeFile>(std::move(f->delete_range))
-                                                : std::make_shared<ColumnTinyFile>(f->schema, f->rows, f->bytes, f->data_page_id);
+        ColumnStableFilePtr f_v3;
+        if (f->isDeleteRange())
+            f_v3 = std::make_shared<ColumnDeleteRangeFile>(std::move(f->delete_range));
+        else
+            f_v3 = std::make_shared<ColumnTinyFile>(f->schema, f->rows, f->bytes, f->data_page_id);
+
         column_files_v3.push_back(f_v3);
     }
     return column_files_v3;

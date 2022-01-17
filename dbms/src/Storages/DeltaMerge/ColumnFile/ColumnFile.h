@@ -15,11 +15,12 @@ static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
 struct DMContext;
 class ColumnFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
 class ColumnInMemoryFile;
 class ColumnTinyFile;
 class ColumnDeleteRangeFile;
 class ColumnBigFile;
-using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+
 using ColumnFiles = std::vector<ColumnFilePtr>;
 class ColumnStableFile;
 using ColumnStableFilePtr = std::shared_ptr<ColumnStableFile>;
@@ -41,6 +42,14 @@ protected:
     virtual ~ColumnFile() = default;
 
 public:
+    enum Type : UInt32
+    {
+        DELETE_RANGE = 1,
+        TINY_FILE = 2,
+        BIG_FILE = 3,
+        INMEMORY_FILE = 4,
+    };
+
     struct Cache
     {
         Cache(const Block & header)
@@ -56,25 +65,9 @@ public:
     using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
-    // distinguish metadata between different kinds of `ColumnFile`
-    enum Type : UInt32
-    {
-        DELETE_RANGE = 1,
-        TINY_FILE = 2,
-        BIG_FILE = 3,
-        INMEMORY_FILE = 4,
-    };
-
 public:
     /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
     bool getId() const { return id; }
-
-    virtual bool isAppendable() const { return false; }
-    virtual void disableAppend() {}
-    virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
-    {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
-    }
 
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; };
@@ -82,13 +75,13 @@ public:
 
     virtual Type getType() const = 0;
 
-    /// Is a DeltaPackBlock or not.
+    /// Is a ColumnInMemoryFile or not.
     bool isInMemoryFile() const { return getType() == Type::INMEMORY_FILE; }
-    /// Is a DeltaPackFile or not.
+    /// Is a ColumnTinyFile or not.
     bool isTinyFile() const { return getType() == Type::TINY_FILE; }
-    /// Is a DeltaPackDeleteRange or not.
+    /// Is a ColumnDeleteRangeFile or not.
     bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
-
+    /// Is a ColumnBigFile or not.
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
 
     ColumnInMemoryFile * tryToInMemoryFile();
@@ -96,13 +89,16 @@ public:
     ColumnDeleteRangeFile * tryToDeleteRange();
     ColumnBigFile * tryToBigFile();
 
-    virtual ColumnStableFilePtr flush()
+    virtual ColumnFileReaderPtr
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+
+    /// only ColumnInMemoryFile can be appendable
+    virtual bool isAppendable() const { return false; }
+    virtual void disableAppend() {}
+    virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
-
-    virtual ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
 
     virtual String toString() const = 0;
 };

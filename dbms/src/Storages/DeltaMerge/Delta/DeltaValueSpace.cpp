@@ -48,6 +48,12 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
     column_stable_file_set->saveMeta(wbs);
 }
 
+void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
+{
+    column_stable_file_set->recordRemoveColumnFilesPages(wbs);
+}
+
+
 std::pair<ColumnStableFiles, ColumnFiles>
 DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const
 {
@@ -58,17 +64,20 @@ DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & 
 
 size_t DeltaValueSpace::getTotalCacheRows() const
 {
-    return 0;
+    std::scoped_lock lock(mutex);
+    return mem_table_set->getRows() + column_stable_file_set->getTotalCacheRows();
 }
 
 size_t DeltaValueSpace::getTotalCacheBytes() const
 {
-    return 0;
+    std::scoped_lock lock(mutex);
+    return mem_table_set->getBytes() + column_stable_file_set->getTotalCacheBytes();;
 }
 
 size_t DeltaValueSpace::getValidCacheRows() const
 {
-    return 0;
+    std::scoped_lock lock(mutex);
+    return mem_table_set->getRows() + column_stable_file_set->getValidCacheRows();;
 }
 
 bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFilePtr & column_file)
@@ -77,6 +86,7 @@ bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFile
     if (abandoned.load(std::memory_order_relaxed))
         return false;
     mem_table_set->appendColumnFile(column_file);
+    return true;
 }
 
 bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
@@ -221,7 +231,7 @@ bool DeltaValueSpace::compact(DMContext & context)
 //            LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
             return false;
         }
-        if (!compaction_task->commit())
+        if (!compaction_task->commit(wbs))
         {
             LOG_WARNING(log, "Structure has been updated during compact");
             wbs.rollbackWrittenLogAndData();
@@ -229,9 +239,9 @@ bool DeltaValueSpace::compact(DMContext & context)
             return false;
         }
 
-        LOG_DEBUG(log,
+//        LOG_DEBUG(log,
 //                  simpleInfo() << " Successfully compacted " << total_compact_packs << " packs into " << tasks.size() << " packs, total "
-                               << total_compact_rows << " rows.");
+//                               << total_compact_rows << " rows.");
     }
     wbs.writeRemoves();
 

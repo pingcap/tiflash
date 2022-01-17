@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Storages/DeltaMerge/ColumnFile/ColumnStableFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h"
 
 namespace DB
 {
@@ -47,11 +48,32 @@ public:
     MinorCompaction(size_t compaction_src_level_);
 
     // return whether this task is a trivial move
-    inline bool packUpTask(Task && task);
+    inline bool packUpTask(Task && task)
+    {
+        if (unlikely(task.to_compact.empty()))
+            throw Exception("task shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+
+        bool is_trivial_move = false;
+        if (task.to_compact.size() == 1)
+        {
+            // Maybe this column file is small, but it cannot be merged with other packs, so also remove it's cache.
+            for (auto & f : task.to_compact)
+            {
+                if (auto * t_file = f->tryToTinyFile(); t_file)
+                {
+                    t_file->clearCache();
+                }
+            }
+            is_trivial_move = true;
+        }
+        task.is_trivial_move = is_trivial_move;
+        tasks.push_back(std::move(task));
+        return is_trivial_move;
+    }
 
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
-    bool commit();
+    bool commit(WriteBatches & wbs);
 };
 
 using MinorCompactionPtr = std::shared_ptr<MinorCompaction>;

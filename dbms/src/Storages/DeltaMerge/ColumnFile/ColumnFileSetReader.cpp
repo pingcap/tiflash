@@ -216,7 +216,7 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
     auto & column_files = snapshot->getColumnFiles();
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(column_file_rows_end, placed_rows);
 
-    for (size_t pack_index = start_pack_index; pack_index < snapshot->getColumnFilesCount(); ++pack_index)
+    for (size_t pack_index = start_pack_index; pack_index < snapshot->getColumnFileCount(); ++pack_index)
     {
         auto & column_file = column_files[pack_index];
 

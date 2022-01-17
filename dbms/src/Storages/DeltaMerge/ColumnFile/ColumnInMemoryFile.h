@@ -7,18 +7,17 @@ namespace DB
 namespace DM
 {
 
-class ColumnInMemoryFileReader;
-
 class ColumnInMemoryFile : public ColumnFile
 {
     friend class ColumnInMemoryFileReader;
+
 private:
     BlockPtr schema;
 
     UInt64 rows = 0;
     UInt64 bytes = 0;
 
-    // This pack cannot append any more data.
+    // whether this instance can append any more data.
     bool disable_append = false;
 
     // The cache data in memory.
@@ -38,27 +37,28 @@ private:
 
 public:
     explicit ColumnInMemoryFile(const Block & schema_)
-        : schema(std::make_shared<Block>(schema_.cloneEmpty())),
-        cache(std::make_shared<Cache>(schema_))
+        : schema(std::make_shared<Block>(schema_.cloneEmpty()))
+        , cache(std::make_shared<Cache>(schema_))
     {
         colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
     }
 
+    Type getType() const override { return Type::INMEMORY_FILE; }
+
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; };
 
-    Type getType() const override { return Type::INMEMORY_FILE; }
-    /// The schema of this pack. Could be empty, i.e. a DeleteRange does not have a schema.
+    CachePtr getCache() { return cache; }
+
+    /// The schema of this pack.
     BlockPtr getSchema() const { return schema; }
-    /// Update the schema object. It is used to reduce the serialization/deserialization of schema objects.
-    /// Note that the caller must make sure that the new schema instance is identical to the current one.
-    void setSchema(const BlockPtr & v) { schema = v; }
     /// Replace the schema with a new schema, and the new schema instance should be exactly the same as the previous one.
     void resetIdenticalSchema(BlockPtr schema_) { schema = schema_; }
 
-    CachePtr getCache() { return cache; }
+    ColumnFileReaderPtr
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
     bool isAppendable() const override
     {
@@ -70,12 +70,17 @@ public:
     }
     bool append(DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes) override;
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
-
     Block readDataForFlush() const;
 
-    String toString() const override { return ""; }
+    String toString() const override
+    {
+        String s = "{in_memory_file,rows:" + DB::toString(rows) //
+                   + ",bytes:" + DB::toString(bytes) //
+                   + ",disable_append:" + DB::toString(disable_append) //
+                   + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+                   + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
+        return s;
+    }
 };
 
 

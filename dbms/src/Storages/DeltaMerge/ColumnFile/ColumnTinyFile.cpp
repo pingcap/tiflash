@@ -245,6 +245,5 @@ ColumnFileReaderPtr ColumnTinyFileReader::createNewReader(const ColumnDefinesPtr
     return std::make_shared<ColumnTinyFileReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
 }
 
-
 }
 }

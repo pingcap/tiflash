@@ -8,7 +8,7 @@ namespace DB
 {
 namespace DM
 {
-void serializeSavedColumnFiles_V3(WriteBuffer & buf, const ColumnStableFiles & column_files)
+void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnStableFiles & column_files)
 {
     writeIntBinary(column_files.size(), buf);
     BlockPtr last_schema;
@@ -47,7 +47,7 @@ void serializeSavedColumnFiles_V3(WriteBuffer & buf, const ColumnStableFiles & c
     }
 }
 
-ColumnStableFiles deserializePacks_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
+ColumnStableFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
 {
     size_t column_file_count;
     readIntBinary(column_file_count, buf);

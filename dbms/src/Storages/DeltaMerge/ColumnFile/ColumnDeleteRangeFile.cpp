@@ -6,7 +6,10 @@ namespace DB
 {
 namespace DM
 {
-ColumnFileReaderPtr ColumnDeleteRangeFile::getReader(const DB::DM::DMContext &, const DB::DM::StorageSnapshotPtr &, const DB::DM::ColumnDefinesPtr &) const
+ColumnFileReaderPtr ColumnDeleteRangeFile::getReader(
+    const DMContext & /*context*/,
+    const StorageSnapshotPtr & /*storage_snap*/,
+    const ColumnDefinesPtr & /*col_defs*/) const
 {
     return std::make_shared<ColumnFileEmptyReader>();
 }

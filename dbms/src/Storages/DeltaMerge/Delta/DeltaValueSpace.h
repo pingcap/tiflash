@@ -5,10 +5,6 @@
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
-#include <Storages/DeltaMerge/Delta/DeltaPack.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackBlock.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackDeleteRange.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackFile.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -86,6 +82,8 @@ public:
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
+    String simpleInfo() const { return "Delta [" + DB::toString(column_stable_file_set->getId()) + "]"; }
+
     bool getLock(Lock & lock) const
     {
         Lock my_lock(mutex);
@@ -102,6 +100,8 @@ public:
 
     void saveMeta(WriteBatches & wbs) const;
 
+    void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
+
     PageId getId() const { return column_stable_file_set->getId(); }
 
     /// First check whether 'head_packs' is exactly the head of packs in this instance.
@@ -111,6 +111,20 @@ public:
     /// Note that this method is expected to be called by some one who already have lock on this instance.
     std::pair<ColumnStableFiles, ColumnFiles>
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
+
+    size_t getColumnFileCount() const { return column_stable_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount(); }
+    size_t getRows(bool use_unsaved = true) const
+    {
+        return use_unsaved ? column_stable_file_set->getRows() + mem_table_set->getRows() : column_stable_file_set->getRows();
+    }
+    size_t getBytes(bool use_unsaved = true) const
+    {
+        return use_unsaved ? column_stable_file_set->getBytes() + mem_table_set->getBytes() : column_stable_file_set->getBytes();
+    }
+    size_t getDeletes() const { return column_stable_file_set->getDeletes() + mem_table_set->getDeletes(); }
+
+    size_t getUnsavedRows() const { return mem_table_set->getRows(); }
+    size_t getUnsavedBytes() const { return mem_table_set->getBytes(); }
 
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;
@@ -250,15 +264,20 @@ public:
         CurrentMetrics::sub(type);
     }
 
-    ColumnFiles & getStableColumnFiles() const { return stable_files_snap->getColumnFiles(); }
+    // Only used when `is_update` is true
+    ColumnFiles & getHeadColumnFilesForCheck() const
+    {
+        // mem_table_snap must be nullptr
+        return stable_files_snap->getColumnFiles();
+    }
 
-    size_t getColumnFilesCount() const { return mem_table_snap->getColumnFilesCount() + stable_files_snap->getColumnFilesCount(); }
+    size_t getColumnFileCount() const { return mem_table_snap->getColumnFileCount() + stable_files_snap->getColumnFileCount(); }
     size_t getRows() const { return mem_table_snap->getRows() + stable_files_snap->getRows(); }
     size_t getBytes() const { return mem_table_snap->getBytes() + stable_files_snap->getBytes(); }
     size_t getDeletes() const { return mem_table_snap->getDeletes() + stable_files_snap->getDeletes(); }
 
-    size_t getMemTableRowsOffset() const { stable_files_snap->getRows(); }
-    size_t getMemTableDeletesOffset() const { stable_files_snap->getDeletes(); }
+    size_t getMemTableRowsOffset() const { return stable_files_snap->getRows(); }
+    size_t getMemTableDeletesOffset() const { return stable_files_snap->getDeletes(); }
 
     RowKeyRange getSquashDeleteRange() const;
 

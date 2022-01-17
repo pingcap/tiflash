@@ -36,6 +36,11 @@ public:
 
     ColumnFiles cloneColumnFiles() { return column_files; }
 
+    size_t getColumnFileCount() const { return column_files.size(); }
+    size_t getRows() const { return rows; }
+    size_t getBytes() const { return bytes; }
+    size_t getDeletes() const { return deletes; }
+
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.

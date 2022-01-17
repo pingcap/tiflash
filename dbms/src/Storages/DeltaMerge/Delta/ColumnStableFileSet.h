@@ -74,7 +74,6 @@ public:
     ColumnStableFiles
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
-
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
     PageId getId() const { return metadata_id; }
@@ -95,10 +94,6 @@ public:
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
-
-    bool isShouldCompact() const { return should_compact; }
-
-    UInt64 getCurrentFlushVersion() { return flush_version; }
 
     bool appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnStableFiles & column_files, WriteBatches & wbs);
 

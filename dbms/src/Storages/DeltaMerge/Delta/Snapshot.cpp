@@ -132,7 +132,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
 
 bool DeltaValueReader::shouldPlace(const DMContext & context,
                                    DeltaIndexPtr my_delta_index,
-                                   const RowKeyRange & segment_range,
+                                   const RowKeyRange & segment_range_,
                                    const RowKeyRange & relevant_range,
                                    UInt64 max_version)
 {
@@ -142,7 +142,7 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 
-    if (relevant_range.all() || relevant_range == segment_range //
+    if (relevant_range.all() || relevant_range == segment_range_ //
         || delta_snap->getRows() - placed_rows > context.delta_cache_limit_rows //
         || placed_delete_ranges != delta_snap->getDeletes())
         return true;
