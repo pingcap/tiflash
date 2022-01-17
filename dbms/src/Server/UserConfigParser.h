@@ -20,9 +20,11 @@ class ConfigReloader;
 using ConfigReloaderPtr = std::unique_ptr<ConfigReloader>;
 namespace UserConfig
 {
-
-ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const std::string & config_path,
-    std::unique_ptr<Context> & global_context, Poco::Logger * log);
+ConfigReloaderPtr parseSettings(
+    Poco::Util::LayeredConfiguration & config,
+    const std::string & config_path,
+    std::unique_ptr<Context> & global_context,
+    Poco::Logger * log);
 
 }
 } // namespace DB

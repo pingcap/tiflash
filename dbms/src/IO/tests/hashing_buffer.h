@@ -3,7 +3,11 @@
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 
-#define FAIL(msg) { std::cout << msg; exit(1); }
+#define FAIL(msg)         \
+    {                     \
+        std::cout << msg; \
+        exit(1);          \
+    }
 
 
 CityHash_v1_0_2::uint128 referenceHash(const char * data, size_t len)

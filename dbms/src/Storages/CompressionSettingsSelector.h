@@ -1,20 +1,19 @@
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <IO/CompressedStream.h>
 #include <IO/CompressionSettings.h>
 #include <IO/ReadHelpers.h>
-#include <Common/Exception.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_COMPRESSION_METHOD;
-    extern const int UNKNOWN_ELEMENT_IN_CONFIG;
-}
+extern const int UNKNOWN_COMPRESSION_METHOD;
+extern const int UNKNOWN_ELEMENT_IN_CONFIG;
+} // namespace ErrorCodes
 
 
 /** Allows you to select the compression settings for the conditions specified in the configuration file.
@@ -80,7 +79,7 @@ private:
     std::vector<Element> elements;
 
 public:
-    CompressionSettingsSelector() {}    /// Always returns the default method.
+    CompressionSettingsSelector() {} /// Always returns the default method.
 
     CompressionSettingsSelector(Poco::Util::AbstractConfiguration & config, const std::string & config_prefix)
     {
@@ -108,4 +107,4 @@ public:
     }
 };
 
-}
+} // namespace DB
