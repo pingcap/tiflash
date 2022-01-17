@@ -2,6 +2,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 
 #include <ext/scope_guard.h>
 #include <mutex>
@@ -91,7 +92,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -125,16 +125,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-
-            if (write.type == WriteBatch::WriteType::PUT)
-            {
-                edit.put(write.page_id, entry);
-            }
-            else // WriteBatch::WriteType::UPSERT
-            {
-                edit.upsertPage(write.page_id, entry);
-            }
-
+            edit.put(write.page_id, entry);
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -147,6 +138,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.ref(write.page_id, write.ori_page_id);
             break;
         }
+        default:
+            throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
     }
 
@@ -363,13 +356,11 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     return blob_need_gc;
 }
 
-PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
-                                          const PageSize & total_page_size,
-                                          const WriteLimiterPtr & write_limiter,
-                                          const ReadLimiterPtr & read_limiter)
+PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
+                              const PageSize & total_page_size,
+                              const WriteLimiterPtr & write_limiter,
+                              const ReadLimiterPtr & read_limiter)
 {
-    PageIdAndVersionedEntryList copy_list;
-
     PageEntriesEdit edit;
 
     if (total_page_size == 0)
@@ -408,12 +399,12 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
                 new_entry.size = entry.size;
 
                 new_entry.file_id = blobfile_id;
-                new_entry.offset = offset_in_data;
+                new_entry.offset = offset_in_data; // FIXME: offset_in_file + offset_in_data?
 
                 offset_in_data += new_entry.size;
                 data_pos += new_entry.size;
 
-                copy_list.emplace_back(std::make_tuple(page_id, std::move(versioned), std::move(new_entry)));
+                edit.upsertPage(page_id, versioned, new_entry);
             }
         }
     }
@@ -439,7 +430,7 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
         throw e;
     }
 
-    return copy_list;
+    return edit;
 }
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id) const

@@ -60,11 +60,12 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageEntryV3 & entry)
+    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::UPSERT;
         record.page_id = page_id;
+        record.version = ver;
         record.entry = entry;
         records.emplace_back(record);
     }
@@ -112,7 +113,7 @@ public:
         records.emplace_back(rec);
     }
 
-    EditRecords & getRecords() { return records; }
+    EditRecords & getMutRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
 
 private:

@@ -19,6 +19,10 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
+/*********************************
+  * VersionedPageEntries methods *
+  ********************************/
+
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
@@ -31,7 +35,6 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
     }
     return std::nullopt;
 }
-
 
 std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
 {
@@ -102,6 +105,10 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
 
     return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
+
+/*************************
+  * PageDirectory methods
+  ************************/
 
 PageDirectory::PageDirectory()
     : sequence(0)
@@ -270,25 +277,28 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-
-void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries)
+void PageDirectory::gcApply(PageEntriesEdit && migrated_edit)
 {
     std::shared_lock read_lock(table_rw_mutex);
-    for (const auto & [page_id, version, entry] : migrated_entries)
+    for (auto & record : migrated_edit.getMutRecords())
     {
-        auto iter = mvcc_table_directory.find(page_id);
-        if (iter == mvcc_table_directory.end())
+        auto iter = mvcc_table_directory.find(record.page_id);
+        if (unlikely(iter == mvcc_table_directory.end()))
         {
-            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", page_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
         }
+
+        // Increase the epoch for migrated record.
+        record.version.epoch += 1;
 
         // Append the gc version to version list
         auto & versioned_entries = iter->second;
         auto page_lock = versioned_entries->acquireLock();
-        versioned_entries->createNewVersion(version.sequence, version.epoch + 1, entry);
-
-        // TBD: wal apply
+        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch + 1, record.entry);
     }
+
+    // Apply migrate edit into WAL
+    // wal->apply(migrated_edit);
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>

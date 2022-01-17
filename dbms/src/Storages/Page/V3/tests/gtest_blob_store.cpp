@@ -688,18 +688,17 @@ TEST_F(BlobStoreTest, GC)
     auto stat = blob_store.blob_stats.fileIdToStat(0);
     stat->changeToReadOnly();
 
-    const auto & copy_list = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    const auto & gc_edit = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
 
     // Check copy_list which will apply fo Mvcc
-    ASSERT_EQ(copy_list.size(), buff_nums);
+    ASSERT_EQ(gc_edit.size(), buff_nums);
     auto it = versioned_entries.begin();
-    for (const auto & [page_id_, version_type, entry_] : copy_list)
+    for (const auto & record : gc_edit.getRecords())
     {
-        (void)version_type;
-        ASSERT_EQ(page_id_, page_id);
-        ASSERT_EQ(entry_.file_id, 1);
-        ASSERT_EQ(it->second.checksum, entry_.checksum);
-        ASSERT_EQ(it->second.size, entry_.size);
+        ASSERT_EQ(record.page_id, page_id);
+        ASSERT_EQ(record.entry.file_id, 1);
+        ASSERT_EQ(record.entry.checksum, it->second.checksum);
+        ASSERT_EQ(record.entry.size, it->second.size);
         it++;
     }
 
