@@ -258,6 +258,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
+    if (ts.next_read_engine() != tipb::EngineType::Local)
+        throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
     DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
     storage_interpreter.execute(pipeline);
@@ -694,6 +696,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             taskLogger());
         pipeline.streams.resize(1);
+        // should record for agg before restore concurrency. See #3804.
+        recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
     }
     else
@@ -712,6 +716,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             context.getFileProvider(),
             true,
             taskLogger());
+        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     // add cast
 }
@@ -758,134 +763,9 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::v
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
-    dagContext().getProfileStreamsMap()[key].qb_id = query_block.id;
-    for (auto & stream : pipeline.streams)
-    {
-        dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
-    }
-    for (auto & stream : pipeline.streams_with_non_joined_data)
-        dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
-}
-
-void copyExecutorTreeWithLocalTableScan(
-    tipb::DAGRequest & dag_req,
-    const tipb::Executor * root,
-    const tipb::DAGRequest & org_req)
-{
-    const tipb::Executor * current = root;
-    auto * exec = dag_req.mutable_root_executor();
-    while (current->tp() != tipb::ExecType::TypeTableScan)
-    {
-        exec->set_tp(current->tp());
-        exec->set_executor_id(current->executor_id());
-        if (current->tp() == tipb::ExecType::TypeSelection)
-        {
-            auto * sel = exec->mutable_selection();
-            for (auto const & condition : current->selection().conditions())
-            {
-                auto * tmp = sel->add_conditions();
-                tmp->CopyFrom(condition);
-            }
-            exec = sel->mutable_child();
-            current = &current->selection().child();
-        }
-        else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
-        {
-            auto * agg = exec->mutable_aggregation();
-            for (auto const & expr : current->aggregation().agg_func())
-            {
-                auto * tmp = agg->add_agg_func();
-                tmp->CopyFrom(expr);
-            }
-            for (auto const & expr : current->aggregation().group_by())
-            {
-                auto * tmp = agg->add_group_by();
-                tmp->CopyFrom(expr);
-            }
-            agg->set_streamed(current->aggregation().streamed());
-            exec = agg->mutable_child();
-            current = &current->aggregation().child();
-        }
-        else if (current->tp() == tipb::ExecType::TypeLimit)
-        {
-            auto * limit = exec->mutable_limit();
-            limit->set_limit(current->limit().limit());
-            exec = limit->mutable_child();
-            current = &current->limit().child();
-        }
-        else if (current->tp() == tipb::ExecType::TypeTopN)
-        {
-            auto * topn = exec->mutable_topn();
-            topn->set_limit(current->topn().limit());
-            for (auto const & expr : current->topn().order_by())
-            {
-                auto * tmp = topn->add_order_by();
-                tmp->CopyFrom(expr);
-            }
-            exec = topn->mutable_child();
-            current = &current->topn().child();
-        }
-        else
-        {
-            throw TiFlashException("Not supported yet", Errors::Coprocessor::Unimplemented);
-        }
-    }
-
-    if (current->tp() != tipb::ExecType::TypeTableScan)
-        throw TiFlashException("Only support copy from table scan sourced query block", Errors::Coprocessor::Internal);
-    exec->set_tp(tipb::ExecType::TypeTableScan);
-    exec->set_executor_id(current->executor_id());
-    auto * new_ts = new tipb::TableScan(current->tbl_scan());
-    new_ts->set_next_read_engine(tipb::EngineType::Local);
-    exec->set_allocated_tbl_scan(new_ts);
-
-    /// force the encode type to be TypeCHBlock, so the receiver side does not need to handle the timezone related issues
-    dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
-    dag_req.set_force_encode_type(true);
-    if (org_req.has_time_zone_name() && !org_req.time_zone_name().empty())
-        dag_req.set_time_zone_name(org_req.time_zone_name());
-    else if (org_req.has_time_zone_offset())
-        dag_req.set_time_zone_offset(org_req.time_zone_offset());
-}
-
-void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
-{
-    // remote query containing agg/limit/topN can not running
-    // in parellel, but current remote query is running in
-    // parellel, so just disable this corner case.
-    if (query_block.aggregation || query_block.limitOrTopN)
-        throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
-    const auto & ts = query_block.source->tbl_scan();
-    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    cop_key_ranges.reserve(ts.ranges_size());
-    for (const auto & range : ts.ranges())
-    {
-        cop_key_ranges.emplace_back(range.low(), range.high());
-    }
-    sort(cop_key_ranges.begin(), cop_key_ranges.end());
-
-    ::tipb::DAGRequest dag_req;
-
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, *dagContext().dag_request);
-    DAGSchema schema;
-    ColumnsWithTypeAndName columns;
-    BoolVec is_ts_column;
-    std::vector<NameAndTypePair> source_columns;
-    for (int i = 0; i < static_cast<int>(query_block.output_field_types.size()); i++)
-    {
-        dag_req.add_output_offsets(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(query_block.output_field_types[i]);
-        String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
-        schema.push_back(std::make_pair(col_name, info));
-        is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
-        source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(query_block.output_field_types[i]));
-        final_project.emplace_back(col_name, "");
-    }
-
-    dag_req.set_collect_execution_summaries(dagContext().collect_execution_summaries);
-    executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
-
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    auto & profile_streams_info = dagContext().getProfileStreamsMap()[key];
+    profile_streams_info.qb_id = query_block.id;
+    pipeline.transform([&profile_streams_info](auto & stream) { profile_streams_info.input_streams.push_back(stream); });
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
@@ -1036,11 +916,6 @@ void DAGQueryBlockInterpreter::executeExtraCastAndSelection(
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
-    if (query_block.isRemoteQuery())
-    {
-        executeRemoteQuery(pipeline);
-        return;
-    }
     SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
@@ -1104,7 +979,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
-        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
 
     if (res.before_having)
@@ -1210,8 +1084,8 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             partition_col_id,
             collators,
             exchange_sender.tp(),
-            context.getSettings().dag_records_per_chunk,
-            context.getSettings().batch_send_min_limit,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext());
         stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), taskLogger());

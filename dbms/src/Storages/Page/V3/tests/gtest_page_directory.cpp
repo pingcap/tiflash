@@ -3,253 +3,19 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
-#include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 #include <fmt/format.h>
-
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int PS_ENTRY_NOT_EXISTS;
-extern const int PS_ENTRY_NO_VALID_VERSION;
-} // namespace ErrorCodes
 namespace PS::V3::tests
 {
-String toString(const PageEntryV3 & entry)
-{
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
-}
-
-inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
-{
-    // Maybe need more fields check later
-    return (lhs.file_id == rhs.file_id && lhs.offset == rhs.offset && lhs.size == rhs.size);
-}
-
-::testing::AssertionResult getEntryCompare(
-    const char * expected_entry_expr,
-    const char * dir_expr,
-    const char * page_id_expr,
-    const char * snap_expr,
-    const PageEntryV3 & expected_entry,
-    const PageDirectory & dir,
-    const PageId page_id,
-    const PageDirectorySnapshotPtr & snap)
-{
-    auto check_id_entry = [&](const PageIDAndEntryV3 & expected_id_entry, const PageIDAndEntryV3 & actual_id_entry) -> ::testing::AssertionResult {
-        const auto & [pid, entry] = actual_id_entry;
-        String err_msg;
-        if (pid != expected_id_entry.first)
-        {
-            err_msg = fmt::format("Try to get entry [id={}] but get [id={}]", page_id_expr, pid);
-            return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
-        }
-        if (isSameEntry(entry, expected_entry))
-        {
-            return ::testing::AssertionSuccess();
-        }
-        // else not the expected entry we want
-        auto actual_expr = fmt::format("Get entry [id={}] from {} with snap{}", page_id_expr, dir_expr, snap_expr);
-        return testing::internal::EqFailure(
-            expected_entry_expr,
-            actual_expr.c_str(),
-            toString(expected_entry),
-            toString(entry),
-            false);
-    };
-    String error;
-    try
-    {
-        auto id_entry = dir.get(page_id, snap);
-        return check_id_entry({page_id, expected_entry}, id_entry);
-    }
-    catch (DB::Exception & ex)
-    {
-        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
-            error = fmt::format("Try to get entry [id={}] but not exists. Err message: {}", page_id_expr, ex.message());
-        else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            error = fmt::format("Try to get entry [id={}] with version {} from {} but failed. Err message: {}", page_id_expr, snap->sequence, snap_expr, ex.message());
-        else
-            error = ex.displayText();
-        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-    }
-    catch (...)
-    {
-        error = getCurrentExceptionMessage(true);
-    }
-    return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-}
-#define ASSERT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
-#define EXPECT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
-
-String toString(const PageIDAndEntriesV3 & entries)
-{
-    FmtBuffer buf;
-    buf.append("[");
-    buf.joinStr(
-        entries.begin(),
-        entries.end(),
-        [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{},{}>", id_entry.first, toString(id_entry.second));
-        },
-        ", ");
-    buf.append("]");
-    return buf.toString();
-}
-::testing::AssertionResult getEntriesCompare(
-    const char * expected_entries_expr,
-    const char * dir_expr,
-    const char * page_ids_expr,
-    const char * snap_expr,
-    const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectory & dir,
-    const PageIds page_ids,
-    const PageDirectorySnapshotPtr & snap)
-{
-    auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries, const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
-        if (expected_id_entries.size() == actual_id_entries.size())
-        {
-            for (size_t idx = 0; idx == expected_id_entries.size(); ++idx)
-            {
-                const auto & expected_id_entry = expected_id_entries[idx];
-                const auto & actual_id_entry = expected_id_entries[idx];
-                if (actual_id_entry.first != expected_id_entry.first)
-                {
-                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}] at [index={}]", expected_id_entry.first, actual_id_entry.first, idx);
-                    return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
-                }
-                if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))
-                {
-                    // not the expected entry we want
-                    String err_msg;
-                    auto expect_expr = fmt::format("Entry at {} [index={}]", idx);
-                    auto actual_expr = fmt::format("Get entries {} from {} with snap {} [index={}", page_ids_expr, dir_expr, snap_expr, idx);
-                    return testing::internal::EqFailure(
-                        expect_expr.c_str(),
-                        actual_expr.c_str(),
-                        toString(expected_id_entry.second),
-                        toString(actual_id_entry.second),
-                        false);
-                }
-            }
-            return ::testing::AssertionSuccess();
-        }
-
-        // else not the expected entry we want
-        auto expected_expr = fmt::format("Entries from {} [size={}]", expected_entries_expr, expected_entries.size());
-        auto actual_expr = fmt::format("Get entries {} from {} with snap {}, [size={}]", page_ids_expr, dir_expr, snap_expr, actual_id_entries.size());
-        return testing::internal::EqFailure(
-            expected_expr.c_str(),
-            actual_expr.c_str(),
-            toString(expected_entries),
-            toString(actual_id_entries),
-            false);
-    };
-    String error;
-    try
-    {
-        auto id_entries = dir.get(page_ids, snap);
-        return check_id_entries(expected_entries, id_entries);
-    }
-    catch (DB::Exception & ex)
-    {
-        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
-            error = fmt::format("Try to get entries with [ids={}] but not exists. Err message: {}", page_ids_expr, ex.message());
-        else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            error = fmt::format("Try to get entries with [ids={}] with version {} from {} but failed. Err message: {}", page_ids_expr, snap->sequence, snap_expr, ex.message());
-        else
-            error = ex.displayText();
-        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-    }
-    catch (...)
-    {
-        error = getCurrentExceptionMessage(true);
-    }
-    return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-}
-#define ASSERT_ENTRIES_EQ(expected_entries, dir, pid, snap) \
-    ASSERT_PRED_FORMAT4(getEntriesCompare, expected_entries, dir, pid, snap)
-#define EXPECT_ENTRIES_EQ(expected_entries, dir, pid, snap) \
-    EXPECT_PRED_FORMAT4(getEntriesCompare, expected_entries, dir, pid, snap)
-
-::testing::AssertionResult getEntryNotExist(
-    const char * dir_expr,
-    const char * page_id_expr,
-    const char * snap_expr,
-    const PageDirectory & dir,
-    const PageId page_id,
-    const PageDirectorySnapshotPtr & snap)
-{
-    String error;
-    try
-    {
-        auto id_entry = dir.get(page_id, snap);
-        error = fmt::format(
-            "Expect entry [id={}] from {} with snap{} not exist, but got <{}, {}>",
-            page_id_expr,
-            dir_expr,
-            snap_expr,
-            id_entry.first,
-            toString(id_entry.second));
-    }
-    catch (DB::Exception & ex)
-    {
-        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS || ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            return ::testing::AssertionSuccess();
-        else
-            error = ex.displayText();
-        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-    }
-    catch (...)
-    {
-        error = getCurrentExceptionMessage(true);
-    }
-    return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-}
-#define EXPECT_ENTRY_NOT_EXIST(dir, pid, snap) \
-    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, pid, snap)
-::testing::AssertionResult getEntriesNotExist(
-    const char * dir_expr,
-    const char * page_ids_expr,
-    const char * snap_expr,
-    const PageDirectory & dir,
-    const PageIds page_ids,
-    const PageDirectorySnapshotPtr & snap)
-{
-    String error;
-    try
-    {
-        auto id_entry = dir.get(page_ids, snap);
-        error = fmt::format(
-            "Expect entry [id={}] from {} with snap{} not exist, but got {}",
-            page_ids_expr,
-            dir_expr,
-            snap_expr,
-            toString(id_entry));
-    }
-    catch (DB::Exception & ex)
-    {
-        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS || ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            return ::testing::AssertionSuccess();
-        else
-            error = ex.displayText();
-        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-    }
-    catch (...)
-    {
-        error = getCurrentExceptionMessage(true);
-    }
-    return ::testing::AssertionFailure(::testing::Message(error.c_str()));
-}
-#define EXPECT_ENTRIES_NOT_EXIST(dir, pids, snap) \
-    EXPECT_PRED_FORMAT3(getEntriesNotExist, dir, pids, snap)
-
 class PageDirectoryTest : public ::testing::Test
 {
 protected:
@@ -631,5 +397,670 @@ try
     // TODO: restore, invalid ref page is filtered
 }
 CATCH
+
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                   \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+    entries.createNewVersion((VERSION), entry_v##VERSION);
+#define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
+#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                              \
+    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = (VERSION), .offset = 0x234, .checksum = 0x5678}; \
+    entries.createNewVersion((VERSION), (EPOCH), entry_gc_v##VERSION##_##EPOCH);
+
+TEST(VersionedEntriesTest, InsertGet)
+{
+    VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(5);
+    INSERT_ENTRY(10);
+
+    // Insert some entries with version
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_v2));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v5));
+    }
+    for (UInt64 seq = 10; seq < 20; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+
+    // Insert some entries with version && gc epoch
+    INSERT_GC_ENTRY(2, 1);
+    INSERT_GC_ENTRY(5, 1);
+    INSERT_GC_ENTRY(5, 2);
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+    }
+    for (UInt64 seq = 10; seq < 20; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+
+    // Insert delete. Can not get entry with seq >= delete_version.
+    // But it won't affect reading with old seq.
+    entries.createDelete(15);
+    ASSERT_FALSE(entries.getEntry(1).has_value());
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    for (UInt64 seq = 5; seq < 10; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+    }
+    for (UInt64 seq = 10; seq < 15; ++seq)
+    {
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+    }
+    for (UInt64 seq = 15; seq < 20; ++seq)
+    {
+        ASSERT_FALSE(entries.getEntry(seq).has_value());
+    }
+}
+
+TEST(VersionedEntriesTest, GC)
+try
+{
+    VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_GC_ENTRY(2, 1);
+    INSERT_ENTRY(5);
+    INSERT_GC_ENTRY(5, 1);
+    INSERT_GC_ENTRY(5, 2);
+    INSERT_ENTRY(10);
+    INSERT_ENTRY(11);
+    entries.createDelete(15);
+
+    // noting to be removed
+    auto removed_entries = entries.deleteAndGC(1);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 0);
+
+    // <2,0> get removed.
+    removed_entries = entries.deleteAndGC(2);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 1);
+    auto iter = removed_entries.first.begin();
+    ASSERT_TRUE(isSameEntry(entry_v2, *iter));
+
+    // nothing get removed.
+    removed_entries = entries.deleteAndGC(4);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 0);
+
+    // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
+    removed_entries = entries.deleteAndGC(11);
+    ASSERT_FALSE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 5);
+    iter = removed_entries.first.begin();
+    ASSERT_TRUE(isSameEntry(entry_v10, *iter));
+    iter++;
+    ASSERT_TRUE(isSameEntry(entry_gc_v5_2, *iter));
+    iter++;
+    ASSERT_TRUE(isSameEntry(entry_gc_v5_1, *iter));
+    iter++;
+    ASSERT_TRUE(isSameEntry(entry_v5, *iter));
+    iter++;
+    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *iter)) << toString(*iter);
+
+    // <11,0> get removed, all cleared.
+    removed_entries = entries.deleteAndGC(20);
+    ASSERT_TRUE(removed_entries.second);
+    ASSERT_EQ(removed_entries.first.size(), 1);
+}
+CATCH
+
+TEST(VersionedEntriesTest, ReadAfterGcApplied)
+try
+{
+    VersionedPageEntries entries;
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(3);
+    INSERT_ENTRY(5);
+
+    // Read with snapshot seq=2
+    ASSERT_TRUE(isSameEntry(entry_v2, *entries.getEntry(2)));
+
+    // Mock that gc applied and insert <2, 1>
+    INSERT_GC_ENTRY(2, 1);
+
+    // Now we should read the entry <2, 1> with seq=2
+    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *entries.getEntry(2)));
+
+    // <2,0> get removed
+    auto removed_entries = entries.deleteAndGC(2);
+    ASSERT_EQ(removed_entries.first.size(), 1);
+}
+CATCH
+
+TEST(VersionedEntriesTest, getEntriesByBlobId)
+{
+    VersionedPageEntries entries;
+
+    INSERT_BLOBID_ENTRY(1, 1);
+    INSERT_BLOBID_ENTRY(1, 2);
+    INSERT_BLOBID_ENTRY(2, 3);
+    INSERT_BLOBID_ENTRY(2, 4);
+    INSERT_BLOBID_ENTRY(1, 5);
+    INSERT_BLOBID_ENTRY(3, 6);
+    INSERT_BLOBID_ENTRY(3, 8);
+    INSERT_BLOBID_ENTRY(1, 11);
+
+    const auto & [versioned_entries1, total_size1] = entries.getEntriesByBlobId(1);
+
+    ASSERT_EQ(versioned_entries1.size(), 4);
+    ASSERT_EQ(total_size1, 1 + 2 + 5 + 11);
+    auto it = versioned_entries1.begin();
+
+    ASSERT_EQ(it->first.sequence, 1);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v1));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 2);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v2));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 5);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v5));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 11);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v11));
+
+    const auto & [versioned_entries2, total_size2] = entries.getEntriesByBlobId(2);
+
+    ASSERT_EQ(versioned_entries2.size(), 2);
+    ASSERT_EQ(total_size2, 3 + 4);
+    it = versioned_entries2.begin();
+
+    ASSERT_EQ(it->first.sequence, 3);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v3));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 4);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v4));
+
+    const auto & [versioned_entries3, total_size3] = entries.getEntriesByBlobId(3);
+
+    ASSERT_EQ(versioned_entries3.size(), 2);
+    ASSERT_EQ(total_size3, 6 + 8);
+    it = versioned_entries3.begin();
+
+    ASSERT_EQ(it->first.sequence, 6);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v6));
+
+    it++;
+    ASSERT_EQ(it->first.sequence, 8);
+    ASSERT_TRUE(isSameEntry(it->second, entry_v8));
+}
+
+#undef INSERT_BLOBID_ENTRY
+#undef INSERT_ENTRY
+#undef INSERT_GC_ENTRY
+// end of testing `VersionedEntriesTest`
+
+class PageDirectoryGCTest : public PageDirectoryTest
+{
+};
+
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                              \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+    {                                                                                                                \
+        PageEntriesEdit edit;                                                                                        \
+        edit.put((PAGE_ID), entry_v##VERSION);                                                                       \
+        dir.apply(std::move(edit));                                                                                  \
+    }
+// Insert an entry into mvcc directory
+#define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
+// Insert an entry into mvcc directory, and acquire a snapshot
+#define INSERT_ENTRY_ACQ_SNAP(PAGE_ID, VERSION) \
+    INSERT_ENTRY(PAGE_ID, VERSION)              \
+    auto snapshot##VERSION = dir.createSnapshot();
+#define INSERT_DELETE(PAGE_ID)      \
+    {                               \
+        PageEntriesEdit edit;       \
+        edit.del((PAGE_ID));        \
+        dir.apply(std::move(edit)); \
+    }
+
+static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
+{
+    size_t num = 0;
+    for (const auto & es : entries)
+        num += es.size();
+    return num;
+}
+
+TEST_F(PageDirectoryGCTest, GCPushForward)
+try
+{
+    PageId page_id = 50;
+
+    /**
+     * before GC => {
+     *     50  -> [v1...v5]
+     *   }
+     *   snapshot remain: [v3,v5]
+     */
+    INSERT_ENTRY(page_id, 1);
+    INSERT_ENTRY(page_id, 2);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 3);
+    INSERT_ENTRY(page_id, 4);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 5);
+
+    EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+
+    /**
+     * after GC =>  {
+     *     50  -> [v3,v4,v5]
+     *   }
+     *   snapshot remain: [v3,v5]
+     */
+    auto del_entries = dir.gc();
+    EXPECT_EQ(del_entries.size(), 1);
+    // v1, v2 have been removed.
+    ASSERT_EQ(getNumEntries(del_entries), 2);
+
+    EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+
+    // Release all snapshots and run gc again, (min gc version get pushed forward and)
+    // all versions get compacted.
+    snapshot3.reset();
+    snapshot5.reset();
+    del_entries = dir.gc();
+    ASSERT_EQ(getNumEntries(del_entries), 2);
+
+    auto snapshot_after_gc = dir.createSnapshot();
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot_after_gc);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCPushForward2)
+try
+{
+    // GC push forward with 2 page entry list
+    /**
+     * case 2
+     * before GC => {
+     *     50  -> [v2,v5,v10]
+     *     512 -> [v1,v3,v4,v6,v7,v8,v9]
+     *   }
+     *   snapshot remain: [v3, v5]
+     */
+    PageId page_id = 50;
+    PageId another_page_id = 512;
+
+    INSERT_ENTRY(another_page_id, 1);
+    INSERT_ENTRY(page_id, 2);
+    INSERT_ENTRY_ACQ_SNAP(another_page_id, 3);
+    INSERT_ENTRY(another_page_id, 4);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 5);
+    INSERT_ENTRY(another_page_id, 6);
+    INSERT_ENTRY(another_page_id, 7);
+    INSERT_ENTRY(another_page_id, 8);
+    INSERT_ENTRY(another_page_id, 9);
+    INSERT_ENTRY(page_id, 10);
+
+    {
+        /**
+         * after GC => {
+         *     50  -> [v5,v10]
+         *     512 -> [v3,v4,v6,v7,v8,v9]
+         *   }
+         *   snapshot remain: [v3, v5]
+         */
+        const auto & del_entries = dir.gc();
+        // page_id: []; another_page_id: v1 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
+    }
+
+    {
+        snapshot3.reset();
+        /**
+         * after GC => {
+         *     50  -> [v5,v10]
+         *     512 -> [v6,v7,v8,v9]
+         *   }
+         *   snapshot remain: [v5]
+         */
+        const auto & del_entries = dir.gc();
+        // page_id: v2; another_page_id: v3 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 2);
+    }
+
+    {
+        snapshot5.reset();
+        /**
+         * after GC => {
+         *     50  -> [v10]
+         *     512 -> [v9]
+         *   }
+         *   snapshot remain: []
+         */
+        const auto & del_entries = dir.gc();
+        // page_id: v5; another_page_id: v6,v7,v8 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 5);
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCBlockedByOldSnap)
+try
+{
+    /**
+     * case 1
+     * before GC => {
+     *     50  -> [v3,v5,v10]
+     *     512 -> [v1,v2,v4,v6,v7,v8,v9]
+     *   }
+     *   snapshot remain: [v1, v3, v5, v10]
+     */
+    PageId page_id = 50;
+    PageId another_page_id = 512;
+
+    // Push entries
+    INSERT_ENTRY_ACQ_SNAP(another_page_id, 1);
+    INSERT_ENTRY(another_page_id, 2);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 3);
+    INSERT_ENTRY(another_page_id, 4);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 5);
+    INSERT_ENTRY(another_page_id, 6);
+    INSERT_ENTRY(another_page_id, 7);
+    INSERT_ENTRY(another_page_id, 8);
+    INSERT_ENTRY(another_page_id, 9);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 10);
+
+    EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
+    EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+
+    {
+        /**
+         * after GC => [
+         *     50  -> [v3,v5,v10]
+         *     512 -> [v1,v2,v4,v6,v7,v8,v9]
+         *   }
+         *   snapshot remain: [v1,v3,v5,v10]
+         */
+        auto removed_entries = dir.gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
+        EXPECT_EQ(getNumEntries(removed_entries), 0);
+        EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
+        EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+        EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+    }
+
+    {
+        /**
+         * after GC => [
+         *     50  -> [v3,v5,v10]
+         *     512 -> [v1,v2,v4,v6,v7,v8,v9]
+         *   }
+         *   snapshot remain: [v1]
+         */
+        // The GC on page_id=50 is blocked by previous `snapshot1`,
+        // release other snapshot won't change the result from `snapshot1`
+        snapshot3.reset();
+        snapshot5.reset();
+        snapshot10.reset();
+        auto removed_entries = dir.gc();
+        EXPECT_EQ(getNumEntries(removed_entries), 0);
+        EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
+    }
+
+    {
+        /**
+         * after GC => [
+         *     50  -> [v10]
+         *     512 -> [v9]
+         *   }
+         *   snapshot remain: []
+         */
+        snapshot1.reset();
+        auto removed_entries = dir.gc(); // this will compact all versions
+        // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
+        EXPECT_EQ(getNumEntries(removed_entries), 8);
+
+        auto snap_after_gc = dir.createSnapshot();
+        EXPECT_ENTRY_EQ(entry_v10, dir, page_id, snap_after_gc);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snap_after_gc);
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCCleanUPDeletedPage)
+try
+{
+    /**
+     * before GC => {
+     *     50  -> [v3,v5,v8(delete)]
+     *     512 -> [v1,v2,v4,v6,v7,v8,v9,v10(delete)]
+     *   }
+     *   snapshot remain: [v5, v8, v9]
+     */
+    PageId page_id = 50;
+    PageId another_page_id = 512;
+
+    // Push entries
+    INSERT_ENTRY(another_page_id, 1);
+    INSERT_ENTRY(another_page_id, 2);
+    INSERT_ENTRY(page_id, 3);
+    INSERT_ENTRY(another_page_id, 4);
+    INSERT_ENTRY_ACQ_SNAP(page_id, 5);
+    INSERT_ENTRY(another_page_id, 6);
+    INSERT_ENTRY(another_page_id, 7);
+    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.del(page_id);
+        edit.put(another_page_id, entry_v8);
+        dir.apply(std::move(edit));
+    }
+    auto snapshot8 = dir.createSnapshot();
+    INSERT_ENTRY_ACQ_SNAP(another_page_id, 9);
+    INSERT_DELETE(another_page_id);
+
+    {
+        EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+        EXPECT_ENTRY_EQ(entry_v4, dir, another_page_id, snapshot5);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot8);
+        EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        /**
+         * after GC => [
+         *     50  -> [v5,v8(delete)]
+         *     512 -> [v4,v6,v8,v9,v10(delete)]
+         *   }
+         *   snapshot remain: [v5,v8,v9]
+         */
+        auto del_entries = dir.gc();
+        // page_id: v3; another_page_id: v1,v2 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 3);
+        ASSERT_EQ(dir.numPages(), 2);
+    }
+
+    {
+        /**
+         * after GC => [
+         *     512 -> [v8,v9,v10(delete)]
+         *   }
+         *   snapshot remain: [v8,v9]
+         */
+        snapshot5.reset();
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot8);
+        EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        auto del_entries = dir.gc();
+        // page_id: v5; another_page_id: v4,v6,v7 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 4);
+        ASSERT_EQ(dir.numPages(), 1); // page_id should be removed.
+    }
+
+    {
+        /**
+         * after GC => [
+         *     512 -> [v9, v10(delete)]
+         *   }
+         *   snapshot remain: [v9]
+         */
+        snapshot8.reset();
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
+        EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
+        auto del_entries = dir.gc();
+        // another_page_id: v8 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
+    }
+
+    {
+        /**
+         * after GC => { empty }
+         *   snapshot remain: []
+         */
+        snapshot9.reset();
+        auto del_entries = dir.gc();
+        // another_page_id: v9 have been removed.
+        EXPECT_EQ(getNumEntries(del_entries), 1);
+        ASSERT_EQ(dir.numPages(), 0); // all should be removed.
+    }
+
+    auto snapshot_after_all = dir.createSnapshot();
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot_after_all);
+    EXPECT_ENTRY_NOT_EXIST(dir, another_page_id, snapshot_after_all);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, FullGCApply)
+try
+{
+    PageId page_id = 50;
+    PageId another_page_id = 512;
+    INSERT_ENTRY_TO(page_id, 1, 1);
+    INSERT_ENTRY_TO(page_id, 2, 2);
+    INSERT_ENTRY_TO(another_page_id, 3, 2);
+    INSERT_ENTRY_TO(page_id, 4, 1);
+    INSERT_ENTRY_TO(page_id, 5, 3);
+    INSERT_ENTRY_TO(another_page_id, 6, 1);
+
+    // FIXME: This will copy many outdate pages
+    // Full GC get entries
+    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
+    EXPECT_EQ(candidate_entries_1.first.size(), 1);
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 2); // 2 page entries list
+
+    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
+    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
+    const auto & entries_in_file2 = candidate_entries_2_3.first[2];
+    const auto & entries_in_file3 = candidate_entries_2_3.first[3];
+    EXPECT_EQ(entries_in_file2.size(), 2); // 2 page entries list
+    EXPECT_EQ(entries_in_file3.size(), 1); // 1 page entries list
+
+    PageIdAndVersionedEntryList gc_migrate_entries;
+    for (const auto & [file_id, entries] : candidate_entries_1.first)
+    {
+        (void)file_id;
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+    for (const auto & [file_id, entries] : candidate_entries_2_3.first)
+    {
+        (void)file_id;
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+
+    // Full GC execute apply
+    dir.gcApply(gc_migrate_entries);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, MVCCAndFullGCInConcurrent)
+try
+{
+    PageId page_id = 50;
+    PageId another_page_id = 512;
+    INSERT_ENTRY_TO(page_id, 1, 1);
+    INSERT_ENTRY_TO(page_id, 2, 2);
+    INSERT_ENTRY_TO(page_id, 3, 2);
+    INSERT_ENTRY_TO(page_id, 4, 1);
+    INSERT_ENTRY_TO(page_id, 5, 3);
+    INSERT_ENTRY_TO(another_page_id, 6, 1);
+    INSERT_DELETE(page_id);
+
+    EXPECT_EQ(dir.numPages(), 2);
+
+    // 1.1 Full GC get entries
+    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
+    EXPECT_EQ(candidate_entries_1.first.size(), 1);
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 2);
+
+    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
+    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
+    const auto & entries_in_file2 = candidate_entries_2_3.first[2];
+    const auto & entries_in_file3 = candidate_entries_2_3.first[3];
+    EXPECT_EQ(entries_in_file2.size(), 1);
+    EXPECT_EQ(entries_in_file3.size(), 1);
+
+    // 2.1 Execute GC
+    dir.gc();
+    // `page_id` get removed
+    EXPECT_EQ(dir.numPages(), 1);
+
+    PageIdAndVersionedEntryList gc_migrate_entries;
+    for (const auto & [file_id, entries] : candidate_entries_1.first)
+    {
+        (void)file_id;
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+    for (const auto & [file_id, entries] : candidate_entries_2_3.first)
+    {
+        (void)file_id;
+        for (const auto & [page_id, version_entries] : entries)
+        {
+            for (const auto & [ver, entry] : version_entries)
+            {
+                gc_migrate_entries.emplace_back(page_id, ver, entry);
+            }
+        }
+    }
+
+    // 1.2 Full GC execute apply
+    ASSERT_THROW({ dir.gcApply(gc_migrate_entries); }, DB::Exception);
+}
+CATCH
+
+#undef INSERT_ENTRY_TO
+#undef INSERT_ENTRY
+#undef INSERT_ENTRY_ACQ_SNAP
+#undef INSERT_DELETE
+
 } // namespace PS::V3::tests
 } // namespace DB

@@ -2,7 +2,7 @@
 
 namespace DB::PageUtil
 {
-UInt32 randInt(const UInt32 min, const UInt32 max)
+UInt32 randInt(UInt32 min, UInt32 max)
 {
     static thread_local std::mt19937 generator;
     std::uniform_int_distribution<UInt32> distribution(min, max);
