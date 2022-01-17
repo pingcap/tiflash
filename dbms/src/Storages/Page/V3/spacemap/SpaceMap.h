@@ -78,6 +78,11 @@ public:
     virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
 
     /**
+     * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
+     */
+    virtual UInt64 getRightMargin() = 0;
+
+    /**
      * Sanity check for correctness
      */
     using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;
