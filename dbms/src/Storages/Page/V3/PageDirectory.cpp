@@ -117,7 +117,10 @@ void PageDirectory::restore()
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
 {
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
-    snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
+    {
+        std::lock_guard snapshots_lock(snapshots_mutex);
+        snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
+    }
     return snap;
 }
 
@@ -179,10 +182,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
 
-    auto snap = createSnapshot();
-
-    // stage 1, persisted the changes to WAL
-    // wal.apply(edit);
+    // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
+    // wal->apply(edit, PageVersionType(last_sequence + 1, 0));
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
@@ -272,6 +273,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
 void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries)
 {
+    std::shared_lock read_lock(table_rw_mutex);
     for (const auto & [page_id, version, entry] : migrated_entries)
     {
         auto iter = mvcc_table_directory.find(page_id);
@@ -280,9 +282,10 @@ void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries
             throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", page_id), ErrorCodes::LOGICAL_ERROR);
         }
 
-        auto versioned_page = iter->second;
-        iter->second->acquireLock();
-        iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
+        // Append the gc version to version list
+        auto & versioned_entries = iter->second;
+        auto page_lock = versioned_entries->acquireLock();
+        versioned_entries->createNewVersion(version.sequence, version.epoch + 1, entry);
 
         // TBD: wal apply
     }
@@ -330,17 +333,21 @@ std::vector<PageEntriesV3> PageDirectory::gc()
     UInt64 lowest_seq = sequence.load();
     std::vector<PageEntriesV3> all_del_entries;
 
-    // Cleanup released snapshots
-    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
-        if (iter->expired())
-            iter = snapshots.erase(iter);
-        else
+        // Cleanup released snapshots
+        std::lock_guard lock(snapshots_mutex);
+        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
-            lowest_seq = std::min(lowest_seq, iter->lock()->sequence);
-            ++iter;
+            if (iter->expired())
+                iter = snapshots.erase(iter);
+            else
+            {
+                lowest_seq = std::min(lowest_seq, iter->lock()->sequence);
+                ++iter;
+            }
         }
     }
+
     {
         std::unique_lock write_lock(table_rw_mutex);
         for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)

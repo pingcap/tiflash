@@ -157,6 +157,7 @@ private:
     using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
 
+    mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
     WALStore wal;
