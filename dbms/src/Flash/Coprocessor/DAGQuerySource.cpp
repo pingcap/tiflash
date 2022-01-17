@@ -22,7 +22,7 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
-    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(getDAGContext().getQBIdToJoinAliasMap());
+    root_query_block->collectAllPossibleChildrenJoinExecutorId(getDAGContext().getSourceNameToJoinExecutorIdMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
     for (UInt32 i : dag_request.output_offsets())

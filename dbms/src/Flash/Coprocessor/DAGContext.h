@@ -18,12 +18,6 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 
-struct ProfileStreamsInfo
-{
-    UInt32 qb_id;
-    BlockInputStreams input_streams;
-};
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 struct JoinExecuteInfo
@@ -93,9 +87,9 @@ public:
     {}
 
     void attachBlockIO(const BlockIO & io_);
-    std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
+    std::map<String, BlockInputStreams> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
-    std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
+    std::unordered_map<String, std::vector<String>> & getSourceNameToJoinExecutorIdMap();
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
@@ -177,16 +171,16 @@ public:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
-    std::map<String, ProfileStreamsInfo> profile_streams_map;
-    /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to
+    /// profile_streams_map is a map that maps from executor_id to BlockInputStreams
+    std::map<String, BlockInputStreams> profile_streams_map;
+    /// profile_streams_map_for_join_build_side is a map that maps from join executor id to
     /// the last BlockInputStreams for join build side. In TiFlash, a hash join's build side is
     /// finished before probe side starts, so the join probe side's running time does not include
     /// hash table's build time, when construct ExecSummaries, we need add the build cost to probe executor
     std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
-    /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
+    /// qb_id_to_join_alias_map is a map that maps source name to all the join executor id
     /// in this query block and all its children query block
-    std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    std::unordered_map<String, std::vector<String>> source_name_to_join_executor_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;

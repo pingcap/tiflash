@@ -83,7 +83,7 @@ bool DAGContext::allowInvalidDate() const
     return sql_mode & SqlMode::ALLOW_INVALID_DATES;
 }
 
-std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
+std::map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
@@ -93,9 +93,9 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map_for_join_build_side;
 }
 
-std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap()
+std::unordered_map<String, std::vector<String>> & DAGContext::getSourceNameToJoinExecutorIdMap()
 {
-    return qb_id_to_join_alias_map;
+    return source_name_to_join_executor_id_map;
 }
 
 std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
@@ -178,9 +178,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     {
         if (p.first == table_scan_executor_id)
         {
-            for (auto & streamPtr : p.second.input_streams)
+            for (auto & stream_ptr : p.second)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
                 {
                     time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                     num_produced_bytes += p_stream->getProfileInfo().bytes;

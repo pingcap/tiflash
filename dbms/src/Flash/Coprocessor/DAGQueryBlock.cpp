@@ -68,7 +68,6 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     : id(id_generator.nextBlockID())
     , root(&root_)
     , qb_column_prefix("__QB_" + std::to_string(id) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current) && current->has_executor_id())
@@ -163,7 +162,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     : id(id_)
     , root(nullptr)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = executors.size() - 1; i >= 0; i--)
     {
@@ -308,16 +306,16 @@ void DAGQueryBlock::fillOutputFieldTypes()
     }
 }
 
-void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
+void DAGQueryBlock::collectAllPossibleChildrenJoinExecutorId(std::unordered_map<String, std::vector<String>> & result)
 {
-    std::vector<String> all_qb_join_subquery_alias;
+    std::vector<String> all_join_executor_id;
     for (auto & child : children)
     {
-        child->collectAllPossibleChildrenJoinSubqueryAlias(result);
-        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(), result[child->id].begin(), result[child->id].end());
+        child->collectAllPossibleChildrenJoinExecutorId(result);
+        all_join_executor_id.insert(all_join_executor_id.end(), result[child->source_name].begin(), result[child->source_name].end());
     }
-    all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
-    result[id] = all_qb_join_subquery_alias;
+    all_join_executor_id.push_back(source_name);
+    result[source_name] = all_join_executor_id;
 }
 
 } // namespace DB
