@@ -95,9 +95,5 @@ mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select
 |                |        5 |
 +----------------+----------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; SELECT max(lpad("y",0,a)) FROM test.t2
-+--------------------+
-| max(lpad("y",0,a)) |
-+--------------------+
-|                    |
-+--------------------+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; SELECT max(lpad('y',0,c1)) FROM test.t2
+max(lpad('y',0,c1))
