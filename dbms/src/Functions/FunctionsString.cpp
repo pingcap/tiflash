@@ -2839,6 +2839,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             padding_prev_offset = (*padding_offsets)[i];
@@ -2870,6 +2876,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             result_offsets[i] = res_prev_offset;
@@ -2900,6 +2912,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             padding_prev_offset = (*padding_offsets)[i];
             result_offsets[i] = res_prev_offset;
@@ -2928,6 +2946,12 @@ public:
                 {
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
+            }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
             }
 
             result_offsets[i] = res_prev_offset;
