@@ -5,6 +5,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
@@ -142,9 +143,9 @@ PageDirectory::PageDirectory()
 {
 }
 
-void PageDirectory::restore()
+void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    wal = WALStore::create(provider, delegator, write_limiter);
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
@@ -302,7 +303,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     UInt64 last_sequence = sequence.load();
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    // wal->apply(edit, PageVersionType(last_sequence + 1, 0));
+    wal->apply(edit, PageVersionType(last_sequence + 1, 0));
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
@@ -415,7 +416,7 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    // wal->apply(migrated_edit);
+    wal->apply(migrated_edit);
 
     if (!need_scan_page_ids)
     {

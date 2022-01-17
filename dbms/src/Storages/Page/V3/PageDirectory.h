@@ -166,7 +166,7 @@ class PageDirectory
 public:
     PageDirectory();
 
-    void restore();
+    void restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter);
 
     PageDirectorySnapshotPtr createSnapshot() const;
 

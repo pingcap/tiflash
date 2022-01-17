@@ -76,8 +76,6 @@ public:
     void apply(PageEntriesEdit & edit, const PageVersionType & version);
     void apply(const PageEntriesEdit & edit);
 
-    static WALStoreReaderPtr createReader(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator);
-
     void gc();
 
 private:

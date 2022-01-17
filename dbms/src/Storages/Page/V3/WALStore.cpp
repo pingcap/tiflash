@@ -14,6 +14,7 @@
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
@@ -22,21 +23,59 @@
 #include <cassert>
 #include <memory>
 
-namespace DB
-{
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
-} // namespace DB
 namespace DB::PS::V3
 {
-WALStorePtr WALStore::create(
-    FileProviderPtr & /*provider*/,
-    PSDiskDelegatorPtr & /*delegator*/,
-    const WriteLimiterPtr & /*write_limiter*/)
+WALStoreReaderPtr WALStore::createReader(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::vector<std::pair<String, Strings>> all_filenames;
+    {
+        Strings filenames;
+        for (const auto & p : delegator->listPaths())
+        {
+            Poco::File directory(p);
+            if (!directory.exists())
+                directory.createDirectories();
+            filenames.clear();
+            directory.list(filenames);
+            all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
+            filenames.clear();
+        }
+        ASSERT(all_filenames.size() == 1); // TODO: multi-path
+    }
+
+    return std::make_shared<WALStoreReader>(provider, std::move(all_filenames));
+}
+
+WALStorePtr WALStore::create(
+    FileProviderPtr & provider,
+    PSDiskDelegatorPtr & delegator,
+    const WriteLimiterPtr & write_limiter)
+{
+    auto reader = WALStoreReader::create(provider, delegator);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        (void)ok;
+        (void)edit;
+        // callback(edit); apply to PageDirectory
+        reader->next();
+    }
+
+    // Create a new LogFile for writing new logs
+    const auto path = delegator->defaultPath(); // TODO: multi-path
+    auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
+    auto filename = fmt::format("log_{}", log_num);
+    auto fullname = fmt::format("{}/{}", path, filename);
+    LOG_FMT_INFO(&Poco::Logger::get("WALStore"), "Creating log file for writing, [log_num={}] [path={}] [filename={}]", log_num, path, filename);
+    WriteBufferByFileProviderBuilder builder(
+        /*has_checksum=*/false,
+        provider,
+        fullname,
+        EncryptionPath{path, filename},
+        true,
+        write_limiter);
+    auto log_file = std::make_unique<LogWriter>(builder.with_buffer_size(Format::BLOCK_SIZE).build(), log_num, /*recycle*/ true);
+    return std::unique_ptr<WALStore>(new WALStore(path, provider, write_limiter, std::move(log_file)));
 }
 
 WALStore::WALStore(
@@ -61,14 +100,15 @@ void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version)
     apply(edit);
 }
 
-void WALStore::apply(const PageEntriesEdit & /*edit*/)
+void WALStore::apply(const PageEntriesEdit & edit)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    const String serialized = ser::serializeTo(edit);
+    ReadBufferFromString payload(serialized);
+    log_file->addRecord(payload, serialized.size());
 }
 
 void WALStore::gc()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 } // namespace DB::PS::V3
