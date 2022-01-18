@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Columns/IColumn.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
