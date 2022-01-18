@@ -74,6 +74,8 @@ add_library(boost_fiber_numa
   ${BOOST_FIBER_LIBRARY_DIR}/src/numa/algo/work_stealing.cpp
 )
 
+target_include_directories (boost_fiber_numa BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
+
 add_library(Boost::fiber_numa ALIAS boost_fiber_numa)
 
 target_compile_definitions(boost_fiber_numa
