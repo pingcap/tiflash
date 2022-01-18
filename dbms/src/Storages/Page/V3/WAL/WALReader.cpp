@@ -247,9 +247,16 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            LOG_FMT_TRACE(logger, "deserialize [size={}] [deser={}]", record.size(), Redact::keyToHexString(record.data(), record.size()));
+            // LOG_FMT_TRACE(
+            //     logger,
+            //     "deserialize [offset={}] [eof={}] [size={}] [deser={}]",
+            //     reader->lastRecordOffset(),
+            //     reader->isEOF(),
+            //     record.size(),
+            //     Redact::keyToHexString(record.data(), record.size()));
             return {true, ser::deserializeFrom(record)};
         }
+
         // Roll to read the next file
         if (bool next_file = openNextFile(); !next_file)
         {
@@ -271,10 +278,12 @@ bool WALStoreReader::openNextFile()
         const auto log_num = next_reading_file->log_num;
         const auto level_num = next_reading_file->level_num;
         const auto filename = fmt::format("log_{}_{}", log_num, level_num);
+        const auto fullname = fmt::format("{}/{}", parent_path, filename);
+        LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
-            fmt::format("{}/{}", parent_path, filename),
+            fullname,
             EncryptionPath{parent_path, filename},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,

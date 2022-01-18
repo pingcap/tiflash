@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/types.h>
@@ -81,12 +82,20 @@ public:
 
 private:
     WALStore(
-        const String & path_,
+        const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
         const WriteLimiterPtr & write_limiter_,
         std::unique_ptr<LogWriter> && cur_log);
 
-    const String path;
+    static std::unique_ptr<LogWriter>
+    rollLogWriter(
+        PSDiskDelegatorPtr delegator,
+        const FileProviderPtr & provider,
+        const WriteLimiterPtr & write_limiter,
+        Format::LogNumberType new_log_num,
+        Poco::Logger * logger);
+
+    const PSDiskDelegatorPtr delegator;
     const FileProviderPtr provider;
     const WriteLimiterPtr write_limiter;
     std::unique_ptr<LogWriter> log_file;

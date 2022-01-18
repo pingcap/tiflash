@@ -7,6 +7,8 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <random>
+
 namespace DB::PS::V3::tests
 {
 TEST(WALSeriTest, AllPuts)
@@ -155,6 +157,7 @@ try
         EXPECT_EQ(reader->logNum(), 0);
     }
 
+    std::vector<size_t> size_each_edit;
     auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
     ASSERT_NE(wal, nullptr);
 
@@ -166,6 +169,7 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry_p1);
         edit.put(2, entry_p2);
+        size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver20);
     }
 
@@ -177,10 +181,11 @@ try
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
-            ASSERT_TRUE(ok);
-            num_applied_edit += 1;
+            if (!ok)
+                break;
             // Details of each edit is verified in `WALSeriTest`
-            ASSERT_EQ(edit.size(), 2);
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
+            num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 1);
     }
@@ -198,6 +203,7 @@ try
         edit.appendRecord(PageEntriesEdit::EditRecord{.type = WriteBatch::WriteType::REF, .page_id = 4, .ori_page_id = 3, .entry = entry_p3});
         edit.put(5, entry_p5);
         edit.del(2);
+        size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver21);
     }
 
@@ -209,17 +215,11 @@ try
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
-            ASSERT_TRUE(ok);
-            num_applied_edit += 1;
+            if (!ok)
+                break;
             // Details of each edit is verified in `WALSeriTest`
-            if (num_applied_edit == 1)
-            {
-                ASSERT_EQ(edit.size(), 2);
-            }
-            else if (num_applied_edit == 2)
-            {
-                ASSERT_EQ(edit.size(), 4);
-            }
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
+            num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 2);
     }
@@ -237,6 +237,7 @@ try
         edit.upsertPage(1, ver20_1, entry_p1_2);
         edit.upsertPage(3, ver21_1, entry_p3_2);
         edit.upsertPage(5, ver21_1, entry_p5_2);
+        size_each_edit.emplace_back(edit.size());
         wal->apply(edit);
     }
 
@@ -248,24 +249,154 @@ try
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
-            ASSERT_TRUE(ok);
-            num_applied_edit += 1;
+            if (!ok)
+                break;
             // Details of each edit is verified in `WALSeriTest`
-            if (num_applied_edit == 1)
-            {
-                ASSERT_EQ(edit.size(), 2);
-            }
-            else if (num_applied_edit == 2)
-            {
-                ASSERT_EQ(edit.size(), 4);
-            }
-            else if (num_applied_edit == 3)
-            {
-                ASSERT_EQ(edit.size(), 3);
-            }
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
+            num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 3);
     }
+}
+CATCH
+
+TEST_F(WALStoreTest, ReadWriteRestore2)
+try
+{
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    auto provider = ctx.getFileProvider();
+    auto path = getTemporaryPath();
+
+    auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
+    ASSERT_NE(wal, nullptr);
+
+    std::vector<size_t> size_each_edit;
+    // Stage 1. Apply with only puts
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .offset = 0x123, .checksum = 0x4567};
+    PageVersionType ver20(/*seq=*/20);
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry_p1);
+        edit.put(2, entry_p2);
+        size_each_edit.emplace_back(edit.size());
+        wal->apply(edit, ver20);
+    }
+
+    // Stage 2. Apply with puts and refs
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageVersionType ver21(/*seq=*/21);
+    {
+        PageEntriesEdit edit;
+        edit.put(3, entry_p3);
+        // Mock for edit.ref(4, 3);
+        edit.appendRecord(PageEntriesEdit::EditRecord{.type = WriteBatch::WriteType::REF, .page_id = 4, .ori_page_id = 3, .entry = entry_p3});
+        edit.put(5, entry_p5);
+        edit.del(2);
+        size_each_edit.emplace_back(edit.size());
+        wal->apply(edit, ver21);
+    }
+
+    // Stage 3. Apply with delete and upsert
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    {
+        PageEntriesEdit edit;
+        edit.upsertPage(1, ver20_1, entry_p1_2);
+        edit.upsertPage(3, ver21_1, entry_p3_2);
+        edit.upsertPage(5, ver21_1, entry_p5_2);
+        size_each_edit.emplace_back(edit.size());
+        wal->apply(edit);
+    }
+
+    wal.reset();
+
+    {
+        size_t num_applied_edit = 0;
+        auto reader = WALStoreReader::create(provider, delegator);
+        while (reader->remained())
+        {
+            const auto & [ok, edit] = reader->next();
+            if (!ok)
+                break;
+            // Details of each edit is verified in `WALSeriTest`
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            num_applied_edit += 1;
+        }
+        EXPECT_EQ(num_applied_edit, 3);
+    }
+
+    {
+        size_t num_applied_edit = 0;
+        wal = WALStore::create(
+            [&](PageEntriesEdit && edit) {
+                // Details of each edit is verified in `WALSeriTest`
+                EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+                num_applied_edit += 1;
+            },
+            provider,
+            delegator);
+        EXPECT_EQ(num_applied_edit, 3);
+    }
+}
+CATCH
+
+TEST_F(WALStoreTest, ManyEdits)
+try
+{
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    auto provider = ctx.getFileProvider();
+    auto path = getTemporaryPath();
+
+    // Stage 1. empty
+    auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
+    ASSERT_NE(wal, nullptr);
+
+    std::mt19937 rd;
+    std::uniform_int_distribution<> d(0, 20);
+
+    constexpr size_t num_edits_test = 100000;
+    PageId page_id = 0;
+    std::vector<size_t> size_each_edit;
+    size_each_edit.reserve(num_edits_test);
+    PageVersionType ver(/*seq*/ 32);
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        PageEntryV3 entry{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
+        PageEntriesEdit edit;
+        const size_t num_pages_put = d(rd);
+        for (size_t p = 0; p < num_pages_put; ++p)
+        {
+            page_id += 1;
+            entry.size = page_id;
+            edit.put(page_id, entry);
+        }
+        wal->apply(edit, ver);
+
+        size_each_edit.emplace_back(num_pages_put);
+        ver.sequence += 1;
+    }
+
+    wal.reset();
+
+    size_t num_edits_read = 0;
+    size_t num_pages_read = 0;
+    wal = WALStore::create(
+        [&](PageEntriesEdit && edit) {
+            num_pages_read += edit.size();
+            EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
+            num_edits_read += 1;
+        },
+        provider,
+        delegator);
+    EXPECT_EQ(num_edits_read, num_edits_test);
+    EXPECT_EQ(num_pages_read, page_id);
+
+    LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 }
 CATCH
 
