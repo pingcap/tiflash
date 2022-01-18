@@ -50,7 +50,7 @@ public:
     // Returns the physical offset of the last record returned by readRecord.
     //
     // Undefined before the first call to readRecord.
-    UInt64 lastRecordOffset();
+    UInt64 lastRecordOffset() const { return last_record_offset; }
 
     bool isEOF() const { return eof; }
 
@@ -104,7 +104,8 @@ private:
 private:
     const bool verify_checksum;
     bool recycled;
-    bool eof; // Last Read() indicated EOF by returning < BlockSize
+    bool is_last_block; // Last Read() indicated EOF by returning < BlockSize
+    bool eof;
     bool read_error; // Error occrured while reading from file
     // Offset of the file position indicator within the last block when an EOF was detected.
     WALRecoveryMode recovery_mode;

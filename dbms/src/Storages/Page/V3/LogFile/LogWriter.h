@@ -75,7 +75,12 @@ public:
 
     void close();
 
-    Format::LogNumberType logNumber() const { return log_number; }
+    size_t writtenBytes() const;
+
+    Format::LogNumberType logNumber() const
+    {
+        return log_number;
+    }
 
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);

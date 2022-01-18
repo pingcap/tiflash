@@ -34,6 +34,11 @@ LogWriter::~LogWriter()
     }
 }
 
+size_t LogWriter::writtenBytes() const
+{
+    return dest->getMaterializedBytes();
+}
+
 void LogWriter::flush()
 {
     dest->sync();
