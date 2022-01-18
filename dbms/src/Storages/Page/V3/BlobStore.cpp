@@ -528,15 +528,14 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
     }
     LOG_FMT_INFO(log, "BlobStore will migrate {}M into new Blobs", total_page_size / DB::MB);
 
-    BlobFileOffset remain_page_size = total_page_size;
+    auto alloc_size = total_page_size > config.file_limit_size.get() ? config.file_limit_size.get() : total_page_size;
 
-    auto alloc_size = remain_page_size > config.file_limit_size.get() ? config.file_limit_size.get() : remain_page_size;
     // We could make the memory consumption smooth during GC.
     char * data_buf = static_cast<char *>(alloc(alloc_size));
     SCOPE_EXIT({
         free(data_buf, alloc_size);
     });
-    remain_page_size -= alloc_size;
+    BlobFileOffset remain_page_size = total_page_size - alloc_size;
 
     char * data_pos = data_buf;
     BlobFileOffset offset_in_data = 0;
@@ -554,6 +553,8 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
         {
             for (const auto & [versioned, entry] : versioned_entry)
             {
+                // When we can't load the remaining data.
+                // we will use the original buffer to find an area to load the remaining data
                 if (offset_in_data + entry.size > config.file_limit_size)
                 {
                     if (offset_in_data != alloc_size)
@@ -570,8 +571,10 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
                     }
                     catch (DB::Exception & e)
                     {
-                        // TBD : reset
-                        // removePosFromStats(blobfile_id, offset_in_file, total_page_size);
+                        for (const auto & [blobfile_id, offset_in_file, page_size] : written_blobs)
+                        {
+                            removePosFromStats(blobfile_id, offset_in_file, page_size);
+                        }
                         LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blobfile_id, offset_in_file, total_page_size);
                         throw e;
                     }
@@ -611,14 +614,23 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
         }
     }
 
-    // if (unlikely(data_pos != data_buf + total_page_size))
-    // {
-    //     removePosFromStats(blobfile_id, offset_in_file, total_page_size);
-    //     throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
-    //                                 data_buf + total_page_size,
-    //                                 data_pos),
-    //                     ErrorCodes::LOGICAL_ERROR);
-    // }
+    if (offset_in_data != 0)
+    {
+        try
+        {
+            auto blob_file = getBlobFile(blobfile_id);
+            blob_file->write(data_buf, offset_in_file, offset_in_data, write_limiter);
+        }
+        catch (DB::Exception & e)
+        {
+            for (const auto & [blobfile_id, offset_in_file, page_size] : written_blobs)
+            {
+                removePosFromStats(blobfile_id, offset_in_file, page_size);
+            }
+            LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blobfile_id, offset_in_file, total_page_size);
+            throw e;
+        }
+    }
 
     return copy_list;
 }
