@@ -66,13 +66,13 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
 
     holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
 
-    return std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz);
+    return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
 }
 
 void PSWriter::updatedRandomData()
 {
     size_t memory_size = approx_page_mb * DB::MB * 2;
-    if (unlikely(memory != nullptr))
+    if (memory == nullptr)
     {
         memory = static_cast<char *>(malloc(memory_size));
         if (memory == nullptr)
@@ -131,7 +131,7 @@ void PSCommonWriter::updatedRandomData()
                                                                                            : batch_buffer_size);
     size_t memory_size = single_buff_size * batch_buffer_nums;
 
-    if (likely(memory == nullptr))
+    if (memory == nullptr)
     {
         memory = static_cast<char *>(malloc(memory_size));
         if (memory == nullptr)

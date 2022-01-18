@@ -144,6 +144,7 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
     DB::Int64 num_snapshots_removed = 0;
     size_t num_valid_snapshots = 0;
 
+    std::unique_lock write_lock(table_rw_mutex);
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
         if (iter->expired())
@@ -433,6 +434,11 @@ std::vector<PageEntriesV3> PageDirectory::gc()
     UInt64 lowest_seq = sequence.load();
     std::vector<PageEntriesV3> all_del_entries;
 
+    // If we don't need `getSnapshotsStat`.
+    // or we decide to no do snapshot clean in `getSnapshotsStat`.
+    // Then we can put the write lock after snapshots clean.
+    std::unique_lock write_lock(table_rw_mutex);
+
     // Cleanup released snapshots
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
@@ -444,8 +450,8 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             ++iter;
         }
     }
+
     {
-        std::unique_lock write_lock(table_rw_mutex);
         for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
         {
             const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);

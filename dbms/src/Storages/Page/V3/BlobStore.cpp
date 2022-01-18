@@ -208,30 +208,40 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         {
             stat = blob_stats.createStat(blob_file_id);
         }
+
+        // We must get the lock from BlobStat under the BlobStats lock.
+        // It will ensure that BlobStat updates are in order.
+        // Also it won't incur more overhead.
+        // If BlobStat can updates are not order. Then
+
+        stat->lock();
     }
 
     // Get Postion from single stat
-    auto lock_stat = stat->lock();
+    auto old_max_cap = stat->sm_max_caps;
     BlobFileOffset offset = stat->getPosFromStat(size);
 
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
+        stat->unlock();
         stat->smap->logStats();
-        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no corrent. [size={}, max_caps={}, BlobFileId={}]",
+        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no corrent. [size={}, old_max_caps={}, max_caps(updated)={}, BlobFileId={}]",
                                     size,
+                                    old_max_cap,
                                     stat->sm_max_caps,
                                     stat->id),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
+    stat->unlock();
     return std::make_pair(stat->id, offset);
 }
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
     const auto & stat = blob_stats.fileIdToStat(blob_id);
-    auto lock = stat->lock();
+    auto lock = stat->lock_guard();
     stat->removePosFromStat(offset, size);
 
     // TBD : consider remove the empty file
@@ -465,11 +475,16 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             continue;
         }
 
-        auto lock = stat->lock();
+        auto lock = stat->lock_guard();
         auto right_margin = stat->smap->getRightMargin();
 
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
-        assert(stat->sm_valid_rate <= 1.0);
+        if (stat->sm_valid_rate > 1.0)
+        {
+            LOG_FMT_ERROR(log, "Current blob got a invalid rate {:.2f}, total size is {} , valid size is {} , right margin is {}", stat->sm_valid_rate, stat->sm_total_size, stat->sm_valid_size, right_margin);
+            assert(false);
+        }
+
 
         // Check if GC is required
         if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
@@ -510,6 +525,7 @@ PageIdAndVersionedEntryList BlobStore::gc(std::map<BlobFileId, PageIdAndVersione
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
+    LOG_FMT_INFO(log, "BlobStore will migrate {}M into new Blobs", total_page_size / DB::MB);
 
     // TBD : consider whether total_page_size > `file_limit_size`
     // We should make the memory consumption smooth during GC.
@@ -716,6 +732,12 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         return std::make_pair(nullptr, chooseNewStat());
     }
 
+    // We need to assume that this insert will reduce max_cap.
+    // Because other threads may also be waiting for BlobStats to chooseStat during this time.
+    // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
+    // After the BlobStore records the buffer size, max_caps will also get an accurate update.
+    // So there won't get problem in reducing max_caps here.
+    stat_ptr->sm_max_caps -= buf_size;
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 

@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
@@ -324,6 +325,22 @@ TEST_P(SpaceMapTest, TestSearch)
                        {.start = 60,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges4, 2), 2));
+}
+
+TEST_P(SpaceMapTest, TestSearch2)
+{
+    auto smap = SpaceMap::createSpaceMap(test_type, 0, 512ULL * 1024 * 1024);
+    Range ranges[] = {{.start = 0,
+                       .end = 512ULL * 1024 * 1024}};
+    ASSERT_TRUE(smap->check(genChecker(ranges, 1), 1));
+    ASSERT_TRUE(smap->markUsed(535655239ULL, 1215673));
+
+    BlobFileOffset offset = 0;
+    UInt64 max_cap = 0;
+
+    std::tie(offset, max_cap) = smap->searchInsertOffset(1854079);
+    ASSERT_NE(offset, INVALID_BLOBFILE_OFFSET);
+    ASSERT_NE(max_cap, 0);
 }
 
 INSTANTIATE_TEST_CASE_P(
