@@ -224,7 +224,7 @@ try
     {
         for (UInt8 month = 1; month <= 12; month++)
         {
-            for (UInt8 day: corner_days)
+            for (UInt8 day : corner_days)
             {
                 //DateTime const nullable
                 testForDateTime<true, true>(year, month, day);
