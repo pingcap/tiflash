@@ -71,6 +71,14 @@ void BlobFile::truncate(size_t size)
     PageUtil::ftruncateFile(wrfile, size);
 }
 
+void BlobFile::del()
+{
+    if (auto data_file = Poco::File(getPath()); data_file.exists())
+    {
+        file_provider->deleteRegularFile(getPath(), getEncryptionPath());
+    }
+}
+
 BlobFile::~BlobFile()
 {
     wrfile->close();

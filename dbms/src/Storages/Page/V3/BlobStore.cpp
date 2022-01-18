@@ -245,7 +245,12 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     auto lock = stat->lock_guard();
     stat->removePosFromStat(offset, size);
 
-    // TBD : consider remove the empty file
+    if (stat->sm_valid_size == 0)
+    {
+        LOG_FMT_TRACE(log, "Erase Blob [BlobId={}]", blob_id);
+        blob_stats.eraseStat(stat);
+        getBlobFile(blob_id)->del();
+    }
 }
 
 
@@ -702,31 +707,10 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
+void BlobStore::BlobStats::eraseStat(const BlobStatPtr & stat)
 {
-    BlobStatPtr stat = nullptr;
-    bool found = false;
-
-    for (auto & stat_in_map : stats_map)
-    {
-        stat = stat_in_map;
-        if (stat->id == blob_file_id)
-        {
-            found = true;
-            break;
-        }
-    }
-
-    if (!found)
-    {
-        LOG_FMT_ERROR(log, "No exist BlobStat [BlobFileId={}]", blob_file_id);
-        return;
-    }
-
-    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
-
+    old_ids.emplace_back(stat->id);
     stats_map.remove(stat);
-    old_ids.emplace_back(blob_file_id);
 }
 
 BlobFileId BlobStore::BlobStats::chooseNewStat()

@@ -114,7 +114,7 @@ public:
 
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
-        void eraseStat(BlobFileId blob_file_id);
+        void eraseStat(const BlobStatPtr & stat);
 
         void changeToReadOnly(BlobFileId blob_file_id);
 

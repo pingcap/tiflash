@@ -38,6 +38,8 @@ public:
 
     void truncate(size_t size);
 
+    void del();
+
 private:
     FileProviderPtr file_provider;
     String path;
