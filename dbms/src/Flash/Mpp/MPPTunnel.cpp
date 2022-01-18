@@ -18,7 +18,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
-    TaskCancelledCallback callback,
     int input_steams_num_,
     bool is_local_,
     const LogWithPrefixPtr & log_)
@@ -26,12 +25,9 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , finished(false)
     , is_local(is_local_)
     , timeout(timeout_)
-    , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
-    , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , thread_manager(newThreadManager())
-    , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
+    , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -41,14 +37,15 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
     try
     {
-        if (!finished)
-            writeDone();
-        if (!is_local && thread_manager)
         {
-            thread_manager->wait();
+            std::unique_lock lock(mu);
+            if (finished)
+                return;
+            /// make sure to finish the tunnel after it is connected
+            waitUntilConnectedOrFinished(lock);
+            send_queue.finish();
         }
-        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-        clearSendQueue();
+        waitForConsumerFinish(/*allow_throw=*/false);
     }
     catch (...)
     {
@@ -60,37 +57,34 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
-    std::unique_lock<std::mutex> lk(mu);
-    if (finished)
-        return;
-    if (connected && !reason.empty())
     {
-        try
+        std::unique_lock lk(mu);
+        if (finished)
+            return;
+        if (connected)
         {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+            if (!reason.empty())
+            {
+                try
+                {
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+                    send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+                }
+            }
+            send_queue.finish();
         }
-        catch (...)
+        else
         {
-            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+            finished = true;
+            cv_for_connected_or_finished.notify_all();
+            return;
         }
     }
-    if (connected)
-    {
-        send_queue.push(nullptr);
-        /// should wait the errors being sent in abnormal cases.
-        cv_for_finished.wait(lk, [&]() { return finished.load(); });
-    }
-    else
-    {
-        finished = true;
-    }
-}
-
-template <typename Writer>
-bool MPPTunnelBase<Writer>::isTaskCancelled()
-{
-    return task_cancelled_callback();
+    waitForConsumerFinish(/*allow_throw=*/false);
 }
 
 // TODO: consider to hold a buffer
@@ -99,88 +93,61 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 {
     LOG_TRACE(log, "ready to write");
     {
-        {
-            std::unique_lock<std::mutex> lk(mu);
-            waitUntilConnectedOrCancelled(lk);
-            if (finished)
-                throw Exception("write to tunnel which is already closed," + send_loop_msg);
-        }
+        std::unique_lock lk(mu);
+        waitUntilConnectedOrFinished(lk);
+        if (finished)
+            throw Exception("write to tunnel which is already closed," + consumer_state.getError());
 
-        connection_profile_info.bytes += data.ByteSizeLong();
-        connection_profile_info.packets += 1;
-        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
-        if (close_after_write)
+        if (send_queue.push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
-            std::unique_lock<std::mutex> lk(mu);
-            if (!finished)
+            connection_profile_info.bytes += data.ByteSizeLong();
+            connection_profile_info.packets += 1;
+
+            if (close_after_write)
             {
-                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
-                send_queue.push(nullptr);
-                LOG_TRACE(log, "sending a nullptr to finish write.");
+                send_queue.finish();
+                LOG_TRACE(log, "finish write.");
             }
+            return;
         }
     }
+    // push failed, wait consumer for the final state
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
-/// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-template <typename Writer>
-void MPPTunnelBase<Writer>::clearSendQueue()
-{
-    MPPDataPacketPtr res;
-    while (send_queue.size() > 0)
-    {
-        send_queue.pop(res);
-    }
-}
-
-/// to avoid being blocked when pop(), we should send nullptr into send_queue in all cases
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
     assert(!is_local);
+    String err_msg;
     try
     {
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
-        while (!finished)
+        while (send_queue.pop(res))
         {
-            send_queue.pop(res);
-            if (nullptr == res)
+            if (!writer->Write(*res))
             {
-                finishWithLock();
-                return;
-            }
-            else
-            {
-                if (!writer->Write(*res))
-                {
-                    finishWithLock();
-                    auto msg = " grpc writes failed.";
-                    LOG_ERROR(log, msg);
-                    throw Exception(tunnel_id + msg);
-                }
+                err_msg = "grpc writes failed.";
+                break;
             }
         }
     }
     catch (Exception & e)
     {
-        std::unique_lock<std::mutex> lk(mu);
-        send_loop_msg = e.message();
+        err_msg = e.message();
     }
     catch (std::exception & e)
     {
-        std::unique_lock<std::mutex> lk(mu);
-        send_loop_msg = e.what();
+        err_msg = e.what();
     }
     catch (...)
     {
-        std::unique_lock<std::mutex> lk(mu);
-        send_loop_msg = "fatal error in sendLoop()";
+        err_msg = "fatal error in sendLoop()";
     }
-    if (!finished)
-    {
-        finishWithLock();
-    }
+    if (!err_msg.empty())
+        LOG_ERROR(log, err_msg);
+    consumerFinish(err_msg);
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -188,96 +155,111 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: " << is_local);
-    std::unique_lock<std::mutex> lk(mu);
-    if (finished)
-        throw Exception("has finished, " + send_loop_msg);
-    /// make sure to finish the tunnel after it is connected
-    LOG_TRACE(log, "waitUntilConnectedOrCancelled");
-    waitUntilConnectedOrCancelled(lk);
-    lk.unlock();
-    /// in normal cases, send nullptr to notify finish
-    send_queue.push(nullptr);
-    LOG_TRACE(log, "waitForFinish");
-    waitForFinish();
-    LOG_TRACE(log, "done to finish");
+    {
+        std::unique_lock lk(mu);
+        if (finished)
+            throw Exception("write to tunnel which is already closed," + consumer_state.getError());
+        /// make sure to finish the tunnel after it is connected
+        waitUntilConnectedOrFinished(lk);
+
+        send_queue.finish();
+    }
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
 template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
     assert(is_local);
-    if (!finished)
-    {
-        MPPDataPacketPtr res;
-        send_queue.pop(res);
-        if (nullptr == res)
-        {
-            finishWithLock();
-        }
-
+    MPPDataPacketPtr res;
+    if (send_queue.pop(res))
         return res;
-    }
+    consumerFinish("");
     return nullptr;
 }
-
 
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-    std::lock_guard<std::mutex> lk(mu);
-    if (connected)
-        throw Exception("has connected");
-
-    LOG_DEBUG(log, "ready to connect");
-    writer = writer_;
-    if (!is_local)
     {
-        thread_manager->schedule(true, "MPPTunnel", [this] {
-            sendLoop();
-        });
+        std::unique_lock lk(mu);
+        if (connected)
+            throw Exception("has connected");
+
+        LOG_TRACE(log, "ready to connect");
+        if (is_local)
+            assert(writer_ == nullptr);
+        else
+        {
+            writer = writer_;
+            // communicate send_thread through `consumer_state`
+            // NOTE: if the thread creation failed, `connected` will still be `false`.
+            newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
+                sendLoop();
+            });
+        }
+        connected = true;
+        cv_for_connected_or_finished.notify_all();
     }
-    connected = true;
-    cv_for_connected.notify_all();
+    LOG_DEBUG(log, "connected");
 }
 
 template <typename Writer>
 void MPPTunnelBase<Writer>::waitForFinish()
 {
-    std::unique_lock<std::mutex> lk(mu);
-
-    cv_for_finished.wait(lk, [&]() { return finished.load(); });
-
-    /// check whether sendLoop() normally or abnormally exited
-    if (!send_loop_msg.empty())
-        throw Exception("sendLoop() exits unexpected, " + send_loop_msg);
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
+void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
 {
-    auto connected_or_cancelled = [&] {
-        return connected || isTaskCancelled();
+#ifndef NDEBUG
+    {
+        std::unique_lock lock(mu);
+        assert(connected);
+    }
+#endif
+    String err_msg = consumer_state.getError(); // may blocking
+    if (allow_throw && !err_msg.empty())
+        throw Exception("Consumer exits unexpected, " + err_msg);
+}
+
+template <typename Writer>
+void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
+{
+    auto connected_or_finished = [&] {
+        return connected || finished;
     };
     if (timeout.count() > 0)
     {
-        if (!cv_for_connected.wait_for(lk, timeout, connected_or_cancelled))
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
+
+        if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
     else
     {
-        cv_for_connected.wait(lk, connected_or_cancelled);
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        cv_for_connected_or_finished.wait(lk, connected_or_finished);
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (!connected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::finishWithLock()
+void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 {
-    clearSendQueue();
-    std::unique_lock<std::mutex> lk(mu);
+    // must finish send_queue outside of the critical area to avoid deadlock with write.
+    send_queue.finish();
+
+    std::unique_lock lk(mu);
     finished = true;
-    cv_for_finished.notify_all();
+    // must call setError in the critical area to keep consistent with `finished` from outside.
+    consumer_state.setError(err_msg);
+    cv_for_connected_or_finished.notify_all();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
