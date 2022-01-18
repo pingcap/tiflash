@@ -783,7 +783,7 @@ public:
     /// Get result types by argument types. If the function does not apply to these arguments, throw an exception.
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if ((arguments.size() < 1) || (arguments.size() > 2))
+        if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed "
                     + toString(arguments.size()) + ", should be 1 or 2.",
@@ -873,7 +873,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if ((arguments.size() < 1) || (arguments.size() > 2))
+        if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed "
                     + toString(arguments.size()) + ", should be 1 or 2.",
@@ -1337,7 +1337,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return false; }
 
 private:
-    FracType getFracFromConstColumn(const ColumnConst * column) const
+    static FracType getFracFromConstColumn(const ColumnConst * column)
     {
         using UnsignedFrac = make_unsigned_t<FracType>;
 
@@ -1368,7 +1368,7 @@ private:
 
         auto input_type = arguments[0].type;
 
-        auto frac_column = arguments[1].column.get();
+        const auto * frac_column = arguments[1].column.get();
         bool frac_column_const = frac_column && frac_column->isColumnConst();
 
         if (input_type->isInteger())
@@ -1400,7 +1400,7 @@ private:
 
             if (frac_column_const)
             {
-                auto column = typeid_cast<const ColumnConst *>(frac_column);
+                const auto * column = typeid_cast<const ColumnConst *>(frac_column);
                 assert(column != nullptr);
 
                 is_const_frac = true;
