@@ -11,10 +11,10 @@ namespace
 template <typename T>
 AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p)
 {
-    if (auto dec_type = typeid_cast<const T *>(p))
+    if (const auto * dec_type = typeid_cast<const T *>(p))
     {
         AggregateFunctionPtr res;
-        auto [result_prec, result_scale] = AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale);
+        auto [result_prec, result_scale] = AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale());
         auto result_type = createDecimal(result_prec, result_scale);
         if (checkDecimal<Decimal32>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal32>(
