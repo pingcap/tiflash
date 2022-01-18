@@ -114,6 +114,22 @@ try
             createConstColumn<Nullable<Int64>>(1, 5),
             createConstColumn<Nullable<Int64>>(1, -3)));
 
+    // only null least
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({{}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({{}, {}}),
+            createColumn<Nullable<Int64>>({{}, {}})));
+
+    // const and only null least
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({{}, {}, {}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({{}, {}, {}, {}}),
+            createConstColumn<Nullable<Int64>>(4, 3)));
+
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({18446744073709551614U}),
         executeFunction(
@@ -233,6 +249,22 @@ try
             func_name,
             createConstColumn<Nullable<Int64>>(1, 5),
             createConstColumn<Nullable<Int64>>(1, -3)));
+
+    // only null greatest
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({{}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({{}, {}}),
+            createColumn<Nullable<Int64>>({{}, {}})));
+
+    // const and only null greatest
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({{}, {}, {}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({{}, {}, {}, {}}),
+            createConstColumn<Nullable<Int64>>(4, 3)));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({18446744073709551615U}),

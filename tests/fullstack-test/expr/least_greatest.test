@@ -6,8 +6,16 @@ mysql> drop table if exists test.t2
 mysql> create table test.t2 (id1 BIGINT UNSIGNED, id2 BIGINT UNSIGNED, id3 BIGINT)
 mysql> alter table test.t2 set tiflash replica 1
 mysql> insert into test.t2 values (18446744073709551615, 18446744073709551615, 9223372036854775807)
+mysql> drop table if exists test.t3
+mysql> create table test.t3 (id1 int, id2 int)
+mysql> alter table test.t3 set tiflash replica 1
+mysql> insert into test.t3 values (NULL, NULL), (NULL, NULL), (NULL, NULL)
 
 func> wait_table test t1, t2
+
+# parse error
+mysql> set tidb_enforce_mpp=1; select least() from test.t1
+ERROR 1582 (42000) at line 1: Incorrect parameter count in the call to native function 'least'
 
 # least tests
 mysql> set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
@@ -27,6 +35,25 @@ mysql> set tidb_enforce_mpp=1; select id, least(NULL, id, id1, id2, id3, id4, id
 |   90 |                                                         NULL |
 | 1278 |                                                         NULL |
 +------+--------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8, id9) from test.t1
++------+--------------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8, id9) |
++------+--------------------------------------------------------------+
+|    1 |                                                         NULL |
+|   90 |                                                         NULL |
+| 1278 |                                                         NULL |
++------+--------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9, NULL) from test.t1
++------+--------------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8, id9, NULL) |
++------+--------------------------------------------------------------+
+|    1 |                                                         NULL |
+|   90 |                                                         NULL |
+| 1278 |                                                         NULL |
++------+--------------------------------------------------------------+
+
 
 mysql> set tidb_enforce_mpp=1; select id, least(id1, id2, id8) from test.t1
 +------+----------------------+
@@ -93,6 +120,15 @@ mysql> set tidb_enforce_mpp=1; select least(id1, id3) from test.t2
 | 9223372036854775807 |
 +---------------------+
 
+# least only null
+mysql> set tidb_enforce_mpp=1; select least(id1, id2) from test.t3
++-----------------+
+| least(id1, id2) |
++-----------------+
+|            NULL |
+|            NULL |
+|            NULL |
++-----------------+
 
 # greatest tests
 mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
@@ -108,6 +144,24 @@ mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, 
 mysql> set tidb_enforce_mpp=1; select id, greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) from test.t1
 +------+-----------------------------------------------------------------+
 | id   | greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8, id9) |
++------+-----------------------------------------------------------------+
+|    1 |                                                            NULL |
+|   90 |                                                            NULL |
+| 1278 |                                                            NULL |
++------+-----------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8, id9) from test.t1
++------+-----------------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8, id9) |
++------+-----------------------------------------------------------------+
+|    1 |                                                            NULL |
+|   90 |                                                            NULL |
+| 1278 |                                                            NULL |
++------+-----------------------------------------------------------------+
+
+mysql> set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9, NULL) from test.t1
++------+-----------------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, id9, NULL) |
 +------+-----------------------------------------------------------------+
 |    1 |                                                            NULL |
 |   90 |                                                            NULL |
@@ -186,3 +240,13 @@ mysql> set tidb_enforce_mpp=1; select greatest(id3, id3) from test.t2
 +---------------------+
 | 9223372036854775807 |
 +---------------------+
+
+# greatest only null
+mysql> set tidb_enforce_mpp=1; select greatest(id1, id2) from test.t3
++--------------------+
+| greatest(id1, id2) |
++--------------------+
+|               NULL |
+|               NULL |
+|               NULL |
++--------------------+
