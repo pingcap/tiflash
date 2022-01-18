@@ -495,7 +495,6 @@ struct SenderHelper
                 task_meta,
                 task_meta,
                 std::chrono::seconds(60),
-                [] { return false; },
                 concurrency,
                 false);
             tunnel->connect(writer.get());
