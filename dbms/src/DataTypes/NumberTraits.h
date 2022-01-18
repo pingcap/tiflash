@@ -345,7 +345,7 @@ struct ToInteger<Int128>
 template <typename A, typename B>
 struct ResultOfBinaryLeast
 {
-    static_assert(is_arithmetic_v<A> && is_arithmetic_v<B>);
+    static_assert(std::is_arithmetic_v<A> && std::is_arithmetic_v<B>);
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
@@ -358,7 +358,7 @@ struct ResultOfBinaryLeast
 template <typename A, typename B>
 struct ResultOfBinaryGreatest
 {
-    static_assert(is_arithmetic_v<A> && is_arithmetic_v<B>);
+    static_assert(std::is_arithmetic_v<A> && std::is_arithmetic_v<B>);
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
