@@ -145,7 +145,32 @@ PageDirectory::PageDirectory()
 
 void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
 {
-    wal = WALStore::create(provider, delegator, write_limiter);
+    auto callback = [this](PageEntriesEdit && edit) {
+        for (auto & record : edit.getMutRecords())
+        {
+            auto [iter, created] = mvcc_table_directory.insert(std::make_pair(record.page_id, nullptr));
+            if (created)
+            {
+                iter->second = std::make_shared<VersionedPageEntries>();
+            }
+
+            auto versioned_page = iter->second;
+            switch (record.type)
+            {
+            case WriteBatch::WriteType::PUT:
+                [[fallthrough]];
+            case WriteBatch::WriteType::UPSERT:
+                iter->second->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
+                break;
+            case WriteBatch::WriteType::DEL:
+                iter->second->createDelete(record.version.sequence);
+                break;
+            default:
+                throw Exception(fmt::format("Unknown write type: {}", record.type));
+            }
+        }
+    };
+    wal = WALStore::create(callback, provider, delegator, write_limiter);
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const

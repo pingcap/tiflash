@@ -69,9 +69,10 @@ public:
     using ChecksumClass = Digest::CRC64;
 
     static WALStorePtr create(
+        std::function<void(PageEntriesEdit &&)> && restore_callback,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
-        const WriteLimiterPtr & write_limiter);
+        const WriteLimiterPtr & write_limiter = nullptr);
 
     void apply(PageEntriesEdit & edit, const PageVersionType & version);
     void apply(const PageEntriesEdit & edit);

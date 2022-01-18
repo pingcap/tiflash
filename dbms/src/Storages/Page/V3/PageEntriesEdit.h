@@ -35,6 +35,11 @@ struct PageVersionType
             return epoch < rhs.epoch;
         return sequence < rhs.sequence;
     }
+
+    bool operator==(const PageVersionType & rhs) const
+    {
+        return (sequence == rhs.sequence) && (epoch == rhs.epoch);
+    }
 };
 using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;

@@ -57,4 +57,10 @@ static constexpr int HEADER_SIZE = CHECKSUM_FIELD_SIZE + PAYLOAD_FIELD_SIZE + si
 // - log number (4 bytes).
 static constexpr int RECYCLABLE_HEADER_SIZE = CHECKSUM_FIELD_SIZE + PAYLOAD_FIELD_SIZE + sizeof(MaxRecordType) + sizeof(LogNumberType);
 
+enum LogFileStage {
+    Invalid,
+    Temporary,
+    Normal,
+};
+
 } // namespace DB::PS::V3::Format

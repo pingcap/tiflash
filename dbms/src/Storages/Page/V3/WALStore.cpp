@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/RedactHelpers.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
@@ -47,6 +48,7 @@ WALStoreReaderPtr WALStore::createReader(FileProviderPtr & provider, PSDiskDeleg
 }
 
 WALStorePtr WALStore::create(
+    std::function<void(PageEntriesEdit &&)> && restore_callback,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
     const WriteLimiterPtr & write_limiter)
@@ -58,13 +60,13 @@ WALStorePtr WALStore::create(
         (void)ok;
         (void)edit;
         // callback(edit); apply to PageDirectory
-        reader->next();
+        restore_callback(std::move(edit));
     }
 
     // Create a new LogFile for writing new logs
     const auto path = delegator->defaultPath(); // TODO: multi-path
     auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
-    auto filename = fmt::format("log_{}", log_num);
+    auto filename = fmt::format("log_{}_0", log_num);
     auto fullname = fmt::format("{}/{}", path, filename);
     LOG_FMT_INFO(&Poco::Logger::get("WALStore"), "Creating log file for writing, [log_num={}] [path={}] [filename={}]", log_num, path, filename);
     WriteBufferByFileProviderBuilder builder(
@@ -103,6 +105,7 @@ void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version)
 void WALStore::apply(const PageEntriesEdit & edit)
 {
     const String serialized = ser::serializeTo(edit);
+    LOG_FMT_TRACE(logger, "apply [size={}] [ser={}]", serialized.size(), Redact::keyToHexString(serialized.data(), serialized.size()));
     ReadBufferFromString payload(serialized);
     log_file->addRecord(payload, serialized.size());
 }

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Encryption/FileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 
 namespace DB::PS::V3
@@ -9,13 +8,15 @@ namespace DB::PS::V3
 namespace ser
 {
 String serializeTo(const PageEntriesEdit & edit);
-}
+PageEntriesEdit deserializeFrom(std::string_view record);
+} // namespace ser
 
 class ReportCollector : public LogReader::Reporter
 {
 public:
     void corruption(size_t /*bytes*/, const String & /*msg*/) override
     {
+        // FIXME: handle corruption
     }
 };
 
@@ -25,6 +26,7 @@ public:
     static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator);
 
     bool remained() const;
+
     std::tuple<bool, PageEntriesEdit> next();
 
     Format::LogNumberType logNum()
@@ -34,7 +36,7 @@ public:
         return reader->getLogNumber();
     }
 
-    WALStoreReader(FileProviderPtr & provider_, std::vector<std::pair<String, Strings>> && all_filenames_);
+    WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && all_filenames_);
 
     WALStoreReader(const WALStoreReader &) = delete;
     WALStoreReader & operator=(const WALStoreReader &) = delete;
@@ -45,8 +47,8 @@ private:
     FileProviderPtr provider;
     ReportCollector reporter;
 
-    size_t all_files_read_index = 0;
-    std::vector<std::pair<String, Strings>> all_filenames;
+    const LogFilenameSet all_filenames;
+    LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
     Poco::Logger * logger;
 };
