@@ -309,7 +309,7 @@ public:
         }
     }
 
-    void create(const AggregateDataPtr __restrict place) const override
+    void create(AggregateDataPtr __restrict place) const override
     {
         new (place) Data;
     }
