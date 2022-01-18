@@ -294,7 +294,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit)
         // Append the gc version to version list
         auto & versioned_entries = iter->second;
         auto page_lock = versioned_entries->acquireLock();
-        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch + 1, record.entry);
+        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
     }
 
     // Apply migrate edit into WAL with the increased epoch version
