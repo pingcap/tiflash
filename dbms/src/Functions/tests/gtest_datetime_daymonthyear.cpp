@@ -222,7 +222,7 @@ try
     UInt8 corner_days[] = {1, 28, 29, 30, 31};
     for (UInt16 year = 1990; year <= 2030; year++)
     {
-        for (UInt8 month = 1; month < 12; month++)
+        for (UInt8 month = 1; month <= 12; month++)
         {
             for (UInt8 day: corner_days)
             {
