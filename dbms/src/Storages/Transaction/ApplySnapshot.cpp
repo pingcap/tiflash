@@ -81,7 +81,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
             {
                 if (region.first != region_id)
                 {
-                    LOG_WARNING(log, fmt::format("{}: range of region {} is overlapped with region {}, should not happen", __PRETTY_FUNCTION__, std::to_string(region_id), std::to_string(region.first)));
+                    LOG_FMT_WARNING(log, "{}: range of region {} is overlapped with region {}, should not happen", __PRETTY_FUNCTION__, std::to_string(region_id), std::to_string(region.first));
                 }
             }
         });
