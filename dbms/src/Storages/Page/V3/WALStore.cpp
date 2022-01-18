@@ -69,14 +69,18 @@ WALStorePtr WALStore::create(
     auto filename = fmt::format("log_{}_0", log_num);
     auto fullname = fmt::format("{}/{}", path, filename);
     LOG_FMT_INFO(&Poco::Logger::get("WALStore"), "Creating log file for writing, [log_num={}] [path={}] [filename={}]", log_num, path, filename);
-    WriteBufferByFileProviderBuilder builder(
-        /*has_checksum=*/false,
-        provider,
-        fullname,
-        EncryptionPath{path, filename},
-        true,
-        write_limiter);
-    auto log_file = std::make_unique<LogWriter>(builder.with_buffer_size(Format::BLOCK_SIZE).build(), log_num, /*recycle*/ true);
+    auto log_file = std::make_unique<LogWriter>(
+        WriteBufferByFileProviderBuilder(
+            /*has_checksum=*/false,
+            provider,
+            fullname,
+            EncryptionPath{path, filename},
+            true,
+            write_limiter)
+            .with_buffer_size(Format::BLOCK_SIZE) // Must be `BLOCK_SIZE`
+            .build(),
+        log_num,
+        /*recycle*/ true);
     return std::unique_ptr<WALStore>(new WALStore(path, provider, write_limiter, std::move(log_file)));
 }
 

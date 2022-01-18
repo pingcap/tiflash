@@ -276,9 +276,11 @@ bool WALStoreReader::openNextFile()
             provider,
             fmt::format("{}/{}", parent_path, filename),
             EncryptionPath{parent_path, filename},
-            Format::BLOCK_SIZE, // Must be `Format::BLOCK_SIZE`
-            0,
-            nullptr);
+            /*estimated_size*/ Format::BLOCK_SIZE,
+            /*aio_threshold*/ 0,
+            /*read_limiter*/ nullptr,
+            /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+        );
         reader = std::make_unique<LogReader>(
             std::move(read_buf),
             &reporter,
