@@ -123,6 +123,7 @@ private:
     DAGSchema schema;
 
     MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> empty_channel;
 
     std::mutex mu;
     /// should lock `mu` when visit these members

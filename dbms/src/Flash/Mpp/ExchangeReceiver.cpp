@@ -41,11 +41,20 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max(source_num, max_streams_) * 2)
     , thread_manager(newThreadManager())
     , msg_channel(max_buffer_size)
+    , empty_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
     rpc_context->fillSchema(schema);
+
+    for (size_t i = 0; i < max_buffer_size; ++i)
+    {
+        auto msg = std::make_shared<ReceivedMessage>();
+        msg->packet = std::make_shared<mpp::MPPDataPacket>();
+        empty_channel.push(std::move(msg));
+    }
+
     setUpConnection();
 }
 
@@ -54,6 +63,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
     setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
+    empty_channel.finish();
 
     if (thread_manager)
         thread_manager->wait();
@@ -64,6 +74,7 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setState(ExchangeReceiverState::CANCELED);
     msg_channel.finish();
+    empty_channel.finish();
 }
 
 template <typename RPCContext>
@@ -96,16 +107,34 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                auto recv_msg = std::make_shared<ReceivedMessage>();
-                recv_msg->packet = std::make_shared<MPPDataPacket>();
+                std::shared_ptr<ReceivedMessage> recv_msg;
+                bool need_push_back_to_empty_channel = false;
+                SCOPE_EXIT({
+                    if (need_push_back_to_empty_channel)
+                        empty_channel.push(std::move(recv_msg));
+                });
+                if (!empty_channel.pop(recv_msg))
+                {
+                    meet_error = true;
+                    auto local_state = getState();
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(local_state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
+                }
+                need_push_back_to_empty_channel = true;
+                recv_msg->packet->Clear();
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
                 bool success = reader->read(recv_msg->packet);
                 if (!success)
+                {
                     break;
+                }
                 has_data = true;
                 if (recv_msg->packet->has_error())
+                {
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
+                }
 
                 if (!msg_channel.push(std::move(recv_msg)))
                 {
@@ -115,6 +144,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     LOG_WARNING(log, local_err_msg);
                     break;
                 }
+                else
+                    need_push_back_to_empty_channel = false;
             }
             // if meet error, such as decode packect fails, it will not retry.
             if (meet_error)
@@ -198,6 +229,11 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
+    bool need_push_back_to_empty_channel = false;
+    SCOPE_EXIT({
+        if (need_push_back_to_empty_channel)
+            empty_channel.push(std::move(recv_msg));
+    });
     if (!msg_channel.pop(recv_msg))
     {
         std::unique_lock lock(mu);
@@ -220,6 +256,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
+    need_push_back_to_empty_channel = true;
     assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
     if (recv_msg->packet->has_error())
