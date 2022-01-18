@@ -6,7 +6,7 @@
 
 namespace DB
 {
-ColumnPtr castColumnImpl(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context, String func_name)
+ColumnPtr castColumnImpl(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context, const String & func_name)
 {
     if (arg.type->equals(*type))
         return arg.column;

@@ -2,7 +2,6 @@
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatest.h>
 
-
 namespace DB
 {
 template <typename A, typename B>
@@ -14,7 +13,6 @@ struct BinaryGreatestBaseImpl<A, B, false>
     static Result apply(A a, B b)
     {
         return accurate::greaterOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
-        // return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -48,7 +46,7 @@ struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionBinaryGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
-using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<GreatestImpl, FunctionBinaryGreatest>;
+using FunctionTiDBGreatest = FunctionVectorizedLeastGreatest<GreatestImpl, FunctionBinaryGreatest>;
 
 } // namespace
 

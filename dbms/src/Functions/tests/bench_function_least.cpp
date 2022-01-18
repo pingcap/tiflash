@@ -1,4 +1,6 @@
+#include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/LeastGreatest.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
@@ -7,6 +9,46 @@
 
 namespace DB
 {
+template <typename A, typename B>
+struct BinaryGreatestBaseImpl<A, B, false>
+{
+    using ResultType = typename NumberTraits::ResultOfBinaryGreatest<A, B>::Type;
+
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
+    {
+        return accurate::greaterOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
+
+template <typename A, typename B>
+struct BinaryGreatestBaseImpl<A, B, true>
+{
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
+    using ResultPrecInferer = PlusDecimalInferer;
+
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
+
+struct RowbasedGreatestImpl
+{
+    static constexpr auto name = "tidbRowbasedGreatest";
+    static bool apply(bool cmp_result) { return !cmp_result; }
+};
 namespace tests
 {
 class FunctionBench : public benchmark::Fixture
@@ -75,12 +117,128 @@ public:
     }
 };
 
+
+template <typename Impl, typename SpecializedFunction>
+class FunctionRowbasedLeastGreatest : public IFunction
+{
+public:
+    static constexpr auto name = Impl::name;
+    explicit FunctionRowbasedLeastGreatest(const Context & context)
+        : context(context){};
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionRowbasedLeastGreatest<Impl, SpecializedFunction>>(context);
+    }
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        size_t num_arguments = arguments.size();
+        if (num_arguments < 2)
+        {
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+
+        DataTypes data_types(num_arguments);
+        for (size_t i = 0; i < num_arguments; ++i)
+            data_types[i] = block.getByPosition(arguments[i]).type;
+
+        DataTypePtr result_type = getReturnTypeImpl(data_types);
+
+        bool is_types_valid = getColumnType(result_type, [&](const auto & type, bool) {
+            using ColumnType = std::decay_t<decltype(type)>;
+            using ColumnFieldType = typename ColumnType::FieldType;
+            using ColVec = ColumnVector<ColumnFieldType>;
+            auto col_to = ColVec::create(block.rows());
+            auto & vec_to = col_to->getData();
+            size_t num_arguments = arguments.size();
+            size_t rows = block.rows();
+            std::vector<const ColVec *> columns;
+
+            // TODO need to convert the column
+            for (size_t arg = 0; arg < num_arguments; ++arg)
+            {
+                if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arguments[arg]).column.get()); from)
+                    columns.push_back(from);
+                else
+                    throw Exception(fmt::format("Illegal column type {} of  arguments of function {}", block.getByPosition(arguments[arg]).type->getName(), getName()), ErrorCodes::LOGICAL_ERROR);
+            }
+
+            for (size_t row_num = 0; row_num < rows; ++row_num)
+            {
+                size_t best_arg = arguments[0];
+                for (size_t arg = 1; arg < num_arguments; ++arg)
+                {
+                    const auto & vec_from = columns[arguments[arg]]->getData();
+                    const auto & vec_best = columns[arguments[best_arg]]->getData();
+                    bool cmp_result = accurate::lessOp(vec_from[row_num], vec_best[row_num]);
+                    if (Impl::apply(cmp_result))
+                        best_arg = arg;
+                }
+                const auto & vec_best = columns[arguments[best_arg]]->getData();
+                vec_to[row_num] = vec_best[row_num];
+            }
+            block.getByPosition(result).column = std::move(col_to);
+            return true;
+        });
+
+        if (!is_types_valid)
+            throw Exception(fmt::format("Illegal return type of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    template <typename F>
+    static bool getColumnType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt64,
+            DataTypeUInt64,
+            DataTypeFloat64>(type.get(), std::forward<F>(f));
+    }
+
+    const Context & context;
+};
+
+namespace
+{
+// clang-format off
+struct NameGreatest               { static constexpr auto name = "greatest"; };
+// clang-format on
+
+using FunctionBinaryRowbasedGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
+using FunctionTiDBRowbasedGreatest = FunctionRowbasedLeastGreatest<RowbasedGreatestImpl, FunctionBinaryRowbasedGreatest>;
+} // namespace
 class LeastBench : public FunctionBench
 {
 public:
     void SetUp(const benchmark::State & state) override
     {
         FunctionBench::SetUp(state);
+        try
+        {
+            auto & factory = FunctionFactory::instance();
+            factory.registerFunction<FunctionTiDBRowbasedGreatest>();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
         initCols();
         initCols2();
     }
@@ -99,7 +257,6 @@ public:
     ColumnWithTypeAndName col_nullable2;
     ColumnWithTypeAndName col_nullable3;
     std::vector<ColumnWithTypeAndName> v_col;
-
 
 private:
     void initCols()
@@ -169,12 +326,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col1,
-            col2,
-            col3);
+        executeFunction(context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -188,11 +340,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col1,
-            col2);
+        executeFunction(context, func_name, col1, col2);
     }
 }
 CATCH
@@ -206,12 +354,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col_nullable1,
-            col_nullable2,
-            col_nullable3);
+        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -221,16 +364,11 @@ BENCHMARK_DEFINE_F(LeastBench, benchNormal)
 (benchmark::State & state)
 try
 {
-    const String & func_name = "tidbGreatest";
+    const String & func_name = "tidbRowbasedGreatest";
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col1,
-            col2,
-            col3);
+        executeFunction(context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -240,15 +378,11 @@ BENCHMARK_DEFINE_F(LeastBench, benchNormal2Col)
 (benchmark::State & state)
 try
 {
-    const String & func_name = "tidbGreatest";
+    const String & func_name = "tidbRowbasedGreatest";
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col1,
-            col2);
+        executeFunction(context, func_name, col1, col2);
     }
 }
 CATCH
@@ -258,16 +392,11 @@ BENCHMARK_DEFINE_F(LeastBench, benchNormalWithNullable)
 (benchmark::State & state)
 try
 {
-    const String & func_name = "tidbGreatest";
+    const String & func_name = "tidbRowbasedGreatest";
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            col_nullable1,
-            col_nullable2,
-            col_nullable3);
+        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -282,10 +411,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            v_col);
+        executeFunction(context, func_name, v_col);
     }
 }
 CATCH
@@ -295,14 +421,11 @@ BENCHMARK_DEFINE_F(LeastBench, benchNormalMoreCols)
 (benchmark::State & state)
 try
 {
-    const String & func_name = "tidbGreatest";
+    const String & func_name = "tidbRowbasedGreatest";
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(
-            context,
-            func_name,
-            v_col);
+        executeFunction(context, func_name, v_col);
     }
 }
 CATCH

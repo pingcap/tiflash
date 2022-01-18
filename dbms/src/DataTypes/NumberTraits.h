@@ -337,26 +337,6 @@ struct ToInteger<Int128>
     using Type = Int128;
 };
 
-
-template <typename A, typename B>
-struct BinaryLeastSpecialCase
-{
-    using Type = std::conditional_t<
-        std::is_unsigned_v<A> && std::is_unsigned_v<B>,
-        UInt64,
-        Int64>;
-};
-
-template <typename A, typename B>
-struct BinaryGreatestSpecialCase
-{
-    using Type = std::conditional_t<
-        std::is_signed_v<A> && std::is_signed_v<B>,
-        Int64,
-        UInt64>;
-};
-
-
 // in TiDB:
 // if A or B is floating-point, least/Greatest(A, B) evalutes to Float64.
 // If A and B's size is 8 bytes
@@ -365,19 +345,27 @@ struct BinaryGreatestSpecialCase
 template <typename A, typename B>
 struct ResultOfBinaryLeast
 {
+    static_assert(is_arithmetic_v<A> && is_arithmetic_v<B>);
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        typename BinaryLeastSpecialCase<A, B>::Type>;
+        std::conditional_t<
+            std::is_unsigned_v<A> && std::is_unsigned_v<B>,
+            UInt64,
+            Int64>>;
 };
 
 template <typename A, typename B>
 struct ResultOfBinaryGreatest
 {
+    static_assert(is_arithmetic_v<A> && is_arithmetic_v<B>);
     using Type = std::conditional_t<
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        typename BinaryGreatestSpecialCase<A, B>::Type>;
+        std::conditional_t<
+            std::is_signed_v<A> && std::is_signed_v<B>,
+            Int64,
+            UInt64>>;
 };
 
 } // namespace NumberTraits

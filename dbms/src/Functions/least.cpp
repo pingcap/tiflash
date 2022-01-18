@@ -16,9 +16,7 @@ struct BinaryLeastBaseImpl<A, B, false>
     static Result apply(A a, B b)
     {
         /** gcc 4.9.2 successfully vectorizes a loop from this function. */
-        // YWQ: in bench, The performance is almost the same..
         return accurate::lessOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
-        // return static_cast<Result>(a) < static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -52,7 +50,7 @@ struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
 
 using FunctionBinaryLeast = FunctionBinaryArithmetic<BinaryLeastBaseImpl_t, NameLeast>;
-using FunctionTiDBLeast = FunctionBuilderTiDBLeastGreatest<LeastImpl, FunctionBinaryLeast>;
+using FunctionTiDBLeast = FunctionVectorizedLeastGreatest<LeastImpl, FunctionBinaryLeast>;
 
 } // namespace
 
