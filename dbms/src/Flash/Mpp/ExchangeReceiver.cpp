@@ -3,6 +3,7 @@
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <ext/scope_guard.h>
 #include <fmt/core.h>
 
 namespace DB
