@@ -785,14 +785,13 @@ public:
     {
         if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed "
-                    + toString(arguments.size()) + ", should be 1 or 2.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!type->isNumber() && !type->isDecimal())
                 throw Exception(
-                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
@@ -819,8 +818,7 @@ public:
               || executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -875,14 +873,13 @@ public:
     {
         if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed "
-                    + toString(arguments.size()) + ", should be 1 or 2.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!type->isDecimal())
                 throw Exception(
-                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeInt64>();
     }
@@ -898,8 +895,7 @@ public:
               || executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
