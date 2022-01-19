@@ -11,6 +11,7 @@
 #include <Functions/FunctionsGeo.h>
 #include <Functions/IFunction.h>
 #include <common/preciseExp10.h>
+#include <fmt/core.h>
 
 /** More efficient implementations of mathematical functions are possible when using a separate library.
   * Disabled due to licence compatibility limitations.
@@ -81,9 +82,9 @@ private:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments.front()->isNumber())
-            throw Exception{
-                "Illegal type " + arguments.front()->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments.front()->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if constexpr (Nullable)
         {
@@ -165,13 +166,13 @@ private:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        const auto arg = block.getByPosition(arguments[0]).column.get();
+        const auto * const arg = block.getByPosition(arguments[0]).column.get();
 
         if (!execute<UInt8>(block, arg, result) && !execute<UInt16>(block, arg, result) && !execute<UInt32>(block, arg, result) && !execute<UInt64>(block, arg, result) && !execute<Int8>(block, arg, result) && !execute<Int16>(block, arg, result) && !execute<Int32>(block, arg, result) && !execute<Int64>(block, arg, result) && !execute<Float32>(block, arg, result) && !execute<Float64>(block, arg, result))
         {
-            throw Exception{
-                "Illegal column " + arg->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", arg->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -248,9 +249,9 @@ private:
     {
         const auto check_argument_type = [this](const IDataType * arg) {
             if (!arg->isNumber())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
 
         check_argument_type(arguments.front().get());
@@ -470,7 +471,7 @@ private:
     {
         if (const auto left_arg_typed = checkAndGetColumn<ColumnVector<LeftType>>(left_arg))
         {
-            const auto right_arg = block.getByPosition(arguments[1]).column.get();
+            const auto * right_arg = block.getByPosition(arguments[1]).column.get();
 
             if (executeRight<LeftType, UInt8>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt16>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt64>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int8>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int16>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int64>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Float32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Float64>(block, result, left_arg_typed, right_arg))
             {
@@ -478,14 +479,14 @@ private:
             }
             else
             {
-                throw Exception{
-                    "Illegal column " + block.getByPosition(arguments[1]).column->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(
+                    fmt::format("Illegal column {} of second argument of function {}", block.getByPosition(arguments[1]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
             }
         }
         else if (const auto left_arg_typed = checkAndGetColumnConst<ColumnVector<LeftType>>(left_arg))
         {
-            const auto right_arg = block.getByPosition(arguments[1]).column.get();
+            const auto * right_arg = block.getByPosition(arguments[1]).column.get();
 
             if (executeRight<LeftType, UInt8>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt16>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, UInt64>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int8>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int16>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Int64>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Float32>(block, result, left_arg_typed, right_arg) || executeRight<LeftType, Float64>(block, result, left_arg_typed, right_arg))
             {
@@ -493,9 +494,9 @@ private:
             }
             else
             {
-                throw Exception{
-                    "Illegal column " + block.getByPosition(arguments[1]).column->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(
+                    fmt::format("Illegal column {} of second argument of function {}", block.getByPosition(arguments[1]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
             }
         }
 
@@ -504,13 +505,13 @@ private:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        const auto left_arg = block.getByPosition(arguments[0]).column.get();
+        const auto * left_arg = block.getByPosition(arguments[0]).column.get();
 
         if (!executeLeft<UInt8>(block, arguments, result, left_arg) && !executeLeft<UInt16>(block, arguments, result, left_arg) && !executeLeft<UInt32>(block, arguments, result, left_arg) && !executeLeft<UInt64>(block, arguments, result, left_arg) && !executeLeft<Int8>(block, arguments, result, left_arg) && !executeLeft<Int16>(block, arguments, result, left_arg) && !executeLeft<Int32>(block, arguments, result, left_arg) && !executeLeft<Int64>(block, arguments, result, left_arg) && !executeLeft<Float32>(block, arguments, result, left_arg) && !executeLeft<Float64>(block, arguments, result, left_arg))
         {
-            throw Exception{
-                "Illegal column " + left_arg->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", left_arg->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
