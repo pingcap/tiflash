@@ -196,7 +196,9 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
+# Due to ODR restriction and profiing bugs (https://llvm.discourse.group/t/segfault-in-libunwind-during-cpu-profiling/5806/2)
+# We keep runtime libs to be dynamically linked when LLVM toolchain is used
+if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -218,7 +220,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
 
-        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ c++ c++abi)
+        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ -lc++ -lc++abi)
         if (LIBCXX_PATH)
           link_directories ("${LIBCXX_PATH}/lib")
         endif()
@@ -226,7 +228,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     if (USE_LLVM_LIBUNWIND)
       set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
-      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind unwind)
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind -lunwind)
     endif ()
 
     if (USE_LLVM_COMPILER_RT)
@@ -234,11 +236,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
     endif ()
 
-    if (MAKE_STATIC_LIBRARIES)
-      link_libraries (-Wl,-Bstatic ${TIFLASH_LLVM_LINKAGE_FLAGS} -Wl,-Bdynamic)
-    else ()
-      link_libraries (${TIFLASH_LLVM_LINKAGE_FLAGS})
-    endif ()
+    link_libraries (-Wl,-Bdynamic ${TIFLASH_LLVM_LINKAGE_FLAGS})
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)

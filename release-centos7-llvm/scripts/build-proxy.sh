@@ -35,9 +35,9 @@ if [ -f /.dockerenv ]; then
 
     echo '#!/usr/bin/env bash' > /root/tiflash-link
     if [[ $(uname -m) == 'aarch64' ]]; then
-        echo '/usr/local/bin/clang -Wl,-Bstatic -lunwind -lc++abi /usr/local/lib/clang/13.0.0/lib/aarch64-unknown-linux-gnu/libclang_rt.builtins.a -Wl,-Bdynamic ${@//*gcc_s*}' >>  /root/tiflash-link
+        echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libunwind.so -l:libc++abi.so -l:libc++.so /usr/local/lib/clang/13.0.0/lib/aarch64-unknown-linux-gnu/libclang_rt.builtins.a ${@//*gcc_s*}' >> /root/tiflash-link
     else
-        echo '/usr/local/bin/clang -Wl,-Bstatic -lunwind -lc++abi /usr/local/lib/clang/13.0.0/lib/x86_64-unknown-linux-gnu/libclang_rt.builtins.a -Wl,-Bdynamic ${@//*gcc_s*}' >>  /root/tiflash-link
+        echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libunwind.so -l:libc++abi.so -l:libc++.so /usr/local/lib/clang/13.0.0/lib/x86_64-unknown-linux-gnu/libclang_rt.builtins.a ${@//*gcc_s*}' >> /root/tiflash-link
     fi
     chmod +x /root/tiflash-link
     sed -i -e 's/\/usr\/local\/bin\/clang/\/root\/tiflash-link/g' $HOME/.cargo/config

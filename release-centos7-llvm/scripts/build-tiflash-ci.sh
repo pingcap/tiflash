@@ -167,6 +167,9 @@ cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}/fla
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/"
+vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
+vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
+vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
 
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
