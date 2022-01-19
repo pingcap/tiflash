@@ -26,25 +26,6 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
     }
 }
 
-struct ReactorTrigger
-{
-    MPMCQueue<size_t> * queue;
-    size_t source_index;
-
-    ReactorTrigger(
-        MPMCQueue<size_t> * queue_,
-        size_t source_index_)
-        : queue(queue_)
-        , source_index(source_index_)
-    {
-    }
-
-    void trigger()
-    {
-        queue->push(source_index);
-    }
-};
-
 enum class AsyncRequestStage
 {
     NEED_INIT,
@@ -69,8 +50,9 @@ struct AsyncRequestStat : public UnaryCallback<bool>
     using AsyncReader = typename RPCContext::AsyncReader;
 
     std::shared_ptr<RPCContext> rpc_context;
-    const Request * request = nullptr;
-    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel = nullptr;
+    const Request * request; // won't be null
+    MPMCQueue<size_t> * notify_queue; // won't be null
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel; // won't be null
 
     String req_info;
     bool meet_error = false;
@@ -80,7 +62,6 @@ struct AsyncRequestStat : public UnaryCallback<bool>
     TimePoint start_waiting_retry_ts{Clock::duration::zero()};
     AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
 
-    ReactorTrigger trigger;
     std::shared_ptr<AsyncReader> reader;
     MPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
@@ -95,14 +76,19 @@ struct AsyncRequestStat : public UnaryCallback<bool>
         const LogWithPrefixPtr & log_)
         : rpc_context(context)
         , request(&req)
+        , notify_queue(queue)
         , msg_channel(msg_channel_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , trigger(queue, req.source_index)
         , log(getMPPTaskLog(log_, req_info))
     {
         packets.resize(BATCH_PACKET_COUNT);
         for (auto & packet : packets)
             packet = std::make_shared<MPPDataPacket>();
+    }
+
+    void notifyReactor()
+    {
+        notify_queue->push(request->source_index);
     }
 
     // execute will be called by RPC framework so it should be as light as possible.
@@ -113,18 +99,18 @@ struct AsyncRequestStat : public UnaryCallback<bool>
         case AsyncRequestStage::WAIT_MAKE_READER:
             if (!ok)
                 reader.reset();
-            trigger.trigger();
+            notifyReactor();
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
             if (!ok || read_packet_index == BATCH_PACKET_COUNT || packets[read_packet_index - 1]->has_error())
-                trigger.trigger();
+                notifyReactor();
             else
                 reader->read(packets[read_packet_index], this);
             break;
         case AsyncRequestStage::WAIT_FINISH:
-            trigger.trigger();
+            notifyReactor();
             break;
         default:
             __builtin_unreachable();
