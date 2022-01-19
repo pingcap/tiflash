@@ -101,6 +101,8 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
 
+    bool getDBIDByName(const String & database_name, DatabaseID * db_id);
+
     SchemaDiff getSchemaDiff(Int64 version);
 
     std::unordered_map<String, DatabaseID> getDatabases() { return databases; }

@@ -1,0 +1,230 @@
+#include <Debug/MockTiDB.h>
+#include <Debug/MockTiKV.h>
+#include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgNaturalDag.h>
+#include <Debug/dbgTools.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/CoprocessorHandler.h>
+#include <Interpreters/Context.h>
+#include <Poco/Base64Decoder.h>
+#include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
+#include <Poco/MemoryStream.h>
+#include <Poco/StreamCopier.h>
+#include <Storages/Transaction/TMTContext.h>
+
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
+
+static const String TABLE_IDS = "table_of_interest";
+static const String TABLE_DATA = "table_data";
+static const String TABLE_META = "meta";
+static const String TABLE_REGIONS = "regions";
+static const String REGION_ID = "id";
+static const String REGION_START = "start";
+static const String REGION_END = "end";
+static const String REGION_KEYVALUE_DATA = "pairs";
+static const String TIKV_KEY = "key";
+static const String TIKV_VALUE = "value";
+static const String REQ_RSP_DATA = "request_data";
+static const String REQ_TYPE = "type";
+static const String REQUEST = "request";
+static const String RESPONSE = "response";
+static const String DEFAULT_DATABASE_NAME = "test";
+static const uint64_t DEFAULT_REGION_VERSION = 0;
+static const uint64_t DEFAULT_REGION_CONF_VERSION = 0;
+
+
+void decodeBase64(const String & str, String & out)
+{
+    Poco::MemoryInputStream inputStream(str.data(), str.size());
+    Poco::Base64Decoder decoder(inputStream);
+    Poco::StreamCopier::copyToString(decoder, out);
+}
+
+String printAsBytes(const String & str)
+{
+    std::stringstream ss;
+    for (auto c : str)
+    {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+    }
+    return ss.str();
+}
+
+void NaturalDag::init()
+{
+    std::ifstream file(json_dag_path);
+    if (!file.is_open())
+        throw Exception("Failed to open file: " + json_dag_path, ErrorCodes::BAD_ARGUMENTS);
+
+    auto json_str = String((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(json_str);
+    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed parsing json file: " << json_dag_path);
+
+    auto obj = result.extract<JSONObjectPtr>();
+    loadTables(obj);
+    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading table data!");
+    loadReqAndRsp(obj);
+    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading req and rsp data!");
+}
+
+void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
+{
+    auto req_data_json = obj->getArray(REQ_RSP_DATA);
+    for (auto & req_data_json_obj : *req_data_json)
+    {
+        auto req_data_obj = req_data_json_obj.extract<JSONObjectPtr>();
+        auto req_type = req_data_obj->getValue<uint16_t>(REQ_TYPE);
+        String request;
+        decodeBase64(req_data_obj->getValue<String>(REQUEST), request);
+        coprocessor::Request cop_request;
+        if (!cop_request.ParseFromString(request))
+            throw Exception("Incorrect request data!", ErrorCodes::BAD_ARGUMENTS);
+
+        String response;
+        decodeBase64(req_data_obj->getValue<String>(RESPONSE), response);
+        coprocessor::Response cop_response;
+        if (!cop_response.ParseFromString(response))
+            throw Exception("Incorrect response data!", ErrorCodes::BAD_ARGUMENTS);
+        req_rsp.emplace_back(std::make_tuple(req_type, std::move(cop_request), std::move(cop_response)));
+    }
+}
+void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
+{
+    auto toi_json = obj->getArray(TABLE_IDS);
+    for (auto it = toi_json->begin(); it != toi_json->end(); ++it)
+    {
+        table_ids.push_back(it->extract<TableID>());
+    }
+
+    auto td_json = obj->getObject(TABLE_DATA);
+    for (auto id : table_ids)
+    {
+        auto table = LoadedTableData();
+        table.id = id;
+        auto tbl_json = td_json->getObject(std::to_string(id));
+        auto meta_json = tbl_json->getObject(TABLE_META);
+        table.meta = TiDB::TableInfo(meta_json);
+        auto regions_json = tbl_json->getArray(TABLE_REGIONS);
+        for (auto & region_json : *regions_json)
+        {
+            auto region = LoadedRegionInfo();
+            loadRegion(region_json, region);
+            table.regions.push_back(std::move(region));
+        }
+        tables.emplace(id, std::move(table));
+    }
+}
+
+void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::LoadedRegionInfo & region) const
+{
+    auto region_obj = region_json.extract<JSONObjectPtr>();
+    region.id = region_obj->getValue<uint64_t>(REGION_ID);
+    region.version = DEFAULT_REGION_VERSION;
+    region.conf_ver = DEFAULT_REGION_CONF_VERSION;
+    String region_start;
+    decodeBase64(region_obj->getValue<String>(REGION_START), region_start);
+    auto region_start_key = RecordKVFormat::encodeAsTiKVKey(region_start);
+    region.start = std::move(region_start_key);
+
+    String region_end;
+    decodeBase64(region_obj->getValue<String>(REGION_END), region_end);
+    auto region_end_key = RecordKVFormat::encodeAsTiKVKey(region_end);
+    region.end = std::move(region_end_key);
+    LOG_INFO(log, __PRETTY_FUNCTION__ << ": RegionID: " << region.id << ", RegionStart: " << printAsBytes(region.start) << ", RegionEnd: " << printAsBytes(region.end));
+
+    auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
+    for (auto & pair_json : *pairs_json)
+    {
+        auto pair_obj = pair_json.extract<JSONObjectPtr>();
+        String key;
+        decodeBase64(pair_obj->getValue<String>(TIKV_KEY), key);
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key); // encode raw key
+        String value;
+        decodeBase64(pair_obj->getValue<String>(TIKV_VALUE), value);
+        TiKVValue tikv_value(std::move(value)); // use value directly, no encoding needed
+        region.pairs.push_back(std::make_pair(std::move(tikv_key), std::move(tikv_value)));
+    }
+}
+
+const String & NaturalDag::getDataBaseName() const
+{
+    return DEFAULT_DATABASE_NAME;
+}
+
+void NaturalDag::buildTables(Context & context)
+{
+    using ClientPtr = pingcap::pd::ClientPtr;
+    TMTContext & tmt = context.getTMTContext();
+    ClientPtr pd_client = tmt.getPDClient();
+    auto schema_syncer = tmt.getSchemaSyncer();
+
+    String db_name(getDataBaseName());
+    buildDataBase(context, schema_syncer, db_name);
+
+    for (auto & it : tables)
+    {
+        auto & table = it.second;
+        auto meta = table.meta;
+        MockTiDB::instance().addTable(db_name, std::move(meta));
+        schema_syncer->syncSchemas(context);
+        for (auto & region : table.regions)
+        {
+            metapb::Region region_pb;
+            metapb::Peer peer;
+            region_pb.set_id(region.id);
+            region_pb.set_start_key(region.start.getStr());
+            region_pb.set_end_key(region.end.getStr());
+            RegionMeta region_meta(std::move(peer), std::move(region_pb), initialApplyState());
+            auto raft_index = RAFT_INIT_LOG_INDEX;
+            region_meta.setApplied(raft_index, RAFT_INIT_LOG_TERM);
+            RegionPtr region_ptr = std::make_shared<Region>(std::move(region_meta));
+            tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region_ptr, nullptr, 0, tmt);
+
+            auto & pairs = region.pairs;
+            for (auto & pair : pairs)
+            {
+                auto & key = pair.first;
+                auto & value = pair.second;
+                UInt64 prewrite_ts = pd_client->getTS();
+                UInt64 commit_ts = pd_client->getTS();
+                raft_cmdpb::RaftCmdRequest request;
+                RegionBench::addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, false);
+                tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region.id, MockTiKV::instance().getRaftIndex(region.id), MockTiKV::instance().getRaftTerm(region.id), tmt);
+            }
+        }
+    }
+}
+
+void NaturalDag::buildDataBase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const
+{
+    DatabaseID db_id;
+    if (MockTiDB::instance().getDBIDByName(db_name, &db_id))
+    {
+        MockTiDB::instance().dropDB(context, db_name, true);
+    }
+    MockTiDB::instance().newDataBase(db_name);
+    schema_syncer->syncSchemas(context);
+}
+
+void NaturalDag::build(Context & context)
+{
+    buildTables(context);
+}
+
+void NaturalDag::clean(Context & context)
+{
+    String db_name(getDataBaseName());
+    MockTiDB::instance().dropDB(context, db_name, true);
+}
+
+} // namespace DB

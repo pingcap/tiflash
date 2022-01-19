@@ -551,6 +551,19 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
     return db_ptr;
 }
 
+bool MockTiDB::getDBIDByName(const String & database_name, DatabaseID * db_id)
+{
+    for (auto it = databases.begin(); it != databases.end(); it++)
+    {
+        if (it->first == database_name)
+        {
+            *db_id = it->second;
+            return true;
+        }
+    }
+    return false;
+}
+
 SchemaDiff MockTiDB::getSchemaDiff(Int64 version_)
 {
     return version_diff[version_];
