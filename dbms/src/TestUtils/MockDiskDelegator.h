@@ -58,6 +58,14 @@ public:
         return 0;
     }
 
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_free*/,
+        const String & /*pf_parent_path*/)
+    {
+        return 0;
+    }
+
 private:
     String path;
 };
@@ -106,6 +114,14 @@ public:
         size_t /*size_to_add*/,
         const String & /*pf_parent_path*/,
         bool /*need_insert_location*/)
+    {
+        return 0;
+    }
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_free*/,
+        const String & /*pf_parent_path*/)
     {
         return 0;
     }

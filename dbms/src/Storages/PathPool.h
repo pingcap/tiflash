@@ -131,6 +131,12 @@ public:
         bool need_insert_location)
         = 0;
 
+    virtual size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path)
+        = 0;
+
     virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
 
     virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) = 0;
@@ -157,6 +163,11 @@ public:
         size_t size_to_add,
         const String & pf_parent_path,
         bool need_insert_location) override;
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
@@ -192,6 +203,11 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
+
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
     void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
@@ -219,6 +235,11 @@ public:
         size_t size_to_add,
         const String & pf_parent_path,
         bool need_insert_location) override;
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 

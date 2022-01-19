@@ -45,6 +45,17 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
 {
 }
 
+BlobStore::BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
+    : delegator(delegator_)
+    , file_provider(file_provider_)
+    , config(config_)
+    , log(&Poco::Logger::get("BlobStore"))
+    , blob_stats(log, config_)
+    , cached_files(config.cached_fd_size)
+{
+
+}
+
 void BlobStore::restore(const CollapsingPageDirectory & entries)
 {
     blob_stats.restore(entries);
@@ -675,14 +686,35 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 {
-    return path + "/blobfile_" + DB::toString(blob_id);
+    if (!path.empty())
+    {
+        return path + "/blobfile_" + DB::toString(blob_id);
+    }
+
+    PageFileIdAndLevel id_lvl;
+    id_lvl.first = blob_id;
+    id_lvl.second = 0;
+
+    String parent_path;
+
+    if (blobfile_ids.find(blob_id) == blobfile_ids.end())
+    {
+        blobfile_ids[blob_id] = 1;
+        parent_path = delegator->choosePath(id_lvl);
+    }
+    else
+    {
+        parent_path = delegator->getPageFilePath(id_lvl);
+    }
+
+    return parent_path + "/blobfile_" + DB::toString(blob_id);
 }
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
-                       })
+    return cached_file.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
+                          return std::make_shared<BlobFile>(getBlobFilePath(blob_id), blob_id, file_provider, delegator);
+                      })
         .first;
 }
 

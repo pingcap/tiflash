@@ -7,6 +7,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/PathPool.h>
 
 #include <mutex>
 
@@ -172,6 +173,8 @@ public:
 
     void restore(const CollapsingPageDirectory & entries);
 
+    BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+
     std::vector<BlobFileId> getGCStats();
 
     PageEntriesEdit gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
@@ -223,13 +226,14 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id) const;
+    String getBlobFilePath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    PSDiskDelegatorPtr delegator;
 
     FileProviderPtr file_provider;
     String path{};
@@ -240,6 +244,8 @@ private:
     BlobStats blob_stats;
 
     DB::LRUCache<BlobFileId, BlobFile> cached_files;
+    // TBD: replace it with stat_maps
+    std::map<BlobFileId, int> blobfile_ids;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 

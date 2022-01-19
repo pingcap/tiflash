@@ -12,9 +12,15 @@ extern const char exception_before_page_file_write_sync[];
 namespace PS::V3
 {
 BlobFile::BlobFile(String path_,
-                   FileProviderPtr file_provider_)
-    : file_provider{file_provider_}
+                   BlobFileId blob_id_,
+                   FileProviderPtr file_provider_,
+                   PSDiskDelegatorPtr delegator_,
+                   bool truncate_if_exists)
+    : blob_id(blob_id_)
+    , file_provider{file_provider_}
+    , delegator(delegator_)
     , path(path_)
+    , file_size(0)
 {
     // TODO: support encryption file
     wrfile = file_provider->newWriteReadableFile(
@@ -63,13 +69,29 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
     PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, false);
 #endif
     PageUtil::syncFile(wrfile);
+
+    if (delegator != nullptr && offset + size > file_size)
+    {
+        delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
+                                       offset + size - file_size,
+                                       path,
+                                       true);
+        file_size = offset + size;
+    }
 }
 
 void BlobFile::truncate(size_t size)
 {
     PageUtil::ftruncateFile(wrfile, size);
+    if (delegator != nullptr)
+    {
+        assert(size < file_size);
+        delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
+        file_size = size;
+    }
 }
 
+// TBD : when blobfile del , call delegator method
 void BlobFile::remove()
 {
     if (!wrfile->isClosed())

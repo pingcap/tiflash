@@ -536,6 +536,38 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
     return index;
 }
 
+size_t PSDiskDelegatorMulti::freePageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_free,
+    const String & pf_parent_path)
+{
+    // Get a normalized path without `path_prefix` and trailing '/'
+    String upper_path = removeTrailingSlash(Poco::Path(pf_parent_path).parent().toString());
+    UInt32 index = UINT32_MAX;
+    for (size_t i = 0; i < pool.latest_path_infos.size(); i++)
+    {
+        if (pool.latest_path_infos[i].path == upper_path)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (unlikely(index == UINT32_MAX))
+    {
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
+    }
+
+    if (page_path_map.find(id_lvl) == page_path_map.end())
+    {
+        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+    }
+
+    // update global used size
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
+    return 0;
+}
+
 String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
@@ -601,6 +633,18 @@ size_t PSDiskDelegatorSingle::addPageFileUsedSize(
     // In this case, inserting to page_path_map seems useless.
     // Simply add used size for global capacity is OK.
     pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
+    return 0;
+}
+
+
+size_t PSDiskDelegatorSingle::freePageFileUsedSize(
+    const PageFileIdAndLevel & /*id_lvl*/,
+    size_t size_to_free,
+    const String & pf_parent_path)
+{
+    // In this case, inserting to page_path_map seems useless.
+    // Simply add used size for global capacity is OK.
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
     return 0;
 }
 
@@ -691,6 +735,37 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
 
     // update global used size
     pool.global_capacity->addUsedSize(upper_path, size_to_add);
+    return index;
+}
+
+size_t PSDiskDelegatorRaft::freePageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_free,
+    const String & pf_parent_path)
+{
+    String upper_path = getNormalizedPath(pf_parent_path);
+    UInt32 index = UINT32_MAX;
+    for (size_t i = 0; i < raft_path_infos.size(); i++)
+    {
+        if (raft_path_infos[i].path == upper_path)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (unlikely(index == UINT32_MAX))
+    {
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
+    }
+
+    if (page_path_map.find(id_lvl) == page_path_map.end())
+    {
+        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+    }
+
+    // update global used size
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
     return index;
 }
 
