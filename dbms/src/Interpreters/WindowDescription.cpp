@@ -9,38 +9,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 }
 
-std::string WindowFunctionDescription::dump() const
-{
-    WriteBufferFromOwnString ss;
-
-    ss << "window function '" << column_name << "\n";
-    ss << "function node " << function_node->dumpTree() << "\n";
-    ss << "aggregate function '" << aggregate_function->getName() << "'\n";
-    if (!function_parameters.empty())
-    {
-        ss << "parameters " << toString(function_parameters) << "\n";
-    }
-
-    return ss.str();
-}
-
-std::string WindowDescription::dump() const
-{
-    WriteBufferFromOwnString ss;
-
-    ss << "window '" << window_name << "'\n";
-    ss << "partition_by " << dumpSortDescription(partition_by) << "\n";
-    ss << "order_by " << dumpSortDescription(order_by) << "\n";
-    ss << "full_sort_description " << dumpSortDescription(full_sort_description) << "\n";
-
-    return ss.str();
-}
 
 std::string WindowFrame::toString() const
 {
@@ -89,7 +62,7 @@ void WindowFrame::toString(WriteBuffer & buf) const
 
 std::string WindowFrame::getFrameTypeName(FrameType type) const
 {
-    switch(type)
+    switch (type)
     {
     case FrameType::Rows:
         return "rows";
@@ -97,7 +70,7 @@ std::string WindowFrame::getFrameTypeName(FrameType type) const
         return "groups";
     case FrameType::Range:
         return "range";
-    default :
+    default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid frame type", type);
     }
 }
@@ -196,8 +169,10 @@ void WindowFrame::checkValid() const
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
                             "Frame start offset {} {} does not precede the frame end offset {} {}",
-                            begin_offset.toString(), begin_preceding ? "PRECEDING" : "FOLLOWING",
-                            end_offset.toString(), end_preceding ? "PRECEDING" : "FOLLOWING");
+                            begin_offset.toString(),
+                            begin_preceding ? "PRECEDING" : "FOLLOWING",
+                            end_offset.toString(),
+                            end_preceding ? "PRECEDING" : "FOLLOWING");
         }
         return;
     }
@@ -223,4 +198,45 @@ void WindowDescription::checkValid() const
     }
 }
 
+WindowFrame::BoundaryType getBoundaryTypeFromTipb(tipb::BoundaryType type)
+{
+    switch (type)
+    {
+    case tipb::BoundaryType::Current:
+        return WindowFrame::BoundaryType::Current;
+    case tipb::BoundaryType::Offset:
+        return WindowFrame::BoundaryType::Offset;
+    case tipb::BoundaryType::Unbounded:
+        return WindowFrame::BoundaryType::Unbounded;
+    }
+    throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Unknowed boundary type {}",
+                    type);
+}
+
+WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameMode type)
+{
+    switch (type)
+    {
+    case tipb::WindowFrameMode::Range:
+        return WindowFrame::FrameType::Range;
+    case tipb::WindowFrameMode::Rows:
+        return WindowFrame::FrameType::Rows;
+    }
+    throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Unknowed frame type {}",
+                    type);
+}
+
+void WindowDescription::setWindowFrame(tipb::WindowFrame frame_)
+{
+    frame.type = getFrameTypeFromTipb(frame_.window_frame_mode());
+    frame.begin_offset = frame_.begin_offset();
+    frame.begin_type = getBoundaryTypeFromTipb(frame_.begin_type());
+    frame.begin_preceding = frame_.begin_preceding();
+    frame.end_offset = frame_.end_offset();
+    frame.end_type = getBoundaryTypeFromTipb(frame_.end_type());
+    frame.end_preceding = frame_.end_preceding();
+    frame.is_default = false;
+}
 }

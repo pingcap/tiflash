@@ -15,7 +15,18 @@ namespace DB
 class WindowBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    AggregateDescriptions aggregate_descriptions;
+    WindowDescription window_description;
+    WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_) : window_description(window_description_)
+    {
+        children.push_back(input);
+    }
+
+    String getName() const override { return "Window"; }
+
+    Block getHeader() const override;
+
+protected:
+    Block readImpl() override;
 
 
 };

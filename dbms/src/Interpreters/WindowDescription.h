@@ -3,10 +3,13 @@
 #include <Core/Field.h>
 #include <Parsers/IAST.h>
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <AggregateFunctions/WindowFunction.h>
+#include <Interpreters/AggregateDescription.h>
 #include <Core/SortDescription.h>
 #include <DataTypes/IDataType.h>
 #include <Core/Names.h>
 #include <Core/Types.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -15,15 +18,15 @@ class ASTFunction;
 
 struct WindowFunctionDescription
 {
-    std::string column_name;
-    const ASTFunction * function_node = nullptr;
-    AggregateFunctionPtr aggregate_function;
-    Array function_parameters;
-    DataTypes argument_types;
+    WindowFunction * window_function = nullptr;
+    Array parameters;
+    ColumnNumbers arguments;
     Names argument_names;
+    std::string column_name;
 
-    std::string dump() const;
 };
+
+using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
 
 struct WindowFrame
 {
@@ -81,6 +84,8 @@ struct WindowDescription
 {
     std::string window_name;
 
+    ExpressionActionsPtr before_window;
+
     // We don't care about the particular order of keys for PARTITION BY, only
     // that they are sorted. For now we always require ASC, but we could be more
     // flexible and match any direction, or even different order of columns.
@@ -95,16 +100,17 @@ struct WindowDescription
     WindowFrame frame;
 
     // The window functions that are calculated for this window.
-    std::vector<WindowFunctionDescription> window_functions;
+    WindowFunctionDescriptions window_functions_descriptions;
 
+    AggregateDescriptions aggregate_descriptions;
 
     std::string dump() const;
 
     void checkValid() const;
+
+    void setWindowFrame(tipb::WindowFrame frame);
 };
 
-using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
-
-using WindowDescriptions = std::unordered_map<std::string, WindowDescription>;
+using WindowDescriptions = std::vector<WindowDescription>;
 
 }

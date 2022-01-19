@@ -10,6 +10,7 @@
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/WindowDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/Transaction/TMTStorages.h>
@@ -35,6 +36,8 @@ class DAGExpressionAnalyzer : private boost::noncopyable
 public:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
+    bool after_window;
+    
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
 
@@ -50,6 +53,10 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
+    std::vector<NameAndTypePair> appendWindowOrderBy(
+        ExpressionActionsChain & chain,
+        const tipb::WindowSort & window_sort);
+
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
@@ -59,6 +66,10 @@ public:
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
+
+    WindowDescription appendWindow(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window);
 
     void appendAggSelect(
         ExpressionActionsChain & chain,
@@ -196,6 +207,8 @@ private:
     std::vector<NameAndTypePair> source_columns;
     // all columns after aggregation
     std::vector<NameAndTypePair> aggregated_columns;
+    // all columns after window
+    std::vector<NameAndTypePair> after_window_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;
     const Context & context;

@@ -774,6 +774,96 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
     return {aggregation_keys, collators, aggregate_descriptions};
 }
 
+WindowDescription DAGExpressionAnalyzer::appendWindow(
+    ExpressionActionsChain & chain,
+    const tipb::Window & window)
+{
+    WindowDescription window_description;
+//    window_description.partition_by = window.partition_by();
+
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & step = chain.steps.back();
+
+    if (window.partition_by_size() == 0 && window.agg_func_size() == 0 && window.window_func_size() == 0)
+    {
+        //should not reach here
+        throw TiFlashException("window executor without group by/agg exprs/window exprs", Errors::Coprocessor::BadRequest);
+    }
+
+    if (window.window_func_size() != 0 && window.agg_func_size() != 0)
+    {
+        throw TiFlashException("can not have window and agg functions together in one window.", Errors::Coprocessor::BadRequest);
+    }
+
+    // TODO: extract into function
+    for (const tipb::Expr & expr : window.window_func())
+    {
+        WindowFunctionDescription window_function_description;
+        String window_func_name = getWindowFunctionName(expr);
+        auto child_size = expr.children_size();
+        DataTypes types(child_size);
+        window_function_description.argument_names.resize(child_size);
+        TiDB::TiDBCollators arg_collators;
+        for (Int32 i = 0; i < child_size; i++)
+        {
+            String arg_name = getActions(expr.children(i), step.actions);
+            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+            if (removeNullable(types[i])->isString())
+                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+            else
+                arg_collators.push_back(nullptr);
+            window_function_description.argument_names[i] = arg_name;
+            step.required_output.push_back(arg_name);
+        }
+        String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
+
+        window_function_description.column_name = func_string;
+        window_function_description.window_function = dynamic_cast<WindowFunction *>(static_cast<IAggregateFunction *>(AggregateFunctionFactory::instance().get(window_func_name, types, {}, 0, window.partition_by_size() == 0).get()));
+
+        DataTypePtr result_type = window_function_description.window_function->getReturnType();
+
+        window_description.window_functions_descriptions.push_back(window_function_description);
+
+        after_window_columns.emplace_back(func_string, result_type);
+    }
+
+    for (const tipb::Expr & expr : window.agg_func())
+    {
+        AggregateDescription aggregate_description;
+        String agg_func_name = getAggFunctionName(expr);
+        auto child_size = expr.children_size();
+        DataTypes types(child_size);
+        aggregate_description.argument_names.resize(child_size);
+        TiDB::TiDBCollators arg_collators;
+        for (Int32 i = 0; i < child_size; i++)
+        {
+            String arg_name = getActions(expr.children(i), step.actions);
+            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+            aggregate_description.argument_names[i] = arg_name;
+            if (removeNullable(types[i])->isString())
+                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+            else
+                arg_collators.push_back(nullptr);
+            step.required_output.push_back(arg_name);
+        }
+        String func_string = genFuncString(agg_func_name, aggregate_description.argument_names, arg_collators);
+
+        aggregate_description.column_name = func_string;
+        aggregate_description.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, window.partition_by_size() == 0);
+
+        DataTypePtr result_type = aggregate_description.function->getReturnType();
+        window_description.aggregate_descriptions.push_back(aggregate_description);
+        after_window_columns.emplace_back(func_string, result_type);
+    }
+
+    if (window.has_window_frame())
+    {
+        window_description.setWindowFrame(window.window_frame());
+    }
+
+    return window_description;
+}
+
 bool isUInt8Type(const DataTypePtr & type)
 {
     auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
@@ -880,6 +970,30 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
 
+std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
+    ExpressionActionsChain & chain,
+    const tipb::WindowSort & window_sort)
+{
+    if (window_sort.order_by_size() == 0)
+    {
+        throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
+    }
+    std::vector<NameAndTypePair> order_columns;
+    order_columns.reserve(window_sort.order_by_size());
+
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & step = chain.steps.back();
+
+    for (const tipb::ByItem & order_by : window_sort.order_by())
+    {
+        String name = getActions(order_by.expr(), step.actions);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
+        step.required_output.push_back(name);
+    }
+    return order_columns;
+}
+
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
     const tipb::TopN & topN)
@@ -905,7 +1019,7 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
 {
-    return after_agg ? aggregated_columns : source_columns;
+    return after_agg ? aggregated_columns : after_window ? after_window_columns : source_columns;
 }
 
 tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)

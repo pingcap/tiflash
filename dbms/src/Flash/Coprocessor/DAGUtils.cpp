@@ -30,6 +30,14 @@ extern const String uniq_raw_res_name;
 
 namespace
 {
+const std::unordered_map<tipb::ExprType, String> window_func_map({
+    {tipb::ExprType::Rank, "rank"},
+    {tipb::ExprType::Dense_rank, "dense_rank"},
+    {tipb::ExprType::Row_number, "row_number"},
+    {tipb::ExprType::Lag_in_frame, "lag_in_frame"},
+    {tipb::ExprType::Lead_in_frame, "lead_in_frame"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -721,6 +729,18 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         "{}(distinct={}) is not supported.",
         tipb::ExprType_Name(expr.tp()),
         expr.has_distinct() ? "true" : "false");
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+}
+
+const String & getWindowFunctionName(const tipb::Expr & expr)
+{
+    auto it = window_func_map.find(expr.tp());
+    if (it != distinct_agg_func_map.end())
+        return it->second;
+
+    const auto errmsg = fmt::format(
+        "{} is not supported.",
+        tipb::ExprType_Name(expr.tp()));
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 

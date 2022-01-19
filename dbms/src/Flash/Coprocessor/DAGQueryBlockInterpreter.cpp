@@ -11,6 +11,7 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -84,6 +85,11 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
+
+    Names partition_keys;
+    std::unordered_map<String, WindowDescription> window_description_map;
+    std::unordered_map<String, SortDescription> window_sort_description_map;
+    std::vector<String> window_op_list;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -177,15 +183,61 @@ AnalysisResult analyzeExpressions(
             chain.addStep();
         }
     }
-    // Or TopN, not both.
+    // Or TopN
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
 
-    if (query_block.window && query_block.window->tp() == tipb::ExecType::TypeWindow)
+    // Or window, not both.
+    if (!query_block.window_op_list.empty())
     {
+        // window op list in query_block like : window4 -> window3 -> sort2 -> window2 -> window1 -> sort1
+        // so we need reverse the list to handle each op
+        for (auto reverse_iter = query_block.window_op_list.rbegin(); reverse_iter != query_block.window_op_list.rend(); ++reverse_iter)
+        {
+            res.window_op_list.push_back(*reverse_iter);
+        }
+        String name;
+        for (auto op_name : res.window_op_list)
+        {
+            auto iter = query_block.windows.find(op_name);
+            if (iter != query_block.windows.end())
+            {
+                name = iter->first;
+                auto & window = iter->second;
+                if (window && window->tp() == tipb::ExecType::TypeWindow)
+                {
+                    WindowDescription window_description = analyzer.appendWindow(
+                        chain,
+                        window->window());
+                    window_description.before_window = chain.getLastActions();
+                    res.window_description_map.insert({name, window_description});
+                    continue;
+                }
+            }
 
+            iter = query_block.window_sorts.find(op_name);
+            if (iter != query_block.window_sorts.end())
+            {
+                name = iter->first;
+                auto & window_sort = iter->second;
+                std::vector<bool> sort_orders;
+                if (window_sort && window_sort->tp() == tipb::ExecType::TypeWindowSort)
+                {
+                    std::vector<NameAndTypePair> columns= analyzer.appendWindowOrderBy(chain, window_sort->window_sort());
+                    res.window_sort_description_map.insert({name, getSortDescription(columns, window_sort->window_sort().order_by())});
+                    continue;
+                }
+            }
+
+            // should not reach here
+            throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
+        }
+
+        analyzer.after_window = true;
+        chain.finalize();
+        chain.clear();
     }
 
     // Append final project results if needed.
@@ -644,6 +696,57 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, taskLogger()); });
 }
 
+void DAGQueryBlockInterpreter::executeWindow(
+    DAGPipeline & pipeline,
+    WindowDescription & window_description)
+{
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, taskLogger()); });
+    Block header = pipeline.firstStream()->getHeader();
+
+    // TODO: extract into function
+    for (auto & window_descr : window_description.window_functions_descriptions)
+    {
+        if (window_descr.arguments.empty())
+        {
+            for (const auto & name : window_descr.argument_names)
+            {
+                window_descr.arguments.push_back(header.getPositionByName(name));
+            }
+        }
+    }
+
+    for (auto & agg_descr : window_description.aggregate_descriptions)
+    {
+        if (agg_descr.arguments.empty())
+        {
+            for (const auto & name : agg_descr.argument_names)
+            {
+                agg_descr.arguments.push_back(header.getPositionByName(name));
+            }
+        }
+    }
+
+    if (pipeline.streams.size() == 1)
+    {
+        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
+        BlockInputStreams inputs;
+        if (!pipeline.streams.empty())
+            inputs.push_back(pipeline.firstStream());
+        else
+            pipeline.streams.resize(1);
+        if (stream_with_non_joined_data)
+            inputs.push_back(stream_with_non_joined_data);
+
+        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs, taskLogger()), window_description);
+        recordProfileStreams(pipeline, window_description.window_name);
+
+    }
+    else
+    {
+        throw TiFlashException("window block must have 1 input stream", Errors::Coprocessor::BadRequest);
+    }
+}
+
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expression_actions_ptr,
@@ -738,6 +841,38 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, taskLogger()); });
     }
+}
+
+void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription order_descr)
+{
+    const Settings & settings = context.getSettingsRef();
+
+    Int64 limit = 0;
+
+    pipeline.transform([&](auto & stream) {
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), limit);
+
+        /// Limits on sorting
+        IProfilingBlockInputStream::LocalLimits limits;
+        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
+        sorting_stream->setLimits(limits);
+
+        stream = sorting_stream;
+    });
+
+    /// If there are several streams, we merge them into one
+    executeUnion(pipeline, max_streams, taskLogger());
+
+    /// Merge the sorted blocks.
+    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+        pipeline.firstStream(),
+        order_descr,
+        settings.max_block_size,
+        limit,
+        settings.max_bytes_before_external_sort,
+        context.getTemporaryPath(),
+        taskLogger());
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
@@ -985,6 +1120,34 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block.qb_column_prefix,
         pipeline.streams.size());
     dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
+
+    if (!res.window_op_list.empty())
+    {
+        String name;
+        for (auto op_name : res.window_op_list)
+        {
+            auto window_iter = res.window_description_map.find(op_name);
+            if (window_iter != res.window_description_map.end())
+            {
+                name = window_iter->first;
+                WindowDescription window_description = window_iter->second;
+                executeWindow(pipeline, window_description);
+                continue;
+            }
+
+            auto sort_iter = res.window_sort_description_map.find(op_name);
+            if (sort_iter != res.window_sort_description_map.end())
+            {
+                name = sort_iter->first;
+                SortDescription window_sort_description = sort_iter->second;
+                executeWindowOrder(pipeline, window_sort_description);
+                continue;
+            }
+
+            // should not reach here
+            throw TiFlashException("incorrect window or sort name" + op_name, Errors::Coprocessor::BadRequest);
+        }
+    }
 
     if (res.before_aggregation)
     {
