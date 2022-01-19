@@ -76,6 +76,3 @@
 	path = contrib/protobuf
 	url = https://github.com/protocolbuffers/protobuf/
   branch = v3.8.0
-[submodule "abseil-cpp"]
-	path = abseil-cpp
-	url = https://github.com/abseil/abseil-cpp
