@@ -713,6 +713,32 @@ void BlobStore::BlobStats::eraseStat(const BlobStatPtr & stat)
     stats_map.remove(stat);
 }
 
+void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id)
+{
+    BlobStatPtr stat = nullptr;
+    bool found = false;
+
+    for (auto & stat_in_map : stats_map)
+    {
+        stat = stat_in_map;
+        if (stat->id == blob_file_id)
+        {
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        LOG_FMT_ERROR(log, "No exist BlobStat [BlobFileId={}]", blob_file_id);
+        return;
+    }
+
+    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
+
+    eraseStat(stat);
+}
+
 BlobFileId BlobStore::BlobStats::chooseNewStat()
 {
     /**

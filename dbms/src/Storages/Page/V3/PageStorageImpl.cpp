@@ -93,7 +93,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
     catch (DB::Exception & e)
     {
         LOG_FMT_WARNING(log, "{}", e.message());
-        return {}; // return invalid PageEntry
+        return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
     }
 }
 

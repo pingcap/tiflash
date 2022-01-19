@@ -116,6 +116,8 @@ public:
 
         void eraseStat(const BlobStatPtr & stat);
 
+        void eraseStat(const BlobFileId blob_file_id);
+
         void changeToReadOnly(BlobFileId blob_file_id);
 
         /**
@@ -149,7 +151,7 @@ public:
         Poco::Logger * log;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 1;
+        BlobFileId roll_id = 0;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         std::mutex lock_stats;

@@ -708,4 +708,57 @@ TEST_F(BlobStoreTest, GC)
     ASSERT_EQ(file0.getSize(), file1.getSize());
 }
 
+TEST_F(BlobStoreTest, GCMigirateBigData)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
+    size_t buff_nums = 20;
+    size_t buff_size = 20;
+
+    BlobStore::Config config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 100;
+    auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
+    char c_buff[buff_size * buff_nums];
+
+    WriteBatch wb;
+
+    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
+
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        VersionedEntries versioned_entries;
+        versioned_entries.emplace_back(1, records[0].entry);
+        if (gc_context.find(records[0].entry.file_id) == gc_context.end())
+        {
+            PageIdAndVersionedEntries versioned_pageid_entries;
+            versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
+            gc_context[records[0].entry.file_id] = std::move(versioned_pageid_entries);
+        }
+        else
+        {
+            gc_context[records[0].entry.file_id].emplace_back(std::make_pair(page_id, versioned_entries));
+        }
+
+        page_id++;
+        wb.clear();
+    }
+
+    const auto & copy_list = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    ASSERT_EQ(copy_list.size(), buff_nums);
+}
+CATCH
+
 } // namespace DB::PS::V3::tests
