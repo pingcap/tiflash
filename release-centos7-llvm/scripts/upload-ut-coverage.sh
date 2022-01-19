@@ -19,9 +19,9 @@ llvm-cov export \
     --ignore-filename-regex "/usr/include/.*" \
     --ignore-filename-regex "/usr/local/.*" \
     --ignore-filename-regex "/usr/lib/.*" \
-    --ignore-filename-regex "${SRCPATH}/contrib/.*" \
-    --ignore-filename-regex "${SRCPATH}/dbms/src/Debug/.*" \
-    --ignore-filename-regex "${SRCPATH}/dbms/src/Client/.*" \
+    --ignore-filename-regex ".*/contrib/.*" \
+    --ignore-filename-regex ".*/dbms/src/Debug/.*" \
+    --ignore-filename-regex ".*/dbms/src/Client/.*" \
     > /tiflash/profile/lcov.info
 
 mkdir -p /tiflash/report
@@ -52,9 +52,9 @@ llvm-cov report \
     --ignore-filename-regex "/usr/include/.*" \
     --ignore-filename-regex "/usr/local/.*" \
     --ignore-filename-regex "/usr/lib/.*" \
-    --ignore-filename-regex "${SRCPATH}/contrib/.*" \
-    --ignore-filename-regex "${SRCPATH}/dbms/src/Debug/.*" \
-    --ignore-filename-regex "${SRCPATH}/dbms/src/Client/.*" \
+    --ignore-filename-regex ".*/contrib/.*" \
+    --ignore-filename-regex ".*/dbms/src/Debug/.*" \
+    --ignore-filename-regex ".*/dbms/src/Client/.*" \
     /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata | \
     grep -E "^(TOTAL|Filename)" | \
     cut -d" " -f2- | sed -e 's/^[[:space:]]*//' | sed -e 's/Missed\ /Missed/g' | column -t >> /tiflash/profile/diff-coverage
