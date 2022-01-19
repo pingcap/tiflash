@@ -65,14 +65,17 @@
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
 	url = https://github.com/google/benchmark
-[submodule "contrib/protobuf"]
-	path = contrib/protobuf
-	url = https://github.com/ClickHouse-Extras/protobuf.git
-	branch = v3.13.0.1
-[submodule "contrib/abseil-cpp"]
-	path = contrib/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp.git
 [submodule "contrib/grpc"]
 	path = contrib/grpc
-	url = https://github.com/ClickHouse-Extras/grpc.git
-	branch = v1.33.2
+	url = https://github.com/grpc/grpc
+ 	branch = v1.26.0
+# [submodule "contrib/abseil-cpp"]
+# 	path = contrib/abseil-cpp
+# 	url = https://github.com/abseil/abseil-cpp.git
+[submodule "contrib/protobuf"]
+	path = contrib/protobuf
+	url = https://github.com/protocolbuffers/protobuf/
+  branch = v3.8.0
+[submodule "abseil-cpp"]
+	path = abseil-cpp
+	url = https://github.com/abseil/abseil-cpp
