@@ -4,7 +4,6 @@
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
-#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -20,7 +19,6 @@
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -40,10 +38,10 @@ String genFuncString(const String & func_name, const Names & argument_names, con
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
     for (const auto & collator : collators)
     {
-        if (collator == nullptr)
-            buf.append("_0");
-        else
+        if (collator)
             buf.fmtAppend("_{}", collator->getCollatorId());
+        else
+            buf.append("_0");
     }
     buf.append(" ");
     return buf.toString();
@@ -642,7 +640,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     AggregateDescriptions aggregate_descriptions;
     NamesAndTypes aggregated_columns;
 
-    auto actions = newActions(getCurrentInputColumns());
+    auto actions_holder = newActionsHolder(getCurrentInputColumns());
     std::unordered_set<String> agg_key_set;
 
     for (const tipb::Expr & expr : agg.agg_func())
@@ -650,7 +648,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         String agg_func_name = getAggFuncName(expr, agg, settings);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, actions, agg_func_name, aggregate_descriptions, aggregated_columns, agg.group_by().empty());
+            buildGroupConcat(expr, actions_holder.getActions(), agg_func_name, aggregate_descriptions, aggregated_columns, agg.group_by().empty());
             continue;
         }
 
@@ -661,8 +659,8 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         aggregate.argument_names.resize(child_size);
         for (Int32 i = 0; i < child_size; i++)
         {
-            String arg_name = getActions(expr.children(i), actions);
-            types[i] = actions->getSampleBlock().getByName(arg_name).type;
+            String arg_name = getActions(expr.children(i), actions_holder.getActions());
+            types[i] = actions_holder.getActions()->getSampleBlock().getByName(arg_name).type;
             if (removeNullable(types[i])->isString())
                 arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
             else
@@ -695,7 +693,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 
     for (const tipb::Expr & expr : agg.group_by())
     {
-        String name = getActions(expr, actions);
+        String name = getActions(expr, actions_holder.getActions());
         bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
         if (!duplicated_key)
         {
@@ -711,7 +709,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         /// let TiDB/TiFlash to decide whether aggregate the data with collation info or not
         if (group_by_collation_sensitive)
         {
-            auto type = actions->getSampleBlock().getByName(name).type;
+            auto type = actions_holder.getActions()->getSampleBlock().getByName(name).type;
             TiDB::TiDBCollatorPtr collator;
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
@@ -756,17 +754,18 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
             }
             else
             {
-                aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+                aggregated_columns.emplace_back(name, actions_holder.getActions()->getSampleBlock().getByName(name).type);
             }
         }
         else
         {
             // this is a temp result since implicit cast maybe added on these aggregated_columns
-            aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+            aggregated_columns.emplace_back(name, actions_holder.getActions()->getSampleBlock().getByName(name).type);
         }
     }
     source_columns = std::move(aggregated_columns);
-    return {aggregation_keys, collators, aggregate_descriptions, actions};
+    actions_holder.setRequiredOutputs(toNames(source_columns));
+    return {aggregation_keys, collators, aggregate_descriptions, actions_holder.toActions()};
 }
 
 bool isUInt8Type(const DataTypePtr & type)
@@ -821,8 +820,11 @@ String DAGExpressionAnalyzer::appendWhere(ExpressionActionsPtr & actions, const 
 
 std::tuple<String, ExpressionActionsPtr> DAGExpressionAnalyzer::appendWhere(const std::vector<const tipb::Expr *> & conditions)
 {
-    auto actions = newActions(getCurrentInputColumns());
-    return {appendWhere(actions, conditions), actions};
+    auto actions_holder = newActionsHolder(getCurrentInputColumns());
+    actions_holder.setRequiredOutputs(toNames(getCurrentInputColumns()));
+    auto filter_column_name = appendWhere(actions_holder.getActions(), conditions);
+    actions_holder.appendRequiredOutput(filter_column_name);
+    return {filter_column_name, actions_holder.toActions()};
 }
 
 String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, const String & column_name)
@@ -884,14 +886,16 @@ std::tuple<NamesAndTypes, ExpressionActionsPtr> DAGExpressionAnalyzer::appendOrd
     std::vector<NameAndTypePair> order_columns;
     order_columns.reserve(topN.order_by_size());
 
-    auto actions = newActions(getCurrentInputColumns());
+    auto actions_holder = newActionsHolder(getCurrentInputColumns());
+    actions_holder.setRequiredOutputs(toNames(getCurrentInputColumns()));
     for (const tipb::ByItem & by_item : topN.order_by())
     {
-        String name = getActions(by_item.expr(), actions);
-        auto type = actions->getSampleBlock().getByName(name).type;
+        String name = getActions(by_item.expr(), actions_holder.getActions());
+        auto type = actions_holder.getActions()->getSampleBlock().getByName(name).type;
         order_columns.emplace_back(name, type);
+        actions_holder.appendRequiredOutput(name);
     }
-    return {order_columns, actions};
+    return {order_columns, actions_holder.toActions()};
 }
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
@@ -1132,11 +1136,7 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCastAfterAgg(const tipb::Aggre
     if (need_update)
     {
         source_columns = std::move(updated_aggregated_columns);
-        Names projected_columns;
-        projected_columns.reserve(source_columns.size());
-        for (const auto & source_column : source_columns)
-            projected_columns.push_back(source_column.name);
-        actions->add(ExpressionAction::project(projected_columns));
+        actions->add(ExpressionAction::project(toNames(source_columns)));
         return actions;
     }
     else
@@ -1447,6 +1447,26 @@ ExpressionActionsPtr DAGExpressionAnalyzer::newActions(const NamesAndTypes & col
         }
     }
     return std::make_shared<ExpressionActions>(column_list, settings);
+}
+
+ExpressionActionsPtr DAGExpressionAnalyzer::newActions(const NamesAndTypesList & columns) const
+{
+    return std::make_shared<ExpressionActions>(columns, settings);
+}
+
+ExpressionActionsHolder DAGExpressionAnalyzer::newActionsHolder(const NamesAndTypes & columns) const
+{
+    NamesAndTypesList column_list;
+    std::unordered_set<String> column_name_set;
+    for (const auto & col : columns)
+    {
+        if (column_name_set.find(col.name) == column_name_set.end())
+        {
+            column_list.emplace_back(col.name, col.type);
+            column_name_set.emplace(col.name);
+        }
+    }
+    return ExpressionActionsHolder(column_list, settings);
 }
 
 } // namespace DB

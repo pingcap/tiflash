@@ -9,6 +9,7 @@
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ExpressionActionsHolder.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -102,6 +103,10 @@ public:
 
     ExpressionActionsPtr newActions(const NamesAndTypes & columns) const;
 
+    ExpressionActionsPtr newActions(const NamesAndTypesList & columns) const;
+
+    ExpressionActionsHolder newActionsHolder(const NamesAndTypes & columns) const;
+
 private:
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
@@ -177,7 +182,7 @@ private:
 
     String appendWhere(ExpressionActionsPtr & actions, const std::vector<const tipb::Expr *> & conditions);
 
-    // all columns from table scan
+    // all columns from source
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;

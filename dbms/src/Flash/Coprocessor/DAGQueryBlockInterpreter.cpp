@@ -73,7 +73,9 @@ struct AnalysisResult
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr project_after_aggregation;
     ExpressionActionsPtr before_having;
+    ExpressionActionsPtr project_after_having;
     ExpressionActionsPtr before_order;
+    ExpressionActionsPtr project_after_order;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
@@ -126,18 +128,12 @@ AnalysisResult analyzeExpressions(
     if (!conditions.empty())
     {
         std::tie(res.filter_column_name, res.before_where) = analyzer.appendWhere(conditions);
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-        {
-            auto actions = analyzer.newActions(analyzer.getCurrentInputColumns());
-            NamesWithAliases project_cols;
-            for (const auto & col : analyzer.getCurrentInputColumns())
-            {
-                project_cols.emplace_back(col.name, col.name);
-            }
-            actions->add(ExpressionAction::project(project_cols));
-            res.project_after_where = std::move(actions);
-        }
+
+        auto proj_after_actions = analyzer.newActions(res.before_where->getSampleBlock().getNamesAndTypesList());
+        proj_after_actions->add(ExpressionAction::project(toNames(analyzer.getCurrentInputColumns())));
+        res.project_after_where = std::move(proj_after_actions);
     }
+
     // There will be either Agg...
     if (query_block.aggregation)
     {
@@ -159,15 +155,23 @@ AnalysisResult analyzeExpressions(
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
             std::tie(res.having_column_name, res.before_having) = analyzer.appendWhere(having_conditions);
+
+            auto proj_after_actions = analyzer.newActions(res.before_having->getSampleBlock().getNamesAndTypesList());
+            proj_after_actions->add(ExpressionAction::project(toNames(analyzer.getCurrentInputColumns())));
+            res.project_after_having = std::move(proj_after_actions);
         }
     }
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
         std::tie(res.order_columns, res.before_order) = analyzer.appendOrderBy(query_block.limitOrTopN->topn());
+
+        auto proj_after_actions = analyzer.newActions(res.before_order->getSampleBlock().getNamesAndTypesList());
+        proj_after_actions->add(ExpressionAction::project(toNames(analyzer.getCurrentInputColumns())));
+        res.project_after_order = std::move(proj_after_actions);
     }
 
-    // Append final project results if needed.
+    // Append final project results.
     res.final_projection = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             query_block.output_field_types,
@@ -966,17 +970,21 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
+        if (res.project_after_having)
+            pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_having, taskLogger()); });
         recordProfileStreams(pipeline, query_block.having_name);
     }
 
     if (res.before_order)
     {
         executeExpression(pipeline, res.before_order);
-    }
-    if (!res.order_columns.empty())
-    {
-        // execute topN
-        executeOrder(pipeline, res.order_columns);
+        if (!res.order_columns.empty())
+        {
+            // execute topN
+            executeOrder(pipeline, res.order_columns);
+        }
+        if (res.project_after_order)
+            pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_order, taskLogger()); });
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
