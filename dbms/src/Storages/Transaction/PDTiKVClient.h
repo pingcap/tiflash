@@ -2,6 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <Core/Types.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
