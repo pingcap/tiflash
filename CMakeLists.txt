@@ -1,7 +1,7 @@
-project (ClickHouse)
+project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
@@ -266,9 +266,9 @@ endif ()
 
 # when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
 if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set (CLICKHOUSE_ETC_DIR "/etc")
+    set (TIFLASH_ETC_DIR "/etc")
 else ()
-    set (CLICKHOUSE_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
+    set (TIFLASH_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
 endif ()
 
 option (UNBUNDLED "Try find all libraries in system (if fail - use bundled from contrib/)" OFF)
@@ -354,9 +354,9 @@ endif()
 include (cmake/print_flags.cmake)
 
 # Directory for Yandex specific files
-set (CLICKHOUSE_PRIVATE_DIR ${ClickHouse_SOURCE_DIR}/private/)
-if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
-    add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
+set (TIFLASH_PRIVATE_DIR ${TiFlash_SOURCE_DIR}/private/)
+if (EXISTS ${TIFLASH_PRIVATE_DIR})
+    add_subdirectory (${TIFLASH_PRIVATE_DIR})
 endif ()
 
 # Enable tests by default when build type is debug

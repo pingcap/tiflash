@@ -1,5 +1,5 @@
-set(protobuf_source_dir "${ClickHouse_SOURCE_DIR}/contrib/protobuf")
-set(protobuf_binary_dir "${ClickHouse_BINARY_DIR}/contrib/protobuf")
+set(protobuf_source_dir "${TiFlash_SOURCE_DIR}/contrib/protobuf")
+set(protobuf_binary_dir "${TiFlash_BINARY_DIR}/contrib/protobuf")
 
 
 add_definitions(-DGOOGLE_PROTOBUF_CMAKE_BUILD)

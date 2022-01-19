@@ -1,5 +1,5 @@
-set(_gRPC_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/grpc")
-set(_gRPC_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/grpc")
+set(_gRPC_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/grpc")
+set(_gRPC_BINARY_DIR "${TiFlash_BINARY_DIR}/contrib/grpc")
 
 # Use re2 from ClickHouse contrib, not from gRPC third_party.
 if(NOT RE2_INCLUDE_DIR)
@@ -76,4 +76,4 @@ add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
 # The contrib/grpc/CMakeLists.txt redefined the PROTOBUF_GENERATE_GRPC_CPP() function for its own purposes,
 # so we need to redefine it back.
-include("${ClickHouse_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
+include("${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
