@@ -8,6 +8,16 @@
 
 namespace DB
 {
+namespace
+{
+void mergePacket(mpp::MPPDataPacket & a, mpp::MPPDataPacket & b)
+{
+    if (!b.data().empty())
+        a.set_allocated_data(b.release_data());
+    for (int i = 0; i < b.chunks_size(); ++i)
+        a.add_chunks(std::move(*b.mutable_chunks(i)));
+}
+} // namespace
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
@@ -126,6 +136,10 @@ void MPPTunnelBase<Writer>::sendLoop()
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
+            MPPDataPacketPtr next;
+            while (res->data().empty() && send_queue.tryPop(next, std::chrono::milliseconds(0)))
+                mergePacket(*res, *next);
+
             if (!writer->Write(*res))
             {
                 err_msg = "grpc writes failed.";
