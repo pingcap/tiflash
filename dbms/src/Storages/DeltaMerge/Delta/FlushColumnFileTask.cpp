@@ -1,8 +1,10 @@
 #include "FlushColumnFileTask.h"
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 
 
 namespace DB
@@ -11,8 +13,7 @@ namespace DM
 {
 FlushColumnFileTask::FlushColumnFileTask(DMContext & context_, const MemTableSetPtr & mem_table_set_)
     : context{context_},
-      mem_table_set{mem_table_set_},
-      log(&Poco::Logger::get("FlushColumnFileTask"))
+      mem_table_set{mem_table_set_}
 {}
 
 DeltaIndex::Updates FlushColumnFileTask::prepare(WriteBatches & wbs)

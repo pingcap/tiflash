@@ -1,6 +1,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -23,7 +24,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     auto snap = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update = for_update;
     snap->_delta = this->shared_from_this();
-    snap->stable_files_snap = column_stable_file_set->createSnapshot(context);
+    snap->stable_files_snap = stable_file_set->createSnapshot(context);
     snap->shared_delta_index = delta_index;
 
     if (for_update)

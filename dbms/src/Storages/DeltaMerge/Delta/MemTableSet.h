@@ -9,7 +9,7 @@ namespace DB
 {
 namespace DM
 {
-
+/// This class is not thread safe, manipulate on it requires acquire extra synchronization
 class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
@@ -33,6 +33,12 @@ public:
         : column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
     {}
+
+    String info() const
+    {
+        return fmt::format("{MemTableSet: {} column files, {} rows, {} bytes, {} deletes}",
+                           column_files.size(), rows.load(), bytes.load(), deletes.load());
+    }
 
     ColumnFiles cloneColumnFiles() { return column_files; }
 

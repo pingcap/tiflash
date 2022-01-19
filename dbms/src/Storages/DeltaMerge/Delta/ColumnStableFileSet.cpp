@@ -30,14 +30,11 @@ inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-ColumnStableFileSet::ColumnStableFileSet(PageId metadata_id_, const ColumnStableFiles & column_stable_files)
-    : metadata_id(metadata_id_)
-    , log(&Poco::Logger::get("ColumnStableFileSet"))
+void ColumnStableFileSet::updateStats()
 {
-    // FIXME: place column file to different levels
-    column_stable_file_levels.push_back(column_stable_files);
-    for (auto & file_level : column_stable_file_levels)
+    for (auto & file_level : stable_files_levels)
     {
+        stable_files_count += file_level.size();
         for (auto & file : file_level)
         {
             rows += file->getRows();
@@ -45,6 +42,16 @@ ColumnStableFileSet::ColumnStableFileSet(PageId metadata_id_, const ColumnStable
             deletes += file->getDeletes();
         }
     }
+}
+
+ColumnStableFileSet::ColumnStableFileSet(PageId metadata_id_, const ColumnStableFiles & column_stable_files)
+    : metadata_id(metadata_id_)
+    , log(&Poco::Logger::get("ColumnStableFileSet"))
+{
+    // TODO: place column file to different levels
+    stable_files_levels.push_back(column_stable_files);
+
+    updateStats();
 }
 
 ColumnStableFileSetPtr ColumnStableFileSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
@@ -57,51 +64,66 @@ ColumnStableFileSetPtr ColumnStableFileSet::restore(DMContext & context, const R
 
 void ColumnStableFileSet::saveMeta(WriteBatches & wbs) const
 {
-    serializeColumnStableFileLevels(wbs, metadata_id, column_stable_file_levels);
+    serializeColumnStableFileLevels(wbs, metadata_id, stable_files_levels);
 }
 
-ColumnStableFiles
-ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const
+void ColumnStableFileSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
-    if (head_column_files.size() > getColumnFileCount())
+    for (const auto & level : stable_files_levels)
     {
-//        LOG_ERROR(log,
-//                  info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
-//                         << ", packs: " << packsToString(packs));
-        throw Exception("Check head packs failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
+        for (const auto & file : level)
+            file->removeData(wbs);
+    }
+}
+
+
+ColumnStableFiles ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context,
+                                                             const RowKeyRange & target_range,
+                                                             const ColumnFiles & head_column_files,
+                                                             WriteBatches & wbs) const
+{
+    // We check in the direction from the last level to the first level.
+    // In every level, we check from the begin to the last.
+    auto it_1 = head_column_files.begin();
+    auto level_it = stable_files_levels.rbegin();
+    auto it_2 = level_it->begin();
+    bool check_success = true;
+    if (likely(head_column_files.size() <= stable_files_count.load()))
+    {
+        while (it_1 != head_column_files.end() && level_it != stable_files_levels.rend())
+        {
+            if (it_2 == level_it->end())
+            {
+                level_it++;
+                if (unlikely(level_it == stable_files_levels.rend()))
+                    throw Exception("Delta Check head algorithm broken", ErrorCodes::LOGICAL_ERROR);
+                it_2 = level_it->begin();
+                continue;
+            }
+            if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
+            {
+                check_success = false;
+                break;
+            }
+        }
     }
 
-    auto it_1 = head_column_files.begin();
-    auto level_it = column_stable_file_levels.rbegin();
-    auto it_2 = level_it->begin();
-    while (it_1 != head_column_files.end() && level_it != column_stable_file_levels.rend())
+    if (unlikely(!check_success))
     {
-        if (it_2 == level_it->end())
-        {
-            level_it++;
-            if (level_it == column_stable_file_levels.rend())
-                throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
-            it_2 = level_it->begin();
-            continue;
-        }
-        if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
-        {
-//            LOG_ERROR(log,
-//                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
-//                                   << ", packs: " << packsToString(packs));
-            throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
-        }
+        LOG_ERROR(log,
+                  info() << ", Delta Check head failed, unexpected size. head column files: " << columnFilesToString(head_column_files)
+                         << ", level details: " << levelsInfo());
+        throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
     ColumnStableFiles cloned_tail;
-    while (level_it != column_stable_file_levels.rend() || it_2 != level_it->end())
+    while (level_it != stable_files_levels.rend())
     {
         if (it_2 == level_it->end())
         {
             level_it++;
-            if (level_it == column_stable_file_levels.rend())
+            if (level_it == stable_files_levels.rend())
                 break;
-
             it_2 = level_it->begin();
         }
         const auto & column_file = *it_2;
@@ -116,14 +138,9 @@ ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context, const RowKeyRang
         }
         else if (auto * tf = column_file->tryToTinyFile(); tf)
         {
-            PageId new_data_page_id = 0;
-            if (tf->getDataPageId())
-            {
-                // Use a newly created page_id to reference the data page_id of current pack.
-                new_data_page_id = context.storage_pool.newLogPageId();
-                wbs.log.putRefPage(new_data_page_id, tf->getDataPageId());
-            }
-
+            // Use a newly created page_id to reference the data page_id of current column file.
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            wbs.log.putRefPage(new_data_page_id, tf->getDataPageId());
             auto new_column_file = tf->cloneWith(new_data_page_id);
             cloned_tail.push_back(new_column_file);
         }
@@ -148,21 +165,10 @@ ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context, const RowKeyRang
     return cloned_tail;
 }
 
-void ColumnStableFileSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
-{
-    for (const auto & level : column_stable_file_levels)
-    {
-        for (const auto & file : level)
-        {
-            file->removeData(wbs);
-        }
-    }
-}
-
 size_t ColumnStableFileSet::getTotalCacheRows() const
 {
     size_t cache_rows = 0;
-    for (const auto & level : column_stable_file_levels)
+    for (const auto & level : stable_files_levels)
     {
         for (const auto & file : level)
         {
@@ -179,7 +185,7 @@ size_t ColumnStableFileSet::getTotalCacheRows() const
 size_t ColumnStableFileSet::getTotalCacheBytes() const
 {
     size_t cache_bytes = 0;
-    for (const auto & level : column_stable_file_levels)
+    for (const auto & level : stable_files_levels)
     {
         for (const auto & file : level)
         {
@@ -196,7 +202,7 @@ size_t ColumnStableFileSet::getTotalCacheBytes() const
 size_t ColumnStableFileSet::getValidCacheRows() const
 {
     size_t cache_rows = 0;
-    for (const auto & level : column_stable_file_levels)
+    for (const auto & level : stable_files_levels)
     {
         for (const auto & file : level)
         {
@@ -218,26 +224,44 @@ bool ColumnStableFileSet::appendColumnStableFilesToLevel0(size_t prev_flush_vers
         return false;
     }
     flush_version += 1;
-    // FIXME: copy a new column_stable_file_levels
-    if (column_stable_file_levels.empty())
-        column_stable_file_levels.emplace_back();
-    auto & level_0 = column_stable_file_levels[0];
-    for (const auto & f : column_files)
+    ColumnStableFileLevels new_stable_files_levels;
+    for (auto & level : stable_files_levels)
     {
-        level_0.push_back(f);
+        auto & new_level = new_stable_files_levels.emplace_back();
+        for (auto & file : level)
+            new_level.push_back(file);
     }
-    MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-    serializeColumnStableFileLevels(wbs, metadata_id, column_stable_file_levels);
+    if (new_stable_files_levels.empty())
+        new_stable_files_levels.emplace_back();
+    auto & new_level_0 = new_stable_files_levels[0];
+    for (const auto & f : column_files)
+        new_level_0.push_back(f);
+
+    /// Save the new metadata of column files to disk.
+    serializeColumnStableFileLevels(wbs, metadata_id, new_stable_files_levels);
+    wbs.writeMeta();
+
+    /// Commit updates in memory.
+    stable_files_levels.swap(new_stable_files_levels);
+    updateStats();
+
     return true;
 }
 
 MinorCompactionPtr ColumnStableFileSet::pickUpMinorCompaction(DMContext & context)
 {
+    // Every time we try to compact all column files in a specific level.
+    // For ColumnTinyFile, we will try to combine small `ColumnTinyFile`s to a bigger one.
+    // For ColumnDeleteRangeFile and ColumnBigFile, we will simply move them to the next level.
+    // And only if there some small `ColumnTinyFile`s which can be combined together we will actually do the compaction.
     size_t check_level_num = 0;
-    while (check_level_num < column_stable_file_levels.size())
+    while (check_level_num < stable_files_levels.size())
     {
+        if (next_compaction_level >= stable_files_levels.size())
+            next_compaction_level = 0;
+
         auto compaction = std::make_shared<MinorCompaction>(next_compaction_level);
-        auto & level = column_stable_file_levels[next_compaction_level];
+        auto & level = stable_files_levels[next_compaction_level];
         if (!level.empty())
         {
             bool is_all_trivial_move = true;
@@ -253,20 +277,16 @@ MinorCompactionPtr ColumnStableFileSet::pickUpMinorCompaction(DMContext & contex
                 if (auto * t_file = file->tryToTinyFile(); t_file)
                 {
                     bool cur_task_full = cur_task.total_rows >= context.delta_small_pack_rows;
-                    bool schema_ok = cur_task.to_compact.empty();
-                    if (schema_ok)
+                    bool small_column_file = t_file->getRows() < context.delta_small_pack_rows;
+                    bool schema_ok
+                        = cur_task.to_compact.empty();
+                    if (!schema_ok)
                     {
                         if (auto * last_t_file = cur_task.to_compact.back()->tryToTinyFile(); last_t_file)
-                        {
                             schema_ok = t_file->getSchema() == last_t_file->getSchema();
-                        }
-                        else
-                        {
-                            schema_ok = false;
-                        }
                     }
 
-                    if (cur_task_full || !schema_ok)
+                    if (cur_task_full || !small_column_file || !schema_ok)
                         packup_cur_task();
 
                     cur_task.addColumnFile(file);
@@ -295,44 +315,48 @@ bool ColumnStableFileSet::installCompactionResults(const MinorCompactionPtr & co
         LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
-    ColumnStableFileLevels new_column_stable_file_levels;
+    ColumnStableFileLevels new_stable_files_levels;
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
     {
-        new_column_stable_file_levels.push_back(column_stable_file_levels[i]);
+        auto & new_level = new_stable_files_levels.emplace_back();
+        for (const auto & f : stable_files_levels[i])
+            new_level.push_back(f);
     }
-    // the next level is empty because all the column file is compacted to next level
-    new_column_stable_file_levels.push_back(ColumnStableFileLevel{});
-    ColumnStableFileLevel new_level_after_compact;
-    if (column_stable_file_levels.size() > compaction->compaction_src_level + 1)
+    // Create a new empty level for `compaction_src_level` because all the column files is compacted to next level
+    new_stable_files_levels.emplace_back();
+
+    // Add new file to the target level
+    auto target_level = compaction->compaction_src_level + 1;
+    auto & target_level_files = new_stable_files_levels.emplace_back();
+    if (stable_files_levels.size() > target_level)
     {
-        for (auto & column_file : column_stable_file_levels[compaction->compaction_src_level + 1])
-        {
-            new_level_after_compact.emplace_back(column_file);
-        }
+        for (auto & column_file : stable_files_levels[target_level])
+            target_level_files.emplace_back(column_file);
     }
     for (auto & task : compaction->tasks)
     {
         if (task.is_trivial_move)
-        {
-            new_level_after_compact.push_back(task.to_compact[0]);
-        }
+            target_level_files.push_back(task.to_compact[0]);
         else
-        {
-            new_level_after_compact.push_back(task.result);
-        }
-    }
-    new_column_stable_file_levels.push_back(new_level_after_compact);
-    for (size_t i = compaction->compaction_src_level + 2; i < column_stable_file_levels.size(); i++)
-    {
-        new_column_stable_file_levels.push_back(column_stable_file_levels[i]);
+            target_level_files.push_back(task.result);
     }
 
-    /// Save the new metadata of packs to disk.
-    serializeColumnStableFileLevels(wbs, metadata_id, new_column_stable_file_levels);
+    // Append remaining levels
+    for (size_t i = target_level + 1; i < stable_files_levels.size(); i++)
+    {
+        auto & new_level = new_stable_files_levels.emplace_back();
+        for (const auto & f : stable_files_levels[i])
+            new_level.push_back(f);
+    }
+
+    /// Save the new metadata of column files to disk.
+    serializeColumnStableFileLevels(wbs, metadata_id, new_stable_files_levels);
     wbs.writeMeta();
 
-    /// Update packs in memory.
-    column_stable_file_levels.swap(new_column_stable_file_levels);
+    /// Commit updates in memory.
+    stable_files_levels.swap(new_stable_files_levels);
+    updateStats();
+
     return true;
 }
 
@@ -346,7 +370,7 @@ ColumnFileSetSnapshotPtr ColumnStableFileSet::createSnapshot(const DMContext & c
 
     size_t total_rows = 0;
     size_t total_deletes = 0;
-    for (const auto & level : column_stable_file_levels)
+    for (const auto & level : stable_files_levels)
     {
         for (const auto & file : level)
         {

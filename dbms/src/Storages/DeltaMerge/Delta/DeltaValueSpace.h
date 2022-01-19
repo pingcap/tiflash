@@ -36,21 +36,16 @@ struct DMContext;
 struct WriteBatches;
 class StoragePool;
 
-static std::atomic_uint64_t NEXT_PACK_ID{0};
-
-
-
 class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
     , private boost::noncopyable
 {
-    friend class DeltaValueSpaceSnapshot;
-
 public:
     using Lock = std::unique_lock<std::mutex>;
 
 private:
-    ColumnStableFileSetPtr column_stable_file_set;
-
+    /// column files in `stable_file_set` are all persisted in disks and can be restored after restart.
+    ColumnStableFileSetPtr stable_file_set;
+    /// column files in `mem_table_set` just resides in memory.
     MemTableSetPtr mem_table_set;
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
@@ -78,11 +73,17 @@ private:
 public:
     explicit DeltaValueSpace(PageId id_, const ColumnStableFiles & stable_files = {}, const ColumnFiles & in_memory_files = {});
 
+    explicit DeltaValueSpace(ColumnStableFileSetPtr && stable_file_set_);
+
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
-    String simpleInfo() const { return "Delta [" + DB::toString(column_stable_file_set->getId()) + "]"; }
+    String simpleInfo() const { return "Delta [" + DB::toString(stable_file_set->getId()) + "]"; }
+    String info() const
+    {
+        return fmt::format("MemTableSet: {}, StableFileSet: {}", mem_table_set->info(), stable_file_set->info());
+    }
 
     bool getLock(Lock & lock) const
     {
@@ -102,26 +103,27 @@ public:
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
-    PageId getId() const { return column_stable_file_set->getId(); }
-
-    /// First check whether 'head_packs' is exactly the head of packs in this instance.
-    ///   If yes, then clone the tail of packs, using ref pages.
+    /// First check whether 'head_column_files' is exactly the head of column files in this instance.
+    ///   If yes, then clone the tail of column files, using ref pages.
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
+    /// And the `head_column_files` must just reside in `stable_file_set`.
     std::pair<ColumnStableFiles, ColumnFiles>
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
-    size_t getColumnFileCount() const { return column_stable_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount(); }
+    PageId getId() const { return stable_file_set->getId(); }
+
+    size_t getColumnFileCount() const { return stable_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount(); }
     size_t getRows(bool use_unsaved = true) const
     {
-        return use_unsaved ? column_stable_file_set->getRows() + mem_table_set->getRows() : column_stable_file_set->getRows();
+        return use_unsaved ? stable_file_set->getRows() + mem_table_set->getRows() : stable_file_set->getRows();
     }
     size_t getBytes(bool use_unsaved = true) const
     {
-        return use_unsaved ? column_stable_file_set->getBytes() + mem_table_set->getBytes() : column_stable_file_set->getBytes();
+        return use_unsaved ? stable_file_set->getBytes() + mem_table_set->getBytes() : stable_file_set->getBytes();
     }
-    size_t getDeletes() const { return column_stable_file_set->getDeletes() + mem_table_set->getDeletes(); }
+    size_t getDeletes() const { return stable_file_set->getDeletes() + mem_table_set->getDeletes(); }
 
     size_t getUnsavedRows() const { return mem_table_set->getRows(); }
     size_t getUnsavedBytes() const { return mem_table_set->getBytes(); }

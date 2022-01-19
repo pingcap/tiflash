@@ -36,7 +36,5 @@ ColumnStableFiles deserializeColumnStableFiles_V2(ReadBuffer & buf, UInt64 versi
 void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnStableFiles & column_files);
 ColumnStableFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
 
-/// Debugging string
-String columnFilesToString(const ColumnFiles & column_files);
 }
 }

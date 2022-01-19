@@ -118,24 +118,6 @@ ColumnStableFiles deserializeColumnStableFiles(DMContext & context, const RowKey
     return column_files;
 }
 
-String columnFilesToString(const ColumnFiles & column_files)
-{
-    String packs_info = "[";
-    for (auto & f : column_files)
-    {
-        if (f->isInMemoryFile())
-            packs_info += "B_" + DB::toString(f->getRows()) + "_N,";
-        else if (f->isTinyFile())
-            packs_info += "B_" + DB::toString(f->getRows()) + "_S,";
-        else if (f->isBigFile())
-            packs_info += "F_" + DB::toString(f->getRows()) + "_S,";
-        else if (auto f_delete = f->tryToDeleteRange(); f_delete)
-            packs_info += "D_" + f_delete->getDeleteRange().toString() + "_S,";
-    }
-    if (!column_files.empty())
-        packs_info.erase(packs_info.size() - 1);
-    packs_info += "]";
-    return packs_info;
-}
+
 }
 }

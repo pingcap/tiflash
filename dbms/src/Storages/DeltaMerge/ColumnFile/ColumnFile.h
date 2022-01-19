@@ -132,5 +132,9 @@ size_t copyColumnsData(
     size_t rows_offset,
     size_t rows_limit,
     const RowKeyRange * range);
+
+/// Debugging string
+template <typename T>
+String columnFilesToString(const T & column_files);
 }
 }

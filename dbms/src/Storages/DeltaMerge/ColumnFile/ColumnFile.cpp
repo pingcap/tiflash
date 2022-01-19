@@ -82,5 +82,30 @@ size_t copyColumnsData(
     }
 }
 
+template<class T>
+String columnFilesToString(const T & column_files)
+{
+    String column_files_info = "[";
+    for (const auto & f : column_files)
+    {
+        if (f->isInMemoryFile())
+            column_files_info += "B_" + DB::toString(f->getRows()) + "_N,";
+        else if (f->isTinyFile())
+            column_files_info += "B_" + DB::toString(f->getRows()) + "_S,";
+        else if (f->isBigFile())
+            column_files_info += "F_" + DB::toString(f->getRows()) + "_S,";
+        else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
+            column_files_info += "D_" + f_delete->getDeleteRange().toString() + "_S,";
+    }
+
+    if (!column_files.empty())
+        column_files_info.erase(column_files_info.size() - 1);
+    column_files_info += "]";
+    return column_files_info;
+}
+
+template String columnFilesToString<ColumnFiles>(const ColumnFiles & column_files);
+template String columnFilesToString<ColumnStableFiles>(const ColumnStableFiles & column_files);
+
 }
 }

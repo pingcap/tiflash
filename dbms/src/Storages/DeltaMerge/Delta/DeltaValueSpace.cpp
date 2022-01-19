@@ -13,17 +13,29 @@ namespace DB
 {
 namespace DM
 {
-
 // ================================================
 // Public methods
 // ================================================
 
 DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnStableFiles & stable_files, const ColumnFiles & in_memory_files)
-    : column_stable_file_set(std::make_shared<ColumnStableFileSet>(id_, stable_files))
+    : stable_file_set(std::make_shared<ColumnStableFileSet>(id_, stable_files))
     , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
     , log(&Poco::Logger::get("DeltaValueSpace"))
 {}
+
+DeltaValueSpace::DeltaValueSpace(ColumnStableFileSetPtr && stable_file_set_)
+    : stable_file_set(std::move(stable_file_set_))
+    , mem_table_set(std::make_shared<MemTableSet>())
+    , delta_index(std::make_shared<DeltaIndex>())
+    , log(&Poco::Logger::get("DeltaValueSpace"))
+{}
+
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+{
+    auto stable_file_set_ = ColumnStableFileSet::restore(context, segment_range, id);
+    return std::make_shared<DeltaValueSpace>(std::move(stable_file_set_));
+}
 
 void DeltaValueSpace::abandon(DMContext & context)
 {
@@ -35,49 +47,44 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
-{
-    Page page = context.storage_pool.meta()->read(id, nullptr);
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    auto column_stable_files = deserializeColumnStableFiles(context, segment_range, buf);
-    return std::make_shared<DeltaValueSpace>(id, column_stable_files);
-}
-
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
-    column_stable_file_set->saveMeta(wbs);
+    stable_file_set->saveMeta(wbs);
 }
 
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
-    column_stable_file_set->recordRemoveColumnFilesPages(wbs);
+    stable_file_set->recordRemoveColumnFilesPages(wbs);
 }
 
 
 std::pair<ColumnStableFiles, ColumnFiles>
-DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const
+DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
+                                       const RowKeyRange & target_range,
+                                       const ColumnFiles & head_column_files,
+                                       WriteBatches & wbs) const
 {
-    auto stable_files = column_stable_file_set->checkHeadAndCloneTail(context, target_range, head_column_files, wbs);
+    auto tail_stable_files = stable_file_set->checkHeadAndCloneTail(context, target_range, head_column_files, wbs);
     auto memory_files = mem_table_set->cloneColumnFiles();
-    return std::make_pair(std::move(stable_files), std::move(memory_files));
+    return std::make_pair(std::move(tail_stable_files), std::move(memory_files));
 }
 
 size_t DeltaValueSpace::getTotalCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + column_stable_file_set->getTotalCacheRows();
+    return mem_table_set->getRows() + stable_file_set->getTotalCacheRows();
 }
 
 size_t DeltaValueSpace::getTotalCacheBytes() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getBytes() + column_stable_file_set->getTotalCacheBytes();;
+    return mem_table_set->getBytes() + stable_file_set->getTotalCacheBytes();;
 }
 
 size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + column_stable_file_set->getValidCacheRows();;
+    return mem_table_set->getRows() + stable_file_set->getValidCacheRows();;
 }
 
 bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFilePtr & column_file)
@@ -120,7 +127,7 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
 
 bool DeltaValueSpace::flush(DMContext & context)
 {
-//    LOG_DEBUG(log, info() << ", Flush start");
+    LOG_DEBUG(log, info() << ", Flush start");
 
     /// We have two types of data needed to flush to disk:
     ///  1. The cache data in DeltaPackBlock
@@ -134,17 +141,17 @@ bool DeltaValueSpace::flush(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-//            LOG_DEBUG(log, simpleInfo() << "Flush stop because abandoned");
+            LOG_DEBUG(log, simpleInfo() << "Flush stop because abandoned");
             return false;
         }
-        flush_task = mem_table_set->buildFlushTask(context, column_stable_file_set->getRows(), column_stable_file_set->getDeletes());
+        flush_task = mem_table_set->buildFlushTask(context, stable_file_set->getRows(), stable_file_set->getDeletes());
         cur_delta_index = delta_index;
     }
 
     // No update, return successfully.
     if (!flush_task)
     {
-//        LOG_DEBUG(log, simpleInfo() << " Nothing to flush");
+        LOG_DEBUG(log, simpleInfo() << " Nothing to flush");
         return true;
     }
 
@@ -153,9 +160,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-//        LOG_DEBUG(log, simpleInfo() << " Update index start");
+        LOG_DEBUG(log, simpleInfo() << " Update index start");
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-//        LOG_DEBUG(log, simpleInfo() << " Update index done");
+        LOG_DEBUG(log, simpleInfo() << " Update index done");
     }
 
     {
@@ -165,14 +172,14 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Delete written data.
             wbs.setRollback();
-//            LOG_DEBUG(log, simpleInfo() << " Flush stop because abandoned");
+            LOG_DEBUG(log, simpleInfo() << " Flush stop because abandoned");
             return false;
         }
 
-        if (!flush_task->commit(column_stable_file_set, wbs))
+        if (!flush_task->commit(stable_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-//            LOG_DEBUG(log, column_stable_file_set->simpleInfo() << " Stop flush because structure got updated");
+            LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
         }
 
         /// Update delta tree
@@ -188,8 +195,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     // Other thread is doing structure update, just return.
     if (!is_updating.compare_exchange_strong(v, true))
     {
-//        LOG_DEBUG(log, simpleInfo() << " Compact stop because updating");
-
+        LOG_DEBUG(log, simpleInfo() << " Compact stop because updating");
         return true;
     }
     SCOPE_EXIT({
@@ -204,13 +210,13 @@ bool DeltaValueSpace::compact(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-//            LOG_DEBUG(log, simpleInfo() << " Compact stop because abandoned");
+            LOG_DEBUG(log, simpleInfo() << " Compact stop because abandoned");
             return false;
         }
-        compaction_task = column_stable_file_set->pickUpMinorCompaction(context);
+        compaction_task = stable_file_set->pickUpMinorCompaction(context);
         if (!compaction_task)
         {
-//        LOG_DEBUG(log, simpleInfo() << " Nothing to compact");
+        LOG_DEBUG(log, simpleInfo() << " Nothing to compact");
             return true;
         }
         log_storage_snap = context.storage_pool.log()->getSnapshot();
@@ -228,20 +234,18 @@ bool DeltaValueSpace::compact(DMContext & context)
         if (abandoned.load(std::memory_order_relaxed))
         {
             wbs.rollbackWrittenLogAndData();
-//            LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
+            LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
             return false;
         }
         if (!compaction_task->commit(wbs))
         {
             LOG_WARNING(log, "Structure has been updated during compact");
             wbs.rollbackWrittenLogAndData();
-//            LOG_DEBUG(log, simpleInfo() << " Compact stop because structure got updated");
+            LOG_DEBUG(log, simpleInfo() << " Compact stop because structure got updated");
             return false;
         }
 
-//        LOG_DEBUG(log,
-//                  simpleInfo() << " Successfully compacted " << total_compact_packs << " packs into " << tasks.size() << " packs, total "
-//                               << total_compact_rows << " rows.");
+        LOG_DEBUG(log, simpleInfo() << compaction_task->info());
     }
     wbs.writeRemoves();
 

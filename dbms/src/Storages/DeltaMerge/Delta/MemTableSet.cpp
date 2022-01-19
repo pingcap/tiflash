@@ -1,4 +1,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
 namespace DB

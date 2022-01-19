@@ -13,10 +13,11 @@ using ColumnStableFileSetPtr = std::shared_ptr<ColumnStableFileSet>;
 class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 {
     friend class ColumnStableFileSet;
+
 public:
     struct Task
     {
-        Task() {}
+        Task() = default;
 
         ColumnStableFiles to_compact;
         size_t total_rows = 0;
@@ -56,7 +57,7 @@ public:
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            // Maybe this column file is small, but it cannot be merged with other packs, so also remove it's cache.
+            // Maybe this column file is small, but it cannot be merged with other packs, so also remove it's cache if possible.
             for (auto & f : task.to_compact)
             {
                 if (auto * t_file = f->tryToTinyFile(); t_file)
@@ -74,6 +75,8 @@ public:
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
     bool commit(WriteBatches & wbs);
+
+    String info() const;
 };
 
 using MinorCompactionPtr = std::shared_ptr<MinorCompaction>;

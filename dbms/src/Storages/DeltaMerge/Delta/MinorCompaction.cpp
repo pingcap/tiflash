@@ -56,5 +56,10 @@ bool MinorCompaction::commit(WriteBatches & wbs)
     return column_stable_file_set->installCompactionResults(shared_from_this(), wbs);
 }
 
+String MinorCompaction::info() const
+{
+    return fmt::format("Compacted {} column files into {} column files, total {} rows.", total_compact_files, tasks.size(), total_compact_rows);
+}
+
 }
 }
