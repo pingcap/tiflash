@@ -12,11 +12,14 @@
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
+#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
@@ -49,7 +52,7 @@ WALStorePtr WALStore::create(
     // Create a new LogFile for writing new logs
     auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
     auto * logger = &Poco::Logger::get("WALStore");
-    auto log_file = WALStore::rollLogWriter(delegator, provider, write_limiter, log_num, logger);
+    auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
     return std::unique_ptr<WALStore>(new WALStore(delegator, provider, write_limiter, std::move(log_file)));
 }
 
@@ -87,23 +90,29 @@ void WALStore::apply(const PageEntriesEdit & edit)
     if (log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
     {
         auto log_num = log_file->logNumber() + 1;
-        auto new_log_file = rollLogWriter(delegator, provider, write_limiter, log_num, logger);
+        auto [new_log_file, filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
         log_file.swap(new_log_file);
     }
 }
 
-std::unique_ptr<LogWriter> WALStore::rollLogWriter(
+std::tuple<std::unique_ptr<LogWriter>, LogFileName> WALStore::createLogWriter(
     PSDiskDelegatorPtr delegator,
     const FileProviderPtr & provider,
     const WriteLimiterPtr & write_limiter,
-    Format::LogNumberType new_log_num,
-    Poco::Logger * logger)
+    const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+    Poco::Logger * logger,
+    bool manual_flush)
 {
     const auto path = delegator->defaultPath(); // TODO: multi-path
-    auto filename = fmt::format("log_{}_0", new_log_num);
-    auto fullname = fmt::format("{}/{}", path, filename);
-    LOG_FMT_INFO(logger, "Creating log file for writing, [log_num={}] [path={}] [filename={}]", new_log_num, path, filename);
-    return std::make_unique<LogWriter>(
+    LogFileName log_filename = LogFileName{
+        (manual_flush ? Format::LogFileStage::Temporary : Format::LogFileStage::Normal),
+        new_log_lvl.first,
+        new_log_lvl.second,
+        path};
+    auto filename = log_filename.filename(log_filename.stage);
+    auto fullname = log_filename.fullname(log_filename.stage);
+    LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
+    auto log_writer = std::make_unique<LogWriter>(
         WriteBufferByFileProviderBuilder(
             /*has_checksum=*/false,
             provider,
@@ -113,12 +122,71 @@ std::unique_ptr<LogWriter> WALStore::rollLogWriter(
             write_limiter)
             .with_buffer_size(Format::BLOCK_SIZE) // Must be `BLOCK_SIZE`
             .build(),
-        new_log_num,
-        /*recycle*/ true);
+        new_log_lvl.first,
+        /*recycle*/ true,
+        /*manual_flush*/ manual_flush);
+    return {
+        std::move(log_writer),
+        log_filename};
 }
 
-void WALStore::gc()
+// In order to make `restore` in a reasonable time, we need to compact
+// log files.
+void WALStore::compactLogs()
 {
+    LogFilenameSet compact_log_files = WALStoreReader::listAllFiles(delegator, logger);
+    for (auto iter = compact_log_files.begin(); iter != compact_log_files.end(); /*empty*/)
+    {
+        if (iter->log_num >= log_file->logNumber())
+            iter = compact_log_files.erase(iter);
+        else
+            ++iter;
+    }
+    // In order not to make read amplification too high, only apply compact logs when ...
+    if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
+        return;
+
+    InMemoryPageDirectory in_mem_directory;
+    auto reader = WALStoreReader::create(provider, compact_log_files);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        if (!ok)
+        {
+            // TODO: Handle error
+            break;
+        }
+        // callback(edit); apply to the in-mem PageDirectory
+        in_mem_directory.apply(std::move(edit));
+    }
+
+    {
+        const auto log_num = reader->logNum();
+        // Create a temporary file for compacting log files.
+        auto [compact_log, log_filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 1}, logger, /*manual_flush*/ true);
+        in_mem_directory.dumpTo(compact_log);
+        compact_log->flush();
+        compact_log.reset();
+
+        // Rename it to be a normal log file.
+        const auto temp_fullname = log_filename.fullname(Format::LogFileStage::Temporary);
+        const auto normal_fullname = log_filename.fullname(Format::LogFileStage::Normal);
+        LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
+        auto f = Poco::File{temp_fullname};
+        f.renameTo(normal_fullname);
+        LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
+    }
+
+    // Remove compacted log files.
+    for (const auto & filename : compact_log_files)
+    {
+        if (auto f = Poco::File(filename.fullname(Format::LogFileStage::Normal)); f.exists())
+        {
+            f.remove();
+        }
+    }
+    // TODO: Log more information. duration, num entries, size of compact log file...
+    LOG_FMT_INFO(logger, "Compact logs done [num_compacts={}]", compact_log_files.size());
 }
 
 } // namespace DB::PS::V3

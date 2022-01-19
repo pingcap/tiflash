@@ -161,6 +161,21 @@ private:
     std::map<PageVersionType, EntryOrDelete> entries;
 };
 
+class InMemoryPageDirectory
+{
+public:
+    InMemoryPageDirectory();
+
+    void apply(PageEntriesEdit && edit);
+
+    void dumpTo(std::unique_ptr<LogWriter> & log_writer);
+
+    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
+    CollapsingMapType table_directory;
+
+    LogWithPrefixPtr log;
+};
+
 class PageDirectory
 {
 public:

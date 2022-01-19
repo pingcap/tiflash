@@ -1,6 +1,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -359,6 +360,7 @@ try
     std::mt19937 rd;
     std::uniform_int_distribution<> d(0, 20);
 
+    // Stage 2. insert many edits
     constexpr size_t num_edits_test = 100000;
     PageId page_id = 0;
     std::vector<size_t> size_each_edit;
@@ -397,6 +399,24 @@ try
     EXPECT_EQ(num_pages_read, page_id);
 
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
+
+    // Stage 3. compact logs and verify
+    wal->compactLogs();
+    wal.reset();
+
+    // After logs compacted, they should be written as one edit.
+    num_edits_read = 0;
+    num_pages_read = 0;
+    wal = WALStore::create(
+        [&](PageEntriesEdit && edit) {
+            num_pages_read += edit.size();
+            EXPECT_EQ(page_id, edit.size()) << fmt::format("at idx={}", num_edits_read);
+            num_edits_read += 1;
+        },
+        provider,
+        delegator);
+    EXPECT_EQ(num_edits_read, 1);
+    EXPECT_EQ(num_pages_read, page_id);
 }
 CATCH
 

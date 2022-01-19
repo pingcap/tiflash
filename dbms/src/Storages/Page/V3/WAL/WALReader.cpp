@@ -9,220 +9,74 @@
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
 namespace DB::PS::V3
 {
-namespace ser
+LogFilenameSet WALStoreReader::listAllFiles(
+    PSDiskDelegatorPtr & delegator,
+    Poco::Logger * logger)
 {
-inline void serializeVersionTo(const PageVersionType & version, WriteBuffer & buf)
-{
-    writeIntBinary(version.sequence, buf);
-    writeIntBinary(version.epoch, buf);
-}
-
-inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
-{
-    readIntBinary(version.sequence, buf);
-    readIntBinary(version.epoch, buf);
-}
-
-void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
-{
-    assert(record.type == WriteBatch::WriteType::PUT || record.type == WriteBatch::WriteType::UPSERT || record.type == WriteBatch::WriteType::REF);
-
-    writeIntBinary(record.type, buf);
-
-    UInt32 flags = 0;
-    writeIntBinary(flags, buf);
-    writeIntBinary(record.page_id, buf);
-    serializeVersionTo(record.version, buf);
-    writeIntBinary(record.entry.file_id, buf);
-    writeIntBinary(record.entry.offset, buf);
-    writeIntBinary(record.entry.size, buf);
-    writeIntBinary(record.entry.checksum, buf);
-    // fieldsOffset TODO: compression on `fieldsOffset`
-    writeIntBinary(record.entry.field_offsets.size(), buf);
-    for (const auto & [off, checksum] : record.entry.field_offsets)
+    std::vector<std::pair<String, Strings>> all_filenames;
+    Strings filenames;
+    for (const auto & p : delegator->listPaths())
     {
-        writeIntBinary(off, buf);
-        writeIntBinary(checksum, buf);
+        Poco::File directory(p);
+        if (!directory.exists())
+            directory.createDirectories();
+        filenames.clear();
+        directory.list(filenames);
+        all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
+        filenames.clear();
     }
-}
+    ASSERT(all_filenames.size() == 1); // TODO: multi-path
 
-void deserializePutFrom([[maybe_unused]] const WriteBatch::WriteType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
-{
-    assert(record_type == WriteBatch::WriteType::PUT || record_type == WriteBatch::WriteType::UPSERT || record_type == WriteBatch::WriteType::REF);
-
-    UInt32 flags = 0;
-    readIntBinary(flags, buf);
-    PageId page_id;
-    readIntBinary(page_id, buf);
-    PageVersionType version;
-    deserializeVersionFrom(buf, version);
-    PageEntryV3 entry;
-    readIntBinary(entry.file_id, buf);
-    readIntBinary(entry.offset, buf);
-    readIntBinary(entry.size, buf);
-    readIntBinary(entry.checksum, buf);
-    // fieldsOffset
-    PageFieldOffsetChecksums field_offsets;
-    UInt64 size_field_offsets = 0;
-    readIntBinary(size_field_offsets, buf);
-    if (size_field_offsets != 0)
-    {
-        entry.field_offsets.reserve(size_field_offsets);
-        PageFieldOffset field_offset;
-        UInt64 field_checksum;
-        for (size_t i = 0; i < size_field_offsets; ++i)
-        {
-            readIntBinary(field_offset, buf);
-            readIntBinary(field_checksum, buf);
-            entry.field_offsets.emplace_back(field_offset, field_checksum);
-        }
-    }
-
-    // All consider as put
-    PageEntriesEdit::EditRecord rec;
-    rec.type = WriteBatch::WriteType::PUT;
-    rec.page_id = page_id;
-    rec.version = version;
-    rec.entry = entry;
-    edit.appendRecord(rec);
-}
-
-void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
-{
-    assert(record.type == WriteBatch::WriteType::DEL);
-
-    writeIntBinary(record.type, buf);
-
-    writeIntBinary(record.page_id, buf);
-    serializeVersionTo(record.version, buf);
-}
-
-void deserializeDelFrom([[maybe_unused]] const WriteBatch::WriteType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
-{
-    assert(record_type == WriteBatch::WriteType::DEL);
-
-    PageId page_id;
-    readIntBinary(page_id, buf);
-    PageVersionType version;
-    deserializeVersionFrom(buf, version);
-
-    PageEntriesEdit::EditRecord rec;
-    rec.type = WriteBatch::WriteType::DEL;
-    rec.page_id = page_id;
-    rec.version = version;
-    edit.appendRecord(rec);
-}
-
-void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
-{
-    WriteBatch::WriteType record_type;
-    while (!buf.eof())
-    {
-        readIntBinary(record_type, buf);
-        switch (record_type)
-        {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        case WriteBatch::WriteType::REF:
-        {
-            deserializePutFrom(record_type, buf, edit);
-            break;
-        }
-        case WriteBatch::WriteType::DEL:
-        {
-            deserializeDelFrom(record_type, buf, edit);
-            break;
-        }
-        default:
-            throw Exception(fmt::format("Unkonwn record type: {}", record_type));
-        }
-    }
-}
-
-String serializeTo(const PageEntriesEdit & edit)
-{
-    WriteBufferFromOwnString buf;
-    UInt32 version = 1;
-    writeIntBinary(version, buf);
-    for (const auto & record : edit.getRecords())
-    {
-        switch (record.type)
-        {
-        case DB::WriteBatch::WriteType::PUT:
-        case DB::WriteBatch::WriteType::UPSERT:
-        case DB::WriteBatch::WriteType::REF:
-            serializePutTo(record, buf);
-            break;
-        case DB::WriteBatch::WriteType::DEL:
-            serializeDelTo(record, buf);
-            break;
-        default:
-            throw Exception(fmt::format("Unknown record type: {}", record.type), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-    return buf.releaseStr();
-}
-
-PageEntriesEdit deserializeFrom(std::string_view record)
-{
-    PageEntriesEdit edit;
-    ReadBufferFromMemory buf(record.data(), record.size());
-    UInt32 version = 0;
-    readIntBinary(version, buf);
-    if (version != 1)
-        throw Exception("");
-
-    deserializeFrom(buf, edit);
-    return edit;
-}
-} // namespace ser
-
-
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
-{
-    Poco::Logger * logger = &Poco::Logger::get("WALStore");
     LogFilenameSet log_files;
+    for (const auto & [parent_path, filenames] : all_filenames)
     {
-        std::vector<std::pair<String, Strings>> all_filenames;
-        Strings filenames;
-        for (const auto & p : delegator->listPaths())
+        for (const auto & filename : filenames)
         {
-            Poco::File directory(p);
-            if (!directory.exists())
-                directory.createDirectories();
-            filenames.clear();
-            directory.list(filenames);
-            all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
-            filenames.clear();
-        }
-        ASSERT(all_filenames.size() == 1); // TODO: multi-path
-        for (const auto & [parent_path, filenames] : all_filenames)
-        {
-            for (const auto & filename : filenames)
+            auto name = LogFileName::parseFrom(parent_path, filename, logger);
+            switch (name.stage)
             {
-                auto name = LogFileName::parseFrom(parent_path, filename, logger);
-                if (name.stage == Format::LogFileStage::Normal)
-                {
-                    log_files.insert(name);
-                }
+            case Format::LogFileStage::Normal:
+            {
+                log_files.insert(name);
+                break;
+            }
+            case Format::LogFileStage::Temporary:
+                [[fallthrough]];
+            case Format::LogFileStage::Invalid:
+            {
+                // TODO: clean
+                break;
+            }
             }
         }
     }
+    return log_files;
+}
 
-    auto reader = std::make_shared<WALStoreReader>(provider, std::move(log_files));
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files)
+{
+    auto reader = std::make_shared<WALStoreReader>(provider, std::move(files));
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && all_filenames_)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
+{
+    Poco::Logger * logger = &Poco::Logger::get("WALStore");
+    LogFilenameSet log_files = listAllFiles(delegator, logger);
+    return create(provider, std::move(log_files));
+}
+
+WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_)
     : provider(provider_)
-    , all_filenames(std::move(all_filenames_))
-    , next_reading_file(all_filenames.begin())
+    , files(std::move(files_))
+    , next_reading_file(files.begin())
     , logger(&Poco::Logger::get("LogReader"))
 {}
 
@@ -233,7 +87,7 @@ bool WALStoreReader::remained() const
 
     if (!reader->isEOF())
         return true;
-    if (next_reading_file != all_filenames.end())
+    if (next_reading_file != files.end())
         return true;
     return false;
 }
@@ -268,7 +122,7 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
 
 bool WALStoreReader::openNextFile()
 {
-    if (next_reading_file == all_filenames.end())
+    if (next_reading_file == files.end())
     {
         return false;
     }

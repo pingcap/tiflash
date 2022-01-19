@@ -5,6 +5,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
@@ -12,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <type_traits>
+#include <utility>
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
@@ -133,6 +135,74 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
     return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
+/**********************************
+  * InMemoryPageDirectory methods *
+  *********************************/
+
+InMemoryPageDirectory::InMemoryPageDirectory()
+    : log(getLogWithPrefix(nullptr, "InMemPageDirectory"))
+{
+}
+
+void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
+{
+    for (const auto & record : edit.getRecords())
+    {
+        switch (record.type)
+        {
+        case WriteBatch::WriteType::PUT:
+            [[fallthrough]];
+        case WriteBatch::WriteType::UPSERT:
+        {
+            // Insert or replace with latest entry
+            if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
+            {
+                table_directory[record.page_id] = std::make_pair(record.version, record.entry);
+            }
+            else
+            {
+                auto & [ver, entry] = iter->second;
+                if (ver < record.version)
+                {
+                    iter->second = std::make_pair(record.version, record.entry);
+                }
+                // else just ignore outdate version
+            }
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            // Remove the entry if the version of del is newer
+            if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
+            {
+                const auto & [ver, entry] = iter->second;
+                if (ver < record.version)
+                {
+                    table_directory.erase(iter);
+                }
+            }
+            break;
+        }
+        default:
+            throw Exception(fmt::format("Unknown write type: {}", record.type));
+        }
+    }
+}
+
+void InMemoryPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
+{
+    PageEntriesEdit edit;
+    for (const auto & [page_id, versioned_entry] : table_directory)
+    {
+        const auto & version = versioned_entry.first;
+        const auto & entry = versioned_entry.second;
+        edit.upsertPage(page_id, version, entry);
+    }
+    const String serialized = ser::serializeTo(edit);
+    ReadBufferFromString payload(serialized);
+    log_writer->addRecord(payload, serialized.size());
+}
+
 /**************************
   * PageDirectory methods *
   *************************/
@@ -145,32 +215,21 @@ PageDirectory::PageDirectory()
 
 void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
 {
-    auto callback = [this](PageEntriesEdit && edit) {
-        for (auto & record : edit.getMutRecords())
-        {
-            auto [iter, created] = mvcc_table_directory.insert(std::make_pair(record.page_id, nullptr));
-            if (created)
-            {
-                iter->second = std::make_shared<VersionedPageEntries>();
-            }
-
-            auto versioned_page = iter->second;
-            switch (record.type)
-            {
-            case WriteBatch::WriteType::PUT:
-                [[fallthrough]];
-            case WriteBatch::WriteType::UPSERT:
-                iter->second->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
-                break;
-            case WriteBatch::WriteType::DEL:
-                iter->second->createDelete(record.version.sequence);
-                break;
-            default:
-                throw Exception(fmt::format("Unknown write type: {}", record.type));
-            }
-        }
+    // TODO: Speedup restoring
+    InMemoryPageDirectory in_mem_directory;
+    auto callback = [&in_mem_directory](PageEntriesEdit && edit) {
+        in_mem_directory.apply(std::move(edit));
     };
     wal = WALStore::create(callback, provider, delegator, write_limiter);
+    for (const auto & [page_id, versioned_entry] : in_mem_directory.table_directory)
+    {
+        const auto & version = versioned_entry.first;
+        const auto & entry = versioned_entry.second;
+        auto [iter, created] = mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
+        if (created)
+            iter->second = std::make_shared<VersionedPageEntries>();
+        iter->second->createNewVersion(version.sequence, version.epoch, entry);
+    }
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const

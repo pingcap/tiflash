@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -78,7 +79,7 @@ public:
     void apply(PageEntriesEdit & edit, const PageVersionType & version);
     void apply(const PageEntriesEdit & edit);
 
-    void gc();
+    void compactLogs();
 
 private:
     WALStore(
@@ -87,16 +88,17 @@ private:
         const WriteLimiterPtr & write_limiter_,
         std::unique_ptr<LogWriter> && cur_log);
 
-    static std::unique_ptr<LogWriter>
-    rollLogWriter(
+    static std::tuple<std::unique_ptr<LogWriter>, LogFileName>
+    createLogWriter(
         PSDiskDelegatorPtr delegator,
         const FileProviderPtr & provider,
         const WriteLimiterPtr & write_limiter,
-        Format::LogNumberType new_log_num,
-        Poco::Logger * logger);
+        const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+        Poco::Logger * logger,
+        bool manual_flush);
 
-    const PSDiskDelegatorPtr delegator;
-    const FileProviderPtr provider;
+    PSDiskDelegatorPtr delegator;
+    FileProviderPtr provider;
     const WriteLimiterPtr write_limiter;
     std::unique_ptr<LogWriter> log_file;
 

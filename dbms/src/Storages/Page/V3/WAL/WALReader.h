@@ -3,14 +3,13 @@
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 
-namespace DB::PS::V3
+namespace DB
 {
-namespace ser
-{
-String serializeTo(const PageEntriesEdit & edit);
-PageEntriesEdit deserializeFrom(std::string_view record);
-} // namespace ser
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
 
+namespace PS::V3
+{
 class ReportCollector : public LogReader::Reporter
 {
 public:
@@ -23,6 +22,10 @@ public:
 class WALStoreReader
 {
 public:
+    static LogFilenameSet listAllFiles(PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
+
+    static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files);
+
     static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator);
 
     bool remained() const;
@@ -36,7 +39,7 @@ public:
         return reader->getLogNumber();
     }
 
-    WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && all_filenames_);
+    WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_);
 
     WALStoreReader(const WALStoreReader &) = delete;
     WALStoreReader & operator=(const WALStoreReader &) = delete;
@@ -47,10 +50,11 @@ private:
     FileProviderPtr provider;
     ReportCollector reporter;
 
-    const LogFilenameSet all_filenames;
+    const LogFilenameSet files;
     LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
     Poco::Logger * logger;
 };
 
-} // namespace DB::PS::V3
+} // namespace PS::V3
+} // namespace DB

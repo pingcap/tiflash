@@ -1,6 +1,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -10,8 +11,6 @@ namespace DB::PS::V3
 {
 LogFileName LogFileName::parseFrom(const String parent_path, const String & filename, Poco::Logger * log)
 {
-    static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
-    static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {
         LOG_FMT_INFO(log, "Not log file, ignored {}", filename);

@@ -16,12 +16,15 @@
 #include <common/types.h>
 #include <fmt/format.h>
 
+#include <memory>
+
 namespace DB
 {
 namespace PS::V3::tests
 {
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
+public:
     void SetUp() override
     {
         auto path = getTemporaryPath();
