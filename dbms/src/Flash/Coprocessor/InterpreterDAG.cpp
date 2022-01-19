@@ -57,11 +57,12 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
+                dag_query_block.source->exchange_receiver(),
+                dagContext().getMPPTaskMeta(),
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
                 context.getSettingsRef().enable_local_tunnel),
-            dag_query_block.source->exchange_receiver(),
-            dagContext().getMPPTaskMeta(),
+            dag_query_block.source->exchange_receiver().encoded_task_meta_size(),
             max_streams,
             dagContext().log);
     }
