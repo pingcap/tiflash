@@ -19,7 +19,7 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
@@ -30,6 +30,77 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
             return iter->second.entry;
     }
     return std::nullopt;
+}
+
+
+std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
+{
+    PageSize single_page_size = 0;
+    VersionedEntries versioned_entries;
+
+    auto page_lock = acquireLock();
+    for (const auto & [versioned_type, entry_del] : entries)
+    {
+        if (entry_del.is_delete)
+        {
+            continue;
+        }
+
+        const auto & entry = entry_del.entry;
+
+        if (entry.file_id == blob_id)
+        {
+            single_page_size += entry.size;
+            versioned_entries.emplace_back(std::make_pair(versioned_type, entry_del.entry));
+        }
+    }
+
+    return std::make_pair(std::move(versioned_entries), single_page_size);
+}
+
+std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
+{
+    PageEntriesV3 del_entries;
+
+    auto page_lock = acquireLock();
+
+    if (entries.empty())
+    {
+        return std::make_pair(del_entries, true);
+    }
+
+    auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq, UINT64_MAX));
+
+    // Nothing need be GC
+    if (iter == entries.begin())
+    {
+        return std::make_pair(del_entries, false);
+    }
+
+    // If we can't find any seq lower than `lowest_seq`
+    // It means all seq in this entry no need gc.
+    if (iter == entries.end())
+    {
+        return std::make_pair(del_entries, false);
+    }
+
+    for (--iter; iter != entries.begin(); iter--)
+    {
+        // Already deleted, no need put in `del_entries`
+        if (iter->second.is_delete)
+        {
+            continue;
+        }
+
+        del_entries.emplace_back(iter->second.entry);
+        iter = entries.erase(iter);
+    }
+
+    // erase begin
+    del_entries.emplace_back(iter->second.entry);
+    entries.erase(iter);
+
+    return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
 }
 
 PageDirectory::PageDirectory()
@@ -198,17 +269,100 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-bool PageDirectory::gc()
+
+void PageDirectory::gcApply(const PageIdAndVersionedEntryList & migrated_entries)
 {
+    for (const auto & [page_id, version, entry] : migrated_entries)
+    {
+        auto iter = mvcc_table_directory.find(page_id);
+        if (iter == mvcc_table_directory.end())
+        {
+            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", page_id), ErrorCodes::LOGICAL_ERROR);
+        }
+
+        auto versioned_page = iter->second;
+        iter->second->acquireLock();
+        iter->second->createNewVersion(version.sequence, version.epoch + 1, entry);
+
+        // TBD: wal apply
+    }
+}
+
+std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
+PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
+{
+    std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
+
+    PageSize total_page_size = 0;
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+
+        for (const auto & blob_id : blob_need_gc)
+        {
+            PageIdAndVersionedEntries versioned_pageid_entries;
+
+            for (const auto & [page_id, version_entries] : mvcc_table_directory)
+            {
+                VersionedEntries versioned_entries;
+                PageSize page_size;
+                std::tie(versioned_entries, page_size) = version_entries->getEntriesByBlobId(blob_id);
+                if (page_size != 0)
+                {
+                    versioned_pageid_entries.emplace_back(
+                        std::make_pair(page_id, std::move(versioned_entries)));
+                    total_page_size += page_size;
+                }
+            }
+
+            if (versioned_pageid_entries.empty())
+            {
+                throw Exception(fmt::format("Can't get any entries from [BlobFileId={}]", blob_id));
+            }
+
+            blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
+        }
+    }
+    return std::make_pair(std::move(blob_versioned_entries), total_page_size);
+}
+
+std::vector<PageEntriesV3> PageDirectory::gc()
+{
+    UInt64 lowest_seq = sequence.load();
+    std::vector<PageEntriesV3> all_del_entries;
+
     // Cleanup released snapshots
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
         if (iter->expired())
             iter = snapshots.erase(iter);
         else
+        {
+            lowest_seq = std::min(lowest_seq, iter->lock()->sequence);
             ++iter;
+        }
     }
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    {
+        std::unique_lock write_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
+        {
+            const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
+            if (!del_entries.empty())
+            {
+                all_del_entries.emplace_back(std::move(del_entries));
+            }
+
+            if (all_deleted)
+            {
+                iter = mvcc_table_directory.erase(iter);
+            }
+            else
+            {
+                iter++;
+            }
+        }
+    }
+
+    return all_del_entries;
 }
 
 } // namespace PS::V3

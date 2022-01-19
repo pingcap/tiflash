@@ -111,8 +111,9 @@ struct LocalExchangePacketReader : public ExchangePacketReader
     ~LocalExchangePacketReader() override
     {
         if (tunnel)
-        { // In case that ExchangeReceiver throw error before finish reading from mpptunnel
-            tunnel->finishWithLock();
+        {
+            // In case that ExchangeReceiver throw error before finish reading from mpptunnel
+            tunnel->consumerFinish("Receiver closed");
         }
     }
 
@@ -127,6 +128,7 @@ struct LocalExchangePacketReader : public ExchangePacketReader
 
     ::grpc::Status finish() override
     {
+        tunnel.reset();
         return ::grpc::Status::OK;
     }
 };

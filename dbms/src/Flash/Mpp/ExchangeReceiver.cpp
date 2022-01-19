@@ -295,9 +295,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
     setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
-
-    if (thread_manager)
-        thread_manager->wait();
+    thread_manager->wait();
 }
 
 template <typename RPCContext>
@@ -318,7 +316,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else
-            thread_manager->schedule(true, "Receiver", [this, index, req = std::move(req)] { readLoop(req); });
+            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
     }
 
     if (!async_requests.empty())
