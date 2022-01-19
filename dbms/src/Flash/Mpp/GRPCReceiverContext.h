@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
 #include <grpc++/grpc++.h>
@@ -11,86 +12,58 @@
 
 namespace DB
 {
+using MPPDataPacket = mpp::MPPDataPacket;
+using MPPDataPacketPtr = std::shared_ptr<MPPDataPacket>;
+using MPPDataPacketPtrs = std::vector<MPPDataPacketPtr>;
+
 class ExchangePacketReader
 {
 public:
     virtual ~ExchangePacketReader() = default;
-    virtual void initialize() const = 0;
-    virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
+    virtual bool read(MPPDataPacketPtr & packet) = 0;
     virtual ::grpc::Status finish() = 0;
 };
+using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 
 struct ExchangeRecvRequest
 {
+    Int64 source_index = -1;
     Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
+    Int64 recv_task_id = -2;
     std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+    bool is_local = false;
 
     String debugString() const;
-};
-
-class GrpcExchangePacketReader : public ExchangePacketReader
-{
-public:
-    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
-    grpc::ClientContext client_context;
-    std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
-
-    explicit GrpcExchangePacketReader(const ExchangeRecvRequest & req);
-
-    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~GrpcExchangePacketReader() override;
-
-    void initialize() const override;
-    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
-    ::grpc::Status finish() override;
-};
-
-
-class LocalExchangePacketReader : public ExchangePacketReader
-{
-public:
-    MPPTunnelPtr tunnel;
-
-    explicit LocalExchangePacketReader(const std::shared_ptr<MPPTunnel> & tunnel_)
-        : tunnel(tunnel_){};
-
-    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~LocalExchangePacketReader() override
-    {
-        if (tunnel)
-        {
-            // In case that ExchangeReceiver throw error before finish reading from mpptunnel
-            tunnel->consumerFinish("Receiver closed");
-        }
-    }
-
-    void initialize() const override {}
-    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
-    ::grpc::Status finish() override;
 };
 
 class GRPCReceiverContext
 {
 public:
-    using StatusType = ::grpc::Status;
+    using Status = ::grpc::Status;
+    using Request = ExchangeRecvRequest;
+    using Reader = ExchangePacketReader;
 
-    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_);
+    explicit GRPCReceiverContext(
+        const tipb::ExchangeReceiver & exchange_receiver_meta_,
+        const mpp::TaskMeta & task_meta_,
+        pingcap::kv::Cluster * cluster_,
+        std::shared_ptr<MPPTaskManager> task_manager_,
+        bool enable_local_tunnel_);
 
-    ExchangeRecvRequest makeRequest(
-        int index,
-        const tipb::ExchangeReceiver & pb_exchange_receiver,
-        const ::mpp::TaskMeta & task_meta) const;
+    ExchangeRecvRequest makeRequest(int index) const;
 
-    std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr = "") const;
+    ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
 
-    static StatusType getStatusOK()
+    static Status getStatusOK()
     {
         return ::grpc::Status::OK;
     }
 
+    void fillSchema(DAGSchema & schema) const;
+
 private:
+    tipb::ExchangeReceiver exchange_receiver_meta;
+    mpp::TaskMeta task_meta;
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
     bool enable_local_tunnel;
