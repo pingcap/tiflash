@@ -105,6 +105,8 @@ ColumnStableFiles ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context
                 check_success = false;
                 break;
             }
+            it_1++;
+            it_2++;
         }
     }
 
@@ -160,6 +162,7 @@ ColumnStableFiles ColumnStableFileSet::checkHeadAndCloneTail(DMContext & context
         {
             throw Exception("Meet unknown type of column file", ErrorCodes::LOGICAL_ERROR);
         }
+        it_2++;
     }
 
     return cloned_tail;

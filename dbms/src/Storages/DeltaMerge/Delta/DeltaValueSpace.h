@@ -82,7 +82,7 @@ public:
     String simpleInfo() const { return "Delta [" + DB::toString(stable_file_set->getId()) + "]"; }
     String info() const
     {
-        return fmt::format("MemTableSet: {}, StableFileSet: {}", mem_table_set->info(), stable_file_set->info());
+        return fmt::format("{}, {}", mem_table_set->info(), stable_file_set->info());
     }
 
     bool getLock(Lock & lock) const
@@ -273,10 +273,10 @@ public:
         return stable_files_snap->getColumnFiles();
     }
 
-    size_t getColumnFileCount() const { return mem_table_snap->getColumnFileCount() + stable_files_snap->getColumnFileCount(); }
-    size_t getRows() const { return mem_table_snap->getRows() + stable_files_snap->getRows(); }
-    size_t getBytes() const { return mem_table_snap->getBytes() + stable_files_snap->getBytes(); }
-    size_t getDeletes() const { return mem_table_snap->getDeletes() + stable_files_snap->getDeletes(); }
+    size_t getColumnFileCount() const { return (mem_table_snap ? mem_table_snap->getColumnFileCount() : 0) + stable_files_snap->getColumnFileCount(); }
+    size_t getRows() const { return (mem_table_snap ? mem_table_snap->getRows() : 0) + stable_files_snap->getRows(); }
+    size_t getBytes() const { return (mem_table_snap ? mem_table_snap->getBytes() : 0) + stable_files_snap->getBytes(); }
+    size_t getDeletes() const { return (mem_table_snap ? mem_table_snap->getDeletes() : 0) + stable_files_snap->getDeletes(); }
 
     size_t getMemTableRowsOffset() const { return stable_files_snap->getRows(); }
     size_t getMemTableDeletesOffset() const { return stable_files_snap->getDeletes(); }

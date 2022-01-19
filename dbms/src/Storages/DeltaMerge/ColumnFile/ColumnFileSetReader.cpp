@@ -69,12 +69,15 @@ ColumnFileSetReader::ColumnFileSetReader(
     , segment_range(segment_range_)
 {
     size_t total_rows = 0;
-    for (auto & f : snapshot->getColumnFiles())
+    if (snapshot)
     {
-        total_rows += f->getRows();
-        column_file_rows.push_back(f->getRows());
-        column_file_rows_end.push_back(total_rows);
-        column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
+        for (auto & f : snapshot->getColumnFiles())
+        {
+            total_rows += f->getRows();
+            column_file_rows.push_back(f->getRows());
+            column_file_rows_end.push_back(total_rows);
+            column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
+        }
     }
 }
 
@@ -121,6 +124,9 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
     //
     // So here, we should filter out those out-of-range rows.
 
+    if (!snapshot)
+        return 0;
+
     auto total_delta_rows = snapshot->getRows();
 
     auto start = std::min(offset, total_delta_rows);
@@ -150,6 +156,9 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
 
 void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
 {
+    if (!snapshot)
+        return;
+
     /// Note that we merge the consecutive DeltaPackBlock together, which are seperated in groups by DeltaPackDelete and DeltePackFile.
     auto & column_files = snapshot->getColumnFiles();
 
@@ -213,6 +222,9 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
                                       UInt64 max_version,
                                       size_t placed_rows)
 {
+    if (!snapshot)
+        return false;
+
     auto & column_files = snapshot->getColumnFiles();
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(column_file_rows_end, placed_rows);
 

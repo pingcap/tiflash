@@ -171,11 +171,20 @@ void MemTableSet::removeColumnFilesInFlushTask(const FlushColumnFileTask & flush
         }
         column_file_iter++;
     }
+    size_t new_rows = 0;
+    size_t new_bytes = 0;
+    size_t new_deletes = 0;
     while (column_file_iter != column_files.end())
     {
         new_column_files.emplace_back(*column_file_iter);
+        new_rows += (*column_file_iter)->getRows();
+        new_bytes += (*column_file_iter)->getBytes();
+        new_deletes += (*column_file_iter)->getDeletes();
     }
     column_files.swap(new_column_files);
+    rows = new_rows;
+    bytes = new_bytes;
+    deletes = new_deletes;
 }
 
 

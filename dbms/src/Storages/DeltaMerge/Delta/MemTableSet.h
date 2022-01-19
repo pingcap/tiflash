@@ -36,7 +36,7 @@ public:
 
     String info() const
     {
-        return fmt::format("{MemTableSet: {} column files, {} rows, {} bytes, {} deletes}",
+        return fmt::format("MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
                            column_files.size(), rows.load(), bytes.load(), deletes.load());
     }
 

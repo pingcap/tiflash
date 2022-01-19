@@ -68,16 +68,16 @@ public:
     String simpleInfo() const { return "ColumnStableFileSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
     {
-        String levels_summary = "";
+        String levels_summary;
         for (size_t i = 0; i < stable_files_levels.size(); i++)
             levels_summary += fmt::format("[{}]: {}", i, stable_files_levels[i].size());
 
-        return fmt::format("{ColumnStableFileSet [{}][{}]: {} levels, {} column files, {} rows, {} bytes, {} deletes}",
+        return fmt::format("ColumnStableFileSet [{}][{}]: {} column files, {} rows, {} bytes, {} deletes",
                            metadata_id, levels_summary, stable_files_count.load(), rows.load(), bytes.load(), deletes.load());
     }
     String levelsInfo() const
     {
-        String levels_info = "";
+        String levels_info;
         for (size_t i = 0; i < stable_files_levels.size(); i++)
             levels_info += fmt::format("[{}]: {}", i, columnFilesToString(stable_files_levels[i]));
         return levels_info;

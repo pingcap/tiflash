@@ -87,9 +87,8 @@ TEST_F(MemTableSet_test, WriteRead)
     SipHash block_hash;
     block.updateHash(block_hash);
     {
-        mem_table_set->write(dmContext(), block, 0, num_rows_write);
+        mem_table_set->appendToCache(dmContext(), block, 0, num_rows_write);
     }
-
 
     {
         auto mem_table_snapshot = mem_table_set->createSnapshot();
