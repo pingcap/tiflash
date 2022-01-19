@@ -47,8 +47,8 @@ public:
 
 public:
     std::optional<::diagnosticspb::LogMessage> next();
-    static bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size);
-    static bool read_date(
+    static bool readLevel(size_t limit, const char * s, size_t & level_start, size_t & level_size);
+    static bool readDate(
         size_t limit,
         const char * s,
         int & y,
@@ -97,7 +97,7 @@ public:
 
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
-    bool match(const int64_t time, const diagnosticspb::LogLevel level, const char * c, size_t sz) const;
+    bool match(int64_t time, diagnosticspb::LogLevel level, const char * c, size_t sz) const;
     void init();
 
     std::optional<Error> readLog(LogEntry &);
@@ -122,7 +122,7 @@ void ReadLogFile(const std::string & path, std::function<void(std::istream &)> &
 bool FilterFileByDatetime(
     const std::string & path,
     const std::vector<std::string> & ignore_log_file_prefixes,
-    const int64_t start_time);
+    int64_t start_time);
 
 
 }; // namespace DB

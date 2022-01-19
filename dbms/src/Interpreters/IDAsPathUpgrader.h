@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 

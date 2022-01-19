@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Core/Defines.h>
 #include <IO/ReadHelpers.h>
 #include <common/likely.h>

@@ -3091,6 +3091,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             padding_prev_offset = (*padding_offsets)[i];
@@ -3122,6 +3128,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             result_offsets[i] = res_prev_offset;
@@ -3152,6 +3164,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             padding_prev_offset = (*padding_offsets)[i];
             result_offsets[i] = res_prev_offset;
@@ -3180,6 +3198,12 @@ public:
                 {
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
+            }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
             }
 
             result_offsets[i] = res_prev_offset;
@@ -3217,9 +3241,9 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -3234,8 +3258,6 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
@@ -3249,9 +3271,11 @@ public:
                 per_pad_offset += pad_bytes;
                 ++left;
             }
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
@@ -3287,9 +3311,9 @@ public:
                     ++res_offset;
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -3309,17 +3333,17 @@ public:
                     ++res_offset;
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
         {
             copyResult(res, res_offset, data, 0, tmp_target_len);
             res_offset += tmp_target_len;
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
