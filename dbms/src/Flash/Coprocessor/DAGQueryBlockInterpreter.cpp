@@ -71,15 +71,14 @@ struct AnalysisResult
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr project_after_where;
     ExpressionActionsPtr before_aggregation;
+    ExpressionActionsPtr project_after_aggregation;
     ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr before_order;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
     String having_column_name;
     std::vector<NameAndTypePair> order_columns;
-    /// Columns from the SELECT list, before renaming them to aliases.
-    Names selected_columns;
 
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
@@ -87,10 +86,9 @@ struct AnalysisResult
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool addExtraCastsAfterTs(
+ExpressionActionsPtr addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    ExpressionActionsChain & chain,
     const tipb::TableScan & table_scan)
 {
     bool has_need_cast_column = false;
@@ -99,8 +97,8 @@ bool addExtraCastsAfterTs(
         has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
     }
     if (!has_need_cast_column)
-        return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
+        return nullptr;
+    return analyzer.appendExtraCastsAfterTS(need_cast_column, table_scan);
 }
 
 AnalysisResult analyzeExpressions(
@@ -109,18 +107,14 @@ AnalysisResult analyzeExpressions(
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
     const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
-    bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    bool keep_session_timezone_info)
 {
     AnalysisResult res;
-    ExpressionActionsChain chain;
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         auto original_source_columns = analyzer.getCurrentInputColumns();
-        if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block.source->tbl_scan()))
+        if ((res.extra_cast = addExtraCastsAfterTs(analyzer, is_need_cast_column, query_block.source->tbl_scan())))
         {
-            res.extra_cast = chain.getLastActions();
-            chain.addStep();
             size_t index = 0;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
@@ -131,19 +125,17 @@ AnalysisResult analyzeExpressions(
     }
     if (!conditions.empty())
     {
-        res.filter_column_name = analyzer.appendWhere(chain, conditions);
-        res.before_where = chain.getLastActions();
-        chain.addStep();
+        std::tie(res.filter_column_name, res.before_where) = analyzer.appendWhere(conditions);
         if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
         {
+            auto actions = analyzer.newActions(analyzer.getCurrentInputColumns());
             NamesWithAliases project_cols;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
                 project_cols.emplace_back(col.name, col.name);
             }
-            chain.getLastActions()->add(ExpressionAction::project(project_cols));
-            res.project_after_where = chain.getLastActions();
-            chain.addStep();
+            actions->add(ExpressionAction::project(project_cols));
+            res.project_after_where = std::move(actions);
         }
     }
     // There will be either Agg...
@@ -157,43 +149,33 @@ AnalysisResult analyzeExpressions(
             context.getDAGContext()->isMPPTask();
 
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
-            chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
+        res.project_after_aggregation = analyzer.appendCastAfterAgg(query_block.aggregation->aggregation());
 
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
-            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
-            res.before_having = chain.getLastActions();
-            chain.addStep();
+            std::tie(res.having_column_name, res.before_having) = analyzer.appendWhere(having_conditions);
         }
     }
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
-        res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
+        std::tie(res.order_columns, res.before_order) = analyzer.appendOrderBy(query_block.limitOrTopN->topn());
     }
 
     // Append final project results if needed.
-    final_project = query_block.isRootQueryBlock()
+    res.final_projection = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
-            chain,
             query_block.output_field_types,
             query_block.output_offsets,
             query_block.qb_column_prefix,
             keep_session_timezone_info)
-        : analyzer.appendFinalProjectForNonRootQueryBlock(
-            chain,
-            query_block.qb_column_prefix);
+        : analyzer.appendFinalProjectForNonRootQueryBlock(query_block.qb_column_prefix);
 
-    res.before_order_and_select = chain.getLastActions();
-
-    chain.finalize();
-    chain.clear();
-    //todo need call prependProjectInput??
     return res;
 }
 
@@ -326,10 +308,9 @@ void DAGQueryBlockInterpreter::prepareJoin(
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
+    if (auto actions = dag_analyzer.appendJoinKeyAndJoinFilters(keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, actions, taskLogger()); });
     }
 }
 
@@ -342,15 +323,15 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
         return nullptr;
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
-    ExpressionActionsChain chain;
     std::vector<const tipb::Expr *> condition_vector;
+    ExpressionActionsPtr actions;
     if (join.other_conditions_size() > 0)
     {
         for (const auto & c : join.other_conditions())
         {
             condition_vector.push_back(&c);
         }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        std::tie(filter_column_for_other_condition, actions) = dag_analyzer.appendWhere(condition_vector);
     }
     if (join.other_eq_conditions_from_in_size() > 0)
     {
@@ -359,9 +340,9 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        std::tie(filter_column_for_other_eq_condition, actions) = dag_analyzer.appendWhere(condition_vector);
     }
-    return chain.getLastActions();
+    return actions;
 }
 
 /// ClickHouse require join key to be exactly the same type
@@ -586,8 +567,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
+    auto join_actions = dag_analyzer.appendJoin(right_query, columns_added_by_join);
     pipeline.streams = left_pipeline.streams;
     /// add join input stream
     if (is_tiflash_right_join)
@@ -595,7 +575,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         for (size_t i = 0; i < join_build_concurrency; i++)
         {
-            auto non_joined_stream = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
+            auto non_joined_stream = join_actions->createStreamWithNonJoinedDataIfFullOrRightJoin(
                 pipeline.firstStream()->getHeader(),
                 i,
                 join_build_concurrency,
@@ -605,7 +585,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         }
     }
     for (auto & stream : pipeline.streams)
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger());
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, join_actions, taskLogger());
 
     /// add a project to remove all the useless column
     NamesWithAliases project_cols;
@@ -638,7 +618,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
     const ExpressionActionsPtr & expression_actions_ptr,
     Names & key_names,
     TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions)
+    AggregateDescriptions & aggregate_descriptions,
+    const ExpressionActionsPtr & cast_after_aggregation)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, taskLogger()); });
 
@@ -718,7 +699,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
             taskLogger());
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
+
     // add cast
+    if (cast_after_aggregation)
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, cast_after_aggregation, taskLogger()); });
 }
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
@@ -834,23 +818,21 @@ void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, c
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
-    ExpressionActionsChain chain;
-    dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
+    auto actions = dag_analyzer.newActions(dag_analyzer.getCurrentInputColumns());
+
     std::vector<NameAndTypePair> output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())
     {
-        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
-        last_step.required_output.emplace_back(expr_name);
-        const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
+        auto expr_name = dag_analyzer.getActions(expr, actions);
+        const auto & col = actions->getSampleBlock().getByName(expr_name);
         String alias = unique_name_generator.toUniqueName(col.name);
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
     }
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
-    executeProject(pipeline, project_cols);
+    actions->add(ExpressionAction::project(project_cols));
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, actions, taskLogger()); });
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -949,8 +931,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block,
         conditions,
         need_add_cast_column_flag_for_tablescan,
-        keep_session_timezone_info,
-        final_project);
+        keep_session_timezone_info);
 
     if (res.extra_cast || res.before_where)
     {
@@ -978,7 +959,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.before_aggregation)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.project_after_aggregation);
     }
 
     if (res.before_having)
@@ -988,11 +969,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.having_name);
     }
 
-    if (res.before_order_and_select)
+    if (res.before_order)
     {
-        executeExpression(pipeline, res.before_order_and_select);
+        executeExpression(pipeline, res.before_order);
     }
-
     if (!res.order_columns.empty())
     {
         // execute topN
@@ -1001,7 +981,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute projection
-    executeProject(pipeline, final_project);
+    if (res.final_projection)
+    {
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.final_projection, taskLogger()); });
+    }
 
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)

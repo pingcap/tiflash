@@ -36,43 +36,30 @@ public:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
-    DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
+    DAGExpressionAnalyzer(NamesAndTypes source_columns_, const Context & context_);
 
     const Context & getContext() const { return context; }
 
-    const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
+    const NamesAndTypes & getCurrentInputColumns() const;
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
-    String appendWhere(
-        ExpressionActionsChain & chain,
-        const std::vector<const tipb::Expr *> & conditions);
+    std::tuple<String, ExpressionActionsPtr> appendWhere(const std::vector<const tipb::Expr *> & conditions);
 
-    std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::TopN & topN);
+    std::tuple<NamesAndTypes, ExpressionActionsPtr> appendOrderBy(const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
-        ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    void initChain(
-        ExpressionActionsChain & chain,
-        const std::vector<NameAndTypePair> & columns) const;
-
-    void appendJoin(
-        ExpressionActionsChain & chain,
+    ExpressionActionsPtr appendJoin(
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix);
+    ExpressionActionsPtr appendFinalProjectForNonRootQueryBlock(const String & column_prefix);
 
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
+    ExpressionActionsPtr appendFinalProjectForRootQueryBlock(
         const std::vector<tipb::FieldType> & schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
@@ -97,14 +84,12 @@ public:
     // 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
     // TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
     // Int64 to duration.
-    bool appendExtraCastsAfterTS(
-        ExpressionActionsChain & chain,
+    ExpressionActionsPtr appendExtraCastsAfterTS(
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const tipb::TableScan & table_scan);
 
     /// return true if some actions is needed
-    bool appendJoinKeyAndJoinFilters(
-        ExpressionActionsChain & chain,
+    ExpressionActionsPtr appendJoinKeyAndJoinFilters(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
         Names & key_names,
@@ -113,11 +98,11 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
-private:
-    void appendAggSelect(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg);
+    ExpressionActionsPtr appendCastAfterAgg(const tipb::Aggregation & agg);
 
+    ExpressionActionsPtr newActions(const NamesAndTypes & columns) const;
+
+private:
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -127,7 +112,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -189,6 +174,8 @@ private:
     String buildFunction(
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
+
+    String appendWhere(ExpressionActionsPtr & actions, const std::vector<const tipb::Expr *> & conditions);
 
     // all columns from table scan
     NamesAndTypes source_columns;

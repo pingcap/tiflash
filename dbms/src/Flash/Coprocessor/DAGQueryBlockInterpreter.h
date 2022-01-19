@@ -74,7 +74,8 @@ private:
         const ExpressionActionsPtr & expression_actions_ptr,
         Names & key_names,
         TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        AggregateDescriptions & aggregate_descriptions,
+        const ExpressionActionsPtr & cast_after_aggregation);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void executeExchangeSender(DAGPipeline & pipeline);
 
@@ -97,8 +98,6 @@ private:
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-
-    NamesWithAliases final_project;
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
