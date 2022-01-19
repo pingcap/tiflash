@@ -74,8 +74,8 @@ if (USE_INTERNAL_PROTOBUF_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_GRPC_LIBRARY)
+    add_subdirectory(abseil-cpp-cmake)
     add_subdirectory(grpc-cmake)
-    add_subdirectory (abseil-cpp-cmake)
 endif ()
 
 add_subdirectory (kvproto/cpp)
