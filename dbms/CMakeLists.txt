@@ -189,8 +189,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    # ${Protobuf_LIBRARY}
-    # ${gRPC_LIBRARIES}
     ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
@@ -233,9 +231,6 @@ endif ()
 if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
-
-# target_include_directories (dbms PRIVATE ${Protobuf_INCLUDE_DIR})
-# target_include_directories (dbms PRIVATE ${gRPC_INCLUDE_DIRS})
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
