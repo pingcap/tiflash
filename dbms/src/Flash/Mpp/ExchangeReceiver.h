@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/RecyclableBuffer.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -22,10 +22,6 @@ namespace DB
 {
 struct ReceivedMessage
 {
-    ReceivedMessage()
-    {
-        packet = std::make_shared<mpp::MPPDataPacket>();
-    }
     std::shared_ptr<mpp::MPPDataPacket> packet;
     size_t source_index = 0;
     String req_info;
@@ -80,8 +76,7 @@ public:
 public:
     ExchangeReceiverBase(
         std::shared_ptr<RPCContext> rpc_context_,
-        const ::tipb::ExchangeReceiver & exc,
-        const ::mpp::TaskMeta & meta,
+        size_t source_num_,
         size_t max_streams_,
         const LogWithPrefixPtr & log_);
 
@@ -95,19 +90,26 @@ public:
         std::queue<Block> & block_queue,
         const Block & header);
 
-    void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+    size_t getSourceNum() const { return source_num; }
+
+private:
+    using Request = typename RPCContext::Request;
+
+    void setUpConnection();
+    void readLoop(const Request & req);
+
+    void setState(ExchangeReceiverState new_state);
+    ExchangeReceiverState getState();
 
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header);
 
-    size_t getSourceNum() const { return source_num; }
-
-private:
-    void setUpConnection();
-
-    void readLoop(size_t source_index);
+    void connectionDone(
+        bool meet_error,
+        const String & local_err_msg,
+        const LogWithPrefixPtr & log);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -120,15 +122,15 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
+
     std::mutex mu;
-    std::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedMessage> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 
-    LogWithPrefixPtr log;
+    LogWithPrefixPtr exc_log;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
