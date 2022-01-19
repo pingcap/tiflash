@@ -381,6 +381,8 @@ private:
     }
 };
 
+// In some case, getScaleMultiplier and its callee may not be auto inline by the compiler.
+// This may hurt performance. __attribute__((flatten)) tells compliler to inline the callee of this function.
 template <typename T>
 __attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
