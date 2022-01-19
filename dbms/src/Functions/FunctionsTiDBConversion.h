@@ -810,7 +810,7 @@ struct TiDBConvertToFloat
 
 /// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
-template <typename FromDataType, typename ToFieldType, bool return_nullable>
+template <typename FromDataType, typename ToFieldType, bool return_nullable, bool canSkipCheckOverflow>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
@@ -820,13 +820,16 @@ struct TiDBConvertToDecimal
     {
         using UType = typename U::NativeType;
         auto max_value = DecimalMaxValue::get(prec);
-        if (value > max_value || value < -max_value)
+        if constexpr (canSkipCheckOverflow)
         {
-            context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
-            else
-                return static_cast<UType>(-max_value);
+            if (value > max_value || value < -max_value)
+            {
+                context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
+                if (value > 0)
+                    return static_cast<UType>(max_value);
+                else
+                    return static_cast<UType>(-max_value);
+            }
         }
         UType scale_mul = getScaleMultiplier<U>(scale);
         U result = static_cast<UType>(value) * scale_mul;
@@ -1738,6 +1741,39 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
+    template <typename FromDataType>
+    static bool canSkipCheckOverflowForDecimal(PrecType dest_decimal_prec, ScaleType dest_decimal_scale)
+    {
+        using FromFieldType = FromDataType::Field;
+
+        constexpr int isUnsignedInt = (std::is_same(FromFieldType, UInt8)
+                                       || std::is_same(FromFieldType, UInt16)
+                                       || std::is_same(FromFieldType, UInt32)
+                                       || std::is_same(FromFieldType, UInt64));
+        constexpr int isSignedInt = (std::is_same(FromFieldType, Int8)
+                                     || std::is_same(FromFieldType, Int16)
+                                     || std::is_same(FromFieldType, Int32)
+                                     || std::is_same(FromFieldType, Int64));
+        bool canSkip = false;
+        if constexpr (isUnsignedInt)
+        {
+            PrecType prec = IntPrec<FromFieldType>::prec - 1;
+            if (prec <= (dest_decimal_prec - dest_decimal_scale))
+            {
+                canSkip = true;
+            }
+        }
+        else if (isSignedInt)
+        {
+            PrecType prec = IntPrec<FromFieldType>::prec;
+            if (prec <= (dest_decimal_prec - dest_decimal_scale))
+            {
+                canSkip = true;
+            }
+        }
+        return canSkip;
+    }
+
     /// createWrapper creates lambda functions that do the real type conversion job
     template <typename FromDataType, bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & to_type) const
@@ -1765,53 +1801,141 @@ private:
             };
         /// cast as decimal
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+        {
+            PrecType prec = decimal_type->getPrec();
+            ScaleType scale = decimal_type->getScale();
+            bool canSkip = canSkipCheckOverflow<FromDataType>(prec, scale);
+            if (canSkip)
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, true>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+            else
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, false>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+        }
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+        {
+            PrecType prec = decimal_type->getPrec();
+            ScaleType scale = decimal_type->getScale();
+            bool canSkip = canSkipCheckOverflow<FromDataType>(prec, scale);
+            if (canSkip)
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, true>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+            else
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, false>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+        }
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+        {
+            PrecType prec = decimal_type->getPrec();
+            ScaleType scale = decimal_type->getScale();
+            bool canSkip = canSkipCheckOverflow<FromDataType>(prec, scale);
+            if (canSkip)
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, true>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+            else
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, false>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+        }
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+        {
+            PrecType prec = decimal_type->getPrec();
+            ScaleType scale = decimal_type->getScale();
+            bool canSkip = canSkipCheckOverflow<FromDataType>(prec, scale);
+            if (canSkip)
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, true>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+            else
+            {
+                return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, false>::execute(
+                        block,
+                        arguments,
+                        result,
+                        prec,
+                        scale,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
+                };
+            }
+        }
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
