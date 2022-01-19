@@ -21,6 +21,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/String.h>
 #include <common/DateLUT.h>
+#include <fmt/core.h>
 
 #include <type_traits>
 
@@ -792,9 +793,9 @@ struct DateTimeTransformImpl
         }
         else
         {
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of first argument of function " + Transform::name,
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -819,25 +820,26 @@ public:
         if (arguments.size() == 1)
         {
             if (!arguments[0].type->isDateOrDateTime())
-                throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time", arguments[0].type->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 2)
         {
             if (!checkDataType<DataTypeDateTime>(arguments[0].type.get())
                 || !checkDataType<DataTypeString>(arguments[1].type.get()))
-                throw Exception{
-                    "Function " + getName() + " supports 1 or 2 arguments. The 1st argument "
-                                              "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                                              "a constant string with timezone name. The timezone argument is allowed "
-                                              "only when the 1st argument has the type DateTime",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Function {} supports 1 or 2 arguments. The 1st argument "
+                                "must be of type Date or DateTime. The 2nd argument (optional) must be "
+                                "a constant string with timezone name. The timezone argument is allowed "
+                                "only when the 1st argument has the type DateTime",
+                                getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 1 or 2",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         /// For DateTime, if time zone is specified, attach it to type.
         if (std::is_same_v<ToDataType, DataTypeDateTime>)
@@ -860,8 +862,9 @@ public:
         else if (from_type->isMyDateOrMyDateTime())
             DateTimeTransformImpl<DataTypeMyTimeBase::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else
-            throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 
@@ -1319,9 +1322,9 @@ struct DateTimeAddIntervalImpl
         }
         else
         {
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of first argument of function " + Transform::name,
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -1422,9 +1425,9 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
         }
         else
         {
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of first argument of function " + Transform::name,
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), Transform::name),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -1448,33 +1451,35 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2 && arguments.size() != 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 2 or 3",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2 or 3", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         //todo support string as tidb support string
         if (!arguments[1].type->isNumber())
-            throw Exception("Second argument for function " + getName() + " (delta) must be number",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Second argument for function {} (delta) must be number", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2)
         {
             if (!arguments[0].type->isDateOrDateTime() && !arguments[0].type->isString())
-                throw Exception{
+                throw Exception(
                     fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time or string", arguments[0].type->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else
         {
             if (!checkDataType<DataTypeDateTime>(arguments[0].type.get())
                 || !checkDataType<DataTypeString>(arguments[2].type.get()))
-                throw Exception{
-                    "Function " + getName() + " supports 2 or 3 arguments. The 1st argument "
-                                              "must be of type Date or DateTime. The 2nd argument must be number. "
-                                              "The 3rd argument (optional) must be "
-                                              "a constant string with timezone name. The timezone argument is allowed "
-                                              "only when the 1st argument has the type DateTime",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Function {} supports 2 or 3 arguments. The 1st argument "
+                                "must be of type Date or DateTime. The 2nd argument must be number. "
+                                "The 3rd argument (optional) must be "
+                                "a constant string with timezone name. The timezone argument is allowed "
+                                "only when the 1st argument has the type DateTime",
+                                getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         if (checkDataType<DataTypeDate>(arguments[0].type.get()))
@@ -1523,8 +1528,9 @@ public:
         else if (checkDataType<DataTypeString>(from_type))
             DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, true>::execute(block, arguments, result);
         else
-            throw Exception(fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 
@@ -1545,16 +1551,19 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!removeNullable(arguments[0])->isString())
-            throw Exception("First argument for function " + getName() + " (unit) must be String",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("First argument for function {} (unit) must be String", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
-            throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Second argument for function {} must be MyDate or MyDateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[2])->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
-            throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Third argument for function {} must be MyDate or MyDateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         // to align with tidb, timestampdiff with zeroDate input should return null, so always return nullable type
         return makeNullable(std::make_shared<DataTypeInt64>());
@@ -1568,7 +1577,9 @@ public:
     {
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
-            throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("First argument for function {} must be constant String", getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -1621,7 +1632,7 @@ public:
         else if (unit == "microsecond")
             dispatchForColumns<DummyMonthDiffCalculatorImpl, MicroSecondDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else
-            throw Exception("Function " + getName() + " does not support '" + unit + "' unit", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::BAD_ARGUMENTS);
         // warp null
 
         if (block.getByPosition(arguments[1]).type->isNullable()
@@ -1927,12 +1938,14 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!removeNullable(arguments[0])->isMyDateOrMyDateTime())
-            throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("First argument for function {} must be MyDate or MyDateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isMyDateOrMyDateTime())
-            throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Second argument for function {} must be MyDate or MyDateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         // to align with tidb, dateDiff with zeroDate input should return null, so always return nullable type
         return makeNullable(std::make_shared<DataTypeInt64>());
@@ -2113,25 +2126,29 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 3 && arguments.size() != 4)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 3 or 4",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 3 or 4", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!arguments[0]->isString())
-            throw Exception("First argument for function " + getName() + " (unit) must be String",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("First argument for function {} (unit) must be String", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isDateOrDateTime())
-            throw Exception("Second argument for function " + getName() + " must be Date or DateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Second argument for function {} must be Date or DateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[2]->isDateOrDateTime())
-            throw Exception("Third argument for function " + getName() + " must be Date or DateTime",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Third argument for function {} must be Date or DateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 4 && !arguments[3]->isString())
-            throw Exception("Fourth argument for function " + getName() + " (timezone) must be String",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Fourth argument for function {} (timezone) must be String", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -2143,7 +2160,7 @@ public:
     {
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
-            throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("First argument for function {} must be constant String", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -2173,7 +2190,7 @@ public:
         else if (unit == "second" || unit == "ss" || unit == "s")
             dispatchForColumns<ToRelativeSecondNumImpl>(x, y, timezone_x, timezone_y, res->getData());
         else
-            throw Exception("Function " + getName() + " does not support '" + unit + "' unit", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(fmt::format("Function {} does not support '{}' unit", getName(), unit), ErrorCodes::BAD_ARGUMENTS);
 
         block.getByPosition(result).column = std::move(res);
     }
@@ -2196,7 +2213,7 @@ private:
         else if (const auto * x_const = checkAndGetColumnConst<ColumnUInt32>(&x))
             dispatchConstForSecondColumn<Transform>(x_const->getValue<UInt32>(), y, timezone_x, timezone_y, result);
         else
-            throw Exception("Illegal column for first argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("Illegal column for first argument of function {}, must be Date or DateTime", getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename Transform, typename T1>
@@ -2216,7 +2233,7 @@ private:
         else if (const auto * y_const = checkAndGetColumnConst<ColumnUInt32>(&y))
             vectorConstant<Transform>(x, y_const->getValue<UInt32>(), timezone_x, timezone_y, result);
         else
-            throw Exception("Illegal column for second argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("Illegal column for second argument of function {}, must be Date or DateTime", getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename Transform, typename T1>
@@ -2232,7 +2249,7 @@ private:
         else if (const auto * y_vec = checkAndGetColumn<ColumnUInt32>(&y))
             constantVector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
         else
-            throw Exception("Illegal column for second argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("Illegal column for second argument of function {}, must be Date or DateTime", getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename Transform, typename T1, typename T2>
@@ -2396,18 +2413,18 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 2",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
-            throw Exception{
-                "Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Should be MyDateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Should be MyDateTime", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[1].type->isInteger())
-            throw Exception{
-                "Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Should be Integer type",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}. Should be Integer type", arguments[1].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0].type;
     }
@@ -2425,9 +2442,9 @@ public:
 
             const auto * offset_col = block.getByPosition(arguments.back()).column.get();
             if (!offset_col->isColumnConst())
-                throw Exception{
-                    "Second argument of function " + getName() + " must be an integral constant",
-                    ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(
+                    fmt::format("Second argument of function {} must be an integral constant", getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             const auto offset = offset_col->getInt(0);
             for (size_t i = 0; i < size; ++i)
@@ -2444,9 +2461,9 @@ public:
             block.getByPosition(result).column = std::move(col_to);
         }
         else
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of first argument of function " + name,
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), name),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 template <bool convert_from_utc>
@@ -2473,14 +2490,14 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 2",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
-            throw Exception{
-                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be MyDateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}. Should be MyDateTime", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0].type;
     }
@@ -2511,9 +2528,9 @@ public:
             block.getByPosition(result).column = std::move(col_to);
         }
         else
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of first argument of function " + name,
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), name),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2534,14 +2551,14 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 2",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeDateTime>(arguments[0].type.get()))
-            throw Exception{
-                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be DateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}. Should be DateTime", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         String time_zone_name = extractTimeZoneNameFromFunctionArguments(arguments, 1, 0);
         return std::make_shared<DataTypeDateTime>(time_zone_name);
@@ -2570,8 +2587,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!checkDataType<DataTypeDateTime>(arguments[0].get()))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be DateTime.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeDateTime>();
     }
@@ -2595,9 +2613,9 @@ public:
             block.getByPosition(result).column = std::move(res);
         }
         else
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2704,12 +2722,14 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!checkDataType<DataTypeDateTime>(arguments[0].get()))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be DateTime", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!checkDataType<DataTypeUInt32>(arguments[1].get()))
-            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}. Must be UInt32", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>());
     }
@@ -2747,10 +2767,12 @@ public:
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), const_res);
         }
         else
-            throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName()
-                                + ", " + block.getByPosition(arguments[1]).column->getName()
-                                + " of arguments of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal columns {}, {} of arguments of function {}",
+                            block.getByPosition(arguments[0]).column->getName(),
+                            block.getByPosition(arguments[1]).column->getName(),
+                            getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2840,13 +2862,13 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw TiFlashException("First argument for function " + getName() + " (unit) must be String", Errors::Coprocessor::BadRequest);
+            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
 
         // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
         // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
         if (!arguments[1]->isMyDateOrMyDateTime())
             throw TiFlashException(
-                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime.",
+                fmt::format("Illegal type {} of second argument of function {}. Must be DateOrDateTime.", arguments[1]->getName(), getName()),
                 Errors::Coprocessor::BadRequest);
 
         return std::make_shared<DataTypeInt64>();
@@ -2860,7 +2882,7 @@ public:
         const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
             throw TiFlashException(
-                "First argument for function " + getName() + " must be constant String",
+                fmt::format("First argument for function {} must be constant String", getName()),
                 Errors::Coprocessor::BadRequest);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
@@ -2903,7 +2925,7 @@ public:
         // else if (unit == "hour_second");
         // else if (unit == "hour_minute");
         else
-            throw TiFlashException("Function " + getName() + " does not support '" + unit + "' unit", Errors::Coprocessor::BadRequest);
+            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
 
         block.getByPosition(result).column = std::move(col_to);
     }
@@ -3016,7 +3038,7 @@ public:
         else
         {
             throw TiFlashException(
-                "First argument for function " + String(name) + " must be constant number",
+                fmt::format("First argument for function {} must be constant number", name),
                 Errors::Coprocessor::BadRequest);
         }
         return std::make_shared<DataTypeMyDateTime>(fsp);
@@ -3033,7 +3055,7 @@ public:
         else
         {
             throw TiFlashException(
-                "First argument for function " + String(name) + " must be constant number",
+                fmt::format("First argument for function {} must be constant number", name),
                 Errors::Coprocessor::BadRequest);
         }
     }

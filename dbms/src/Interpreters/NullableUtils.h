@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Columns/ColumnNullable.h>
 
 

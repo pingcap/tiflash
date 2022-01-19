@@ -20,6 +20,11 @@ struct PageVersionType
         , epoch(0)
     {}
 
+    explicit PageVersionType(UInt64 seq, UInt64 epoch_)
+        : sequence(seq)
+        , epoch(epoch_)
+    {}
+
     PageVersionType()
         : PageVersionType(0)
     {}
@@ -31,6 +36,9 @@ struct PageVersionType
         return sequence < rhs.sequence;
     }
 };
+using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
+using VersionedEntries = std::vector<VersionedEntry>;
+
 
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
@@ -96,7 +104,6 @@ public:
         PageId page_id;
         PageId ori_page_id;
         PageEntryV3 entry;
-        PageVersionType version;
     };
     using EditRecords = std::vector<EditRecord>;
 
