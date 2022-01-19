@@ -521,7 +521,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
         char c_buff[buff_size];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            c_buff[i] = static_cast<char>((0xff) + i);
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
@@ -601,7 +601,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
         char c_buff[buff_size];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i * buff_size] = static_cast<char>((0xff) + i);
+            c_buff[i] = static_cast<char>((0xff) + i);
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
