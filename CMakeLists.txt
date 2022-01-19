@@ -1,4 +1,4 @@
-project (ClickHouse)
+project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
