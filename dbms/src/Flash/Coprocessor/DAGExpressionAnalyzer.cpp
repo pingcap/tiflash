@@ -575,15 +575,15 @@ void DAGExpressionAnalyzer::buildGroupConcat(
         }
     }
 
-#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                       \
-    std::make_shared<AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>( \
-        aggregate.function,                                                              \
-        types,                                                                           \
-        delimiter,                                                                       \
-        max_len,                                                                         \
-        sort_description,                                                                \
-        all_columns_names_and_types,                                                     \
-        arg_collators,                                                                   \
+#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                           \
+    std::make_shared<AggregateFunctionGroupConcat<(result_is_nullable), (only_one_column)>>( \
+        aggregate.function,                                                                  \
+        types,                                                                               \
+        delimiter,                                                                           \
+        max_len,                                                                             \
+        sort_description,                                                                    \
+        all_columns_names_and_types,                                                         \
+        arg_collators,                                                                       \
         expr.has_distinct())
 
     if (result_is_nullable)
@@ -770,7 +770,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
             aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
         }
     }
-    source_columns = aggregated_columns;
+    source_columns = std::move(aggregated_columns);
 
     auto before_agg = chain.getLastActions();
     chain.finalize();
@@ -1111,51 +1111,34 @@ void DAGExpressionAnalyzer::appendAggSelect(
     const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
-    bool need_update_source_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
-    {
-        const String & name = source_columns[i].name;
-        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
-        if (name != updated_name)
+
+    auto update_cast_column = [&](const tipb::Expr & expr, const NameAndTypePair & origin_column) {
+        String updated_name = appendCastIfNeeded(expr, step.actions, origin_column.name);
+        if (origin_column.name != updated_name)
         {
-            need_update_source_columns = true;
             DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
             updated_aggregated_columns.emplace_back(updated_name, type);
             step.required_output.push_back(updated_name);
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, source_columns[i].type);
-            step.required_output.push_back(name);
+            updated_aggregated_columns.emplace_back(origin_column.name, origin_column.type);
+            step.required_output.push_back(origin_column.name);
         }
+    };
+
+    for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
+    {
+        update_cast_column(aggregation.agg_func(i), source_columns[i]);
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        Int32 output_column_index = i + aggregation.agg_func_size();
-        const String & name = source_columns[output_column_index].name;
-        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
-        if (name != updated_name)
-        {
-            need_update_source_columns = true;
-            DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
-            updated_aggregated_columns.emplace_back(updated_name, type);
-            step.required_output.push_back(updated_name);
-        }
-        else
-        {
-            updated_aggregated_columns.emplace_back(name, source_columns[output_column_index].type);
-            step.required_output.push_back(name);
-        }
+        update_cast_column(aggregation.group_by(i), source_columns[i + aggregation.agg_func_size()]);
     }
 
-    if (need_update_source_columns)
-    {
-        source_columns.clear();
-        for (auto & col : updated_aggregated_columns)
-            source_columns.emplace_back(col.name, col.type);
-    }
+    source_columns = std::move(updated_aggregated_columns);
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
