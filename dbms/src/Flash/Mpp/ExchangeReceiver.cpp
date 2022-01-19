@@ -54,9 +54,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
     setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
-
-    if (thread_manager)
-        thread_manager->wait();
+    thread_manager->wait();
 }
 
 template <typename RPCContext>
