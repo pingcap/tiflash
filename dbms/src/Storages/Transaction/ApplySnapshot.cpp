@@ -81,7 +81,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
             {
                 if (region.first != region_id)
                 {
-                    LOG_FMT_WARNING(log, "{}: range of region {} is overlapped with region {}, please check whether its `PeerState` is `Tombstone` in raftstore proxy", __PRETTY_FUNCTION__, std::to_string(region_id), std::to_string(region.first));
+                    LOG_FMT_WARNING(log, "range of region {} is overlapped with region {}, please check whether its `PeerState` is `Tombstone` in raftstore proxy", region_id, region.first);
                 }
             }
         });
