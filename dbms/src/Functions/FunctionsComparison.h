@@ -287,13 +287,10 @@ struct StringComparisonWithCollatorImpl
         {
             size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
             size_t b_size = StringUtil::sizeAt(b_offsets, i) - 1;
-            int res;
-            if (i == 0)
-                res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
-            else
-                res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, reinterpret_cast<const char *>(&b_data[b_offsets[i - 1]]), b_size);
+            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
+            size_t b_offset = StringUtil::offsetAt(b_offsets, i);
 
-            c[i] = Op::apply(res, 0);
+            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[a_offset]), a_size, reinterpret_cast<const char *>(&b_data[b_offset]), b_size), 0);
         }
     }
 
@@ -310,16 +307,7 @@ struct StringComparisonWithCollatorImpl
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
-            if (i == 0)
-            {
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_offsets[0] - 1, b_data, b_size);
-                c[i] = Op::apply(res, 0);
-            }
-            else
-            {
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, b_data, b_size);
-                c[i] = Op::apply(res, 0);
-            }
+            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), a_offsets[0] - 1, b_data, b_size), 0);
         }
     }
 
@@ -364,12 +352,9 @@ struct StringComparisonImpl
             /// Trailing zero byte of the smaller string is included in the comparison.
             size_t a_size = StringUtil::sizeAt(a_offsets, i);
             size_t b_size = StringUtil::sizeAt(b_offsets, i);
-            int res;
-            if (i == 0)
-                res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
-            else
-                res = memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], std::min(a_size, b_size));
-
+            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
+            size_t b_offset = StringUtil::offsetAt(b_offsets, i);
+            int res = memcmp(&a_data[a_offset], &b_data[b_offset], std::min(a_size, b_size));
             /// if partial compare result is 0, it means the common part of the two strings are exactly the same, then need to
             /// further compare the string length, otherwise we can get the compare result from partial compare result.
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
@@ -388,16 +373,11 @@ struct StringComparisonImpl
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
-            if (i == 0)
-            {
-                int res = memcmp(&a_data[0], b_data, std::min(a_offsets[0], b_size));
-                c[i] = res == 0 ? Op::apply(a_offsets[0], b_size) : Op::apply(res, 0);
-            }
-            else
-            {
-                int res = memcmp(&a_data[a_offsets[i - 1]], b_data, std::min(a_offsets[i] - a_offsets[i - 1], b_size));
-                c[i] = res == 0 ? Op::apply(a_offsets[i] - a_offsets[i - 1], b_size) : Op::apply(res, 0);
-            }
+            size_t a_size = StringUtil::sizeAt(a_offsets, i);
+            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
+
+            int res = memcmp(&a_data[a_offset], b_data, std::min(a_size, b_size));
+            c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
 
