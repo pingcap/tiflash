@@ -727,26 +727,25 @@ private:
         }
         else
         {
-            PrecType result_prec = 0;
-            ScaleType result_scale = 0;
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>)
             {
                 PrecType left_prec = IntPrec<LeftFieldType>::prec;
                 auto [right_prec, right_scale] = getPrecAndScale(arguments[1].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, 0, right_prec, right_scale, result_prec, result_scale);
+
+                auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, 0, right_prec, right_scale);
                 return createDecimal(result_prec, result_scale);
             }
             else if constexpr (std::is_integral_v<RightFieldType>)
             {
                 ScaleType right_prec = IntPrec<RightFieldType>::prec;
                 auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, 0, result_prec, result_scale);
+                auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, 0);
                 return createDecimal(result_prec, result_scale);
             }
             auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
             auto [right_prec, right_scale] = getPrecAndScale(arguments[1].get());
-            Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, right_scale, result_prec, result_scale);
+            auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, right_scale);
 
             return createDecimal(result_prec, result_scale);
         }
