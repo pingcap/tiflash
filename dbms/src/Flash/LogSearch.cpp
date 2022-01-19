@@ -156,7 +156,7 @@ static inline bool read_sint(const char * s, size_t n, int & result)
     return true;
 }
 
-bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size)
+bool LogIterator::readLevel(size_t limit, const char * s, size_t & level_start, size_t & level_size)
 {
     level_start = 33;
     level_size = 0;
@@ -183,7 +183,7 @@ bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start,
     return true;
 }
 
-bool LogIterator::read_date(
+bool LogIterator::readDate(
     size_t limit,
     const char * s,
     int & y,
@@ -247,7 +247,7 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         // If we can reuse prev_time
         entry.time = prev_time_t;
 
-        if (!LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (!LogIterator::readLevel(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
         }
@@ -262,8 +262,8 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        if (LogIterator::read_date(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-            && LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (LogIterator::readDate(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+            && LogIterator::readLevel(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             loglevel_start = line.data() + loglevel_s;
         }
