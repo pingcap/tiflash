@@ -200,6 +200,8 @@ size = "1"
 }
 CATCH
 
+extern "C" char **environ;
+
 #if USE_UNWIND
 TEST(BaseDaemon, StackUnwind)
 {
@@ -244,10 +246,20 @@ level = "debug"
         ::dup2(stderr_fd, STDERR_FILENO);
         char arg[] = "--gtest_filter=BaseDaemon.StackUnwind";
         char * const argv[] = {abs_path, arg, nullptr};
-        char env0[] = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
-        auto env1 = std::getenv("LLVM_PROFILE_FILE");
-        char * const envp[] = {env0, env1, nullptr};
-        ::execve(abs_path, argv, envp);
+        std::vector<char *> envs;
+        std::string profile = "LLVM_PROFILE_FILE=default.profraw";
+        std::string child_flag = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
+        for (auto* i = environ; i != nullptr; i++) {
+            if (strstr(*i, "LLVM_PROFILE_FILE") != nullptr) {
+                profile = fmt::format("{}%c", *i);
+            } else
+            {
+                envs.push_back(*i);
+            }
+        }
+        envs.push_back(child_flag.data());
+        envs.push_back(profile.data());
+        ::execve(abs_path, argv, envs.data());
     }
     else
     {
