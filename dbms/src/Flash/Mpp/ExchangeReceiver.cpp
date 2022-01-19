@@ -43,7 +43,7 @@ static constexpr Int32 MAX_RETRY_TIMES = 10;
 static constexpr Int32 BATCH_PACKET_COUNT = 16;
 
 template <typename RPCContext>
-struct AsyncRequestStat : public UnaryCallback<bool>
+struct AsyncRequestHandler : public UnaryCallback<bool>
 {
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
@@ -68,7 +68,7 @@ struct AsyncRequestStat : public UnaryCallback<bool>
     Status finish_status = RPCContext::getStatusOK();
     LogWithPrefixPtr log;
 
-    AsyncRequestStat(
+    AsyncRequestHandler(
         MPMCQueue<size_t> * queue,
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
@@ -318,12 +318,12 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     MPMCQueue<size_t> ready_requests(alive_async_connections * 2);
     std::vector<size_t> waiting_for_retry_requests;
 
-    std::vector<AsyncRequestStat<RPCContext>> stats;
-    stats.reserve(alive_async_connections);
+    std::vector<AsyncRequestHandler<RPCContext>> handlers;
+    handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
     {
-        stats.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
-        stats.back().start();
+        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
+        handlers.back().start();
     }
 
     static constexpr auto timeout = std::chrono::milliseconds(10);
@@ -333,14 +333,14 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
         size_t source_index = 0;
         if (ready_requests.tryPop(source_index, timeout))
         {
-            auto & stat = stats[source_index];
-            stat.handle();
-            if (stat.finished())
+            auto & handler = handlers[source_index];
+            handler.handle();
+            if (handler.finished())
             {
                 --alive_async_connections;
-                connectionDone(stat.meet_error, stat.err_msg, stat.log);
+                connectionDone(handler.meet_error, handler.err_msg, handler.log);
             }
-            else if (stat.waitingForRetry())
+            else if (handler.waitingForRetry())
             {
                 waiting_for_retry_requests.push_back(source_index);
             }
@@ -350,7 +350,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
             std::vector<size_t> tmp;
             for (auto i : waiting_for_retry_requests)
             {
-                if (!stats[i].retry())
+                if (!handlers[i].retry())
                     tmp.push_back(i);
             }
             waiting_for_retry_requests.swap(tmp);
