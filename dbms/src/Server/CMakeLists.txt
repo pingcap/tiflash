@@ -43,7 +43,6 @@ target_link_libraries (clickhouse-extract-from-config-lib clickhouse_common_conf
 add_library (clickhouse-client-lib Client.cpp)
 target_link_libraries (clickhouse-client-lib clickhouse_functions clickhouse_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories (clickhouse-client-lib PRIVATE ${READLINE_INCLUDE_DIR})
-install (FILES clickhouse-client.xml DESTINATION ${TIFLASH_ETC_DIR}/clickhouse-client COMPONENT clickhouse-client RENAME config.xml)
 
 add_library (clickhouse-benchmark-lib ${SPLIT_SHARED} Benchmark.cpp)
 target_link_libraries (clickhouse-benchmark-lib clickhouse-client-lib clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
@@ -206,8 +205,3 @@ endif ()
 
 set (GLIBC_MAX_REQUIRED 2.4)
 add_test(NAME GLIBC_required_version COMMAND bash -c "readelf -s ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server | grep '@GLIBC' | grep -oP 'GLIBC_[\\d\\.]+' | sort | uniq | sort -r | perl -lnE 'exit 1 if $_ gt q{GLIBC_${GLIBC_MAX_REQUIRED}}'")
-
-install (
-    FILES config.xml users.xml
-    DESTINATION  ${TIFLASH_ETC_DIR}/clickhouse-server
-    COMPONENT tiflash)

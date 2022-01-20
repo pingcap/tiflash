@@ -264,13 +264,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     endif()
 endif ()
 
-# when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
-if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set (TIFLASH_ETC_DIR "/etc")
-else ()
-    set (TIFLASH_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
-endif ()
-
 option (UNBUNDLED "Try find all libraries in system (if fail - use bundled from contrib/)" OFF)
 if (UNBUNDLED)
     set(NOT_UNBUNDLED 0)
