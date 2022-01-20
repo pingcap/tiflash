@@ -1007,13 +1007,13 @@ std::tuple<Field, DataTypePtr, DataTypePtr> inferDataTypeForLiteral(const tipb::
     /// need to extract target_type from expr.field_type() because the flash_type derived from
     /// value is just a `memory type`, which does not have enough information, for example:
     /// for date literal, the flash_type is `UInt64`
-    DataTypePtr target_type{};
+    DataTypePtr target_type;
     if (expr.tp() == tipb::ExprType::Null)
     {
-        // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
-        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing: when
-        //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
-        //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
+        // TODO: We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
+        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing:
+        //  when TiFlash tries to return data to TiDB or exchange data between TiFlash nodes, since codec only recognizes
+        //  TiDB type, using DataTypeNothing will cause error in the codec, so DO NOT use DataTypeNothing until
         //  we fix the codec issue.
         if (exprHasValidFieldType(expr))
         {

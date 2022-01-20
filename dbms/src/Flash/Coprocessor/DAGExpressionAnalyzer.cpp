@@ -228,6 +228,8 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
             continue;
         }
         auto [value, flash_type, target_type] = inferDataTypeForLiteral(child);
+        (void)value;
+        (void)flash_type;
         argument_types.push_back(target_type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
@@ -993,12 +995,12 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 
-bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
+bool DAGExpressionAnalyzer::appendJoinKeysAndFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & join_keys,
     const DataTypes & key_types,
     Names & key_names_out, // output variable
-    bool left,
+    bool is_left_side,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
@@ -1021,19 +1023,24 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!has_actions && (!left || is_right_out_join))
+        if (!has_actions && (!is_left_side || is_right_out_join))
         {
             /// if the join key is a columnRef, then add a new column as the join key if needed.
             /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
-            /// where left_columns and right_columns don't include the join join_keys if they are ColumnRef
-            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join join_keys
-            /// are ColumnRef, they will be included in both left_columns and right_columns
-            /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
-            /// In ClickHouse, it returns id,t1_value,t2_value
-            /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
-            /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
-            /// join, add a new key for right join key, for right join, add new key for both left and right join key
-            String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
+            /// where left_columns and right_columns don't include the join_keys if they are ColumnRef.
+            /// In TiDB, however, the columns returned by join are left_columns and right_columns.
+            /// If the join join_keys are ColumnRef, they will be included in both left_columns and right_columns.
+            /// E.g, for table t1(id, value), t2(id, value) and query `select * from t1 join t2 on t1.id = t2.id`
+            /// the output is as following
+            /// ┌────────────┬───────────┬─────────────────┬─────────────────┐
+            /// │            │ join_keys │  left_columns   │  right_columns  │
+            /// ├────────────┼───────────┼─────────────────┼─────────────────┤
+            /// │ ClickHouse │ id        │ t1.value        │ t2.value        │
+            /// │ TiDB       │           │ t1.id, t1.value │ t2.id, t2.value │
+            /// └────────────┴───────────┴─────────────────┴─────────────────┘
+            /// So in order to make the join compatible with TiDB: if the join key is a columnRef, for inner/left join,
+            /// add a new key for right join key; for right join, add new key for both left and right join key
+            String updated_key_name = unique_name_generator.toUniqueName((is_left_side ? "_l_k_" : "_r_k_") + key_name);
             /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
             /// key names, so just copy a key with new name
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
@@ -1066,21 +1073,13 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         }
         filter_column_name = appendWhere(chain, filter_vector);
     }
-    /// remove useless columns to avoid duplicate columns
-    /// as when compiling the key/filter expression, the origin
-    /// streams may be added some columns that have the
-    /// same name on left streams and right streams, for
-    /// example, if the join condition is something like:
-    /// id + 1 = id + 1,
-    /// the left streams and the right streams will have the
-    /// same constant column for `1`
-    /// Note that the origin left streams and right streams
-    /// will never have duplicated columns because in
-    /// DAGQueryBlockInterpreter we add qb_column_prefix in
-    /// final project step, so if the join condition is not
-    /// literal expression, the key names should never be
-    /// duplicated. In the above example, the final key names should be
-    /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
+    /// remove useless columns to avoid duplicate columns as when compiling the key/filter expression,
+    /// some columns with the same name on the left and right streams may be added into the original streams.
+    /// For example, if the join condition is `id + 1 = id + 1`, the left and right streams will have the same constant column for `1`.
+    /// Note that the original left and right streams will never have duplicated columns in itself,
+    /// because qb_column_prefix is added in DAGQueryBlockInterpreter in the final project step.
+    /// So if the join condition is not a literal expression, the key names should never be duplicated.
+    /// In the example above, the final key names should be something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
     if (ret)
     {
         std::unordered_set<String> needed_columns;
@@ -1377,6 +1376,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         auto [value, flash_type, target_type] = inferDataTypeForLiteral(expr);
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
+        /// add column
         if (!actions_out->getSampleBlock().has(ret))
         {
             ColumnWithTypeAndName column;
@@ -1385,9 +1385,9 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             column.type = target_type;
             actions_out->add(ExpressionAction::addColumn(column));
         }
+        /// append timezone cast for timestamp column
         if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
         {
-            /// append timezone cast for timestamp literal
             tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffsetFromUTC";
             String tz_col = getActions(tz_expr, actions_out);
@@ -1397,6 +1397,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else if (isColumnExpr(expr))
     {
+        /// no additional actions
         ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
     else if (isScalarFunctionExpr(expr))

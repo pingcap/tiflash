@@ -109,12 +109,12 @@ public:
         const DAGQueryBlock & query_block);
 
     /// return true if some actions is needed
-    bool appendJoinKeyAndJoinFilters(
+    bool appendJoinKeysAndFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & join_keys,
         const DataTypes & key_types,
         Names & key_names_out,
-        bool left,
+        bool is_left_side,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);

@@ -323,7 +323,7 @@ void DAGQueryBlockInterpreter::prepareJoin(
     const DataTypes & key_types,
     DAGPipeline & pipeline,
     Names & key_names_out,
-    bool is_left,
+    bool is_left_side,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
@@ -333,7 +333,7 @@ void DAGQueryBlockInterpreter::prepareJoin(
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, join_keys, key_types, key_names_out, is_left, is_right_out_join, filters, filter_column_name))
+    if (dag_analyzer.appendJoinKeysAndFilters(chain, join_keys, key_types, key_names_out, is_left_side, is_right_out_join, filters, filter_column_name))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
     }
