@@ -6,6 +6,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -967,7 +968,7 @@ try
     EXPECT_EQ(entries_in_file2.size(), 2); // 2 page entries list
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 page entries list
 
-    PageIdAndVersionedEntryList gc_migrate_entries;
+    PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
@@ -975,7 +976,7 @@ try
         {
             for (const auto & [ver, entry] : version_entries)
             {
-                gc_migrate_entries.emplace_back(page_id, ver, entry);
+                gc_migrate_entries.upsertPage(page_id, ver, entry);
             }
         }
     }
@@ -986,13 +987,13 @@ try
         {
             for (const auto & [ver, entry] : version_entries)
             {
-                gc_migrate_entries.emplace_back(page_id, ver, entry);
+                gc_migrate_entries.upsertPage(page_id, ver, entry);
             }
         }
     }
 
     // Full GC execute apply
-    dir.gcApply(gc_migrate_entries);
+    dir.gcApply(std::move(gc_migrate_entries));
 }
 CATCH
 
@@ -1028,7 +1029,7 @@ try
     // `page_id` get removed
     EXPECT_EQ(dir.numPages(), 1);
 
-    PageIdAndVersionedEntryList gc_migrate_entries;
+    PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
@@ -1036,7 +1037,7 @@ try
         {
             for (const auto & [ver, entry] : version_entries)
             {
-                gc_migrate_entries.emplace_back(page_id, ver, entry);
+                gc_migrate_entries.upsertPage(page_id, ver, entry);
             }
         }
     }
@@ -1047,13 +1048,13 @@ try
         {
             for (const auto & [ver, entry] : version_entries)
             {
-                gc_migrate_entries.emplace_back(page_id, ver, entry);
+                gc_migrate_entries.upsertPage(page_id, ver, entry);
             }
         }
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir.gcApply(gc_migrate_entries); }, DB::Exception);
+    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
 }
 CATCH
 
