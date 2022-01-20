@@ -905,12 +905,16 @@ public:
 
     ~DeltaTree()
     {
-        if (isLeaf(root))
-            freeTree<Leaf>((LeafPtr)root);
-        else
-            freeTree<Intern>((InternPtr)root);
+        if (root)
+        {
+            if (isLeaf(root))
+                freeTree<Leaf>((LeafPtr)root);
+            else
+                freeTree<Intern>((InternPtr)root);
+        }
 
-        delete allocator;
+        if (allocator)
+            delete allocator;
 
         LOG_TRACE(log, "free");
     }
