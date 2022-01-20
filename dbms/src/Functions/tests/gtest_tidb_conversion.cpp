@@ -672,8 +672,8 @@ try
                          createCastTypeConstColumn("Nullable(Decimal(65,0))")}));
 
     ASSERT_THROW(executeFunction(func_name,
-                            {createColumn<Nullable<Int32>>({9999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}),
-            TiFlashException);
+                                 {createColumn<Nullable<Int32>>({9999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}),
+                 TiFlashException);
 }
 CATCH
 
