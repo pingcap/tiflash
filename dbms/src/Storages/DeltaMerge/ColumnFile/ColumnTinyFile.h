@@ -28,7 +28,6 @@ private:
     // Used to map column id to column instance in a Block.
     ColIdToOffset colid_to_offset;
 
-
 private:
     /// Read a block of columns in `column_defines` from cache / disk,
     /// if `pack->schema` is not match with `column_defines`, take good care of ddl cast

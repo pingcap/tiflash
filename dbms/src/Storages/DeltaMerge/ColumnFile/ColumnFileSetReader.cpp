@@ -69,21 +69,18 @@ ColumnFileSetReader::ColumnFileSetReader(
     , segment_range(segment_range_)
 {
     size_t total_rows = 0;
-    if (snapshot)
+    for (auto & f : snapshot->getColumnFiles())
     {
-        for (auto & f : snapshot->getColumnFiles())
-        {
-            total_rows += f->getRows();
-            column_file_rows.push_back(f->getRows());
-            column_file_rows_end.push_back(total_rows);
-            column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
-        }
+        total_rows += f->getRows();
+        column_file_rows.push_back(f->getRows());
+        column_file_rows_end.push_back(total_rows);
+        column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
     }
 }
 
 ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
-    auto new_reader = new ColumnFileSetReader();
+    auto * new_reader = new ColumnFileSetReader();
     new_reader->snapshot = snapshot;
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
@@ -124,9 +121,6 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
     //
     // So here, we should filter out those out-of-range rows.
 
-    if (!snapshot)
-        return 0;
-
     auto total_delta_rows = snapshot->getRows();
 
     auto start = std::min(offset, total_delta_rows);
@@ -156,9 +150,6 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
 
 void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end, size_t place_rows_offset)
 {
-    if (!snapshot)
-        return;
-
     /// Note that we merge the consecutive DeltaPackBlock together, which are seperated in groups by DeltaPackDelete and DeltePackFile.
     auto & column_files = snapshot->getColumnFiles();
 
@@ -222,9 +213,6 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
                                       UInt64 max_version,
                                       size_t placed_rows)
 {
-    if (!snapshot)
-        return false;
-
     auto & column_files = snapshot->getColumnFiles();
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(column_file_rows_end, placed_rows);
 

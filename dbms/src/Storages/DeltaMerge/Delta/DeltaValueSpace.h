@@ -253,7 +253,7 @@ public:
         return c;
     }
 
-    DeltaValueSnapshot(CurrentMetrics::Metric type_)
+    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
     {
         type = type_;
         CurrentMetrics::add(type);
@@ -269,6 +269,8 @@ public:
     // Only used when `is_update` is true
     ColumnFiles & getHeadColumnFilesForCheck() const
     {
+        if (unlikely(!is_update))
+            throw Exception("Should not call this method when is_update is true", ErrorCodes::LOGICAL_ERROR);
         // mem_table_snap must be nullptr
         return stable_files_snap->getColumnFiles();
     }
