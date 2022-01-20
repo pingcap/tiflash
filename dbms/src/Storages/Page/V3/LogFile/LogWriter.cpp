@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -21,6 +22,8 @@ LogWriter::LogWriter(
     , recycle_log_files(recycle_log_files_)
     , manual_flush(manual_flush_)
 {
+    // Must be `BLOCK_SIZE`, or we can not ensure the correctness of writing.
+    assert(dest->internalBuffer().size() == Format::BLOCK_SIZE);
 }
 
 LogWriter::~LogWriter()
