@@ -487,7 +487,7 @@ class DTEntryIterator
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
-    LeafPtr leaf;
+    LeafPtr leaf = nullptr;
     size_t pos;
     Int64 delta;
 
@@ -564,8 +564,8 @@ class DTEntriesCopy : Allocator
 
     const size_t entry_count;
     const Int64 delta;
-    UInt64 * const sids;
-    DTMutation * const mutations;
+    UInt64 * const sids = nullptr;
+    DTMutation * const mutations = nullptr;
 
 public:
     DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
@@ -589,8 +589,10 @@ public:
 
     ~DTEntriesCopy()
     {
-        this->free(sids, sizeof(UInt64) * entry_count);
-        this->free(mutations, sizeof(DTMutation) * entry_count);
+        if (sids)
+            this->free(sids, sizeof(UInt64) * entry_count);
+        if (mutations)
+            this->free(mutations, sizeof(DTMutation) * entry_count);
     }
 
     class Iterator
