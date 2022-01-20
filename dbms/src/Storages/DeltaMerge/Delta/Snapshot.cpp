@@ -27,7 +27,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->stable_files_snap = stable_file_set->createSnapshot(context);
     snap->shared_delta_index = delta_index;
 
-    if (for_update)
+    if (!for_update)
     {
         snap->mem_table_snap = mem_table_set->createSnapshot();
     }
@@ -93,14 +93,14 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     size_t actual_read = 0;
     if (stable_files_start < stable_files_end)
     {
-        actual_read += stable_files_reader->readRows(output_cols, stable_files_start, stable_files_end, range);
+        actual_read += stable_files_reader->readRows(output_cols, stable_files_start, stable_files_end - stable_files_start, range);
     }
     if (mem_table_start < mem_table_end)
     {
         if (unlikely(!mem_table_reader))
             throw Exception("mem table reader shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
 
-        actual_read += mem_table_reader->readRows(output_cols, mem_table_start, mem_table_end, range);
+        actual_read += mem_table_reader->readRows(output_cols, mem_table_start, mem_table_end - mem_table_start, range);
     }
     return actual_read;
 }
@@ -126,7 +126,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     auto mem_table_deletes_end = deletes_end <= mem_table_deletes_offset ? 0 : std::min(deletes_end - mem_table_deletes_offset, total_delta_deletes - mem_table_deletes_offset);
 
     stable_files_reader->getPlaceItems(res, stable_files_rows_begin, stable_files_deletes_begin, stable_files_rows_end, stable_files_deletes_end);
-    mem_table_reader->getPlaceItems(res, mem_table_rows_begin, mem_table_deletes_begin, mem_table_rows_end, mem_table_deletes_end);
+    mem_table_reader->getPlaceItems(res, mem_table_rows_begin, mem_table_deletes_begin, mem_table_rows_end, mem_table_deletes_end, mem_table_rows_offset);
 
     return res;
 }

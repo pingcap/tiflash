@@ -32,16 +32,24 @@ inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const
 
 void ColumnStableFileSet::updateStats()
 {
+    size_t new_stable_files_count = 0;
+    size_t new_rows = 0;
+    size_t new_bytes = 0;
+    size_t new_deletes = 0;
     for (auto & file_level : stable_files_levels)
     {
-        stable_files_count += file_level.size();
+        new_stable_files_count += file_level.size();
         for (auto & file : file_level)
         {
-            rows += file->getRows();
-            bytes += file->getBytes();
-            deletes += file->getDeletes();
+            new_rows += file->getRows();
+            new_bytes += file->getBytes();
+            new_deletes += file->getDeletes();
         }
     }
+    stable_files_count = new_stable_files_count;
+    rows = new_rows;
+    bytes = new_bytes;
+    deletes = new_deletes;
 }
 
 ColumnStableFileSet::ColumnStableFileSet(PageId metadata_id_, const ColumnStableFiles & column_stable_files)

@@ -32,7 +32,14 @@ public:
     MemTableSet(const ColumnFiles & in_memory_files = {})
         : column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
-    {}
+    {
+        for (const auto & file : column_files)
+        {
+            rows += file->getRows();
+            bytes += file->getBytes();
+            deletes += file->getDeletes();
+        }
+    }
 
     String info() const
     {
@@ -62,7 +69,7 @@ public:
     /// Returns empty if this instance is abandoned, you should try again.
     ColumnFileSetSnapshotPtr createSnapshot();
 
-    FlushColumnFileTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset);
+    FlushColumnFileTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
 
     void removeColumnFilesInFlushTask(const FlushColumnFileTask & flush_task);
 };

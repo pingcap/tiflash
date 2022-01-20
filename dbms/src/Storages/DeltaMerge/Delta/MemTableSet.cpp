@@ -119,7 +119,7 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     return snap;
 }
 
-FlushColumnFileTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset)
+FlushColumnFileTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version)
 {
     if (column_files.empty())
         return nullptr;
@@ -133,11 +133,11 @@ FlushColumnFileTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
     size_t flush_rows = 0;
     size_t flush_bytes = 0;
     size_t flush_deletes = 0;
-    auto flush_task = std::make_shared<FlushColumnFileTask>(context, this->shared_from_this());
+    auto flush_task = std::make_shared<FlushColumnFileTask>(context, this->shared_from_this(), flush_version);
     for (auto & column_file : column_files)
     {
         auto & task = flush_task->tasks.emplace_back(column_file);
-        if (auto mfile = column_file->tryToInMemoryFile(); mfile)
+        if (auto * mfile = column_file->tryToInMemoryFile(); mfile)
         {
             task.rows_offset = cur_rows_offset;
             task.deletes_offset = cur_deletes_offset;
@@ -163,7 +163,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const FlushColumnFileTask & flush
 
     ColumnFiles new_column_files;
     auto column_file_iter = column_files.begin();
-    for (auto & task : tasks)
+    for (const auto & task : tasks)
     {
         if (unlikely(column_file_iter == column_files.end() || *column_file_iter != task.column_file))
         {

@@ -11,9 +11,10 @@ namespace DB
 {
 namespace DM
 {
-FlushColumnFileTask::FlushColumnFileTask(DMContext & context_, const MemTableSetPtr & mem_table_set_)
+FlushColumnFileTask::FlushColumnFileTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t current_flush_version_)
     : context{context_},
-      mem_table_set{mem_table_set_}
+      mem_table_set{mem_table_set_},
+      current_flush_version{current_flush_version_}
 {}
 
 DeltaIndex::Updates FlushColumnFileTask::prepare(WriteBatches & wbs)

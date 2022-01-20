@@ -154,7 +154,7 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
     return actual_read;
 }
 
-void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
+void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end, size_t place_rows_offset)
 {
     if (!snapshot)
         return;
@@ -178,18 +178,18 @@ void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t row
             if (block_rows_end != block_rows_start)
             {
                 auto block = readPKVersion(block_rows_start, block_rows_end - block_rows_start);
-                place_items.emplace_back(std::move(block), block_rows_start);
+                place_items.emplace_back(std::move(block), block_rows_start + place_rows_offset);
             }
 
             // Second, take current pack.
-            if (auto pack_delete = pack.tryToDeleteRange(); pack_delete)
+            if (auto * pack_delete = pack.tryToDeleteRange(); pack_delete)
             {
                 place_items.emplace_back(pack_delete->getDeleteRange());
             }
             else if (pack.isBigFile() && pack.getRows())
             {
                 auto block = readPKVersion(block_rows_end, pack.getRows());
-                place_items.emplace_back(std::move(block), block_rows_end);
+                place_items.emplace_back(std::move(block), block_rows_end + place_rows_offset);
             }
 
             block_rows_end += pack.getRows();
@@ -209,7 +209,7 @@ void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t row
                 if (block_rows_end != block_rows_start)
                 {
                     auto block = readPKVersion(block_rows_start, block_rows_end - block_rows_start);
-                    place_items.emplace_back(std::move(block), block_rows_start);
+                    place_items.emplace_back(std::move(block), block_rows_start + place_rows_offset);
                 }
                 block_rows_start = block_rows_end;
             }

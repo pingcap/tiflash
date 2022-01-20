@@ -101,6 +101,8 @@ public:
     size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
 
+    size_t getCurrentFlushVersion() const { return flush_version; }
+
     bool appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnStableFiles & column_files, WriteBatches & wbs);
 
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);

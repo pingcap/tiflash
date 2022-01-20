@@ -144,7 +144,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             LOG_DEBUG(log, simpleInfo() << "Flush stop because abandoned");
             return false;
         }
-        flush_task = mem_table_set->buildFlushTask(context, stable_file_set->getRows(), stable_file_set->getDeletes());
+        flush_task = mem_table_set->buildFlushTask(context, stable_file_set->getRows(), stable_file_set->getDeletes(), stable_file_set->getCurrentFlushVersion());
         cur_delta_index = delta_index;
     }
 

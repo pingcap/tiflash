@@ -27,7 +27,7 @@ class FlushColumnFileTask
 public:
     struct Task
     {
-        Task(const ColumnFilePtr & column_file_)
+        explicit Task(const ColumnFilePtr & column_file_)
             : column_file(column_file_)
         {}
 
@@ -47,10 +47,10 @@ private:
     ColumnStableFiles results;
     DMContext & context;
     MemTableSetPtr mem_table_set;
-    size_t current_flush_version = 0;
+    size_t current_flush_version;
 
 public:
-    FlushColumnFileTask(DMContext & context_, const MemTableSetPtr & mem_table_set_);
+    FlushColumnFileTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t current_flush_version_);
 
     DeltaIndex::Updates prepare(WriteBatches & wbs);
 
