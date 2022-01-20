@@ -189,7 +189,7 @@ struct DateDateTimeComparisonImpl
             // first check if datetime constant can be convert to date constant
             bool truncated;
             DayNum date_num;
-            std::tie(date_num, truncated) = dateTimeToDate((time_t)b);
+            std::tie(date_num, truncated) = dateTimeToDate(static_cast<time_t>(b));
             if (!truncated)
             {
                 using OpType = A;
@@ -228,7 +228,7 @@ struct DateDateTimeComparisonImpl
             // datetime constant with date vector
             bool truncated;
             DayNum date_num;
-            std::tie(date_num, truncated) = dateTimeToDate((time_t)a);
+            std::tie(date_num, truncated) = dateTimeToDate(static_cast<time_t>(a));
             if (!truncated)
             {
                 using OpType = B;
@@ -285,8 +285,8 @@ struct StringComparisonWithCollatorImpl
 
         for (size_t i = 0; i < size; ++i)
         {
-            size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-            size_t b_size = StringUtil::sizeAt(b_offsets, i) - 1;
+            size_t a_size = StringUtil::sizeAt(a_offsets, i);
+            size_t b_size = StringUtil::sizeAt(b_offsets, i);
             size_t a_offset = StringUtil::offsetAt(a_offsets, i);
             size_t b_offset = StringUtil::offsetAt(b_offsets, i);
 
@@ -307,7 +307,7 @@ struct StringComparisonWithCollatorImpl
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
-            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), a_offsets[0] - 1, b_data, b_size), 0);
+            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), StringUtil::sizeAt(a_offsets, i), b_data, b_size + 1), 0);
         }
     }
 
@@ -1261,7 +1261,7 @@ public:
         }
     }
 
-    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
         return std::make_shared<DataTypeInt8>();
     }

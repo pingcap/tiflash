@@ -90,7 +90,7 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = escape;
+                        c = static_cast<unsigned char>(escape);
                 }
             }
             else if (c == '_')
@@ -121,7 +121,7 @@ public:
                 switch (match_types[p_idx])
                 {
                     case Match:
-                        if (s_offset < length && Collator::RegexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                        if (s_offset < length && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
                         {
                             p_idx++;
                             s_offset = tmp_s_offset;
@@ -170,7 +170,7 @@ template <typename T, bool padding = false>
 class BinCollator : public ITiDBCollator
 {
 public:
-    BinCollator(int32_t id) : ITiDBCollator(id) {}
+    explicit BinCollator(int32_t id) : ITiDBCollator(id) {}
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         if constexpr (padding)
@@ -214,7 +214,7 @@ private:
 
     static inline WeightType weight(CharType c) { return c; }
 
-    static inline bool RegexEq(CharType a, CharType b) {
+    static inline bool regexEq(CharType a, CharType b) {
         return weight(a) == weight(b);
     }
 
@@ -230,7 +230,7 @@ extern const std::array<WeightType, 256 * 256> weight_lut;
 class GeneralCICollator : public ITiDBCollator
 {
 public:
-    GeneralCICollator(int32_t id) : ITiDBCollator(id) {}
+    explicit GeneralCICollator(int32_t id) : ITiDBCollator(id) {}
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
@@ -295,7 +295,7 @@ private:
         //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
     }
 
-    static inline bool RegexEq(CharType a, CharType b) {
+    static inline bool regexEq(CharType a, CharType b) {
         return weight(a) == weight(b);
     }
 
@@ -343,7 +343,7 @@ const std::array<long_weight, 23> weight_lut_long = {
 class UnicodeCICollator : public ITiDBCollator
 {
 public:
-    UnicodeCICollator(int32_t id) : ITiDBCollator(id) {}
+    explicit UnicodeCICollator(int32_t id) : ITiDBCollator(id) {}
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
@@ -386,7 +386,7 @@ public:
                 }
                 else
                 {
-                    return signum((int)(s1_first&0xFFFF)-(int)(s2_first&0xFFFF));
+                    return signum(static_cast<int>(s1_first&0xFFFF)-static_cast<int>(s2_first&0xFFFF));
                 }
             }
         }
@@ -407,8 +407,8 @@ public:
         while (offset < v_length)
         {
             weight(first, second, offset, v_length, s);
-            write_result(first, container, total_size);
-            write_result(second, container, total_size);
+            writeResult(first, container, total_size);
+            writeResult(second, container, total_size);
         }
 
         return StringRef(container.data(), total_size);
@@ -429,7 +429,7 @@ private:
         return decodeUtf8Char(s, offset);
     }
 
-    static inline void write_result(uint64_t & w, std::string & container, size_t & total_size) {
+    static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size) {
         while(w != 0) {
             container[total_size++] = char(w >> 8);
             container[total_size++] = char(w);
@@ -437,7 +437,7 @@ private:
         }
     }
 
-    static inline bool RegexEq(CharType a, CharType b) {
+    static inline bool regexEq(CharType a, CharType b) {
         if (a > 0xFFFF || b > 0xFFFF) {
             return a == b;
         }
@@ -456,7 +456,7 @@ private:
         return true;
     }
 
-    static inline const UnicodeCI::long_weight & weight_lut_long_map(Rune r) {
+    static inline const UnicodeCI::long_weight & weightLutLongMap(Rune r) {
         switch (r) {
             case 0x321D: return UnicodeCI::weight_lut_long[0];
             case 0x321E: return UnicodeCI::weight_lut_long[1];
@@ -500,7 +500,7 @@ private:
                         continue;
                     }
                     if (w == UnicodeCI::long_weight_rune) {
-                        auto long_weight = weight_lut_long_map(r);
+                        auto long_weight = weightLutLongMap(r);
                         first = long_weight.first;
                         second = long_weight.second;
                     }
