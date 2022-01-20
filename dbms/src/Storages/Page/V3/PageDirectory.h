@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <Common/LogWithPrefix.h>
+#include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -15,15 +17,54 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#include <thread>
+#endif
+namespace CurrentMetrics
+{
+extern const Metric PSMVCCNumSnapshots;
+} // namespace CurrentMetrics
+
 namespace DB::PS::V3
 {
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
+    using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+
     UInt64 sequence;
     explicit PageDirectorySnapshot(UInt64 seq)
         : sequence(seq)
-    {}
+        , t_id(Poco::ThreadNumber::get())
+        , create_time(std::chrono::steady_clock::now())
+    {
+        CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
+    }
+
+    ~PageDirectorySnapshot()
+    {
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
+    }
+
+    double elapsedSeconds() const
+    {
+        auto end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> diff = end - create_time;
+        return diff.count();
+    }
+
+    unsigned getTid() const
+    {
+        return t_id;
+    }
+
+private:
+    const unsigned t_id;
+    const TimePoint create_time;
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
@@ -130,20 +171,31 @@ private:
 class PageDirectory
 {
 public:
+    using ConcreteSnapshotRawPtr = PageDirectorySnapshot *;
+
     PageDirectory();
 
     void restore();
 
     PageDirectorySnapshotPtr createSnapshot() const;
 
+    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+
+    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
+
+    PageIDAndEntriesV3 get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
+
+    PageId getMaxId() const;
+
+    std::set<PageId> getAllPageIds();
 
     void apply(PageEntriesEdit && edit);
 
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
-    void gcApply(PageEntriesEdit && migrated_edit);
+    std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
 
     std::vector<PageEntriesV3> gc();
 

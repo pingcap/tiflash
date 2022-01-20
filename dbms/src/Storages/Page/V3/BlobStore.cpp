@@ -254,6 +254,131 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     }
 }
 
+void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
+
+    // Sort in ascending order by offset in file.
+    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+        return a.second.offset < b.second.offset;
+    });
+
+    // allocate data_buf that can hold all pages
+    size_t buf_size = 0;
+    for (const auto & p : entries)
+    {
+        buf_size += p.second.size;
+    }
+
+    char * data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+        free(p, buf_size);
+    });
+
+    char * pos = data_buf;
+    for (const auto & [page_id, entry] : entries)
+    {
+        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+
+        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+        {
+            ChecksumClass digest;
+            digest.update(pos, entry.size);
+            auto checksum = digest.checksum();
+            if (unlikely(entry.size != 0 && checksum != entry.checksum))
+            {
+                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                                            page_id,
+                                            getBlobFilePath(entry.file_id),
+                                            entry.checksum,
+                                            checksum),
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
+        }
+
+        Page page;
+        page.page_id = page_id;
+        page.data = ByteBuffer(pos, pos + entry.size);
+        page.mem_holder = mem_holder;
+        handler(page_id, page);
+
+        pos += entry.size;
+    }
+
+    if (unlikely(pos != data_buf + buf_size))
+        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
+                                    data_buf + buf_size,
+                                    pos),
+                        ErrorCodes::LOGICAL_ERROR);
+}
+
+PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
+
+    // Sort in ascending order by offset in file.
+    std::sort(
+        to_read.begin(),
+        to_read.end(),
+        [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
+
+    // allocate data_buf that can hold all pages with specify fields
+    size_t buf_size = 0;
+    for (auto & [page_id, entry, fields] : to_read)
+    {
+        (void)page_id;
+        // Sort fields to get better read on disk
+        std::sort(fields.begin(), fields.end());
+        buf_size += entry.size;
+    }
+
+    char * data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+        free(p, buf_size);
+    });
+
+    std::set<Page::FieldOffset> fields_offset_in_page;
+    char * pos = data_buf;
+    PageMap page_map;
+    for (const auto & [page_id, entry, fields] : to_read)
+    {
+        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+
+        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+        {
+            ChecksumClass digest;
+            digest.update(pos, entry.size);
+            auto checksum = digest.checksum();
+            if (unlikely(entry.size != 0 && checksum != entry.checksum))
+            {
+                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                                            page_id,
+                                            getBlobFilePath(entry.file_id),
+                                            entry.checksum,
+                                            checksum),
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
+        }
+
+        Page page;
+        page.page_id = page_id;
+        page.data = ByteBuffer(pos, pos + entry.size);
+        page.mem_holder = mem_holder;
+
+        page.field_offsets.swap(fields_offset_in_page);
+        fields_offset_in_page.clear();
+        page_map.emplace(page_id, std::move(page));
+
+        pos += entry.size;
+    }
+
+    if (unlikely(pos != data_buf + buf_size))
+        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
+                                    data_buf + buf_size,
+                                    pos),
+                        ErrorCodes::LOGICAL_ERROR);
+    return page_map;
+}
 
 PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter)
 {
