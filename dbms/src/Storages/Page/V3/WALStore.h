@@ -79,7 +79,7 @@ public:
     void apply(PageEntriesEdit & edit, const PageVersionType & version);
     void apply(const PageEntriesEdit & edit);
 
-    void compactLogs();
+    bool compactLogs();
 
 private:
     WALStore(

@@ -134,7 +134,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 
 // In order to make `restore` in a reasonable time, we need to compact
 // log files.
-void WALStore::compactLogs()
+bool WALStore::compactLogs()
 {
     LogFilenameSet compact_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = compact_log_files.begin(); iter != compact_log_files.end(); /*empty*/)
@@ -146,7 +146,7 @@ void WALStore::compactLogs()
     }
     // In order not to make read amplification too high, only apply compact logs when ...
     if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
-        return;
+        return false;
 
     InMemoryPageDirectory in_mem_directory;
     auto reader = WALStoreReader::create(provider, compact_log_files);
@@ -189,6 +189,7 @@ void WALStore::compactLogs()
     }
     // TODO: Log more information. duration, num entries, size of compact log file...
     LOG_FMT_INFO(logger, "Compact logs done [num_compacts={}]", compact_log_files.size());
+    return true;
 }
 
 } // namespace DB::PS::V3

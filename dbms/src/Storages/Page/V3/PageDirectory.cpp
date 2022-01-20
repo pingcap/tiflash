@@ -558,8 +558,11 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 
 std::vector<PageEntriesV3> PageDirectory::gc()
 {
+    [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
     std::vector<PageEntriesV3> all_del_entries;
+
+    done_anything |= wal->compactLogs();
 
     {
         // Cleanup released snapshots
