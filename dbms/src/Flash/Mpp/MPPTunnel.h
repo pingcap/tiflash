@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
@@ -13,23 +13,48 @@
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 namespace DB
 {
+/**
+ * MPPTunnelBase represents the sender of an exchange connection.
+ *
+ * (Deprecated) It is designed to be a template class so that we can mock a MPPTunnel without involving gRPC.
+ *
+ * The lifecycle of a MPPTunnel can be indicated by `connected` and `finished`:
+ * | Stage                          | `connected` | `finished` |
+ * |--------------------------------|-------------|------------|
+ * | After constructed              | false       | false      |
+ * | After `close` before `connect` | false       | true       |
+ * | After `connect`                | true        | false      |
+ * | After `consumerFinish`         | true        | true       |
+ *
+ * To be short: before `connect`, only `close` can finish a MPPTunnel; after `connect`, only `consumerFinish` can.
+ *
+ * Each MPPTunnel has a consumer to consume data. There're two kinds of consumers: local and remote.
+ * - Remote consumer is owned by MPPTunnel itself. MPPTunnel will create a thread and run `sendLoop`.
+ * - Local consumer is owned by the associated ExchangeReceiver (in the same process).
+ * 
+ * The protocol between MPPTunnel and consumer:
+ * - All data will be pushed into the `send_queue`, including errors.
+ * - MPPTunnel may close `send_queue` to notify consumer normally finish.
+ * - Consumer may close `send_queue` to notify MPPTunnel that an error occurs.
+ * - After `connect` only the consumer can set `finished` to `true`.
+ * - Consumer's state is saved in `consumer_state` and be available after consumer finished.
+ *
+ * NOTE: to avoid deadlock, `waitForConsumerFinish` should be called outside of the protection of `mu`.
+ */
 template <typename Writer>
 class MPPTunnelBase : private boost::noncopyable
 {
 public:
-    using TaskCancelledCallback = std::function<bool()>;
-
     MPPTunnelBase(
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
-        const std::chrono::seconds timeout_,
-        TaskCancelledCallback callback,
+        std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
         const LogWithPrefixPtr & log_ = nullptr);
@@ -37,8 +62,6 @@ public:
     ~MPPTunnelBase();
 
     const String & id() const { return tunnel_id; }
-
-    bool isTaskCancelled();
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
@@ -64,25 +87,21 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    // must under mu's protection
-    void finishWithLock();
+    void consumerFinish(const String & err_msg);
 
 private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
-    /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
-    /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-    void clearSendQueue();
+    void waitForConsumerFinish(bool allow_throw);
 
     std::mutex mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
+    std::condition_variable cv_for_connected_or_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    std::atomic<bool> finished; // if the tunnel has finished its connection.
+    bool finished; // if the tunnel has finished its connection.
 
     bool is_local; // if this tunnel used for local environment
 
@@ -90,19 +109,40 @@ private:
 
     std::chrono::seconds timeout;
 
-    TaskCancelledCallback task_cancelled_callback;
-
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    String send_loop_msg;
-
     int input_streams_num;
 
-    std::shared_ptr<ThreadManager> thread_manager;
-
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    MPMCQueue<MPPDataPacketPtr> send_queue;
+
+    /// Consumer can be sendLoop or local receiver.
+    class ConsumerState
+    {
+    public:
+        ConsumerState()
+            : future(promise.get_future())
+        {
+        }
+
+        // before finished, must be called without protection of mu
+        String getError()
+        {
+            future.wait();
+            return future.get();
+        }
+
+        void setError(const String & err_msg)
+        {
+            promise.set_value(err_msg);
+        }
+
+    private:
+        std::promise<String> promise;
+        std::shared_future<String> future;
+    };
+    ConsumerState consumer_state;
 
     ConnectionProfileInfo connection_profile_info;
 

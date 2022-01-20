@@ -11,7 +11,7 @@ option(ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option(ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option(ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
 option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" OFF)
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -27,8 +27,7 @@ add_library (clickhouse-server-lib
     TCPHandler.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
-    RaftConfigParser.cpp
-    ClusterManagerService.cpp)
+    RaftConfigParser.cpp)
 
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 

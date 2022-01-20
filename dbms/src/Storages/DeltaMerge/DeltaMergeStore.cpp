@@ -114,7 +114,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         light_tasks.push(task);
         break;
     default:
-        throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
+        throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
     }
 
     LOG_FMT_DEBUG(
@@ -220,7 +220,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             // Create the first segment.
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-                throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
             auto first_segment
                 = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
@@ -501,7 +501,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 if (segment_it == segments.end())
                 {
                     // todo print meaningful start row key
-                    throw Exception("Failed to locate segment begin with start: " + start_key.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(fmt::format("Failed to locate segment begin with start: {}", start_key.toDebugString()), ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
@@ -680,7 +680,7 @@ void DeltaMergeStore::ingestFiles(
                 if (segment_it == segments.end())
                 {
                     throw Exception(
-                        "Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
+                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -823,7 +823,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
                 if (segment_it == segments.end())
                 {
                     throw Exception(
-                        "Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
+                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -869,7 +869,7 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
                 if (segment_it == segments.end())
                 {
                     throw Exception(
-                        "Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
+                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -926,7 +926,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
                 if (segment_it == segments.end())
                 {
                     throw Exception(
-                        "Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
+                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -1419,7 +1419,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         default:
-            throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
+            throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
         }
     }
     catch (const Exception & e)
@@ -1602,32 +1602,34 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(log,
-                                 "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
-                                 segment_id,
-                                 segment_range.toDebugString(),
-                                 table_name);
+                    LOG_FMT_INFO(
+                        log,
+                        "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
+                        segment_id,
+                        segment_range.toDebugString(),
+                        table_name);
                 }
                 else
                 {
-                    LOG_FMT_INFO(log,
-                                 "GC aborted on Segment [{}] [range={}] [table={}]",
-                                 segment_id,
-                                 segment_range.toDebugString(),
-                                 table_name);
+                    LOG_FMT_INFO(
+                        log,
+                        "GC aborted on Segment [{}] [range={}] [table={}]",
+                        segment_id,
+                        segment_range.toDebugString(),
+                        table_name);
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_FMT_DEBUG(log,
-                              "GC is skipped Segment [{}] [range={}] [table={}]",
-                              segment_id,
-                              segment_range.toDebugString(),
-                              table_name);
+                LOG_FMT_DEBUG(
+                    log,
+                    "GC is skipped Segment [{}] [range={}] [table={}]",
+                    segment_id,
+                    segment_range.toDebugString(),
+                    table_name);
         }
         catch (Exception & e)
         {
-            e.addMessage("while apply gc Segment [" + DB::toString(segment_id) + "] [range=" + segment_range.toDebugString()
-                         + "] [table=" + table_name + "]");
+            e.addMessage(fmt::format("while apply gc Segment [{}] [range={}] [table={}]", segment_id, segment_range.toDebugString(), table_name));
             e.rethrow();
         }
     }
@@ -2046,18 +2048,21 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
                 ",");
             LOG_ERROR(log, fmt_buf.toString());
 
-            throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
+            throw Exception(fmt::format("Segment [{}] is expected to have id [{}]", segment_id, next_segment_id));
         }
         if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
-            throw Exception("Segment [" + DB::toString(segment_id) + ":" + range.toDebugString()
-                            + "] is expected to have the same start edge value like the end edge value in " + last_range.toDebugString());
+            throw Exception(
+                fmt::format("Segment [{}:{}] is expected to have the same start edge value like the end edge value in {}",
+                            segment_id,
+                            range.toDebugString(),
+                            last_range.toDebugString()));
 
         last_range = range;
         last_end = last_range.getEnd();
         next_segment_id = segment->nextSegmentId();
     }
     if (!last_range.isEndInfinite())
-        throw Exception("Last range " + last_range.toDebugString() + " is expected to have infinite end edge");
+        throw Exception(fmt::format("Last range {} is expected to have infinite end edge", last_range.toDebugString()));
 }
 
 BlockPtr DeltaMergeStore::getHeader() const
@@ -2316,7 +2321,9 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
 
     if (seg_it == segments.end())
     {
-        throw Exception("Failed to locate segment begin with start in range: " + range_it->toDebugString(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())

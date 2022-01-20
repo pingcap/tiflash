@@ -84,7 +84,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
 {
     auto & factory = FunctionFactory::instance();
 
@@ -96,7 +96,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns);
+    auto func = bp->build(columns, collator);
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());

@@ -4,6 +4,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
@@ -1221,6 +1222,29 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
         }
     }
     return dag_req;
+}
+
+tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
+{
+    const tipb::DAGRequest & dag_request = *dag_context.dag_request;
+    const tipb::EncodeType encode_type = dag_request.encode_type();
+    if (dag_context.isMPPTask() && !dag_context.isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        return tipb::EncodeType::TypeCHBlock;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
+        return encode_type;
+    }
+    if (isUnsupportedEncodeType(dag_context.result_field_types, encode_type))
+        return tipb::EncodeType::TypeDefault;
+    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
+        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        return tipb::EncodeType::TypeDefault;
+    return encode_type;
 }
 
 } // namespace DB
