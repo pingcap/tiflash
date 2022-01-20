@@ -139,15 +139,17 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
   * InMemoryPageDirectory methods *
   *********************************/
 
-InMemoryPageDirectory::InMemoryPageDirectory()
-    : log(getLogWithPrefix(nullptr, "InMemPageDirectory"))
-{
-}
+InMemoryPageDirectory::InMemoryPageDirectory() = default;
 
 void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
 {
     for (const auto & record : edit.getRecords())
     {
+        if (max_applied_ver < record.version)
+        {
+            max_applied_ver = record.version;
+        }
+
         switch (record.type)
         {
         case WriteBatch::WriteType::PUT:
@@ -186,7 +188,10 @@ void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
             break;
         }
         default:
+        {
+            // REF is converted into `PUT` in serialized edit, so it should not run into here.
             throw Exception(fmt::format("Unknown write type: {}", record.type));
+        }
         }
     }
 }
@@ -232,6 +237,8 @@ void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & del
             iter->second = std::make_shared<VersionedPageEntries>();
         iter->second->createNewVersion(version.sequence, version.epoch, entry);
     }
+    // Reset the `sequence` to the maximum of persisted.
+    sequence = in_mem_directory.max_applied_ver.sequence;
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const

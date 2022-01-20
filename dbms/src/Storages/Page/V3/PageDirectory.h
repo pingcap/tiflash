@@ -173,7 +173,7 @@ public:
     using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
     CollapsingMapType table_directory;
 
-    LogWithPrefixPtr log;
+    PageVersionType max_applied_ver;
 };
 
 class PageDirectory

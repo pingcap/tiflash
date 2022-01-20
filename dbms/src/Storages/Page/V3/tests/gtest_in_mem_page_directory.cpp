@@ -155,7 +155,11 @@ try
     EXPECT_TRUE(isSameEntry(entry4, entry_v92));
     EXPECT_EQ(ver4, PageVersionType(92, 0)) << fmt::format("{}", ver4);
 
+    // Check the max applied version
+    EXPECT_EQ(dir.max_applied_ver, PageVersionType(92, 0));
+
     // Dump to a log file and get a reader from that file to verify.
+    // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=92)
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
     while (true)

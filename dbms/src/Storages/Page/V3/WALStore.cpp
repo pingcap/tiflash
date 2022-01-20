@@ -53,6 +53,7 @@ WALStorePtr WALStore::create(
     auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
     auto * logger = &Poco::Logger::get("WALStore");
     auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
+    (void)filename;
     return std::unique_ptr<WALStore>(new WALStore(delegator, provider, write_limiter, std::move(log_file)));
 }
 
@@ -91,6 +92,7 @@ void WALStore::apply(const PageEntriesEdit & edit)
     {
         auto log_num = log_file->logNumber() + 1;
         auto [new_log_file, filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
+        (void)filename;
         log_file.swap(new_log_file);
     }
 }

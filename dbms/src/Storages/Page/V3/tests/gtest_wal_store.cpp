@@ -102,7 +102,7 @@ TEST(WALSeriTest, Upserts)
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p3_2));
     iter++;
-    EXPECT_EQ(iter->page_id, 3);
+    EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5_2));
 }
