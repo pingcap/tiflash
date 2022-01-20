@@ -192,7 +192,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
     BlobStatPtr stat;
 
-    {
+    auto lock_stat = [size, this, &stat]() -> std::lock_guard<std::mutex> {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size, lock_stats);
@@ -206,10 +206,11 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // We must get the lock from BlobStat under the BlobStats lock.
         // It will ensure that BlobStat updates are in order.
         // Also it won't incur more overhead.
-        // If BlobStat can updates are not order. Then
+        // If BlobStat can updates are not order.
+        // Then it may cause stat to fail to get the span and write failure.
 
-        stat->sm_lock.lock();
-    }
+        return stat->lock();
+    }();
 
     // Get Postion from single stat
     auto old_max_cap = stat->sm_max_caps;
@@ -218,7 +219,6 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
-        stat->sm_lock.unlock();
         stat->smap->logStats();
         throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no corrent. [size={}, old_max_caps={}, max_caps(updated)={}, BlobFileId={}]",
                                     size,
@@ -228,7 +228,6 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    stat->sm_lock.unlock();
     return std::make_pair(stat->id, offset);
 }
 
@@ -349,7 +348,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
         if (stat->sm_valid_rate > 1.0)
         {
-            LOG_FMT_ERROR(log, "Current blob got a invalid rate {:.2f}, total size is {} , valid size is {} , right margin is {}", stat->sm_valid_rate, stat->sm_total_size, stat->sm_valid_size, right_margin);
+            LOG_FMT_ERROR(log, "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {}", stat->sm_valid_rate, stat->sm_total_size, stat->sm_valid_size, right_margin);
             assert(false);
         }
 
