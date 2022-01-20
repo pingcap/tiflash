@@ -1031,37 +1031,37 @@ void ExpressionActionsChain::addStep()
 
 void ExpressionActionsChain::finalize()
 {
-//    /// Finalize all steps. Right to left to define unnecessary input columns.
-//    for (int i = static_cast<int>(steps.size()) - 1; i >= 0; --i)
-//    {
-//        Names required_output = steps[i].required_output;
-//        if (i + 1 < static_cast<int>(steps.size()))
-//        {
-//            for (const auto & it : steps[i + 1].actions->getRequiredColumnsWithTypes())
-//                required_output.push_back(it.name);
-//        }
-//        steps[i].actions->finalize(required_output);
-//    }
-//
-//    /// When possible, move the ARRAY JOIN from earlier steps to later steps.
-//    for (size_t i = 1; i < steps.size(); ++i)
-//    {
-//        ExpressionAction action;
-//        if (steps[i - 1].actions->popUnusedArrayJoin(steps[i - 1].required_output, action))
-//            steps[i].actions->prependArrayJoin(action, steps[i - 1].actions->getSampleBlock());
-//    }
-//
-//    /// Adding the ejection of unnecessary columns to the beginning of each step.
-//    for (size_t i = 1; i < steps.size(); ++i)
-//    {
-//        size_t columns_from_previous = steps[i - 1].actions->getSampleBlock().columns();
-//
-//        /// If unnecessary columns are formed at the output of the previous step, we'll add them to the beginning of this step.
-//        /// Except when we drop all the columns and lose the number of rows in the block.
-//        if (!steps[i].actions->getRequiredColumnsWithTypes().empty()
-//            && columns_from_previous > steps[i].actions->getRequiredColumnsWithTypes().size())
-//            steps[i].actions->prependProjectInput();
-//    }
+    //    /// Finalize all steps. Right to left to define unnecessary input columns.
+    //    for (int i = static_cast<int>(steps.size()) - 1; i >= 0; --i)
+    //    {
+    //        Names required_output = steps[i].required_output;
+    //        if (i + 1 < static_cast<int>(steps.size()))
+    //        {
+    //            for (const auto & it : steps[i + 1].actions->getRequiredColumnsWithTypes())
+    //                required_output.push_back(it.name);
+    //        }
+    //        steps[i].actions->finalize(required_output);
+    //    }
+    //
+    //    /// When possible, move the ARRAY JOIN from earlier steps to later steps.
+    //    for (size_t i = 1; i < steps.size(); ++i)
+    //    {
+    //        ExpressionAction action;
+    //        if (steps[i - 1].actions->popUnusedArrayJoin(steps[i - 1].required_output, action))
+    //            steps[i].actions->prependArrayJoin(action, steps[i - 1].actions->getSampleBlock());
+    //    }
+    //
+    //    /// Adding the ejection of unnecessary columns to the beginning of each step.
+    //    for (size_t i = 1; i < steps.size(); ++i)
+    //    {
+    //        size_t columns_from_previous = steps[i - 1].actions->getSampleBlock().columns();
+    //
+    //        /// If unnecessary columns are formed at the output of the previous step, we'll add them to the beginning of this step.
+    //        /// Except when we drop all the columns and lose the number of rows in the block.
+    //        if (!steps[i].actions->getRequiredColumnsWithTypes().empty()
+    //            && columns_from_previous > steps[i].actions->getRequiredColumnsWithTypes().size())
+    //            steps[i].actions->prependProjectInput();
+    //    }
 }
 
 std::string ExpressionActionsChain::dumpChain()
