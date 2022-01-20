@@ -1,6 +1,7 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -37,6 +38,8 @@ LogReader::LogReader(
     , log_number(log_num_)
     , log(log_)
 {
+    // Must be `BLOCK_SIZE`, or we can not ensure the correctness of reading.
+    assert(file->internalBuffer().size() == Format::BLOCK_SIZE);
 }
 
 LogReader::~LogReader() = default;
