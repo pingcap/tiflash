@@ -43,16 +43,13 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
-    if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
+    switch (dag_context.encode_type)
     {
+    case tipb::EncodeType::TypeDefault:
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
-    }
-    else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
-    {
+    case tipb::EncodeType::TypeChunk:
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
-    }
-    else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
-    {
+    case tipb::EncodeType::TypeCHBlock:
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
 }
