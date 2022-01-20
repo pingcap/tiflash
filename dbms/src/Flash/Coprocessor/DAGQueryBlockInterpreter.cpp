@@ -1,5 +1,4 @@
 #include <Common/FailPoint.h>
-#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
