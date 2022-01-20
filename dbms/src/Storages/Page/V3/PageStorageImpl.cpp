@@ -40,7 +40,8 @@ void PageStorageImpl::restore()
 
     page_directory = PageDirectory::create(collapsing_directory, std::move(wal));
 
-    // TODO: restore BlobStore
+    // restore BlobStore
+    blob_store.restore(collapsing_directory);
 }
 
 void PageStorageImpl::drop()

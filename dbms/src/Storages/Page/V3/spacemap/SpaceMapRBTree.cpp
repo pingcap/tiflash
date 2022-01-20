@@ -524,7 +524,16 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
 
     UInt64 _biggest_cap = 0;
     UInt64 _biggest_range = 0;
-    for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+
+    node = rb_tree_first(&rb_tree->root);
+    if (node == nullptr)
+    {
+        LOG_ERROR(log, "Current spacemap is full.");
+        biggest_cap = 0;
+        return std::make_pair(offset, biggest_cap);
+    }
+
+    for (; node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
         if (entry->count >= size)

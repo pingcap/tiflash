@@ -52,9 +52,39 @@ public:
 
     std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
 
+    std::pair<UInt64, UInt64> getSizes() const override
+    {
+        struct rb_node * node = rb_tree_last(&rb_tree->root);
+        if (node == nullptr)
+        {
+            auto range = end - start;
+            return std::make_pair(range, range);
+        }
+
+        auto * entry = node_to_entry(node);
+        UInt64 total_size = entry->start - start;
+        UInt64 last_node_size = entry->count;
+        UInt64 valid_size = 0;
+
+        for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+        {
+            entry = node_to_entry(node);
+            valid_size += entry->count;
+        }
+        valid_size = total_size - (valid_size - last_node_size);
+
+        return std::make_pair(total_size, valid_size);
+    }
+
     UInt64 getRightMargin() override
     {
-        auto * entry = node_to_entry(rb_tree_last(&rb_tree->root));
+        struct rb_node * node = rb_tree_last(&rb_tree->root);
+        if (node == nullptr)
+        {
+            return end;
+        }
+
+        auto * entry = node_to_entry(node);
         return entry->start;
     }
 

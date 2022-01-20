@@ -19,6 +19,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+class CollapsingPageDirectory;
 using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
@@ -92,6 +93,18 @@ public:
             BlobFileOffset getPosFromStat(size_t buf_size);
 
             void removePosFromStat(BlobFileOffset offset, size_t buf_size);
+
+            /**
+             * This method is only used when blobstore restore
+             * Restore space map won't change the `sm_total_size`/`sm_valid_size`/`sm_valid_rate`
+             */
+            void restoreSpaceMap(BlobFileOffset offset, size_t buf_size);
+
+            /**
+             * After we restore the space map.
+             * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
+             */
+            void recalculateSpaceMap();
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
@@ -125,7 +138,7 @@ public:
 
         BlobFileId chooseNewStat();
 
-        BlobStatPtr fileIdToStat(BlobFileId file_id);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool create_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
         {
@@ -147,7 +160,7 @@ public:
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
-    void restore();
+    void restore(const CollapsingPageDirectory & entries);
 
     std::vector<BlobFileId> getGCStats();
 

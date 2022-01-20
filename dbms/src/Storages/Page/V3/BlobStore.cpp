@@ -3,6 +3,7 @@
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/logger_useful.h>
 
@@ -39,6 +40,22 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {
+}
+
+void BlobStore::restore(const CollapsingPageDirectory & entries)
+{
+    for (const auto & [page_id, versioned_entry] : entries.table_directory)
+    {
+        const auto & [ver, entry] = versioned_entry;
+        (void)ver;
+        auto stat = blob_stats.blobIdToStat(entry.file_id, /*create_if_not_exist=*/true);
+        stat->restoreSpaceMap(entry.offset, entry.size);
+    }
+
+    for (const auto & stat : blob_stats.getStats())
+    {
+        stat->recalculateSpaceMap();
+    }
 }
 
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -243,7 +260,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    const auto & stat = blob_stats.fileIdToStat(blob_id);
+    const auto & stat = blob_stats.blobIdToStat(blob_id);
     auto lock = stat->lock();
     stat->removePosFromStat(offset, size);
 
@@ -845,7 +862,28 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
 }
 
-BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
+void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
+{
+    if (!smap->markUsed(offset, buf_size))
+    {
+        smap->logStats();
+        throw Exception(fmt::format("Restore postion from BlobStat failed, [offset={}] [buf_size={}] [blob_id={}] is used or subspan is used",
+                                    offset,
+                                    buf_size,
+                                    id),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
+{
+    const auto & [total_size, valid_size] = smap->getSizes();
+    sm_total_size = total_size;
+    sm_valid_size = valid_size;
+    sm_valid_rate = valid_size * 1.0 / total_size;
+}
+
+BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool create_if_not_exist)
 {
     auto guard = lock();
     for (auto & stat : stats_map)
@@ -854,6 +892,11 @@ BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
         {
             return stat;
         }
+    }
+
+    if (create_if_not_exist)
+    {
+        return createStat(file_id, guard);
     }
 
     throw Exception(fmt::format("Can't find BlobStat with [BlobFileId={}]",

@@ -560,7 +560,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     blob_store.remove(entries_del1);
     ASSERT_EQ(entries_del1.begin()->file_id, 1);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
 
     ASSERT_EQ(stat->sm_valid_rate, 0.5);
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
@@ -633,7 +633,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     // Remain entries index [8, 9].
     blob_store.remove(entries_del);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
 
     const auto & gc_stats = blob_store.getGCStats();
     ASSERT_FALSE(gc_stats.empty());
@@ -686,7 +686,7 @@ TEST_F(BlobStoreTest, GC)
     gc_context[1] = versioned_pageid_entries;
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
     stat->changeToReadOnly();
 
     const auto & gc_edit = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
