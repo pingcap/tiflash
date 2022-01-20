@@ -250,7 +250,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
             // If we already request the lock from `r.ori_page_id`, Then we should request again.
             // This can happen when r.ori_page_id have other operating in current writebatch
-            if (auto entry = updating_locks.find(r.ori_page_id) != updating_locks.end() ? iter->second->getEntryNotSafe(last_sequence) : iter->second->getEntry(last_sequence);
+            if (auto entry = (updating_locks.find(r.ori_page_id) != updating_locks.end()
+                                  ? iter->second->getEntryNotSafe(last_sequence)
+                                  : iter->second->getEntry(last_sequence));
                 entry)
             {
                 // copy the entry to be ref
