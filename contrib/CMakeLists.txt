@@ -83,7 +83,7 @@ add_subdirectory (kvproto/cpp)
 set (_save ${ENABLE_TESTS})
 set (ENABLE_TESTS 0)
 # disable ENABLE_TESTS for client-c
-# GTest package conflicts with CH's GTest, so we have to disable test compilation in ch.
+# GTest package conflicts with TiFlash's GTest, so we have to disable test compilation in client-c.
 add_subdirectory (client-c)
 set (ENABLE_TESTS ${_save})
 # -------
