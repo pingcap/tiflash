@@ -139,11 +139,11 @@ public:
 
     void apply(PageEntriesEdit && edit);
 
-    std::vector<PageEntriesV3> gc();
-
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
-    void gcApply(const PageIdAndVersionedEntryList & migrated_entries);
+    void gcApply(PageEntriesEdit && migrated_edit);
+
+    std::vector<PageEntriesV3> gc();
 
     size_t numPages() const
     {
@@ -160,7 +160,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    WALStore wal;
+    WALStorePtr wal;
 
     LogWithPrefixPtr log;
 };
