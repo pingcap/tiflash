@@ -480,9 +480,15 @@ class DTEntryIterator
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
+<<<<<<< HEAD
     LeafPtr leaf;
     size_t  pos;
     Int64   delta;
+=======
+    LeafPtr leaf = nullptr;
+    size_t pos;
+    Int64 delta;
+>>>>>>> b1b0851371 (Fix ~DeltaTree try to delete uninitialized members (#3903))
 
 public:
     DTEntryIterator() = default;
@@ -551,10 +557,17 @@ class DTEntriesCopy : Allocator
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
+<<<<<<< HEAD
     const size_t       entry_count;
     const Int64        delta;
     UInt64 * const     sids;
     DTMutation * const mutations;
+=======
+    const size_t entry_count;
+    const Int64 delta;
+    UInt64 * const sids = nullptr;
+    DTMutation * const mutations = nullptr;
+>>>>>>> b1b0851371 (Fix ~DeltaTree try to delete uninitialized members (#3903))
 
 public:
     DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
@@ -578,8 +591,10 @@ public:
 
     ~DTEntriesCopy()
     {
-        this->free(sids, sizeof(UInt64) * entry_count);
-        this->free(mutations, sizeof(DTMutation) * entry_count);
+        if (sids)
+            this->free(sids, sizeof(UInt64) * entry_count);
+        if (mutations)
+            this->free(mutations, sizeof(DTMutation) * entry_count);
     }
 
     class Iterator
@@ -728,18 +743,32 @@ public:
     static_assert(std::is_standard_layout_v<Intern>);
 
 private:
+<<<<<<< HEAD
     NodePtr root;
     LeafPtr left_leaf, right_leaf;
     size_t  height = 1;
+=======
+    NodePtr root = nullptr;
+    LeafPtr left_leaf = nullptr;
+    LeafPtr right_leaf = nullptr;
+    size_t height = 1;
+>>>>>>> b1b0851371 (Fix ~DeltaTree try to delete uninitialized members (#3903))
 
     size_t num_inserts = 0;
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
+<<<<<<< HEAD
     Allocator * allocator;
     size_t      bytes = 0;
 
     Logger * log;
+=======
+    Allocator * allocator = nullptr;
+    size_t bytes = 0;
+
+    Poco::Logger * log = nullptr;
+>>>>>>> b1b0851371 (Fix ~DeltaTree try to delete uninitialized members (#3903))
 
 public:
     // For test cases only.
@@ -889,12 +918,16 @@ public:
 
     ~DeltaTree()
     {
-        if (isLeaf(root))
-            freeTree<Leaf>((LeafPtr)root);
-        else
-            freeTree<Intern>((InternPtr)root);
+        if (root)
+        {
+            if (isLeaf(root))
+                freeTree<Leaf>((LeafPtr)root);
+            else
+                freeTree<Intern>((InternPtr)root);
+        }
 
-        delete allocator;
+        if (allocator)
+            delete allocator;
 
         LOG_TRACE(log, "free");
     }
