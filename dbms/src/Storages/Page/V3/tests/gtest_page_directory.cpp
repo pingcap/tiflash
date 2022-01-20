@@ -425,8 +425,8 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     dir.apply(std::move(edit2));
 }
 
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                   \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
     entries.createNewVersion((VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                              \
@@ -637,12 +637,12 @@ class PageDirectoryGCTest : public PageDirectoryTest
 {
 };
 
-#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                              \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                                \
-        PageEntriesEdit edit;                                                                                        \
-        edit.put((PAGE_ID), entry_v##VERSION);                                                                       \
-        dir.apply(std::move(edit));                                                                                  \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                        \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
+    {                                                                                                                          \
+        PageEntriesEdit edit;                                                                                                  \
+        edit.put((PAGE_ID), entry_v##VERSION);                                                                                 \
+        dir.apply(std::move(edit));                                                                                            \
     }
 // Insert an entry into mvcc directory
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
