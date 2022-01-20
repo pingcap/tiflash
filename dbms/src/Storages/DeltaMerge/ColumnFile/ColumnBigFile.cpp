@@ -1,5 +1,5 @@
+#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -9,14 +9,14 @@ namespace DB
 {
 namespace DM
 {
-DeltaPackFile::DeltaPackFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
+ColumnBigFile::ColumnBigFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
     : file(file_)
     , segment_range(segment_range_)
 {
     calculateStat(context);
 }
 
-void DeltaPackFile::calculateStat(const DMContext & context)
+void ColumnBigFile::calculateStat(const DMContext & context)
 {
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
     auto hash_salt = context.hash_salt;
@@ -27,22 +27,22 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
 
-DeltaPackReaderPtr
-DeltaPackFile::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr
+ColumnBigFile::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<DPFileReader>(context, *this, col_defs);
+    return std::make_shared<ColumnBigFileReader>(context, *this, col_defs);
 }
 
-void DeltaPackFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
+void ColumnBigFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
 {
     writeIntBinary(file->refId(), buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
 }
 
-DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext & context, //
-                                                const RowKeyRange & segment_range,
-                                                ReadBuffer & buf)
+ColumnFilePtr ColumnBigFile::deserializeMetadata(DMContext & context, //
+                                                 const RowKeyRange & segment_range,
+                                                 ReadBuffer & buf)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;
@@ -56,11 +56,11 @@ DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext & context, //
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-    auto dp_file = new DeltaPackFile(dmfile, valid_rows, valid_bytes, segment_range);
-    return std::shared_ptr<DeltaPackFile>(dp_file);
+    auto dp_file = new ColumnBigFile(dmfile, valid_rows, valid_bytes, segment_range);
+    return std::shared_ptr<ColumnBigFile>(dp_file);
 }
 
-void DPFileReader::initStream()
+void ColumnBigFileReader::initStream()
 {
     if (file_stream)
         return;
@@ -69,9 +69,9 @@ void DPFileReader::initStream()
                                                            /*max_version*/ MAX_UINT64,
                                                            /*clean_read*/ false,
                                                            context.hash_salt,
-                                                           pack.getFile(),
+                                                           column_file.getFile(),
                                                            *col_defs,
-                                                           RowKeyRanges{pack.segment_range},
+                                                           RowKeyRanges{column_file.segment_range},
                                                            RSOperatorPtr{},
                                                            ColumnCachePtr{},
                                                            IdSetPtr{});
@@ -94,9 +94,9 @@ void DPFileReader::initStream()
     }
 }
 
-size_t DPFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnBigFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
-    if (unlikely(rows_offset + rows_limit > pack.valid_rows))
+    if (unlikely(rows_offset + rows_limit > column_file.valid_rows))
         throw Exception("Try to read more rows", ErrorCodes::LOGICAL_ERROR);
 
     /// Read pk and version columns from cached.
@@ -126,10 +126,10 @@ size_t DPFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t row
     return actual_read;
 }
 
-size_t DPFileReader::readRowsOnce(MutableColumns & output_cols, //
-                                  size_t rows_offset,
-                                  size_t rows_limit,
-                                  const RowKeyRange * range)
+size_t ColumnBigFileReader::readRowsOnce(MutableColumns & output_cols, //
+                                         size_t rows_offset,
+                                         size_t rows_limit,
+                                         const RowKeyRange * range)
 {
     auto read_next_block = [&, this]() -> bool {
         rows_before_cur_block += ((bool)cur_block) ? cur_block.rows() : 0;
@@ -186,7 +186,7 @@ size_t DPFileReader::readRowsOnce(MutableColumns & output_cols, //
     return actual_read;
 }
 
-size_t DPFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnBigFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     initStream();
 
@@ -199,22 +199,22 @@ size_t DPFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, 
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(" while reading DTFile " + pack.getFile()->path());
+        e.addMessage(" while reading DTFile " + column_file.getFile()->path());
         throw;
     }
 }
 
-Block DPFileReader::readNextBlock()
+Block ColumnBigFileReader::readNextBlock()
 {
     initStream();
 
     return file_stream->read();
 }
 
-DeltaPackReaderPtr DPFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnBigFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Currently we don't reuse the cache data.
-    return std::make_shared<DPFileReader>(context, pack, new_col_defs);
+    return std::make_shared<ColumnBigFileReader>(context, column_file, new_col_defs);
 }
 
 } // namespace DM

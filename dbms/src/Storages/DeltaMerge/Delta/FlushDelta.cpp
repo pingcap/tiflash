@@ -19,11 +19,11 @@ namespace DB::DM
 {
 struct FlushPackTask
 {
-    FlushPackTask(const DeltaPackPtr & pack_)
+    FlushPackTask(const ColumnFilePtr & pack_)
         : pack(pack_)
     {}
 
-    DeltaPackPtr pack;
+    ColumnFilePtr pack;
 
     Block block_data;
     PageId data_page = 0;
@@ -61,13 +61,13 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         size_t total_rows = 0;
         size_t total_deletes = 0;
-        for (auto & pack : packs)
+        for (auto & pack : column_files)
         {
             if (unlikely(!tasks.empty() && pack->isSaved()))
             {
                 String msg = "Pack should not already saved, because previous packs are not saved.";
 
-                LOG_ERROR(log, simpleInfo() << msg << " Packs: " << packsToString(packs));
+                LOG_ERROR(log, simpleInfo() << msg << " Packs: " << columnFilesToString(column_files));
                 throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
             }
 
@@ -76,21 +76,13 @@ bool DeltaValueSpace::flush(DMContext & context)
             {
                 auto & task = tasks.emplace_back(pack);
 
-                if (auto dpb = pack->tryToBlock(); dpb)
+                if (auto dpb = pack->tryToInMemoryFile(); dpb)
                 {
                     // Stop other threads appending to this pack.
                     dpb->disableAppend();
-
-                    if (!dpb->getDataPageId())
-                    {
-                        if (unlikely(!dpb->getCache()))
-                            throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
-
-
-                        task.rows_offset = total_rows;
-                        task.deletes_offset = total_deletes;
-                        task.block_data = dpb->readFromCache();
-                    }
+                    task.rows_offset = total_rows;
+                    task.deletes_offset = total_deletes;
+                    task.block_data = dpb->readDataForFlush();
                 }
 
                 flush_rows += pack->getRows();
@@ -128,7 +120,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             if (task.sorted)
                 delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
 
-            task.data_page = DeltaPackBlock::writePackData(context, task.block_data, 0, task.block_data.rows(), wbs);
+            task.data_page = ColumnTinyFile::writeColumnFileData(context, task.block_data, 0, task.block_data.rows(), wbs);
         }
 
         wbs.writeLogAndData();
@@ -153,16 +145,16 @@ bool DeltaValueSpace::flush(DMContext & context)
             return false;
         }
 
-        DeltaPacks::iterator flush_start_point;
-        DeltaPacks::iterator flush_end_point;
+        ColumnFiles::iterator flush_start_point;
+        ColumnFiles::iterator flush_end_point;
 
         {
             /// Do some checks before continue, in case other threads do some modifications during current operation,
             /// as we didn't always hold the lock.
 
-            auto p_it = packs.begin();
+            auto p_it = column_files.begin();
             auto t_it = tasks.begin();
-            for (; p_it != packs.end(); ++p_it)
+            for (; p_it != column_files.end(); ++p_it)
             {
                 if (*p_it == t_it->pack)
                     break;
@@ -172,7 +164,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
             for (; t_it != tasks.end(); ++t_it, ++p_it)
             {
-                if (p_it == packs.end() || *p_it != t_it->pack || (*p_it)->isSaved())
+                if (p_it == column_files.end() || *p_it != t_it->pack || (*p_it)->isSaved())
                 {
                     // The packs have been modified, or this pack already saved by another thread.
                     // Let's rollback and break up.
@@ -189,29 +181,42 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         // Create a temporary packs copy, used to generate serialized data.
         // Save the previous saved packs, and the packs we are saving, and the later packs appended during the period we did not held the lock.
-        DeltaPacks packs_copy(packs.begin(), flush_start_point);
+        ColumnFiles packs_copy(column_files.begin(), flush_start_point);
         for (auto & task : tasks)
         {
             // Use a new pack instance to do the serializing.
-            DeltaPackPtr new_pack;
-            if (auto dp_block = task.pack->tryToBlock(); dp_block)
+            ColumnFilePtr new_pack;
+            if (auto * dp_block = task.pack->tryToInMemoryFile(); dp_block)
             {
-                auto new_dpb = std::make_shared<DeltaPackBlock>(*dp_block);
-                // If it's data have been updated, use the new pages info.
-                if (task.data_page != 0)
-                    new_dpb->setDataPageId(task.data_page);
-                if (task.sorted)
-                    new_dpb->setCache(std::make_shared<DeltaPackBlock::Cache>(std::move(task.block_data)));
-
-                new_pack = new_dpb;
+                bool reuse_cache = !task.sorted && (dp_block->getRows() < context.delta_small_pack_rows || dp_block->getBytes() < context.delta_small_pack_bytes);
+                if (reuse_cache)
+                {
+                    new_pack = std::make_shared<ColumnTinyFile>(dp_block->getSchema(),
+                                                                dp_block->getRows(),
+                                                                dp_block->getBytes(),
+                                                                task.data_page,
+                                                                dp_block->getCache());
+                }
+                else
+                {
+                    new_pack = std::make_shared<ColumnTinyFile>(dp_block->getSchema(),
+                                                                dp_block->getRows(),
+                                                                dp_block->getBytes(),
+                                                                task.data_page,
+                                                                std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
+                }
             }
-            else if (auto dp_file = task.pack->tryToFile(); dp_file)
+            else if (auto t_file = task.pack->tryToTinyFile(); t_file)
             {
-                new_pack = std::make_shared<DeltaPackFile>(*dp_file);
+                new_pack = std::make_shared<ColumnTinyFile>(*t_file);
+            }
+            else if (auto dp_file = task.pack->tryToBigFile(); dp_file)
+            {
+                new_pack = std::make_shared<ColumnBigFile>(*dp_file);
             }
             else if (auto dp_delete = task.pack->tryToDeleteRange(); dp_delete)
             {
-                new_pack = std::make_shared<DeltaPackDeleteRange>(*dp_delete);
+                new_pack = std::make_shared<ColumnDeleteRangeFile>(*dp_delete);
             }
             else
             {
@@ -222,7 +227,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
             packs_copy.push_back(new_pack);
         }
-        packs_copy.insert(packs_copy.end(), flush_end_point, packs.end());
+        packs_copy.insert(packs_copy.end(), flush_end_point, column_files.end());
 
         if constexpr (DM_RUN_CHECK)
         {
@@ -248,29 +253,19 @@ bool DeltaValueSpace::flush(DMContext & context)
         }
 
         /// Save the new metadata of packs to disk.
-        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
-        serializeSavedPacks(buf, packs_copy);
+        MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
+        serializeColumnStableFiles(buf, packs_copy);
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
         wbs.writeMeta();
 
         /// Commit updates in memory.
-        packs.swap(packs_copy);
+        column_files.swap(packs_copy);
 
         /// Update delta tree
         if (new_delta_index)
             delta_index = new_delta_index;
-
-        for (auto & pack : packs)
-        {
-            if (auto dp_block = pack->tryToBlock(); dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0
-                && (pack->getRows() >= context.delta_small_pack_rows || pack->getBytes() >= context.delta_small_pack_bytes))
-            {
-                // This pack is too large to use cache.
-                dp_block->clearCache();
-            }
-        }
 
         unsaved_rows -= flush_rows;
         unsaved_bytes -= flush_bytes;

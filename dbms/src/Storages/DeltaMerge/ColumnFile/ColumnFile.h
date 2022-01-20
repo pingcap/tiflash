@@ -11,65 +11,59 @@ namespace DB
 {
 namespace DM
 {
-static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
+static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
 struct DMContext;
-class DeltaPack;
-class DeltaPackBlock;
-class DeltaPackFile;
-class DeltaPackDeleteRange;
-class DMFileBlockInputStream;
-class DeltaPackReader;
+class ColumnFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+class ColumnInMemoryFile;
+class ColumnTinyFile;
+class ColumnDeleteRangeFile;
+class ColumnBigFile;
 
-using DeltaPackReaderPtr = std::shared_ptr<DeltaPackReader>;
-using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
-using DeltaPackPtr = std::shared_ptr<DeltaPack>;
-using DeltaPackBlockPtr = std::shared_ptr<DeltaPackBlock>;
-using DeltaPackFilePtr = std::shared_ptr<DeltaPackFile>;
-using DeltaPackDeleteRangePtr = std::shared_ptr<DeltaPackDeleteRange>;
+using ColumnFiles = std::vector<ColumnFilePtr>;
+class ColumnStableFile;
+using ColumnStableFilePtr = std::shared_ptr<ColumnStableFile>;
+using ColumnStableFiles = std::vector<ColumnStableFilePtr>;
+class ColumnFileReader;
+using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
-using ConstDeltaPackPtr = std::shared_ptr<const DeltaPack>;
-using DeltaPackBlockPtr = std::shared_ptr<DeltaPackBlock>;
-using DeltaPackFilePtr = std::shared_ptr<DeltaPackFile>;
-using DeltaPacks = std::vector<DeltaPackPtr>;
-using DeltaPackBlocks = std::vector<DeltaPackBlockPtr>;
+static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
-static std::atomic_uint64_t MAX_PACK_ID{0};
-
-class DeltaPack
+class ColumnFile
 {
 protected:
     UInt64 id;
 
     bool saved = false;
 
-    DeltaPack()
-        : id(++MAX_PACK_ID)
+    ColumnFile()
+        : id(++MAX_COLUMN_FILE_ID)
     {}
 
-    virtual ~DeltaPack() = default;
+    virtual ~ColumnFile() = default;
 
 public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
-        BLOCK = 2,
-        FILE = 3,
+        TINY_FILE = 2,
+        BIG_FILE = 3,
+        INMEMORY_FILE = 4,
     };
 
     struct Cache
     {
-        Cache(const Block & header)
+        explicit Cache(const Block & header)
             : block(header.cloneWithColumns(header.cloneEmptyColumns()))
         {}
-        Cache(Block && block)
+        explicit Cache(Block && block)
             : block(std::move(block))
         {}
 
         std::mutex mutex;
         Block block;
     };
-
     using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
@@ -81,44 +75,53 @@ public:
     bool isSaved() const { return saved; }
     void setSaved() { saved = true; }
 
-    /// Only DeltaPackBlock could return true.
-    virtual bool isDataFlushable() { return false; }
-
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; };
     virtual size_t getDeletes() const { return 0; };
 
     virtual Type getType() const = 0;
 
-    /// Is a DeltaPackBlock or not.
-    bool isBlock() const { return getType() == Type::BLOCK; }
-    /// Is a DeltaPackFile or not.
-    bool isFile() const { return getType() == Type::FILE; }
-    /// Is a DeltaPackDeleteRange or not.
+    /// Is a ColumnInMemoryFile or not.
+    bool isInMemoryFile() const { return getType() == Type::INMEMORY_FILE; }
+    /// Is a ColumnTinyFile or not.
+    bool isTinyFile() const { return getType() == Type::TINY_FILE; }
+    /// Is a ColumnDeleteRangeFile or not.
     bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
+    /// Is a ColumnBigFile or not.
+    bool isBigFile() const { return getType() == Type::BIG_FILE; };
 
-    DeltaPackBlock * tryToBlock();
-    DeltaPackFile * tryToFile();
-    DeltaPackDeleteRange * tryToDeleteRange();
+    ColumnInMemoryFile * tryToInMemoryFile();
+    ColumnTinyFile * tryToTinyFile();
+    ColumnDeleteRangeFile * tryToDeleteRange();
+    ColumnBigFile * tryToBigFile();
+
+    virtual ColumnFileReaderPtr
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+
+    /// only ColumnInMemoryFile can be appendable
+    virtual bool isAppendable() const { return false; }
+    virtual void disableAppend() {}
+    virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
+    {
+        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
+    }
 
     /// Put the data's page id into the corresponding WriteBatch.
     /// The actual remove will be done later.
-    virtual void removeData(WriteBatches &) const {}
-
-    virtual DeltaPackReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr &) const = 0;
-
-    virtual String toString() const = 0;
+    virtual void removeData(WriteBatches &) const {};
 
     virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
+
+    virtual String toString() const = 0;
 };
 
-class DeltaPackReader
+
+class ColumnFileReader
 {
 public:
-    virtual ~DeltaPackReader() = default;
-    DeltaPackReader() = default;
-    DeltaPackReader(const DeltaPackReader & o) = delete;
+    virtual ~ColumnFileReader() = default;
+    ColumnFileReader() = default;
+    ColumnFileReader(const ColumnFileReader & o) = delete;
 
     /// Read data from this reader and store the result into output_cols.
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
@@ -131,7 +134,7 @@ public:
     virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// Create a new reader from current reader with different columns to read.
-    virtual DeltaPackReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;
+    virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;
 };
 
 size_t copyColumnsData(
@@ -150,18 +153,18 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
 
 /// Serialize those packs' metadata into buf.
 /// Note that this method stop at the first unsaved pack.
-void serializeSavedPacks(WriteBuffer & buf, const DeltaPacks & packs);
+void serializeColumnStableFiles(WriteBuffer & buf, const ColumnFiles & column_files);
 /// Recreate pack instances from buf.
-DeltaPacks deserializePacks(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+ColumnFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
-void serializeSavedPacks_v2(WriteBuffer & buf, const DeltaPacks & packs);
-DeltaPacks deserializePacks_V2(ReadBuffer & buf, UInt64 version);
+void serializeColumnStableFiles_V2(WriteBuffer & buf, const ColumnFiles & column_files);
+ColumnFiles deserializeColumnStableFiles_V2(ReadBuffer & buf, UInt64 version);
 
-void serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs);
-DeltaPacks deserializePacks_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
+void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column_files);
+ColumnFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
+
 
 /// Debugging string
-String packsToString(const DeltaPacks & packs);
-
+String columnFilesToString(const ColumnFiles & column_files);
 } // namespace DM
 } // namespace DB

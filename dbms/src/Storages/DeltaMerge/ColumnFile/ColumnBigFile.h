@@ -1,15 +1,22 @@
 #pragma once
 
-#include <Storages/DeltaMerge/Delta/DeltaPack.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB
 {
 namespace DM
 {
-/// A delta pack which contains a DMFile. The DMFile could have many Blocks.
-class DeltaPackFile : public DeltaPack
+class DMFileBlockInputStream;
+using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
+
+class ColumnBigFile;
+using ColumnBigFilePtr = std::shared_ptr<ColumnBigFile>;
+
+
+/// A column file which contains a DMFile. The DMFile could have many Blocks.
+class ColumnBigFile : public ColumnFile
 {
-    friend class DPFileReader;
+    friend class ColumnBigFileReader;
 
 private:
     DMFilePtr file;
@@ -18,7 +25,7 @@ private:
 
     RowKeyRange segment_range;
 
-    DeltaPackFile(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
+    ColumnBigFile(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
         : file(file_)
         , valid_rows(valid_rows_)
         , valid_bytes(valid_bytes_)
@@ -29,21 +36,21 @@ private:
     void calculateStat(const DMContext & context);
 
 public:
-    DeltaPackFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
+    ColumnBigFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
 
-    DeltaPackFile(const DeltaPackFile &) = default;
+    ColumnBigFile(const ColumnBigFile &) = default;
 
-    DeltaPackFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
+    ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
-        auto new_pack = new DeltaPackFile(*this);
-        new_pack->file = new_file;
-        new_pack->segment_range = new_segment_range;
+        auto new_column_file = new ColumnBigFile(*this);
+        new_column_file->file = new_file;
+        new_column_file->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
-        new_pack->calculateStat(context);
-        return std::shared_ptr<DeltaPackFile>(new_pack);
+        new_column_file->calculateStat(context);
+        return std::shared_ptr<ColumnBigFile>(new_column_file);
     }
 
-    Type getType() const override { return Type::FILE; }
+    Type getType() const override { return Type::BIG_FILE; }
 
     auto getFile() const { return file; }
 
@@ -60,29 +67,28 @@ public:
         wbs.removed_data.delPage(file->refId());
     }
 
-    DeltaPackReaderPtr
+    ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static DeltaPackPtr deserializeMetadata(DMContext & context, //
-                                            const RowKeyRange & segment_range,
-                                            ReadBuffer & buf);
+    static ColumnFilePtr deserializeMetadata(DMContext & context, //
+                                             const RowKeyRange & segment_range,
+                                             ReadBuffer & buf);
 
     String toString() const override
     {
-        String s = "{file,rows:" + DB::toString(getRows()) //
-            + ",bytes:" + DB::toString(getBytes()) //
-            + ",saved:" + DB::toString(saved) + "}"; //
+        String s = "{big_file,rows:" + DB::toString(getRows()) //
+            + ",bytes:" + DB::toString(getBytes()) + "}"; //
         return s;
     }
 };
 
-class DPFileReader : public DeltaPackReader
+class ColumnBigFileReader : public ColumnFileReader
 {
 private:
     const DMContext & context;
-    const DeltaPackFile & pack;
+    const ColumnBigFile & column_file;
     const ColumnDefinesPtr col_defs;
 
     bool pk_ver_only;
@@ -107,9 +113,9 @@ private:
     size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
-    DPFileReader(const DMContext & context_, const DeltaPackFile & pack_, const ColumnDefinesPtr & col_defs_)
+    ColumnBigFileReader(const DMContext & context_, const ColumnBigFile & column_file_, const ColumnDefinesPtr & col_defs_)
         : context(context_)
-        , pack(pack_)
+        , column_file(column_file_)
         , col_defs(col_defs_)
     {
         pk_ver_only = col_defs->size() <= 2;
@@ -119,8 +125,7 @@ public:
 
     Block readNextBlock() override;
 
-    DeltaPackReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
+    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
-
 } // namespace DM
 } // namespace DB

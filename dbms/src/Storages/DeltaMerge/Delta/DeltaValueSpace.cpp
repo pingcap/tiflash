@@ -19,15 +19,17 @@ namespace DM
 
 BlockPtr DeltaValueSpace::lastSchema()
 {
-    for (auto it = packs.rbegin(); it != packs.rend(); ++it)
+    for (auto it = column_files.rbegin(); it != column_files.rend(); ++it)
     {
-        if (auto dp_block = (*it)->tryToBlock(); dp_block)
-            return dp_block->getSchema();
+        if (auto * m_file = (*it)->tryToInMemoryFile(); m_file)
+            return m_file->getSchema();
+        else if (auto * t_file = (*it)->tryToTinyFile(); t_file)
+            return t_file->getSchema();
     }
     return {};
 }
 
-void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
+void DeltaValueSpace::checkPacks(const ColumnFiles & new_column_files)
 {
     if constexpr (!DM_RUN_CHECK)
         return;
@@ -36,7 +38,7 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
 
     bool seen_unsaved = false;
     bool ok = true;
-    for (auto & pack : new_packs)
+    for (const auto & pack : new_column_files)
     {
         if (pack->isSaved() && seen_unsaved)
         {
@@ -51,7 +53,7 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
     if (unlikely(!ok || new_rows != rows || new_deletes != deletes))
     {
         LOG_ERROR(log,
-                  "Rows and deletes check failed. Current packs: " << packsToString(packs) << ", new packs: " << packsToString(new_packs));
+                  "Rows and deletes check failed. Current packs: " << columnFilesToString(column_files) << ", new packs: " << columnFilesToString(column_files));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 }
@@ -60,13 +62,13 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
 // Public methods
 // ================================================
 
-DeltaValueSpace::DeltaValueSpace(PageId id_, const DeltaPacks & packs_)
+DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFiles & column_files_)
     : id(id_)
-    , packs(packs_)
+    , column_files(column_files_)
     , delta_index(std::make_shared<DeltaIndex>())
     , log(&Poco::Logger::get("DeltaValueSpace"))
 {
-    for (auto & pack : packs)
+    for (auto & pack : column_files)
     {
         rows += pack->getRows();
         bytes += pack->getBytes();
@@ -94,50 +96,50 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
 {
     Page page = context.storage_pool.meta()->read(id, nullptr);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    auto packs = deserializePacks(context, segment_range, buf);
+    auto packs = deserializeColumnStableFiles(context, segment_range, buf);
     return std::make_shared<DeltaValueSpace>(id, packs);
 }
 
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
-    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+    MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
     // Only serialize saved packs.
-    serializeSavedPacks(buf, packs);
+    serializeColumnStableFiles(buf, column_files);
     auto data_size = buf.count();
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
-                                                  const RowKeyRange & target_range,
-                                                  const DeltaPacks & head_packs,
-                                                  WriteBatches & wbs) const
+ColumnFiles DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
+                                                   const RowKeyRange & target_range,
+                                                   const ColumnFiles & head_packs,
+                                                   WriteBatches & wbs) const
 {
-    if (head_packs.size() > packs.size())
+    if (head_packs.size() > column_files.size())
     {
         LOG_ERROR(log,
-                  info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
-                         << ", packs: " << packsToString(packs));
+                  info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_packs)
+                         << ", packs: " << columnFilesToString(column_files));
         throw Exception("Check head packs failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
     auto it_1 = head_packs.begin();
-    auto it_2 = packs.begin();
-    for (; it_1 != head_packs.end() && it_2 != packs.end(); ++it_1, ++it_2)
+    auto it_2 = column_files.begin();
+    for (; it_1 != head_packs.end() && it_2 != column_files.end(); ++it_1, ++it_2)
     {
         if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
         {
             LOG_ERROR(log,
-                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
-                                   << ", packs: " << packsToString(packs));
+                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_packs)
+                                   << ", packs: " << columnFilesToString(column_files));
             throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
         }
     }
 
-    DeltaPacks cloned_tail;
-    for (; it_2 != packs.end(); ++it_2)
+    ColumnFiles cloned_tail;
+    for (; it_2 != column_files.end(); ++it_2)
     {
-        auto & pack = *it_2;
-        if (auto dr = pack->tryToDeleteRange(); dr)
+        const auto & pack = *it_2;
+        if (auto * dr = pack->tryToDeleteRange(); dr)
         {
             auto new_dr = dr->getDeleteRange().shrink(target_range);
             if (!new_dr.none())
@@ -146,17 +148,9 @@ DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
                 cloned_tail.push_back(dr->cloneWith(new_dr));
             }
         }
-        else if (auto b = pack->tryToBlock(); b)
+        else if (auto * b = pack->tryToInMemoryFile(); b)
         {
-            PageId new_data_page_id = 0;
-            if (b->getDataPageId())
-            {
-                // Use a newly created page_id to reference the data page_id of current pack.
-                new_data_page_id = context.storage_pool.newLogPageId();
-                wbs.log.putRefPage(new_data_page_id, b->getDataPageId());
-            }
-
-            auto new_pack = b->cloneWith(new_data_page_id);
+            auto new_pack = b->clone();
 
             // No matter or what, don't append to packs which cloned from old packs again.
             // Because they could shared the same cache. And the cache can NOT be inserted from different packs in different delta.
@@ -164,7 +158,16 @@ DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
 
             cloned_tail.push_back(new_pack);
         }
-        else if (auto f = pack->tryToFile(); f)
+        else if (auto * t = pack->tryToTinyFile(); t)
+        {
+            // Use a newly created page_id to reference the data page_id of current pack.
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
+            auto new_pack = t->cloneWith(new_data_page_id);
+
+            cloned_tail.push_back(new_pack);
+        }
+        else if (auto f = pack->tryToBigFile(); f)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
             auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -185,11 +188,16 @@ size_t DeltaValueSpace::getTotalCacheRows() const
 {
     std::scoped_lock lock(mutex);
     size_t cache_rows = 0;
-    for (auto & pack : packs)
+    for (const auto & pack : column_files)
     {
-        if (auto p = pack->tryToBlock(); p)
+        if (auto * p = pack->tryToInMemoryFile(); p)
         {
             if (auto && c = p->getCache(); c)
+                cache_rows += c->block.rows();
+        }
+        else if (auto * t = pack->tryToTinyFile(); t)
+        {
+            if (auto && c = t->getCache(); c)
                 cache_rows += c->block.rows();
         }
     }
@@ -200,11 +208,16 @@ size_t DeltaValueSpace::getTotalCacheBytes() const
 {
     std::scoped_lock lock(mutex);
     size_t cache_bytes = 0;
-    for (auto & pack : packs)
+    for (auto & pack : column_files)
     {
-        if (auto p = pack->tryToBlock(); p)
+        if (auto p = pack->tryToInMemoryFile(); p)
         {
             if (auto && c = p->getCache(); c)
+                cache_bytes += c->block.allocatedBytes();
+        }
+        else if (auto * t = pack->tryToTinyFile(); t)
+        {
+            if (auto && c = t->getCache(); c)
                 cache_bytes += c->block.allocatedBytes();
         }
     }
@@ -215,12 +228,16 @@ size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
     size_t cache_rows = 0;
-    for (auto & pack : packs)
+    for (auto & pack : column_files)
     {
-        if (auto p = pack->tryToBlock(); p)
+        if (auto p = pack->tryToInMemoryFile(); p)
         {
-            if (p->isCached())
-                cache_rows += pack->getRows();
+            cache_rows += pack->getRows();
+        }
+        else if (auto * t = pack->tryToTinyFile(); t)
+        {
+            if (auto && c = t->getCache(); c)
+                cache_rows += c->block.rows();
         }
     }
     return cache_rows;
@@ -228,31 +245,39 @@ size_t DeltaValueSpace::getValidCacheRows() const
 
 void DeltaValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 {
-    for (auto & pack : packs)
+    for (auto & pack : column_files)
         pack->removeData(wbs);
 }
 
-void DeltaValueSpace::appendPackInner(const DeltaPackPtr & pack)
+void DeltaValueSpace::appendPackInner(const ColumnFilePtr & pack)
 {
     auto last_schema = lastSchema();
 
-    if (auto dp_block = pack->tryToBlock(); dp_block)
+    if (auto * m_file = pack->tryToInMemoryFile(); m_file)
     {
         // If this pack's schema is identical to last_schema, then use the last_schema instance,
         // so that we don't have to serialize my_schema instance.
-        auto my_schema = dp_block->getSchema();
+        auto my_schema = m_file->getSchema();
         if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
-            dp_block->resetIdenticalSchema(last_schema);
+            m_file->resetIdenticalSchema(last_schema);
     }
-
-    if (!packs.empty())
+    else if (auto * t_file = pack->tryToTinyFile(); t_file)
     {
-        auto last_pack = packs.back();
-        if (last_pack->isBlock())
-            last_pack->tryToBlock()->disableAppend();
+        // If this pack's schema is identical to last_schema, then use the last_schema instance,
+        // so that we don't have to serialize my_schema instance.
+        auto my_schema = t_file->getSchema();
+        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
+            t_file->resetIdenticalSchema(last_schema);
     }
 
-    packs.push_back(pack);
+    if (!column_files.empty())
+    {
+        auto last_pack = column_files.back();
+        if (last_pack->isAppendable())
+            last_pack->disableAppend();
+    }
+
+    column_files.push_back(pack);
 
     rows += pack->getRows();
     bytes += pack->getBytes();
@@ -263,7 +288,7 @@ void DeltaValueSpace::appendPackInner(const DeltaPackPtr & pack)
     unsaved_deletes += pack->getDeletes();
 }
 
-bool DeltaValueSpace::appendPack(DMContext & /*context*/, const DeltaPackPtr & pack)
+bool DeltaValueSpace::appendPack(DMContext & /*context*/, const ColumnFilePtr & pack)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
@@ -280,51 +305,28 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    // If last pack has a valid cache block, and it is mutable (haven't been saved to disk yet), we will merge the newly block into last pack.
-    // Otherwise, create a new cache block and write into it.
-
-    DeltaPackBlock * mutable_pack{};
-    if (!packs.empty())
+    // If the `column_files` is not empty, and the last `column_file` is a `ColumnInMemoryFile`, we will merge the newly block into the last `column_file`.
+    // Otherwise, create a new `ColumnInMemoryFile` and write into it.
+    bool success = false;
+    size_t append_bytes = block.bytes(offset, limit);
+    if (!column_files.empty())
     {
-        auto & last_pack = packs.back();
-        if (last_pack->isBlock())
-        {
-            if (auto p = last_pack->tryToBlock(); p->isAppendable())
-            {
-                if constexpr (DM_RUN_CHECK)
-                {
-                    if (unlikely(!isSameSchema(*p->getSchema(), p->getCache()->block)))
-                        throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
-                }
-
-                auto & cache_block = p->getCache()->block;
-                bool is_overflow
-                    = cache_block.rows() >= context.delta_cache_limit_rows || cache_block.bytes() >= context.delta_cache_limit_bytes;
-                bool is_same_schema = isSameSchema(block, cache_block);
-                if (!is_overflow && is_same_schema)
-                {
-                    // The last cache block is available
-                    mutable_pack = p;
-                }
-            }
-        }
+        auto & last_column_file = column_files.back();
+        if (last_column_file->isAppendable())
+            success = last_column_file->append(context, block, offset, limit, append_bytes);
     }
 
-    size_t append_bytes = block.bytes(offset, limit);
-
-    if (!mutable_pack)
+    if (!success)
     {
         // Create a new pack.
         auto last_schema = lastSchema();
         auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
-
-        auto new_pack = DeltaPackBlock::createCachePack(my_schema);
-        appendPackInner(new_pack);
-
-        mutable_pack = new_pack->tryToBlock();
+        auto new_column_file = std::make_shared<ColumnInMemoryFile>(my_schema);
+        appendPackInner(new_column_file);
+        success = new_column_file->append(context, block, offset, limit, append_bytes);
+        if (unlikely(!success))
+            throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
     }
-
-    mutable_pack->appendToCache(block, offset, limit, append_bytes);
 
     rows += limit;
     bytes += append_bytes;
@@ -340,13 +342,13 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    auto p = std::make_shared<DeltaPackDeleteRange>(delete_range);
+    auto p = std::make_shared<ColumnDeleteRangeFile>(delete_range);
     appendPackInner(p);
 
     return true;
 }
 
-bool DeltaValueSpace::ingestPacks(DMContext & /*context*/, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool DeltaValueSpace::ingestPacks(DMContext & /*context*/, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
@@ -355,7 +357,7 @@ bool DeltaValueSpace::ingestPacks(DMContext & /*context*/, const RowKeyRange & r
     // Prepend a DeleteRange to clean data before applying packs
     if (clear_data_in_range)
     {
-        auto p = std::make_shared<DeltaPackDeleteRange>(range);
+        auto p = std::make_shared<ColumnDeleteRangeFile>(range);
         appendPackInner(p);
     }
 

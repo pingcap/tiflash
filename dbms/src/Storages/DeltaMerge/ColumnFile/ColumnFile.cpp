@@ -1,21 +1,42 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/DeltaMerge/Delta/DeltaPack.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackBlock.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackDeleteRange.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackFile.h>
-#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+
 
 namespace DB
 {
 namespace DM
 {
+ColumnInMemoryFile * ColumnFile::tryToInMemoryFile()
+{
+    return !isInMemoryFile() ? nullptr : static_cast<ColumnInMemoryFile *>(this);
+}
+
+ColumnTinyFile * ColumnFile::tryToTinyFile()
+{
+    return !isTinyFile() ? nullptr : static_cast<ColumnTinyFile *>(this);
+}
+
+ColumnDeleteRangeFile * ColumnFile::tryToDeleteRange()
+{
+    return !isDeleteRange() ? nullptr : static_cast<ColumnDeleteRangeFile *>(this);
+}
+
+ColumnBigFile * ColumnFile::tryToBigFile()
+{
+    return !isBigFile() ? nullptr : static_cast<ColumnBigFile *>(this);
+}
+
+
 /// ======================================================
 /// Helper methods.
 /// ======================================================
-
 size_t copyColumnsData(
     const Columns & from,
     const ColumnPtr & pk_col,
@@ -128,23 +149,7 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
                                                    {});
 }
 
-
-DeltaPackBlock * DeltaPack::tryToBlock()
-{
-    return !isBlock() ? nullptr : static_cast<DeltaPackBlock *>(this);
-}
-
-DeltaPackFile * DeltaPack::tryToFile()
-{
-    return !isFile() ? nullptr : static_cast<DeltaPackFile *>(this);
-}
-
-DeltaPackDeleteRange * DeltaPack::tryToDeleteRange()
-{
-    return !isDeleteRange() ? nullptr : static_cast<DeltaPackDeleteRange *>(this);
-}
-
-void serializeSavedPacks(WriteBuffer & buf, const DeltaPacks & packs)
+void serializeColumnStableFiles(WriteBuffer & buf, const ColumnFiles & column_files)
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.delta, buf); // Add binary version
     switch (STORAGE_FORMAT_CURRENT.delta)
@@ -152,60 +157,59 @@ void serializeSavedPacks(WriteBuffer & buf, const DeltaPacks & packs)
         // V1 and V2 share the same serializer.
     case DeltaFormat::V1:
     case DeltaFormat::V2:
-        serializeSavedPacks_v2(buf, packs);
+        serializeColumnStableFiles_V2(buf, column_files);
         break;
     case DeltaFormat::V3:
-        serializeSavedPacks_V3(buf, packs);
+        serializeColumnStableFiles_V3(buf, column_files);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(STORAGE_FORMAT_CURRENT.delta), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-DeltaPacks deserializePacks(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    DeltaPacks packs;
+    ColumnFiles column_files;
     switch (version)
     {
-    // V1 and V2 share the same deserializer.
+        // V1 and V2 share the same deserializer.
     case DeltaFormat::V1:
     case DeltaFormat::V2:
-        packs = deserializePacks_V2(buf, version);
+        column_files = deserializeColumnStableFiles_V2(buf, version);
         break;
     case DeltaFormat::V3:
-        packs = deserializePacks_V3(context, segment_range, buf, version);
+        column_files = deserializeColumnStableFiles_V3(context, segment_range, buf, version);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    for (auto & p : packs)
-        p->setSaved();
-    return packs;
+    return column_files;
 }
 
-
-String packsToString(const DeltaPacks & packs)
+String columnFilesToString(const ColumnFiles & column_files)
 {
-    String packs_info = "[";
-    for (auto & p : packs)
+    String column_files_info = "[";
+    for (const auto & f : column_files)
     {
-        if (p->isBlock())
-            packs_info += "B_" + DB::toString(p->getRows());
-        else if (p->isFile())
-            packs_info += "F_" + DB::toString(p->getRows());
-        else if (auto dp_delete = p->tryToDeleteRange(); dp_delete)
-            packs_info += "D_" + dp_delete->getDeleteRange().toString();
-        packs_info += (p->isSaved() ? "_S," : "_N,");
+        if (f->isInMemoryFile())
+            column_files_info += "B_" + DB::toString(f->getRows()) + "_N,";
+        else if (f->isTinyFile())
+            column_files_info += "B_" + DB::toString(f->getRows()) + "_S,";
+        else if (f->isBigFile())
+            column_files_info += "F_" + DB::toString(f->getRows()) + "_S,";
+        else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
+            column_files_info += "D_" + f_delete->getDeleteRange().toString() + "_S,";
     }
-    if (!packs.empty())
-        packs_info.erase(packs_info.size() - 1);
-    packs_info += "]";
-    return packs_info;
+
+    if (!column_files.empty())
+        column_files_info.erase(column_files_info.size() - 1);
+    column_files_info += "]";
+    return column_files_info;
 }
 
 } // namespace DM

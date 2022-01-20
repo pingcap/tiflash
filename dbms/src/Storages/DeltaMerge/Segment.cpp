@@ -277,9 +277,9 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-bool Segment::writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack)
+bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & pack)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, pack->getRows(), pack->isFile());
+    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, pack->getRows(), pack->isBigFile());
     return delta->appendPack(dm_context, pack);
 }
 
@@ -296,7 +296,7 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto pack = DeltaPackBlock::writePack(dm_context, block, 0, block.rows(), wbs);
+    auto pack = ColumnTinyFile::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
     if (delta->appendPack(dm_context, pack))
@@ -323,7 +323,7 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: {}", segment_id, new_range.toDebugString());
@@ -1064,8 +1064,8 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
-    DeltaPacks empty_packs;
-    DeltaPacks * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->getPacks();
+    ColumnFiles empty_packs;
+    ColumnFiles * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->getPacks();
 
     auto my_delta_packs = delta->checkHeadAndCloneTail(dm_context, my_range, *head_packs, wbs);
     auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
@@ -1216,12 +1216,12 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     wbs.writeLogAndData();
 
     /// Make sure saved packs are appended before unsaved packs.
-    DeltaPacks merged_packs;
+    ColumnFiles merged_packs;
 
     auto l_first_unsaved
-        = std::find_if(left_tail_packs.begin(), left_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
+        = std::find_if(left_tail_packs.begin(), left_tail_packs.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
     auto r_first_unsaved
-        = std::find_if(right_tail_packs.begin(), right_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
+        = std::find_if(right_tail_packs.begin(), right_tail_packs.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
 
     merged_packs.insert(merged_packs.end(), left_tail_packs.begin(), l_first_unsaved);
     merged_packs.insert(merged_packs.end(), right_tail_packs.begin(), r_first_unsaved);
