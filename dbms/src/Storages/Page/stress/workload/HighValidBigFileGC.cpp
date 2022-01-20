@@ -42,7 +42,7 @@ public:
         {
             stop_watch.start();
 
-            PageStorage::Config config;
+            DB::PageStorage::Config config;
             config.file_max_size = 8ULL * DB::GB;
             config.file_roll_size = 8ULL * DB::GB;
             initPageStorage(config, name());

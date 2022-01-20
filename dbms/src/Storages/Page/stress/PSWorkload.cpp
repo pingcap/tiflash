@@ -47,7 +47,7 @@ void StressWorkload::onDumpResult()
     }
 }
 
-void StressWorkload::initPageStorage(PageStorage::Config & config, String path_prefix)
+void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String path_prefix)
 {
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
 
@@ -67,8 +67,22 @@ void StressWorkload::initPageStorage(PageStorage::Config & config, String path_p
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0] + "/" + path_prefix);
     }
 
-    ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider);
-    ps->restore();
+    if (options.running_ps_version == 2)
+    {
+        ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider);
+        ps->restore();
+    }
+    else if (options.running_ps_version == 3)
+    {
+        ps = std::make_shared<DB::PS::V3::PageStorageImpl>("stress_test", delegator, config, file_provider);
+        // FIXME : we need restore V3
+    }
+    else
+    {
+        throw DB::Exception(fmt::format("Invalid PageStorage version {}",
+                                        options.running_ps_version));
+    }
+
     {
         size_t num_of_pages = 0;
         ps->traverse([&num_of_pages](const DB::Page & page) {
