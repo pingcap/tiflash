@@ -24,7 +24,7 @@ public:
         : block(block_)
         , block_offset(offset_)
     {}
-    BlockOrDelete(const RowKeyRange & delete_range_)
+    explicit BlockOrDelete(const RowKeyRange & delete_range_)
         : delete_range(delete_range_)
     {}
 
@@ -53,11 +53,11 @@ private:
     size_t rowkey_column_size;
 
 public:
-    ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
+    explicit ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
         :storage_snap{storage_snap_}
     {}
 
-    ColumnFileSetSnapshot(StorageSnapshotPtr && storage_snap_)
+    explicit ColumnFileSetSnapshot(StorageSnapshotPtr && storage_snap_)
         :storage_snap{std::move(storage_snap_)}
     {}
 
@@ -86,7 +86,6 @@ public:
 
     const auto & getStorageSnapshot() { return storage_snap; }
 };
-
 
 }
 }

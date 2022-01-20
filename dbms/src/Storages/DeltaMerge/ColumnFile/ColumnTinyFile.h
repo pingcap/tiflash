@@ -22,12 +22,12 @@ private:
     // The id of data page which stores the data of this pack.
     PageId data_page_id;
 
-    // The members below are not serialized.
-
+    /// The members below are not serialized.
     // The cache data in memory.
     CachePtr cache;
     // Used to map column id to column instance in a Block.
     ColIdToOffset colid_to_offset;
+
 
 private:
     /// Read a block of columns in `column_defines` from cache / disk,
@@ -52,7 +52,6 @@ public:
           data_page_id(data_page_id_),
           cache(cache_)
     {
-        colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
             colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
     }
