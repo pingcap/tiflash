@@ -96,11 +96,6 @@ else
 fi
 ccache -z
 
-pushd ${SRCPATH}/cluster_manage/
-rm -rf ./dist
-./release.sh
-popd
-
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 
