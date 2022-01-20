@@ -399,6 +399,32 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, TestRefWontDeadLock)
+{
+    PageEntriesEdit edit;
+    {
+        // 1. batch.putExternal(0, 0);
+        PageEntryV3 entry1;
+        edit.put(0, entry1);
+
+        // 2. batch.putRefPage(1, 0);
+        edit.ref(1, 0);
+    }
+
+    dir.apply(std::move(edit));
+
+    PageEntriesEdit edit2;
+    {
+        // 1. batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
+        edit2.ref(2, 1);
+
+        // 2. batch.delPage(1); // free ref 1 -> 0
+        edit2.del(1);
+    }
+
+    dir.apply(std::move(edit2));
+}
+
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                   \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
     entries.createNewVersion((VERSION), entry_v##VERSION);

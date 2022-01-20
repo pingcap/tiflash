@@ -23,9 +23,8 @@ namespace PS::V3
  * VersionedPageEntries methods *
  ********************************/
 
-std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries::getEntryNotSafe(UInt64 seq) const
 {
-    auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
     if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
@@ -34,6 +33,12 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
             return iter->second.entry;
     }
     return std::nullopt;
+}
+
+std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
+{
+    auto page_lock = acquireLock();
+    return getEntryNotSafe(seq);
 }
 
 std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
@@ -243,7 +248,10 @@ void PageDirectory::apply(PageEntriesEdit && edit)
                 break;
             }
 
-            if (auto entry = iter->second->getEntry(last_sequence); entry)
+            // If we already request the lock from `r.ori_page_id`, Then we should request again.
+            // This can happen when r.ori_page_id have other operating in current writebatch
+            if (auto entry = updating_locks.find(r.ori_page_id) != updating_locks.end() ? iter->second->getEntryNotSafe(last_sequence) : iter->second->getEntry(last_sequence);
+                entry)
             {
                 // copy the entry to be ref
                 updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
