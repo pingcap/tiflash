@@ -48,10 +48,6 @@ function bake_llvm_base_aarch64() {
     # gRPC
     source $SCRIPTPATH/install_grpc.sh
     install_grpc "1.26.0"
-
-    # Python
-    source $SCRIPTPATH/prepare_python.sh
-    prepare_python "1.26.0"
 }
 
 bake_llvm_base_aarch64
