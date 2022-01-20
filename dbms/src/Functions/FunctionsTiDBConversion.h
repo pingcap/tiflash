@@ -820,7 +820,7 @@ struct TiDBConvertToDecimal
     static U toTiDBDecimalInternal(T value, PrecType prec [[ maybe_unused ]], ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
-        if constexpr (canSkipCheckOverflow)
+        if constexpr (!canSkipCheckOverflow)
         {
             auto max_value = DecimalMaxValue::get(prec);
             if (value > max_value || value < -max_value)
