@@ -243,7 +243,13 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     auto lock = stat->lock();
     stat->removePosFromStat(offset, size);
 
-    // TBD : consider remove the empty file
+    if (stat->sm_valid_size == 0)
+    {
+        LOG_FMT_TRACE(log, "Erase Blob [BlobId={}]", blob_id);
+        auto lock_stats = blob_stats.lock();
+        blob_stats.eraseStat(stat, lock_stats);
+        getBlobFile(blob_id)->del();
+    }
 }
 
 
@@ -384,35 +390,83 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     return blob_need_gc;
 }
 
+
 PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
                               const PageSize & total_page_size,
                               const WriteLimiterPtr & write_limiter,
                               const ReadLimiterPtr & read_limiter)
 {
+    std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
     PageEntriesEdit edit;
 
     if (total_page_size == 0)
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
+    LOG_FMT_INFO(log, "BlobStore will migrate {}M into new Blobs", total_page_size / DB::MB);
 
-    // TBD : consider whether total_page_size > `file_limit_size`
-    // We should make the memory consumption smooth during GC.
-    char * data_buf = static_cast<char *>(alloc(total_page_size));
+    auto alloc_size = total_page_size > config.file_limit_size.get() ? config.file_limit_size.get() : total_page_size;
+
+    // We could make the memory consumption smooth during GC.
+    char * data_buf = static_cast<char *>(alloc(alloc_size));
     SCOPE_EXIT({
-        free(data_buf, total_page_size);
+        free(data_buf, alloc_size);
     });
+    BlobFileOffset remain_page_size = total_page_size - alloc_size;
 
     char * data_pos = data_buf;
-    const auto & [blobfile_id, offset_in_file] = getPosFromStats(total_page_size);
-    UInt64 offset_in_data = 0;
+    BlobFileOffset offset_in_data = 0;
+    BlobFileId blobfile_id;
+    BlobFileOffset offset_in_file;
+    std::tie(blobfile_id, offset_in_file) = getPosFromStats(alloc_size);
 
+    // Although this is a three-layer loop
+    // the amount of data can be seen as linear and fixed
+    // If it is changed to a single-layer loop, the parameters will change.
+    // which will bring more memory waste, and the execution speed will not be faster
     for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
     {
         for (const auto & [page_id, versioned_entry] : versioned_pageid_entry_list)
         {
             for (const auto & [versioned, entry] : versioned_entry)
             {
+                // When we can't load the remaining data.
+                // we will use the original buffer to find an area to load the remaining data
+                if (offset_in_data + entry.size > config.file_limit_size)
+                {
+                    if (offset_in_data != alloc_size)
+                    {
+                        removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
+                    }
+                    remain_page_size += alloc_size - offset_in_data;
+
+                    try
+                    {
+                        auto blob_file = getBlobFile(blobfile_id);
+                        blob_file->write(data_buf, offset_in_file, offset_in_data, write_limiter);
+                        written_blobs.emplace_back(std::make_tuple(blobfile_id, offset_in_file, offset_in_data));
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        for (const auto & [blobfile_id, offset_in_file, page_size] : written_blobs)
+                        {
+                            removePosFromStats(blobfile_id, offset_in_file, page_size);
+                        }
+                        LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blobfile_id, offset_in_file, total_page_size);
+                        throw e;
+                    }
+
+                    // reset the position
+                    data_pos = data_buf;
+                    offset_in_data = 0;
+
+                    auto loop_alloc_size = remain_page_size > config.file_limit_size.get() ? config.file_limit_size.get() : remain_page_size;
+
+                    remain_page_size -= loop_alloc_size;
+
+                    std::tie(blobfile_id, offset_in_file) = getPosFromStats(loop_alloc_size);
+                }
+
                 PageEntryV3 new_entry;
 
                 read(file_id, entry.offset, data_pos, entry.size, read_limiter);
@@ -427,7 +481,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 new_entry.size = entry.size;
 
                 new_entry.file_id = blobfile_id;
-                new_entry.offset = offset_in_data; // FIXME: offset_in_file + offset_in_data?
+                new_entry.offset = offset_in_file + offset_in_data;
 
                 offset_in_data += new_entry.size;
                 data_pos += new_entry.size;
@@ -437,29 +491,27 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     }
 
-    if (unlikely(data_pos != data_buf + total_page_size))
+    if (offset_in_data != 0)
     {
-        removePosFromStats(blobfile_id, offset_in_file, total_page_size);
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
-                                    data_buf + total_page_size,
-                                    data_pos),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
-    try
-    {
-        auto blob_file = getBlobFile(blobfile_id);
-        blob_file->write(data_buf, offset_in_file, total_page_size, write_limiter);
-    }
-    catch (DB::Exception & e)
-    {
-        removePosFromStats(blobfile_id, offset_in_file, total_page_size);
-        LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blobfile_id, offset_in_file, total_page_size);
-        throw e;
+        try
+        {
+            auto blob_file = getBlobFile(blobfile_id);
+            blob_file->write(data_buf, offset_in_file, offset_in_data, write_limiter);
+        }
+        catch (DB::Exception & e)
+        {
+            for (const auto & [blobfile_id, offset_in_file, page_size] : written_blobs)
+            {
+                removePosFromStats(blobfile_id, offset_in_file, page_size);
+            }
+            LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blobfile_id, offset_in_file, total_page_size);
+            throw e;
+        }
     }
 
     return edit;
 }
+
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 {
@@ -528,7 +580,13 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+void BlobStore::BlobStats::eraseStat(const BlobStatPtr & stat, const std::lock_guard<std::mutex> &)
+{
+    old_ids.emplace_back(stat->id);
+    stats_map.remove(stat);
+}
+
+void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
 {
     BlobStatPtr stat = nullptr;
     bool found = false;
@@ -551,8 +609,7 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_gu
 
     LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
 
-    stats_map.remove(stat);
-    old_ids.emplace_back(blob_file_id);
+    eraseStat(stat, lock);
 }
 
 BlobFileId BlobStore::BlobStats::chooseNewStat()
