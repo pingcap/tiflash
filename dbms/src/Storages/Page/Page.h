@@ -88,7 +88,7 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
-    inline bool isValid() const { return file_id != 0 && file_id != INVALID_BLOBFILE_ID; }
+    inline bool isValid() const { return file_id != 0; }
     inline bool isTombstone() const { return ref == 0; }
 
     PageFileIdAndLevel fileIdLevel() const

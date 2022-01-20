@@ -66,12 +66,12 @@ TEST_F(BlobStoreTest, testStat)
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, 0);
+    ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     // still 0
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, 0);
+    ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     stats.createStat(0);
@@ -138,7 +138,7 @@ TEST_F(BlobStoreTest, testFullStats)
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
-    stat = stats.createStat(0);
+    stat = stats.createStat(1);
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
     ASSERT_EQ(offset, 0);
 
@@ -153,26 +153,26 @@ TEST_F(BlobStoreTest, testFullStats)
 
     // Won't choose full one
     std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, 1);
+    ASSERT_EQ(blob_file_id, 2);
     ASSERT_FALSE(stat);
 
-    // A new stat can use
+    // A new stat 2 can use
     stat = stats.createStat(blob_file_id);
     offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, 0);
 
-    // Remove the stat which id is 0 , now remain the stat which id is 1
-    stats.eraseStat(0);
+    // Remove the stat which id is 1 , now remain the stat which id is 1
+    stats.eraseStat(1);
 
-    // Then full the stat which id 1
+    // Then full the stat which id 2
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100);
     ASSERT_EQ(offset, 100);
 
-    // Then choose stat , it should return the stat id 0
+    // Then choose stat , it should return the stat id 1
     // cause in this time , stat which id is 1 have been earsed,
-    // and stat which id is 1 is full.
+    // and stat which id is 2 is full.
     std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, 0);
+    ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 }
 
@@ -212,7 +212,7 @@ TEST_F(BlobStoreTest, testWriteRead)
         ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
 
         // Read directly from the file
         blob_store.read(record.entry.file_id,
@@ -304,7 +304,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
 
         PageFieldSizes check_field_sizes;
         for (auto & [field_offset, crc] : record.entry.field_offsets)
@@ -367,14 +367,14 @@ TEST_F(BlobStoreTest, testWrite)
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buff_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
         ASSERT_EQ(record.type, WriteBatch::WriteType::UPSERT);
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
     }
 
 
@@ -425,7 +425,7 @@ TEST_F(BlobStoreTest, testWrite)
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, buff_size * 2);
         ASSERT_EQ(record.entry.size, buff_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
         ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
@@ -489,7 +489,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         ASSERT_EQ(record.page_id, 50);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
-        ASSERT_EQ(record.entry.file_id, 0);
+        ASSERT_EQ(record.entry.file_id, 1);
 
         wb.clear();
         wb.putPage(51, /*tag*/ 0, buff2, buf_size);
@@ -502,7 +502,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         ASSERT_EQ(record.page_id, 51);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
-        ASSERT_EQ(record.entry.file_id, 1);
+        ASSERT_EQ(record.entry.file_id, 2);
     }
 }
 
@@ -518,10 +518,13 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     WriteBatch wb;
     {
-        char c_buff[buff_size];
+        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i] = static_cast<char>((0xff) + i);
+            for (size_t j = 0; j < buff_size; ++j)
+            {
+                c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+            }
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
@@ -557,9 +560,9 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     // After remove `entries_del1`.
     // Remain entries index [0, 2, 5, 6, 8]
     blob_store.remove(entries_del1);
-    ASSERT_EQ(entries_del1.begin()->file_id, 0);
+    ASSERT_EQ(entries_del1.begin()->file_id, 1);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(0);
+    auto stat = blob_store.blob_stats.fileIdToStat(1);
 
     ASSERT_EQ(stat->sm_valid_rate, 0.5);
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
@@ -582,7 +585,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
 
     // Check disk file have been truncate to right margin
-    String path = blob_store.getBlobFilePath(0);
+    String path = blob_store.getBlobFilePath(1);
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
 }
@@ -598,10 +601,13 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     WriteBatch wb;
     {
-        char c_buff[buff_size];
+        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
-            c_buff[i] = static_cast<char>((0xff) + i);
+            for (size_t j = 0; j < buff_size; ++j)
+            {
+                c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+            }
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
@@ -629,7 +635,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     // Remain entries index [8, 9].
     blob_store.remove(entries_del);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(0);
+    auto stat = blob_store.blob_stats.fileIdToStat(1);
 
     const auto & gc_stats = blob_store.getGCStats();
     ASSERT_FALSE(gc_stats.empty());
@@ -639,7 +645,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
 
     // Then we must do heavy GC
-    ASSERT_EQ(*gc_stats.begin(), 0);
+    ASSERT_EQ(*gc_stats.begin(), 1);
 }
 
 
@@ -679,10 +685,10 @@ TEST_F(BlobStoreTest, GC)
     PageIdAndVersionedEntries versioned_pageid_entries;
     versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
     std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
-    gc_context[0] = versioned_pageid_entries;
+    gc_context[1] = versioned_pageid_entries;
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
-    auto stat = blob_store.blob_stats.fileIdToStat(0);
+    auto stat = blob_store.blob_stats.fileIdToStat(1);
     stat->changeToReadOnly();
 
     const auto & copy_list = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
@@ -694,18 +700,18 @@ TEST_F(BlobStoreTest, GC)
     {
         (void)version_type;
         ASSERT_EQ(page_id_, page_id);
-        ASSERT_EQ(entry_.file_id, 1);
+        ASSERT_EQ(entry_.file_id, 2);
         ASSERT_EQ(it->second.checksum, entry_.checksum);
         ASSERT_EQ(it->second.size, entry_.size);
         it++;
     }
 
     // Check blobfile1
-    Poco::File file0(blob_store.getBlobFilePath(0));
     Poco::File file1(blob_store.getBlobFilePath(1));
-    ASSERT_TRUE(file0.exists());
+    Poco::File file2(blob_store.getBlobFilePath(2));
     ASSERT_TRUE(file1.exists());
-    ASSERT_EQ(file0.getSize(), file1.getSize());
+    ASSERT_TRUE(file2.exists());
+    ASSERT_EQ(file1.getSize(), file2.getSize());
 }
 
 TEST_F(BlobStoreTest, GCMigirateBigData)

@@ -151,7 +151,7 @@ public:
         Poco::Logger * log;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 0;
+        BlobFileId roll_id = 1;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         std::mutex lock_stats;

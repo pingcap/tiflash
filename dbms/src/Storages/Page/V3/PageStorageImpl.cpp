@@ -79,6 +79,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
     try
     {
         const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
         PageEntry entry_ret;
@@ -141,6 +142,7 @@ PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, c
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        (void)id;
         auto info = BlobStore::FieldReadInfo(page_id, entry, field_indices);
         read_infos.emplace_back(info);
     }
