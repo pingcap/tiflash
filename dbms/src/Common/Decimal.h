@@ -27,7 +27,7 @@ struct IntPrec
 template <>
 struct IntPrec<int8_t>
 {
-    static constexpr PrecType prec = 4;
+    static constexpr PrecType prec = 3;
 };
 template <>
 struct IntPrec<uint8_t>
@@ -37,7 +37,7 @@ struct IntPrec<uint8_t>
 template <>
 struct IntPrec<int16_t>
 {
-    static constexpr PrecType prec = 6;
+    static constexpr PrecType prec = 5;
 };
 template <>
 struct IntPrec<uint16_t>
@@ -47,7 +47,7 @@ struct IntPrec<uint16_t>
 template <>
 struct IntPrec<int32_t>
 {
-    static constexpr PrecType prec = 11;
+    static constexpr PrecType prec = 10;
 };
 template <>
 struct IntPrec<uint32_t>

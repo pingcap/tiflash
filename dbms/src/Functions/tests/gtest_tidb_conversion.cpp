@@ -7,6 +7,7 @@
 #include "DataTypes/DataTypeNullable.h"
 #include "DataTypes/DataTypesNumber.h"
 #include "Functions/FunctionHelpers.h"
+#include "Functions/FunctionsTiDBConversion.h"
 #include "TestUtils/FunctionTestUtils.h"
 #include "common/types.h"
 #include "gtest/gtest.h"
@@ -939,6 +940,106 @@ try
     ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
 }
 CATCH
+
+TEST_F(TestTidbConversion, skipCheckOverflowIntToDeciaml)
+{
+    DataTypePtr int8_ptr = makeDataType<Int8>();
+    DataTypePtr int16_ptr = makeDataType<Int16>();
+    DataTypePtr int32_ptr = makeDataType<Int32>();
+    DataTypePtr int64_ptr = makeDataType<Int64>();
+    DataTypePtr uint8_ptr = makeDataType<UInt8>();
+    DataTypePtr uint16_ptr = makeDataType<UInt16>();
+    DataTypePtr uint32_ptr = makeDataType<UInt32>();
+    DataTypePtr uint64_ptr = makeDataType<UInt64>();
+
+    const PrecType prec_decimal32 = 8;
+    const PrecType prec_decimal64 = 17;
+    const PrecType prec_decimal128 = 37;
+    const PrecType prec_decimal256 = 65;
+    const ScaleType scale = 0;
+
+    // int8(max_prec: 3) -> decimal32(max_prec: 9)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, prec_decimal32, scale));
+    // int16(max_prec: 5) -> decimal32(max_prec: 9)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt16>(int16_ptr, prec_decimal32, scale));
+    // int32(max_prec: 10) -> decimal32(max_prec: 9)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt32>(int32_ptr, prec_decimal32, scale));
+    // int64(max_prec: 20) -> decimal32(max_prec: 9)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, prec_decimal32, scale));
+
+    // uint8(max_prec: 3) -> decimal32(max_prec: 9)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt8>(uint8_ptr, prec_decimal32, scale));
+    // uint16(max_prec: 5) -> decimal32(max_prec: 9)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt16>(uint16_ptr, prec_decimal32, scale));
+    // uint32(max_prec: 10) -> decimal32(max_prec: 9)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt32>(uint32_ptr, prec_decimal32, scale));
+    // uint64(max_prec: 20) -> decimal32(max_prec: 9)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal32, scale));
+    
+    // int8(max_prec: 3) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, prec_decimal64, scale));
+    // int16(max_prec: 5) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt16>(int16_ptr, prec_decimal64, scale));
+    // int32(max_prec: 10) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt32>(int32_ptr, prec_decimal64, scale));
+    // int64(max_prec: 20) -> decimal64(max_prec: 18)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, prec_decimal64, scale));
+
+    // uint8(max_prec: 3) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt8>(uint8_ptr, prec_decimal64, scale));
+    // uint16(max_prec: 5) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt16>(uint16_ptr, prec_decimal64, scale));
+    // uint32(max_prec: 10) -> decimal64(max_prec: 18)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt32>(uint32_ptr, prec_decimal64, scale));
+    // uint64(max_prec: 20) -> decimal64(max_prec: 18)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal64, scale));
+
+    // int8(max_prec: 3) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, prec_decimal128, scale));
+    // int16(max_prec: 5) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt16>(int16_ptr, prec_decimal128, scale));
+    // int32(max_prec: 10) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt32>(int32_ptr, prec_decimal128, scale));
+    // int64(max_prec: 20) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, prec_decimal128, scale));
+
+    // uint8(max_prec: 3) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt8>(uint8_ptr, prec_decimal128, scale));
+    // uint16(max_prec: 5) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt16>(uint16_ptr, prec_decimal128, scale));
+    // uint32(max_prec: 10) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt32>(uint32_ptr, prec_decimal128, scale));
+    // uint64(max_prec: 20) -> decimal128(max_prec: 38)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal128, scale));
+
+    // int8(max_prec: 3) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, prec_decimal256, scale));
+    // int16(max_prec: 5) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt16>(int16_ptr, prec_decimal256, scale));
+    // int32(max_prec: 10) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt32>(int32_ptr, prec_decimal256, scale));
+    // int64(max_prec: 20) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, prec_decimal256, scale));
+
+    // uint8(max_prec: 3) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt8>(uint8_ptr, prec_decimal256, scale));
+    // uint16(max_prec: 5) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt16>(uint16_ptr, prec_decimal256, scale));
+    // uint32(max_prec: 10) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt32>(uint32_ptr, prec_decimal256, scale));
+    // uint64(max_prec: 20) -> decimal256(max_prec: 65)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal256, scale));
+}
+
+TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDeciaml)
+{
+    DataTypePtr decimal32_ptr_8_3 = createDecimal(8, 3);
+    DataTypePtr decimal32_ptr_8_2 = createDecimal(8, 2);
+
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 8, 3));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_3, 8, 2));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 7, 5));
+}
 
 } // namespace
 } // namespace DB::tests
