@@ -9,5 +9,4 @@ install_dir="$SRCPATH/release-darwin/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "${install_dir:?}"/*; else mkdir -p "$install_dir"; fi
 
 $SCRIPTPATH/build-tiflash-proxy.sh
-$SCRIPTPATH/build-cluster-manager.sh
 $SCRIPTPATH/build-tiflash-release.sh
