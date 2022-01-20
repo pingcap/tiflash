@@ -1,6 +1,5 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -19,30 +18,13 @@ extern const int LOGICAL_ERROR;
 FilterBlockInputStream::FilterBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & expression_,
-    const String & filter_column_name,
+    const String & filter_column_name_,
     const LogWithPrefixPtr & log_)
     : expression(expression_)
+    , filter_column_name(filter_column_name_)
     , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
-
-    /// Determine position of filter column.
-    header = input->getHeader();
-    expression->execute(header);
-
-    filter_column = header.getPositionByName(filter_column_name);
-    auto & column_elem = header.safeGetByPosition(filter_column);
-
-    /// Isn't the filter already constant?
-    if (column_elem.column)
-        constant_filter_description = ConstantFilterDescription(*column_elem.column);
-
-    if (!constant_filter_description.always_false && !constant_filter_description.always_true)
-    {
-        /// Replace the filter column to a constant with value 1.
-        FilterDescription filter_description_check(*column_elem.column);
-        column_elem.column = column_elem.type->createColumnConst(header.rows(), UInt64(1));
-    }
 }
 
 
@@ -66,12 +48,41 @@ Block FilterBlockInputStream::getTotals()
 
 Block FilterBlockInputStream::getHeader() const
 {
-    return header;
+    Block res = children.back()->getHeader();
+    expression->execute(res);
+    return res;
+}
+
+
+void FilterBlockInputStream::readPrefixImpl()
+{
+    assert(!has_init_filter);
+    has_init_filter = true;
+
+    /// Determine position of filter column.
+    auto header = children.back()->getHeader();
+    expression->execute(header);
+
+    filter_column = header.getPositionByName(filter_column_name);
+    auto & column_elem = header.safeGetByPosition(filter_column);
+
+    /// Isn't the filter already constant?
+    if (column_elem.column)
+        constant_filter_description = ConstantFilterDescription(*column_elem.column);
+
+    if (!constant_filter_description.always_false && !constant_filter_description.always_true)
+    {
+        /// Replace the filter column to a constant with value 1.
+        FilterDescription filter_description_check(*column_elem.column);
+        column_elem.column = column_elem.type->createColumnConst(header.rows(), UInt64(1));
+    }
 }
 
 
 Block FilterBlockInputStream::readImpl()
 {
+    assert(has_init_filter);
+
     Block res;
 
     if (constant_filter_description.always_false)

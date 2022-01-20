@@ -32,12 +32,17 @@ public:
 protected:
     Block readImpl() override;
 
+    void readPrefixImpl() override;
+
 private:
     ExpressionActionsPtr expression;
-    Block header;
+    String filter_column_name;
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+
+    // for assert
+    bool has_init_filter = false;
 
     const LogWithPrefixPtr log;
 };
