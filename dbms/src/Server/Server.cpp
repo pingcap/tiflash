@@ -64,7 +64,6 @@
 #include <limits>
 #include <memory>
 
-#include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
@@ -1287,7 +1286,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
 
         SessionCleaner session_cleaner(*global_context);
-        ClusterManagerService cluster_manager_service(*global_context, config_path);
 
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
