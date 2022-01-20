@@ -88,7 +88,7 @@ private:
         const WriteLimiterPtr & write_limiter_,
         std::unique_ptr<LogWriter> && cur_log);
 
-    static std::tuple<std::unique_ptr<LogWriter>, LogFileName>
+    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         PSDiskDelegatorPtr delegator,
         const FileProviderPtr & provider,

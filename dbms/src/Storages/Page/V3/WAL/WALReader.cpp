@@ -38,7 +38,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
     {
         for (const auto & filename : filenames)
         {
-            auto name = LogFileName::parseFrom(parent_path, filename, logger);
+            auto name = LogFilename::parseFrom(parent_path, filename, logger);
             switch (name.stage)
             {
             case Format::LogFileStage::Normal:

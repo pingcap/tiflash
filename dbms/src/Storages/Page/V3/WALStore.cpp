@@ -95,7 +95,7 @@ void WALStore::apply(const PageEntriesEdit & edit)
     }
 }
 
-std::tuple<std::unique_ptr<LogWriter>, LogFileName> WALStore::createLogWriter(
+std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     PSDiskDelegatorPtr delegator,
     const FileProviderPtr & provider,
     const WriteLimiterPtr & write_limiter,
@@ -104,7 +104,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFileName> WALStore::createLogWriter(
     bool manual_flush)
 {
     const auto path = delegator->defaultPath(); // TODO: multi-path
-    LogFileName log_filename = LogFileName{
+    LogFilename log_filename = LogFilename{
         (manual_flush ? Format::LogFileStage::Temporary : Format::LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,

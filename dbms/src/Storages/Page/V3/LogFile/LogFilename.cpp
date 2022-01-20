@@ -9,7 +9,7 @@
 
 namespace DB::PS::V3
 {
-LogFileName LogFileName::parseFrom(const String parent_path, const String & filename, Poco::Logger * log)
+LogFilename LogFilename::parseFrom(const String parent_path, const String & filename, Poco::Logger * log)
 {
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {

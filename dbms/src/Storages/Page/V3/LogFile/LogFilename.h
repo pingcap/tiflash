@@ -11,7 +11,7 @@ class Logger;
 
 namespace DB::PS::V3
 {
-struct LogFileName
+struct LogFilename
 {
     const Format::LogFileStage stage;
     const Format::LogNumberType log_num;
@@ -21,7 +21,7 @@ struct LogFileName
     static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
     static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
 
-    static LogFileName parseFrom(const String parent_path, const String & filename, Poco::Logger * log);
+    static LogFilename parseFrom(const String parent_path, const String & filename, Poco::Logger * log);
 
     inline String filename(Format::LogFileStage s) const
     {
@@ -40,15 +40,15 @@ struct LogFileName
     }
 };
 
-struct LogFileNameCmp
+struct LogFilenameCmp
 {
-    bool operator()(const LogFileName & lhs, const LogFileName & rhs) const
+    bool operator()(const LogFilename & lhs, const LogFilename & rhs) const
     {
         if (lhs.log_num == rhs.log_num)
             return lhs.level_num < rhs.level_num;
         return lhs.log_num < rhs.log_num;
     }
 };
-using LogFilenameSet = std::set<LogFileName, LogFileNameCmp>;
+using LogFilenameSet = std::set<LogFilename, LogFilenameCmp>;
 
 } // namespace DB::PS::V3
