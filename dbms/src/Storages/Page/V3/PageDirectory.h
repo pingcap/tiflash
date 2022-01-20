@@ -71,6 +71,8 @@ public:
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
+    std::optional<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
+
     /**
      * Take out the `VersionedEntries` which exist in the `BlobFileId`.
      * Also return the total size of entries.
