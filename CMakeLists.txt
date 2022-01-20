@@ -353,12 +353,6 @@ endif()
 
 include (cmake/print_flags.cmake)
 
-# Directory for Yandex specific files
-set (TIFLASH_PRIVATE_DIR ${TiFlash_SOURCE_DIR}/private/)
-if (EXISTS ${TIFLASH_PRIVATE_DIR})
-    add_subdirectory (${TIFLASH_PRIVATE_DIR})
-endif ()
-
 # Enable tests by default when build type is debug
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (ENABLE_TESTS_DEFAULT ON)
