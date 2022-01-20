@@ -161,7 +161,8 @@ void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
             }
             else
             {
-                auto & [ver, entry] = iter->second;
+                const auto & [ver, entry] = iter->second;
+                (void)entry;
                 if (ver < record.version)
                 {
                     iter->second = std::make_pair(record.version, record.entry);
@@ -176,6 +177,7 @@ void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
             if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
             {
                 const auto & [ver, entry] = iter->second;
+                (void)entry;
                 if (ver < record.version)
                 {
                     table_directory.erase(iter);

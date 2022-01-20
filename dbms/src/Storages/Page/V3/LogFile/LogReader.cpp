@@ -35,7 +35,6 @@ LogReader::LogReader(
     , file(std::move(file_))
     , buffer(file->buffer().begin(), file->buffer().size())
     , reporter(reporter_)
-    , last_record_offset(0)
     , end_of_buffer_offset(0)
     , log_number(log_num_)
     , log(log_)
@@ -96,9 +95,6 @@ LogReader::readRecord()
 {
     String record;
     bool in_fragmented_record = false;
-    // Record offset of the logical record that we're reading
-    // 0 is a dummy value to make compilers happy
-    UInt64 prospective_record_offset = 0;
 
     static_assert(
         std::is_same_v<std::underlying_type_t<Format::RecordType>, UInt8>,
@@ -111,7 +107,6 @@ LogReader::readRecord()
     while (true)
     {
         size_t drop_size = 0;
-        UInt64 physical_record_offset = end_of_buffer_offset - buffer.size();
         const UInt8 record_type_or_error = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type_or_error)
         {
@@ -126,9 +121,7 @@ LogReader::readRecord()
                 // at the beginning of the next block.
                 reportCorruption(record.size(), "partial record without end(1)");
             }
-            prospective_record_offset = physical_record_offset;
             record.assign(fragment.data(), fragment.size());
-            last_record_offset = prospective_record_offset;
             return {true, std::move(record)};
         }
 
@@ -143,7 +136,6 @@ LogReader::readRecord()
                 // at the beginning of the next block.
                 reportCorruption(record.size(), "partial record without end(2)");
             }
-            prospective_record_offset = physical_record_offset;
             record.assign(fragment.data(), fragment.size());
             in_fragmented_record = true;
             break;
@@ -171,7 +163,6 @@ LogReader::readRecord()
             else
             {
                 record.append(fragment.data(), fragment.size());
-                last_record_offset = prospective_record_offset;
                 return {true, std::move(record)};
             }
             break;

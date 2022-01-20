@@ -89,10 +89,10 @@ private:
     std::unique_ptr<WriteBufferFromFileBase> dest;
     size_t block_offset; // Current offset in block
     Format::LogNumberType log_number;
-    bool recycle_log_files;
+    const bool recycle_log_files;
     // If true, it does not flush after each write. Instead it relies on the upper
     // layer to manually does the flush by calling ::flush()
-    bool manual_flush;
+    const bool manual_flush;
 };
 } // namespace PS::V3
 } // namespace DB
