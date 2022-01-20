@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -849,6 +850,7 @@ void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, c
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
     }
+    chain.finalize();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
     executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
