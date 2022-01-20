@@ -74,7 +74,7 @@ public:
 
             std::mutex sm_lock;
 
-            std::lock_guard<std::mutex> lock()
+            [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
                 return std::lock_guard(sm_lock);
             }
@@ -99,7 +99,7 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
-        std::lock_guard<std::mutex> lock() const;
+        [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
