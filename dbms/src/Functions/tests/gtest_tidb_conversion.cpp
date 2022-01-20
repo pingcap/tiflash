@@ -670,6 +670,10 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({MAX_INT64, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(65,0))")}));
+
+    ASSERT_THROW(executeFunction(func_name,
+                            {createColumn<Nullable<Int32>>({9999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}),
+            TiFlashException);
 }
 CATCH
 

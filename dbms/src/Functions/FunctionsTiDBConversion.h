@@ -819,7 +819,8 @@ struct TiDBConvertToDecimal
     static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
-        auto max_value = DecimalMaxValue::get(prec);
+        UType scale_mul = getScaleMultiplier<U>(scale);
+        Int256 max_value = DecimalMaxValue::get(prec) / scale_mul;
         if (value > max_value || value < -max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
@@ -828,7 +829,6 @@ struct TiDBConvertToDecimal
             else
                 return static_cast<UType>(-max_value);
         }
-        UType scale_mul = getScaleMultiplier<U>(scale);
         U result = static_cast<UType>(value) * scale_mul;
         return result;
     }
