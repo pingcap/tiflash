@@ -188,14 +188,14 @@ bool DeltaValueSpace::flush(DMContext & context)
             ColumnFilePtr new_pack;
             if (auto * dp_block = task.pack->tryToInMemoryFile(); dp_block)
             {
-                bool reuse_cache = !task.sorted && (dp_block->getRows() < context.delta_small_pack_rows || dp_block->getBytes() < context.delta_small_pack_bytes);
-                if (reuse_cache)
+                bool is_small_file = dp_block->getRows() < context.delta_small_pack_rows || dp_block->getBytes() < context.delta_small_pack_bytes;
+                if (is_small_file)
                 {
                     new_pack = std::make_shared<ColumnTinyFile>(dp_block->getSchema(),
                                                                 dp_block->getRows(),
                                                                 dp_block->getBytes(),
                                                                 task.data_page,
-                                                                dp_block->getCache());
+                                                                !task.sorted ? dp_block->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
                 }
                 else
                 {
@@ -203,24 +203,24 @@ bool DeltaValueSpace::flush(DMContext & context)
                                                                 dp_block->getRows(),
                                                                 dp_block->getBytes(),
                                                                 task.data_page,
-                                                                std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
+                                                                nullptr);
                 }
             }
-            else if (auto t_file = task.pack->tryToTinyFile(); t_file)
+            else if (auto * t_file = task.pack->tryToTinyFile(); t_file)
             {
                 new_pack = std::make_shared<ColumnTinyFile>(*t_file);
             }
-            else if (auto dp_file = task.pack->tryToBigFile(); dp_file)
+            else if (auto * dp_file = task.pack->tryToBigFile(); dp_file)
             {
                 new_pack = std::make_shared<ColumnBigFile>(*dp_file);
             }
-            else if (auto dp_delete = task.pack->tryToDeleteRange(); dp_delete)
+            else if (auto * dp_delete = task.pack->tryToDeleteRange(); dp_delete)
             {
                 new_pack = std::make_shared<ColumnDeleteRangeFile>(*dp_delete);
             }
             else
             {
-                throw Exception("Unexpected delta pack type", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Unexpected column file type", ErrorCodes::LOGICAL_ERROR);
             }
 
             new_pack->setSaved();
