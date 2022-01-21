@@ -54,20 +54,12 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , subqueries_for_sets(subqueries_for_sets_)
     , exchange_receiver_map(exchange_receiver_map_)
     , log(getMPPTaskLog(dagContext(), "DAGQueryBlockInterpreter"))
-{
-    if (query_block.selection != nullptr)
-    {
-        for (const auto & condition : query_block.selection->selection().conditions())
-            conditions.push_back(&condition);
-    }
-}
+{}
 
 namespace
 {
 struct AnalysisResult
 {
-    ExpressionActionsPtr extra_cast;
-    NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr project_after_where;
     ExpressionActionsPtr before_aggregation;
@@ -78,8 +70,6 @@ struct AnalysisResult
     String filter_column_name;
     String having_column_name;
     std::vector<NameAndTypePair> order_columns;
-    /// Columns from the SELECT list, before renaming them to aliases.
-    Names selected_columns;
 
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
@@ -107,42 +97,21 @@ AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
-    const std::vector<const tipb::Expr *> & conditions,
-    const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
     bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+    if (query_block.selection)
     {
-        auto original_source_columns = analyzer.getCurrentInputColumns();
-        if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block.source->tbl_scan()))
+        // selection on table scan had been executed in executeTs
+        if (query_block.source->tp() != tipb::ExecType::TypeTableScan)
         {
-            res.extra_cast = chain.getLastActions();
-            chain.addStep();
-            size_t index = 0;
-            for (const auto & col : analyzer.getCurrentInputColumns())
-            {
-                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
-                ++index;
-            }
-        }
-    }
-    if (!conditions.empty())
-    {
-        res.filter_column_name = analyzer.appendWhere(chain, conditions);
-        res.before_where = chain.getLastActions();
-        chain.addStep();
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-        {
-            NamesWithAliases project_cols;
-            for (const auto & col : analyzer.getCurrentInputColumns())
-            {
-                project_cols.emplace_back(col.name, col.name);
-            }
-            chain.getLastActions()->add(ExpressionAction::project(project_cols));
-            res.project_after_where = chain.getLastActions();
+            std::vector<const tipb::Expr *> where_conditions;
+            for (const auto & c : query_block.selection->selection().conditions())
+                where_conditions.push_back(&c);
+            res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
+            res.before_where = chain.getLastActions();
             chain.addStep();
         }
     }
@@ -261,11 +230,17 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     if (ts.next_read_engine() != tipb::EngineType::Local)
         throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
+    std::vector<const tipb::Expr *> conditions;
+    if (query_block.selection)
+    {
+        for (const auto & condition : query_block.selection->selection().conditions())
+            conditions.push_back(&condition);
+    }
+
     DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
-    need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
@@ -310,6 +285,75 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+
+    /// handle cast and filter for local and remote table
+    auto is_need_add_cast_column = std::move(storage_interpreter.is_need_add_cast_column);
+    auto original_source_columns = analyzer->getCurrentInputColumns();
+
+    ExpressionActionsPtr before_where;
+    ExpressionActionsPtr project_after_where;
+    String filter_column_name;
+
+    ExpressionActionsChain chain;
+    analyzer->initChain(chain, original_source_columns);
+
+    // execute timezone cast or duration cast if needed for local table scan
+    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, query_block.source->tbl_scan()))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.addStep();
+
+        // After `addExtraCastsAfterTs`, analyzer->getCurrentInputColumns() has been modified.
+        // For remote read, `timezone cast and duration cast` had been pushed down.
+        // To keep the schema of local streams and remote streams the same, do project action for remote read input streams.
+        NamesWithAliases project_for_remote_read;
+        const auto & after_cast_source_columns = analyzer->getCurrentInputColumns();
+        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
+        {
+            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
+        }
+        assert(!project_for_remote_read.empty());
+        ExpressionActionsPtr project_for_cop_read;
+        // except no joined stream
+        for (auto & stream : pipeline.streams)
+        {
+            if (dynamic_cast<CoprocessorBlockInputStream *>(stream.get()))
+            {
+                if (project_for_cop_read == nullptr)
+                    project_for_cop_read = generateProjectExpressionActions(stream, context, project_for_remote_read);
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, taskLogger());
+            }
+            else
+            {
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, taskLogger());
+            }
+        }
+    }
+    if (query_block.selection)
+    {
+        filter_column_name = analyzer->appendWhere(chain, conditions);
+        before_where = chain.getLastActions();
+        chain.addStep();
+
+        // remove
+        NamesWithAliases project_cols;
+        for (const auto & col : analyzer->getCurrentInputColumns())
+        {
+            project_cols.emplace_back(col.name, col.name);
+        }
+        chain.getLastActions()->add(ExpressionAction::project(project_cols));
+        project_after_where = chain.getLastActions();
+        chain.addStep();
+
+        pipeline.transform([&](auto & stream) {
+            // for remote read, filter had been pushed down, don't need to execute again.
+            if (!dynamic_cast<CoprocessorBlockInputStream *>(stream.get()))
+            {
+                stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, taskLogger());
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
+            }
+        });
+    }
 }
 
 void DAGQueryBlockInterpreter::prepareJoin(
@@ -947,23 +991,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         context,
         *analyzer,
         query_block,
-        conditions,
-        need_add_cast_column_flag_for_tablescan,
         keep_session_timezone_info,
         final_project);
 
-    if (res.extra_cast || res.before_where)
-    {
-        executeExtraCastAndSelection(
-            pipeline,
-            res.extra_cast,
-            res.project_after_ts_and_filter_for_remote_read,
-            res.before_where,
-            res.project_after_where,
-            res.filter_column_name);
-    }
     if (res.before_where)
     {
+        // execute where
+        executeWhere(pipeline, res.before_where, res.filter_column_name);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
 
