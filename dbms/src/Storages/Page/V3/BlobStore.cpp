@@ -208,7 +208,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
         // After the BlobStore records the buffer size, max_caps will also get an accurate update.
         // So there won't get problem in reducing max_caps here.
-        stat_ptr->sm_max_caps -= buf_size;
+        stat->sm_max_caps -= size;
 
         // We must get the lock from BlobStat under the BlobStats lock
         // to ensure that BlobStat updates are serialized.
