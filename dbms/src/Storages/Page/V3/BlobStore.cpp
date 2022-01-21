@@ -203,6 +203,13 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
             stat = blob_stats.createStat(blob_file_id, lock_stats);
         }
 
+        // We need to assume that this insert will reduce max_cap.
+        // Because other threads may also be waiting for BlobStats to chooseStat during this time.
+        // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
+        // After the BlobStore records the buffer size, max_caps will also get an accurate update.
+        // So there won't get problem in reducing max_caps here.
+        stat_ptr->sm_max_caps -= buf_size;
+
         // We must get the lock from BlobStat under the BlobStats lock
         // to ensure that BlobStat updates are serialized.
         // Otherwise it may cause stat to fail to get the span for writing
@@ -594,12 +601,6 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         return std::make_pair(nullptr, chooseNewStat());
     }
 
-    // We need to assume that this insert will reduce max_cap.
-    // Because other threads may also be waiting for BlobStats to chooseStat during this time.
-    // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
-    // After the BlobStore records the buffer size, max_caps will also get an accurate update.
-    // So there won't get problem in reducing max_caps here.
-    stat_ptr->sm_max_caps -= buf_size;
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
