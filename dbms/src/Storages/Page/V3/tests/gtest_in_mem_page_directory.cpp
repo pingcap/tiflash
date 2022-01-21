@@ -93,16 +93,22 @@ private:
     Poco::Logger * logger;
 };
 
-#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                              \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                                \
-        PageEntriesEdit edit;                                                                                        \
-        edit.appendRecord(PageEntriesEdit::EditRecord{                                                               \
-            .type = WriteBatch::WriteType::PUT,                                                                      \
-            .page_id = (PAGE_ID),                                                                                    \
-            .version = PageVersionType((VERSION)),                                                                   \
-            .entry = entry_v##VERSION});                                                                             \
-        dir.apply(std::move(edit));                                                                                  \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID) \
+    PageEntryV3 entry_v##VERSION{                       \
+        .file_id = (BLOB_FILE_ID),                      \
+        .size = (VERSION),                              \
+        .tag = 0,                                       \
+        .offset = 0x123,                                \
+        .checksum = 0x4567};                            \
+    {                                                   \
+        PageEntriesEdit edit;                           \
+        edit.appendRecord(PageEntriesEdit::EditRecord{  \
+            .type = WriteBatch::WriteType::PUT,         \
+            .page_id = (PAGE_ID),                       \
+            .ori_page_id = 0,                           \
+            .version = PageVersionType((VERSION)),      \
+            .entry = entry_v##VERSION});                \
+        dir.apply(std::move(edit));                     \
     }
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
 #define INSERT_DELETE(PAGE_ID, VERSION)                \
@@ -111,7 +117,9 @@ private:
         edit.appendRecord(PageEntriesEdit::EditRecord{ \
             .type = WriteBatch::WriteType::DEL,        \
             .page_id = (PAGE_ID),                      \
-            .version = PageVersionType((VERSION))});   \
+            .ori_page_id = 0,                          \
+            .version = PageVersionType((VERSION)),     \
+            .entry = {}});                             \
         dir.apply(std::move(edit));                    \
     }
 

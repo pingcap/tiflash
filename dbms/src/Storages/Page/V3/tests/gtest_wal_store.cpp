@@ -1,3 +1,6 @@
+#include <Poco/Logger.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
@@ -10,16 +13,12 @@
 
 #include <random>
 
-#include "Poco/Logger.h"
-#include "Storages/Page/V3/LogFile/LogFilename.h"
-#include "Storages/Page/V3/LogFile/LogFormat.h"
-
 namespace DB::PS::V3::tests
 {
 TEST(WALSeriTest, AllPuts)
 {
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20(/*seq=*/20);
     PageEntriesEdit edit;
     edit.put(1, entry_p1);
@@ -39,13 +38,18 @@ TEST(WALSeriTest, AllPuts)
 TEST(WALSeriTest, PutsAndRefsAndDels)
 try
 {
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver21(/*seq=*/21);
     PageEntriesEdit edit;
     edit.put(3, entry_p3);
     // Mock for edit.ref(4, 3);
-    edit.appendRecord(PageEntriesEdit::EditRecord{.type = WriteBatch::WriteType::REF, .page_id = 4, .ori_page_id = 3, .entry = entry_p3});
+    edit.appendRecord(PageEntriesEdit::EditRecord{
+        .type = WriteBatch::WriteType::REF,
+        .page_id = 4,
+        .ori_page_id = 3,
+        .version = {},
+        .entry = entry_p3});
     edit.put(5, entry_p5);
     edit.del(2);
     edit.del(1);
@@ -85,9 +89,9 @@ CATCH
 
 TEST(WALSeriTest, Upserts)
 {
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
@@ -247,8 +251,8 @@ try
     ASSERT_NE(wal, nullptr);
 
     // Stage 2. Apply with only puts
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
@@ -278,14 +282,19 @@ try
     wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
 
     // Stage 3. Apply with puts and refs
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
         // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{.type = WriteBatch::WriteType::REF, .page_id = 4, .ori_page_id = 3, .entry = entry_p3});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::REF,
+            .page_id = 4,
+            .ori_page_id = 3,
+            .version = {},
+            .entry = entry_p3});
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
@@ -312,9 +321,9 @@ try
     wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
 
     // Stage 4. Apply with delete and upsert
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
@@ -357,8 +366,8 @@ try
 
     std::vector<size_t> size_each_edit;
     // Stage 1. Apply with only puts
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
@@ -369,14 +378,19 @@ try
     }
 
     // Stage 2. Apply with puts and refs
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
         // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{.type = WriteBatch::WriteType::REF, .page_id = 4, .ori_page_id = 3, .entry = entry_p3});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::REF,
+            .page_id = 4,
+            .ori_page_id = 3,
+            .version = {},
+            .entry = entry_p3});
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
@@ -384,9 +398,9 @@ try
     }
 
     // Stage 3. Apply with delete and upsert
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
@@ -452,7 +466,7 @@ try
     PageVersionType ver(/*seq*/ 32);
     for (size_t i = 0; i < num_edits_test; ++i)
     {
-        PageEntryV3 entry{.file_id = 2, .size = 1, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit;
         const size_t num_pages_put = d(rd);
         for (size_t p = 0; p < num_pages_put; ++p)
