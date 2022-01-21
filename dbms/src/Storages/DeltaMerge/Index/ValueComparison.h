@@ -34,7 +34,7 @@ enum class ValueCompareResult
 {
     False = 0,
     True = 1,
-    CanCompare = 2,
+    CanNotCompare = 2,
 };
 
 template <template <typename, typename> class Op>
@@ -48,7 +48,6 @@ struct ValueComparision
     using GreaterInt = GreaterOp<int, int>;
     using GreaterOrEqualsInt = GreaterOrEqualsOp<int, int>;
 
-    /// 1: true, -1: false, 0: cannot compare.
     template <typename Right>
     static ValueCompareResult compare(const Field & left_field, const DataTypePtr & right_type, const Right & right)
     {
@@ -68,7 +67,7 @@ struct ValueComparision
         if (ok)
             return res ? ValueCompareResult::True : ValueCompareResult::False;
         else
-            return ValueCompareResult::CanCompare;
+            return ValueCompareResult::CanNotCompare;
     }
 
 private:
