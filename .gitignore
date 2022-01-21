@@ -261,6 +261,7 @@ release-darwin/build-release
 libs/libtiflash-proxy
 
 tmp/
+deps/
 
 tests/fullstack-test2/auto_gen
 
