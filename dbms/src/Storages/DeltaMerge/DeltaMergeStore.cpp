@@ -717,7 +717,7 @@ void DeltaMergeStore::ingestFiles(
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            bool ingest_success = segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
+            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
             fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
             if (ingest_success)
             {

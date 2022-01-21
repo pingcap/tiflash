@@ -241,7 +241,7 @@ public:
 
     bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
-    bool ingestPacks(DMContext & context, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & context, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);

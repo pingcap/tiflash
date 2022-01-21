@@ -277,10 +277,10 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & pack)
+bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, pack->getRows(), pack->isBigFile());
-    return delta->appendPack(dm_context, pack);
+    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
+    return delta->appendPack(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
@@ -323,12 +323,12 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range)
+bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: {}", segment_id, new_range.toDebugString());
 
-    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
+    return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const

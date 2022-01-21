@@ -9,6 +9,7 @@ namespace DM
 class ColumnTinyFile;
 using ColumnTinyFilePtr = std::shared_ptr<ColumnTinyFile>;
 
+/// A column file which is persisted on disk.
 class ColumnTinyFile : public ColumnFile
 {
     friend class ColumnTinyFileReader;

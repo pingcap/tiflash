@@ -9,6 +9,7 @@ namespace DM
 class ColumnInMemoryFile;
 using ColumnInMemoryFilePtr = std::shared_ptr<ColumnInMemoryFile>;
 
+/// A column file which is only resides in memory
 class ColumnInMemoryFile : public ColumnFile
 {
     friend class ColumnInMemoryFileReader;
