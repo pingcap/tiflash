@@ -13,17 +13,17 @@ extern const int INVALID_TIME;
 
 bool strictSqlMode(UInt64 sql_mode)
 {
-    return sql_mode & tidbSQLMode::STRICT_ALL_TABLES || sql_mode & tidbSQLMode::STRICT_TRANS_TABLES;
+    return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
 bool DAGContext::allowZeroInDate() const
 {
-    return flags & tidbSQLFlags::IGNORE_ZERO_IN_DATE;
+    return flags & TiDBSQLFlags::IGNORE_ZERO_IN_DATE;
 }
 
 bool DAGContext::allowInvalidDate() const
 {
-    return sql_mode & tidbSQLMode::ALLOW_INVALID_DATES;
+    return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
 std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
@@ -53,7 +53,7 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
 
 void DAGContext::handleTruncateError(const String & msg)
 {
-    if (!(flags & tidbSQLFlags::IGNORE_TRUNCATE || flags & tidbSQLFlags::TRUNCATE_AS_WARNING))
+    if (!(flags & TiDBSQLFlags::IGNORE_TRUNCATE || flags & TiDBSQLFlags::TRUNCATE_AS_WARNING))
     {
         throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
     }
@@ -62,7 +62,7 @@ void DAGContext::handleTruncateError(const String & msg)
 
 void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
 {
-    if (!(flags & tidbSQLFlags::OVERFLOW_AS_WARNING))
+    if (!(flags & TiDBSQLFlags::OVERFLOW_AS_WARNING))
     {
         throw TiFlashException("Overflow error: " + msg, error);
     }
@@ -71,11 +71,11 @@ void DAGContext::handleOverflowError(const String & msg, const TiFlashError & er
 
 void DAGContext::handleDivisionByZero()
 {
-    if (flags & tidbSQLFlags::IN_INSERT_STMT || flags & tidbSQLFlags::IN_UPDATE_OR_DELETE_STMT)
+    if (flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT)
     {
-        if (!(sql_mode & tidbSQLMode::ERROR_FOR_DIVISION_BY_ZERO))
+        if (!(sql_mode & TiDBSQLMode::ERROR_FOR_DIVISION_BY_ZERO))
             return;
-        if (strictSqlMode(sql_mode) && !(flags & tidbSQLFlags::DIVIDED_BY_ZERO_AS_WARNING))
+        if (strictSqlMode(sql_mode) && !(flags & TiDBSQLFlags::DIVIDED_BY_ZERO_AS_WARNING))
         {
             throw TiFlashException("Division by 0", Errors::Expression::DivisionByZero);
         }
@@ -90,7 +90,7 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
         throw TiFlashException(msg, error);
     }
     handleTruncateError(msg);
-    if (strictSqlMode(sql_mode) && (flags & tidbSQLFlags::IN_INSERT_STMT || flags & tidbSQLFlags::IN_UPDATE_OR_DELETE_STMT))
+    if (strictSqlMode(sql_mode) && (flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT))
     {
         throw TiFlashException(msg, error);
     }
@@ -104,9 +104,9 @@ void DAGContext::appendWarning(const String & msg, int32_t code)
     appendWarning(warning);
 }
 
-bool DAGContext::shouldClipToZero()
+bool DAGContext::shouldClipToZero() const
 {
-    return flags & tidbSQLFlags::IN_INSERT_STMT || flags & tidbSQLFlags::IN_LOAD_DATA_STMT;
+    return flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_LOAD_DATA_STMT;
 }
 
 std::pair<bool, double> DAGContext::getTableScanThroughput()
@@ -121,9 +121,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     {
         if (p.first == table_scan_executor_id)
         {
-            for (auto & streamPtr : p.second.input_streams)
+            for (auto & stream_ptr : p.second.input_streams)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
                 {
                     time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                     num_produced_bytes += p_stream->getProfileInfo().bytes;

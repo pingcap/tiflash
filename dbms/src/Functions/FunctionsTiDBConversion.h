@@ -820,6 +820,7 @@ struct TiDBConvertToDecimal
     {
         // outer_value is the value that will expose to user. Such as cast(val_int to decimal), val_int is the outer_value which user used.
         // And val_int * scale_mul is the inner_value, which is stored in deciaml internally.
+        static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
         UType scale_mul = getScaleMultiplier<U>(scale);
         Int256 inner_max_value = DecimalMaxValue::get(prec);

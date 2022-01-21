@@ -41,7 +41,7 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     return 1024;
 }
 
-enum tidbSQLFlags
+enum TiDBSQLFlags
 {
     IGNORE_TRUNCATE = 1,
     TRUNCATE_AS_WARNING = 1u << 1u,
@@ -55,7 +55,7 @@ enum tidbSQLFlags
     IN_LOAD_DATA_STMT = 1u << 10u,
 };
 
-enum tidbSQLMode
+enum TiDBSQLMode
 {
     REAL_AS_FLOAT = 1ul,
     PIPES_AS_CONCAT = 1ul << 1ul,
@@ -159,7 +159,7 @@ public:
     void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
-    bool shouldClipToZero();
+    bool shouldClipToZero() const;
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
@@ -203,23 +203,23 @@ public:
         return io;
     }
 
-    UInt64 GetFlags()
+    UInt64 getFlags() const
     {
         return flags;
     }
-    void SetFlags(UInt64 f)
+    void setFlags(UInt64 f)
     {
         flags = f;
     }
-    void AddFlag(tidbSQLFlags f)
+    void addFlag(TiDBSQLFlags f)
     {
         flags |= f;
     }
-    void DelFlag(tidbSQLFlags f)
+    void delFlag(TiDBSQLFlags f)
     {
         flags &= (~f);
     }
-    bool HasFlag(tidbSQLFlags f)
+    bool hasFlag(TiDBSQLFlags f) const
     {
         return (flags & f);
     }
