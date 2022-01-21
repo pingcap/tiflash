@@ -76,7 +76,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             {
                 auto & task = tasks.emplace_back(pack);
 
-                if (auto dpb = pack->tryToInMemoryFile(); dpb)
+                if (auto * dpb = pack->tryToInMemoryFile(); dpb)
                 {
                     // Stop other threads appending to this pack.
                     dpb->disableAppend();
