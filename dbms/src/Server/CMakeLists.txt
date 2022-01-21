@@ -27,8 +27,7 @@ add_library (clickhouse-server-lib
     TCPHandler.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
-    RaftConfigParser.cpp
-    ClusterManagerService.cpp)
+    RaftConfigParser.cpp)
 
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 

@@ -203,11 +203,10 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
             stat = blob_stats.createStat(blob_file_id, lock_stats);
         }
 
-        // We must get the lock from BlobStat under the BlobStats lock.
-        // It will ensure that BlobStat updates are in order.
-        // Also it won't incur more overhead.
-        // If BlobStat can updates are not order.
-        // Then it may cause stat to fail to get the span and write failure.
+        // We must get the lock from BlobStat under the BlobStats lock
+        // to ensure that BlobStat updates are serialized.
+        // Otherwise it may cause stat to fail to get the span for writing
+        // and throwing exception.
 
         return stat->lock();
     }();
@@ -220,7 +219,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
         stat->smap->logStats();
-        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no corrent. [size={}, old_max_caps={}, max_caps(updated)={}, BlobFileId={}]",
+        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}, old_max_caps={}, max_caps={}, BlobFileId={}]",
                                     size,
                                     old_max_cap,
                                     stat->sm_max_caps,
