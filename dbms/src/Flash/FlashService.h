@@ -8,6 +8,7 @@
 #include <boost/noncopyable.hpp>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
