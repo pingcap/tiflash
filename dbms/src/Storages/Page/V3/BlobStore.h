@@ -79,7 +79,7 @@ public:
                 return std::lock_guard(sm_lock);
             }
 
-            bool isReadOnly()
+            bool isReadOnly() const
             {
                 return type == BlobStatType::READ_ONLY;
             }
@@ -103,7 +103,7 @@ public:
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        void eraseStat(const BlobStatPtr & stat, const std::lock_guard<std::mutex> &);
+        void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
         void eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 

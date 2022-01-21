@@ -245,10 +245,10 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 
     if (stat->sm_valid_size == 0)
     {
-        LOG_FMT_TRACE(log, "Erase Blob [BlobId={}]", blob_id);
+        LOG_FMT_INFO(log, "Removing BlobFile [BlobId={}]", blob_id);
         auto lock_stats = blob_stats.lock();
-        blob_stats.eraseStat(stat, lock_stats);
-        getBlobFile(blob_id)->del();
+        blob_stats.eraseStat(std::move(stat), lock_stats);
+        getBlobFile(blob_id)->remove();
     }
 }
 
@@ -580,7 +580,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(const BlobStatPtr & stat, const std::lock_guard<std::mutex> &)
+void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
     old_ids.emplace_back(stat->id);
     stats_map.remove(stat);
@@ -609,7 +609,7 @@ void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::l
 
     LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
 
-    eraseStat(stat, lock);
+    eraseStat(std::move(stat), lock);
 }
 
 BlobFileId BlobStore::BlobStats::chooseNewStat()

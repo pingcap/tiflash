@@ -38,7 +38,7 @@ public:
 
     void truncate(size_t size);
 
-    void del();
+    void remove();
 
 private:
     FileProviderPtr file_provider;
