@@ -4,7 +4,7 @@
 
 # This file was edited for ClickHouse
 
-set(SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/re2")
+set(SRC_DIR "${TiFlash_SOURCE_DIR}/contrib/re2")
 
 set(RE2_SOURCES
     ${SRC_DIR}/re2/bitstate.cc

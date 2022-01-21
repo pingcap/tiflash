@@ -4,7 +4,7 @@
 # sudo apt-get install libgrpc++-dev protobuf-compiler-grpc
 option(USE_INTERNAL_GRPC_LIBRARY "Set to FALSE to use system gRPC library instead of bundled. (Experimental. Set to OFF on your own risk)" ${NOT_UNBUNDLED})
 
-if(NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/grpc/CMakeLists.txt")
+if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/grpc/CMakeLists.txt")
     if(USE_INTERNAL_GRPC_LIBRARY)
         message(WARNING "submodule contrib/grpc is missing. to fix try run: \n git submodule update --init")
         message(WARNING "Can't use internal grpc")
@@ -27,11 +27,11 @@ if(NOT USE_INTERNAL_GRPC_LIBRARY)
 endif()
 
 if(NOT EXTERNAL_GRPC_LIBRARY_FOUND AND NOT MISSING_INTERNAL_GRPC_LIBRARY)
-    set(gRPC_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/grpc/include")
+    set(gRPC_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/grpc/include")
     set(gRPC_LIBRARIES grpc grpc++)
     set(gRPC_CPP_PLUGIN $<TARGET_FILE:grpc_cpp_plugin>)
 
-    include("${ClickHouse_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
+    include("${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
 
     set(USE_INTERNAL_GRPC_LIBRARY 1)
 endif()
