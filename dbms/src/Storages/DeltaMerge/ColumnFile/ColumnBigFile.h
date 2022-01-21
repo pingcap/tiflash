@@ -8,7 +8,6 @@ namespace DM
 {
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
-
 class ColumnBigFile;
 using ColumnBigFilePtr = std::shared_ptr<ColumnBigFile>;
 
@@ -80,6 +79,7 @@ public:
     {
         String s = "{big_file,rows:" + DB::toString(getRows()) //
             + ",bytes:" + DB::toString(getBytes()) + "}"; //
+        +",saved:" + DB::toString(saved) + "}"; //
         return s;
     }
 };

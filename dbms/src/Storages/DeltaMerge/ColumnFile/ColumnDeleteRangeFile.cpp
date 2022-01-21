@@ -1,7 +1,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
-
 namespace DB
 {
 namespace DM

@@ -9,6 +9,7 @@ namespace DM
 class ColumnDeleteRangeFile;
 using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnDeleteRangeFile>;
 
+/// A column file which contains a DeleteRange. It will remove all covered data in the previous packs.
 class ColumnDeleteRangeFile : public ColumnFile
 {
 private:
@@ -43,7 +44,7 @@ public:
 
     static ColumnFilePtr deserializeMetadata(ReadBuffer & buf);
 
-    String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
+    String toString() const override { return "{delete_range:" + delete_range.toString() + ", saved: " + DB::toString(saved) + "}"; }
 };
 
 class ColumnFileEmptyReader : public ColumnFileReader
