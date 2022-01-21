@@ -11,9 +11,16 @@ class Logger;
 
 namespace DB::PS::V3
 {
+enum LogFileStage
+{
+    Invalid,
+    Temporary,
+    Normal,
+};
+
 struct LogFilename
 {
-    const Format::LogFileStage stage;
+    const LogFileStage stage;
     const Format::LogNumberType log_num;
     const Format::LogNumberType level_num;
     const String parent_path;
@@ -21,21 +28,21 @@ struct LogFilename
     static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
     static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
 
-    static LogFilename parseFrom(const String parent_path, const String & filename, Poco::Logger * log);
+    static LogFilename parseFrom(const String & parent_path, const String & filename, Poco::Logger * log);
 
-    inline String filename(Format::LogFileStage s) const
+    inline String filename(LogFileStage s) const
     {
-        assert(s != Format::LogFileStage::Invalid);
+        assert(s != LogFileStage::Invalid);
         return fmt::format(
             "{}_{}_{}",
-            ((s == Format::LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
+            ((s == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
             log_num,
             level_num);
     }
 
-    inline String fullname(Format::LogFileStage s) const
+    inline String fullname(LogFileStage s) const
     {
-        assert(s != Format::LogFileStage::Invalid);
+        assert(s != LogFileStage::Invalid);
         return fmt::format("{}/{}", parent_path, filename(s));
     }
 };

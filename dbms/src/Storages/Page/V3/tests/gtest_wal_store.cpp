@@ -10,6 +10,10 @@
 
 #include <random>
 
+#include "Poco/Logger.h"
+#include "Storages/Page/V3/LogFile/LogFilename.h"
+#include "Storages/Page/V3/LogFile/LogFormat.h"
+
 namespace DB::PS::V3::tests
 {
 TEST(WALSeriTest, AllPuts)
@@ -105,6 +109,86 @@ TEST(WALSeriTest, Upserts)
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5_2));
+}
+
+TEST(WALLognameTest, parsing)
+{
+    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    const String parent_path("/data1");
+
+    {
+        LogFilename f = LogFilename::parseFrom(parent_path, "log_1_2", log);
+        EXPECT_EQ(f.parent_path, parent_path);
+        EXPECT_EQ(f.log_num, 1);
+        EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.stage, LogFileStage::Normal);
+
+        EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2");
+        EXPECT_EQ(f.fullname(LogFileStage::Temporary), "/data1/.temp.log_1_2");
+        EXPECT_EQ(f.filename(LogFileStage::Normal), "log_1_2");
+        EXPECT_EQ(f.fullname(LogFileStage::Normal), "/data1/log_1_2");
+    }
+
+    {
+        LogFilename f = LogFilename::parseFrom(parent_path, ".temp.log_345_78", log);
+        EXPECT_EQ(f.parent_path, parent_path);
+        EXPECT_EQ(f.log_num, 345);
+        EXPECT_EQ(f.level_num, 78);
+        EXPECT_EQ(f.stage, LogFileStage::Temporary);
+
+        EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_345_78");
+        EXPECT_EQ(f.fullname(LogFileStage::Temporary), "/data1/.temp.log_345_78");
+        EXPECT_EQ(f.filename(LogFileStage::Normal), "log_345_78");
+        EXPECT_EQ(f.fullname(LogFileStage::Normal), "/data1/log_345_78");
+    }
+
+    for (const auto & n : Strings{
+             "something_wrong",
+             "log_1_2_3",
+             ".temp.log_1_2_3",
+             "log_1",
+             ".temp.log_1",
+             "log_abc_def",
+             ".temp.log_abc_def",
+         })
+    {
+        LogFilename f = LogFilename::parseFrom(parent_path, n, log);
+        EXPECT_EQ(f.stage, LogFileStage::Invalid) << n;
+    }
+}
+
+TEST(WALLognameSetTest, ordering)
+{
+    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    const String parent_path("/data1");
+
+    LogFilenameSet filenames;
+    for (const auto & n : Strings{
+             "log_2_1",
+             "log_2_0",
+             ".temp.log_2_1", // ignored since we have inserted "log_2_1"
+             "log_1_2",
+             ".temp.log_1_3",
+         })
+    {
+        filenames.insert(LogFilename::parseFrom(parent_path, n, log));
+    }
+    ASSERT_EQ(filenames.size(), 4);
+    auto iter = filenames.begin();
+    EXPECT_EQ(iter->log_num, 1);
+    EXPECT_EQ(iter->level_num, 2);
+    ++iter;
+    EXPECT_EQ(iter->log_num, 1);
+    EXPECT_EQ(iter->level_num, 3);
+    ++iter;
+    EXPECT_EQ(iter->log_num, 2);
+    EXPECT_EQ(iter->level_num, 0);
+    ++iter;
+    EXPECT_EQ(iter->log_num, 2);
+    EXPECT_EQ(iter->level_num, 1);
+
+    ++iter;
+    EXPECT_EQ(iter, filenames.end());
 }
 
 

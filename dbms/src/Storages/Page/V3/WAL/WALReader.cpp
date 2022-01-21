@@ -41,14 +41,14 @@ LogFilenameSet WALStoreReader::listAllFiles(
             auto name = LogFilename::parseFrom(parent_path, filename, logger);
             switch (name.stage)
             {
-            case Format::LogFileStage::Normal:
+            case LogFileStage::Normal:
             {
                 log_files.insert(name);
                 break;
             }
-            case Format::LogFileStage::Temporary:
+            case LogFileStage::Temporary:
                 [[fallthrough]];
-            case Format::LogFileStage::Invalid:
+            case LogFileStage::Invalid:
             {
                 // TODO: clean
                 break;

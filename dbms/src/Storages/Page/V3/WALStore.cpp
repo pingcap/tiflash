@@ -107,7 +107,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 {
     const auto path = delegator->defaultPath(); // TODO: multi-path
     LogFilename log_filename = LogFilename{
-        (manual_flush ? Format::LogFileStage::Temporary : Format::LogFileStage::Normal),
+        (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,
         path};
@@ -171,8 +171,8 @@ bool WALStore::compactLogs()
         compact_log.reset();
 
         // Rename it to be a normal log file.
-        const auto temp_fullname = log_filename.fullname(Format::LogFileStage::Temporary);
-        const auto normal_fullname = log_filename.fullname(Format::LogFileStage::Normal);
+        const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
+        const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
         LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
         auto f = Poco::File{temp_fullname};
         f.renameTo(normal_fullname);
@@ -182,7 +182,7 @@ bool WALStore::compactLogs()
     // Remove compacted log files.
     for (const auto & filename : compact_log_files)
     {
-        if (auto f = Poco::File(filename.fullname(Format::LogFileStage::Normal)); f.exists())
+        if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
         {
             f.remove();
         }
