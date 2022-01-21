@@ -111,9 +111,9 @@ private:
 private:
     BlockPtr lastSchema();
 
-    void checkPacks(const ColumnFiles & new_column_files);
+    void checkColumnFiles(const ColumnFiles & new_column_files);
 
-    void appendPackInner(const ColumnFilePtr & pack);
+    void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
     DeltaValueSpace(PageId id_, const ColumnFiles & column_files_ = {});
@@ -235,7 +235,7 @@ public:
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
 
-    bool appendPack(DMContext & context, const ColumnFilePtr & pack);
+    bool appendColumnFile(DMContext & context, const ColumnFilePtr & column_file);
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 

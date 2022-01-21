@@ -212,7 +212,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
         new_packs.insert(new_packs.end(), old_packs_offset, column_files.end());
 
-        checkPacks(new_packs);
+        checkColumnFiles(new_packs);
 
         /// Save the new metadata of packs to disk.
         MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);

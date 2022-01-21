@@ -280,7 +280,7 @@ void Segment::serialize(WriteBatch & wb)
 bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
-    return delta->appendPack(dm_context, column_file);
+    return delta->appendColumnFile(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
@@ -299,7 +299,7 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     auto pack = ColumnTinyFile::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
-    if (delta->appendPack(dm_context, pack))
+    if (delta->appendColumnFile(dm_context, pack))
     {
         flushCache(dm_context);
         return true;
