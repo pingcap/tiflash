@@ -254,8 +254,13 @@ TableID MockTiDB::newTable(
     auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
+    return addTable(database_name, std::move(*table_info));
+}
 
-    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
+TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
+{
+    auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+    String qualified_name = database_name + "." + table_info.name;
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 

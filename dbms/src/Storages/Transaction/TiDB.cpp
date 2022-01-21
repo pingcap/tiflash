@@ -733,6 +733,10 @@ catch (const Poco::Exception & e)
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
+TableInfo::TableInfo(Poco::JSON::Object::Ptr json)
+{
+    deserialize(json);
+}
 
 TableInfo::TableInfo(const String & table_info_json)
 {
@@ -805,19 +809,16 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str)
+String JSONToString(Poco::JSON::Object::Ptr json)
+{
+    std::stringstream buf;
+    json->stringify(buf);
+    return buf.str();
+}
+
+void TableInfo::deserialize(Poco::JSON::Object::Ptr obj)
 try
 {
-    if (json_str.empty())
-    {
-        id = DB::InvalidTableID;
-        return;
-    }
-
-    Poco::JSON::Parser parser;
-    Poco::Dynamic::Var result = parser.parse(json_str);
-
-    auto obj = result.extract<Poco::JSON::Object::Ptr>();
     id = obj->getValue<TableID>("id");
     name = obj->getObject("name")->getValue<String>("L");
 
@@ -887,8 +888,30 @@ try
     {
         throw DB::Exception(
             std::string(__PRETTY_FUNCTION__)
-            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + json_str);
+            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + JSONToString(obj));
     }
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + JSONToString(obj),
+        DB::Exception(e));
+}
+
+void TableInfo::deserialize(const String & json_str)
+try
+{
+    if (json_str.empty())
+    {
+        id = DB::InvalidTableID;
+        return;
+    }
+
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(json_str);
+
+    auto obj = result.extract<Poco::JSON::Object::Ptr>();
+    deserialize(obj);
 }
 catch (const Poco::Exception & e)
 {
