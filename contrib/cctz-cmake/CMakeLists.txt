@@ -28,4 +28,10 @@ if (CMAKE_SYSTEM MATCHES "FreeBSD")
     target_compile_definitions (cctz PRIVATE __USE_BSD linux _XOPEN_SOURCE=600)
 endif ()
 
+if(APPLE)
+    find_library(CoreFoundation CoreFoundation)
+endif()
+
 target_include_directories (cctz PUBLIC ${LIBRARY_DIR}/include)
+
+target_link_libraries(cctz PUBLIC $<$<PLATFORM_ID:Darwin>:${CoreFoundation}>)

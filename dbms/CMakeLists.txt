@@ -189,8 +189,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${Protobuf_LIBRARIES}
-    gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
@@ -233,10 +231,6 @@ endif ()
 if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
-
-# This is the local grpc dir, i.e. /usr/local/include. Has to be AFTER all other dependencies' include directories.
-# We want to bundle the grpc inside tiflash someday, so this needs to be gone eventually.
-target_include_directories (dbms PUBLIC ${PROTOBUF_INCLUDE_DIRS})
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
