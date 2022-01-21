@@ -100,7 +100,8 @@ public:
             + ",bytes:" + DB::toString(bytes) //
             + ",data_page_id:" + DB::toString(data_page_id) //
             + ",schema:" + (schema ? schema->dumpStructure() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
+            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none")
+            + ", saved: " + DB::toString(saved) + "}";
         return s;
     }
 };

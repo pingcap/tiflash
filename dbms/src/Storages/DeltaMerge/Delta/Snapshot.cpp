@@ -95,16 +95,16 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
         // If `for_update` is true, only persisted packs are used.
         if (!for_update || pack->isSaved())
         {
-            if (auto b = pack->tryToInMemoryFile(); b)
+            if (auto * b = pack->tryToInMemoryFile(); b)
             {
-                // Flush and compact threads could update the value of DeltaPackBlock::cache,
-                // and since DeltaPack is not mult-threads safe, we should create a new pack object.
+                // Flush threads could update the value of ColumnInMemoryFile::cache,
+                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
                 snap->packs.push_back(std::make_shared<ColumnInMemoryFile>(*b));
             }
-            else if (auto t = pack->tryToTinyFile(); (t && t->getCache()))
+            else if (auto * t = pack->tryToTinyFile(); (t && t->getCache()))
             {
-                // Flush and compact threads could update the value of DeltaPackBlock::cache,
-                // and since DeltaPack is not mult-threads safe, we should create a new pack object.
+                // Compact threads could update the value of ColumnTinyFile::cache,
+                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
                 snap->packs.push_back(std::make_shared<ColumnTinyFile>(*t));
             }
             else
@@ -332,11 +332,18 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
         size_t rows_end_in_pack = pack_rows[pack_index];
 
         auto & pack_reader = pack_readers[pack_index];
-        // FIXME: mem table or tiny file here
-        auto & dpb_reader = typeid_cast<ColumnTinyFileReader &>(*pack_reader);
-        auto pk_column = dpb_reader.getPKColumn();
-        auto version_column = dpb_reader.getVersionColumn();
-
+        ColumnPtr pk_column;
+        ColumnPtr version_column;
+        if (auto m_reader = std::dynamic_pointer_cast<ColumnInMemoryFileReader>(pack_reader); m_reader)
+        {
+            pk_column = m_reader->getPKColumn();
+            version_column = m_reader->getVersionColumn();
+        }
+        else if (auto t_reader = std::dynamic_pointer_cast<ColumnTinyFileReader>(pack_reader); t_reader)
+        {
+            pk_column = t_reader->getPKColumn();
+            version_column = t_reader->getVersionColumn();
+        }
         auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(version_column);
 
