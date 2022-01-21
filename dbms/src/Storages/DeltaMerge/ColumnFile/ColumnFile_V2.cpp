@@ -39,15 +39,18 @@ inline ColumnFiles transform_V2_to_V3(const ColumnStableFiles_V2 & column_files_
 inline ColumnStableFiles_V2 transformSaved_V3_to_V2(const ColumnFiles & column_files_v3)
 {
     ColumnStableFiles_V2 column_files_v2;
-    for (auto & f : column_files_v3)
+    for (const auto & f : column_files_v3)
     {
-        auto f_v2 = new ColumnStableFile_V2();
+        if (!f->isSaved())
+            break;
 
-        if (auto f_delete = f->tryToDeleteRange(); f_delete)
+        auto * f_v2 = new ColumnStableFile_V2();
+
+        if (auto * f_delete = f->tryToDeleteRange(); f_delete)
         {
             f_v2->delete_range = f_delete->getDeleteRange();
         }
-        else if (auto f_tiny_file = f->tryToTinyFile(); f_tiny_file)
+        else if (auto * f_tiny_file = f->tryToTinyFile(); f_tiny_file)
         {
             f_v2->rows = f_tiny_file->getRows();
             f_v2->bytes = f_tiny_file->getBytes();

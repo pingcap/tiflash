@@ -62,7 +62,7 @@ public:
 
     ColumnInMemoryFilePtr clone()
     {
-        return std::make_shared<ColumnInMemoryFile>(schema, cache);
+        return std::make_shared<ColumnInMemoryFile>(*this);
     }
 
     ColumnFileReaderPtr

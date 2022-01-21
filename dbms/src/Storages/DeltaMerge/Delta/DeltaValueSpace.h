@@ -154,7 +154,7 @@ public:
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
     ColumnFiles
-    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_packs, WriteBatches & wbs) const;
+    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 
@@ -268,7 +268,7 @@ private:
 
     StorageSnapshotPtr storage_snap;
 
-    ColumnFiles packs;
+    ColumnFiles column_files;
     size_t rows;
     size_t bytes;
     size_t deletes;
@@ -291,7 +291,7 @@ public:
         c->is_update = is_update;
         c->shared_delta_index = shared_delta_index;
         c->storage_snap = storage_snap;
-        c->packs = packs;
+        c->column_files = column_files;
         c->rows = rows;
         c->bytes = bytes;
         c->deletes = deletes;
@@ -316,9 +316,9 @@ public:
         CurrentMetrics::sub(type);
     }
 
-    ColumnFiles & getPacks() { return packs; }
+    ColumnFiles & getColumnFiles() { return column_files; }
 
-    size_t getPackCount() const { return packs.size(); }
+    size_t getPackCount() const { return column_files.size(); }
     size_t getRows() const { return rows; }
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
@@ -401,7 +401,7 @@ public:
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
         : reader(context_, delta_snap_, col_defs_, segment_range_)
-        , packs(reader.delta_snap->getPacks())
+        , packs(reader.delta_snap->getColumnFiles())
         , pack_count(packs.size())
     {
     }

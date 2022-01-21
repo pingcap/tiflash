@@ -111,25 +111,25 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 
 ColumnFiles DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
                                                    const RowKeyRange & target_range,
-                                                   const ColumnFiles & head_packs,
+                                                   const ColumnFiles & head_column_files,
                                                    WriteBatches & wbs) const
 {
-    if (head_packs.size() > column_files.size())
+    if (head_column_files.size() > column_files.size())
     {
         LOG_ERROR(log,
-                  info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_packs)
+                  info() << ", Delta Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_column_files)
                          << ", packs: " << columnFilesToString(column_files));
         throw Exception("Check head packs failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto it_1 = head_packs.begin();
+    auto it_1 = head_column_files.begin();
     auto it_2 = column_files.begin();
-    for (; it_1 != head_packs.end() && it_2 != column_files.end(); ++it_1, ++it_2)
+    for (; it_1 != head_column_files.end() && it_2 != column_files.end(); ++it_1, ++it_2)
     {
         if ((*it_1)->getId() != (*it_2)->getId() || (*it_1)->getRows() != (*it_2)->getRows())
         {
             LOG_ERROR(log,
-                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_packs)
+                      simpleInfo() << ", Delta Check head packs failed, unexpected size. head_packs: " << columnFilesToString(head_column_files)
                                    << ", packs: " << columnFilesToString(column_files));
             throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
         }
@@ -155,7 +155,6 @@ ColumnFiles DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
             // No matter or what, don't append to packs which cloned from old packs again.
             // Because they could shared the same cache. And the cache can NOT be inserted from different packs in different delta.
             new_pack->disableAppend();
-
             cloned_tail.push_back(new_pack);
         }
         else if (auto * t = pack->tryToTinyFile(); t)
@@ -167,7 +166,7 @@ ColumnFiles DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
 
             cloned_tail.push_back(new_pack);
         }
-        else if (auto f = pack->tryToBigFile(); f)
+        else if (auto * f = pack->tryToBigFile(); f)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
             auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);

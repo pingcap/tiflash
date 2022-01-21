@@ -9,11 +9,15 @@ namespace DM
 {
 void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column_files)
 {
-    writeIntBinary(column_files.size(), buf);
+    size_t saved_packs = std::find_if(column_files.begin(), column_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); }) - column_files.begin();
+
+    writeIntBinary(saved_packs, buf);
     BlockPtr last_schema;
 
-    for (auto & column_file : column_files)
+    for (const auto & column_file : column_files)
     {
+        if (!column_file->isSaved())
+            break;
         // Do not encode the schema if it is the same as previous one.
         writeIntBinary(column_file->getType(), buf);
 
@@ -31,7 +35,7 @@ void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column
         }
         case ColumnFile::Type::TINY_FILE:
         {
-            auto tiny_file = column_file->tryToTinyFile();
+            auto * tiny_file = column_file->tryToTinyFile();
             auto cur_schema = tiny_file->getSchema();
             if (unlikely(!cur_schema))
                 throw Exception("A tiny file without schema: " + column_file->toString(), ErrorCodes::LOGICAL_ERROR);

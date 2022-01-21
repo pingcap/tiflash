@@ -69,7 +69,7 @@ public:
 
 public:
     /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
-    bool getId() const { return id; }
+    UInt64 getId() const { return id; }
     /// This pack is already saved to disk or not. Only saved packs can be recovered after reboot.
     /// "saved" can only be true, after the content data and the metadata are all written to disk.
     bool isSaved() const { return saved; }

@@ -188,6 +188,8 @@ ColumnFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange 
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
                         ErrorCodes::LOGICAL_ERROR);
     }
+    for (auto & f : column_files)
+        f->setSaved();
     return column_files;
 }
 

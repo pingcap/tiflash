@@ -71,7 +71,9 @@ public:
 
     ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
     {
-        return std::make_shared<ColumnTinyFile>(schema, rows, bytes, new_data_page_id, cache);
+        auto new_tiny_file = std::make_shared<ColumnTinyFile>(*this);
+        new_tiny_file->data_page_id = new_data_page_id;
+        return new_tiny_file;
     }
 
     ColumnFileReaderPtr

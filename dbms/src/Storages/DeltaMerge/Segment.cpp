@@ -604,7 +604,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
 {
     LOG_FMT_INFO(log, "Before apply merge delta: {}", info());
 
-    auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getPacks(), wbs);
+    auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFiles(), wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
@@ -1064,11 +1064,11 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
-    ColumnFiles empty_packs;
-    ColumnFiles * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->getPacks();
+    ColumnFiles empty_files;
+    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFiles();
 
-    auto my_delta_packs = delta->checkHeadAndCloneTail(dm_context, my_range, *head_packs, wbs);
-    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
+    auto my_delta_files = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
+    auto other_delta_files = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -1076,8 +1076,8 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id = dm_context.storage_pool.newMetaPageId();
 
-    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_packs);
-    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_packs);
+    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_files);
+    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_files);
 
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
                                             my_range,
@@ -1209,8 +1209,8 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
-    auto left_tail_packs = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getPacks(), wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getPacks(), wbs);
+    auto left_tail_packs = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFiles(), wbs);
+    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFiles(), wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();

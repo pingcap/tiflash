@@ -518,9 +518,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
 
             limit = cur_limit;
-            auto bytes = block.bytes(offset, limit);
+            auto alloc_bytes = block.bytes(offset, limit);
 
-            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && bytes < dm_context->delta_cache_limit_bytes / 4;
+            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
             // Small packs are appended to Delta Cache, the flushed later.
             // While large packs are directly written to PageStorage.
             if (small_pack)

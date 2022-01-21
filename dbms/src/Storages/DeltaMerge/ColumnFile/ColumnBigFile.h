@@ -41,7 +41,7 @@ public:
 
     ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
-        auto new_column_file = new ColumnBigFile(*this);
+        auto * new_column_file = new ColumnBigFile(*this);
         new_column_file->file = new_file;
         new_column_file->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
