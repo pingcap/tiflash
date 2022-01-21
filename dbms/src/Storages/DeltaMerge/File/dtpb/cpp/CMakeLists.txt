@@ -12,7 +12,7 @@ else ()
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 endif ()
 
-if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/File/dtpb/cpp/dtpb/dmfile.pb.h")
+if (NOT EXISTS "${TiFlash_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/File/dtpb/cpp/dtpb/dmfile.pb.h")
     message (FATAL_ERROR "dmfile cpp files in DeltaMerge/File/dtpb/cpp/dtpb is missing. Try go to DeltaMerge/File/dtpb, and run ./generate_cpp.sh")
 endif ()
 
