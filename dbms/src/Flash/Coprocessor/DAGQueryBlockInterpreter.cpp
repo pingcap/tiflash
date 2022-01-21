@@ -849,6 +849,7 @@ void DAGQueryBlockInterpreter::executeProjection(DAGPipeline & pipeline, const t
         project_cols.emplace_back(col.name, alias);
         last_step.required_output.emplace_back(alias);
     }
+    assert(!project_cols.empty());
     last_step.actions->add(ExpressionAction::project(project_cols));
     chain.finalize();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
@@ -1001,7 +1002,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    // execute projection
+    // execute final project action
     executeProjectAction(pipeline, final_project);
 
     // execute limit
@@ -1021,7 +1022,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
+void DAGQueryBlockInterpreter::executeProjectAction(DAGPipeline & pipeline, NamesWithAliases & project_cols)
 {
     if (project_cols.empty())
         return;
