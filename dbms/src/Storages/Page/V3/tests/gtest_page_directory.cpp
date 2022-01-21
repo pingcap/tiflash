@@ -181,7 +181,7 @@ try
 
     // Update 3, 2 won't get updated. Update 2, 3 won't get updated.
     // Note that users should not rely on this behavior
-    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(3, entry_updated);
@@ -193,7 +193,7 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
     EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap2);
 
-    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(2, entry_updated2);
@@ -887,7 +887,7 @@ try
     INSERT_ENTRY_ACQ_SNAP(page_id, 5);
     INSERT_ENTRY(another_page_id, 6);
     INSERT_ENTRY(another_page_id, 7);
-    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(page_id);
