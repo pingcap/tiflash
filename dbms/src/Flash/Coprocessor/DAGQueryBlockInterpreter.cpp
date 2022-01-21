@@ -290,10 +290,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     auto is_need_add_cast_column = std::move(storage_interpreter.is_need_add_cast_column);
     auto original_source_columns = analyzer->getCurrentInputColumns();
 
-    ExpressionActionsPtr before_where;
-    ExpressionActionsPtr project_after_where;
-    String filter_column_name;
-
     ExpressionActionsChain chain;
     analyzer->initChain(chain, original_source_columns);
 
@@ -331,19 +327,18 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     }
     if (query_block.selection)
     {
-        filter_column_name = analyzer->appendWhere(chain, conditions);
-        before_where = chain.getLastActions();
+        String filter_column_name = analyzer->appendWhere(chain, conditions);
+        ExpressionActionsPtr before_where = chain.getLastActions();
         chain.addStep();
 
-        // remove
+        // remove useless tmp column and keep the schema of local streams and remote streams the same.
         NamesWithAliases project_cols;
         for (const auto & col : analyzer->getCurrentInputColumns())
         {
             project_cols.emplace_back(col.name, col.name);
         }
         chain.getLastActions()->add(ExpressionAction::project(project_cols));
-        project_after_where = chain.getLastActions();
-        chain.addStep();
+        ExpressionActionsPtr project_after_where = chain.getLastActions();
 
         pipeline.transform([&](auto & stream) {
             // for remote read, filter had been pushed down, don't need to execute again.
@@ -898,56 +893,6 @@ void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, c
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeExtraCastAndSelection(
-    DAGPipeline & pipeline,
-    const ExpressionActionsPtr & extra_cast,
-    const NamesWithAliases & project_after_ts_and_filter_for_remote_read,
-    const ExpressionActionsPtr & before_where,
-    const ExpressionActionsPtr & project_after_where,
-    const String & filter_column_name)
-{
-    /// execute timezone cast and the selection
-    ExpressionActionsPtr project_for_cop_read;
-    for (auto & stream : pipeline.streams)
-    {
-        if (dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr)
-        {
-            /// for cop read, just execute the project is enough, because timezone cast and the selection are already done in remote TiFlash
-            if (!project_after_ts_and_filter_for_remote_read.empty())
-            {
-                if (project_for_cop_read == nullptr)
-                {
-                    project_for_cop_read = generateProjectExpressionActions(stream, context, project_after_ts_and_filter_for_remote_read);
-                }
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, taskLogger());
-            }
-        }
-        else
-        {
-            /// execute timezone cast or duration cast if needed
-            if (extra_cast)
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, taskLogger());
-            /// execute selection if needed
-            if (before_where)
-            {
-                stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, taskLogger());
-                if (project_after_where)
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
-            }
-        }
-    }
-    for (auto & stream : pipeline.streams_with_non_joined_data)
-    {
-        /// execute selection if needed
-        if (before_where)
-        {
-            stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, taskLogger());
-            if (project_after_where)
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
-        }
-    }
-}
-
 // To execute a query block, you have to:
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
@@ -985,6 +930,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeTS(query_block.source->tbl_scan(), pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
         dagContext().table_scan_executor_id = query_block.source_name;
+
+        if (query_block.selection)
+            recordProfileStreams(pipeline, query_block.selection_name);
     }
 
     auto res = analyzeExpressions(
