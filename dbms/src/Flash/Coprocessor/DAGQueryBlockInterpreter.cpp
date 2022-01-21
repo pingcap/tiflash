@@ -615,7 +615,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         /// it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
-    executeProject(pipeline, project_cols);
+    executeProjectAction(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
@@ -827,7 +827,7 @@ void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
+void DAGQueryBlockInterpreter::executeProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
     std::vector<NameAndTypePair> input_columns;
     pipeline.streams = input_streams_vec[0];
@@ -843,14 +843,15 @@ void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, c
     for (const auto & expr : projection.exprs())
     {
         auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
-        last_step.required_output.emplace_back(expr_name);
         const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
         String alias = unique_name_generator.toUniqueName(col.name);
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
+        last_step.required_output.emplace_back(alias);
     }
+    last_step.actions->add(ExpressionAction::project(project_cols));
+    chain.finalize();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
-    executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -933,7 +934,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
-        executeSourceProjection(pipeline, query_block.source->projection());
+        executeProjection(pipeline, query_block.source->projection());
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
@@ -1001,7 +1002,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute projection
-    executeProject(pipeline, final_project);
+    executeProjectAction(pipeline, final_project);
 
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)

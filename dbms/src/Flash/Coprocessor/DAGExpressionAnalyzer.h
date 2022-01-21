@@ -114,7 +114,7 @@ public:
         String & filter_column_name);
 
 private:
-    void appendAggSelect(
+    void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
 
@@ -126,6 +126,14 @@ private:
         ExpressionActionsPtr & actions);
 
     void buildGroupConcat(
+        const tipb::Expr & expr,
+        ExpressionActionsChain::Step & step,
+        const String & agg_func_name,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        bool result_is_nullable);
+
+    void buildCommonAggFunc(
         const tipb::Expr & expr,
         ExpressionActionsChain::Step & step,
         const String & agg_func_name,

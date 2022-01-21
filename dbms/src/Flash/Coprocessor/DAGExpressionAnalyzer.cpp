@@ -628,6 +628,54 @@ static String getAggFuncName(
     return agg_func_name;
 }
 
+void DAGExpressionAnalyzer::buildCommonAggFunc(
+    const tipb::Expr & expr,
+    ExpressionActionsChain::Step & step,
+    const String & agg_func_name,
+    AggregateDescriptions & aggregate_descriptions,
+    NamesAndTypes & aggregated_columns,
+    bool result_is_nullable)
+{
+    AggregateDescription aggregate;
+    auto child_size = expr.children_size();
+    DataTypes types(child_size);
+    TiDB::TiDBCollators arg_collators;
+    aggregate.argument_names.resize(child_size);
+    for (Int32 i = 0; i < child_size; i++)
+    {
+        String arg_name = getActions(expr.children(i), step.actions);
+        types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+        if (removeNullable(types[i])->isString())
+            arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+        else
+            arg_collators.push_back(nullptr);
+        aggregate.argument_names[i] = arg_name;
+        step.required_output.push_back(arg_name);
+    }
+    String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
+    bool duplicate = false;
+    for (const auto & pre_agg : aggregate_descriptions)
+    {
+        if (pre_agg.column_name == func_string)
+        {
+            aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+            duplicate = true;
+            break;
+        }
+    }
+    if (duplicate)
+        return;
+    aggregate.column_name = func_string;
+    aggregate.parameters = Array();
+    /// if there is group by clause, there is no need to consider the empty input case
+    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
+    aggregate.function->setCollators(arg_collators);
+    aggregate_descriptions.push_back(aggregate);
+    DataTypePtr result_type = aggregate.function->getReturnType();
+    // this is a temp result since implicit cast maybe added on these aggregated_columns
+    aggregated_columns.emplace_back(func_string, result_type);
+}
+
 std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
@@ -650,51 +698,14 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        String agg_func_name = getAggFuncName(expr, agg, settings);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, aggregated_columns, agg.group_by().empty());
-            continue;
+            buildGroupConcat(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, agg.group_by().empty());
         }
-
-        AggregateDescription aggregate;
-        auto child_size = expr.children_size();
-        DataTypes types(child_size);
-        TiDB::TiDBCollators arg_collators;
-        aggregate.argument_names.resize(child_size);
-        for (Int32 i = 0; i < child_size; i++)
+        else
         {
-            String arg_name = getActions(expr.children(i), step.actions);
-            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-            if (removeNullable(types[i])->isString())
-                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
-            else
-                arg_collators.push_back(nullptr);
-            aggregate.argument_names[i] = arg_name;
-            step.required_output.push_back(arg_name);
+            buildCommonAggFunc(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, agg.group_by().empty());
         }
-        String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-        bool duplicate = false;
-        for (const auto & pre_agg : aggregate_descriptions)
-        {
-            if (pre_agg.column_name == func_string)
-            {
-                aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
-                duplicate = true;
-                break;
-            }
-        }
-        if (duplicate)
-            continue;
-        aggregate.column_name = func_string;
-        aggregate.parameters = Array();
-        /// if there is group by clause, there is no need to consider the empty input case
-        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
-        aggregate.function->setCollators(arg_collators);
-        aggregate_descriptions.push_back(aggregate);
-        DataTypePtr result_type = aggregate.function->getReturnType();
-        // this is a temp result since implicit cast maybe added on these aggregated_columns
-        aggregated_columns.emplace_back(func_string, result_type);
     }
 
     for (const tipb::Expr & expr : agg.group_by())
@@ -775,7 +786,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     auto before_agg = chain.getLastActions();
     chain.finalize();
     chain.clear();
-    appendAggSelect(chain, agg);
+    appendCastAfterAgg(chain, agg);
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
@@ -1106,55 +1117,44 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-void DAGExpressionAnalyzer::appendAggSelect(
+void DAGExpressionAnalyzer::appendCastAfterAgg(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
+
     bool need_update_source_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
-    {
-        const String & name = source_columns[i].name;
-        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
-        if (name != updated_name)
+
+    auto update_cast_column = [&](const tipb::Expr & expr, const NameAndTypePair & origin_column) {
+        String updated_name = appendCastIfNeeded(expr, step.actions, origin_column.name);
+        if (origin_column.name != updated_name)
         {
-            need_update_source_columns = true;
             DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
             updated_aggregated_columns.emplace_back(updated_name, type);
             step.required_output.push_back(updated_name);
+            need_update_source_columns = true;
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, source_columns[i].type);
-            step.required_output.push_back(name);
+            updated_aggregated_columns.emplace_back(origin_column.name, origin_column.type);
+            step.required_output.push_back(origin_column.name);
         }
+    };
+
+    for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
+    {
+        update_cast_column(aggregation.agg_func(i), source_columns[i]);
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        Int32 output_column_index = i + aggregation.agg_func_size();
-        const String & name = source_columns[output_column_index].name;
-        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
-        if (name != updated_name)
-        {
-            need_update_source_columns = true;
-            DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
-            updated_aggregated_columns.emplace_back(updated_name, type);
-            step.required_output.push_back(updated_name);
-        }
-        else
-        {
-            updated_aggregated_columns.emplace_back(name, source_columns[output_column_index].type);
-            step.required_output.push_back(name);
-        }
+        update_cast_column(aggregation.group_by(i), source_columns[i + aggregation.agg_func_size()]);
     }
 
     if (need_update_source_columns)
     {
-        source_columns.clear();
-        for (auto & col : updated_aggregated_columns)
-            source_columns.emplace_back(col.name, col.type);
+        source_columns = std::move(updated_aggregated_columns);
     }
 }
 
