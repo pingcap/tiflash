@@ -204,7 +204,7 @@ String columnFilesToString(const ColumnFiles & column_files)
             column_files_info += "F_" + DB::toString(f->getRows());
         else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
             column_files_info += "D_" + f_delete->getDeleteRange().toString();
-        column_files_info += + (f->isSaved() ? "_S," : "_N,");
+        column_files_info += (f->isSaved() ? "_S," : "_N,");
     }
 
     if (!column_files.empty())
