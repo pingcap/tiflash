@@ -541,7 +541,6 @@ SubqueryForSet DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DA
         should_swap_join_side ? join.left_conditions() : join.right_conditions(),
         right_filter_column_name);
 
-    String other_filter_column_name, other_eq_filter_from_in_column_name;
     for (auto const & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
@@ -553,8 +552,12 @@ SubqueryForSet DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DA
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
 
-    ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join, columns_for_other_join_filter, other_filter_column_name, other_eq_filter_from_in_column_name);
+    String other_filter_column_name, other_eq_filter_from_in_column_name;
+    ExpressionActionsPtr other_condition_expr = genJoinOtherConditionAction(
+        join,
+        columns_for_other_join_filter,
+        other_filter_column_name,
+        other_eq_filter_from_in_column_name);
 
     const Settings & settings = context.getSettingsRef();
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;

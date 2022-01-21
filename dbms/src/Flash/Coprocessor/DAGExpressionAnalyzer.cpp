@@ -227,9 +227,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        auto [value, flash_type, target_type] = inferDataTypeForLiteral(child);
-        (void)value;
-        (void)flash_type;
+        auto [value [[maybe_unused]], flash_type [[maybe_unused]], target_type] = inferDataTypeForLiteral(child);
         argument_types.push_back(target_type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
