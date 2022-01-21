@@ -41,6 +41,60 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     return 1024;
 }
 
+enum tidbSQLFlags
+{
+    IGNORE_TRUNCATE = 1,
+    TRUNCATE_AS_WARNING = 1u << 1u,
+    PAD_CHAR_TO_FULL_LENGTH = 1u << 2u,
+    IN_INSERT_STMT = 1u << 3u,
+    IN_UPDATE_OR_DELETE_STMT = 1u << 4u,
+    IN_SELECT_STMT = 1u << 5u,
+    OVERFLOW_AS_WARNING = 1u << 6u,
+    IGNORE_ZERO_IN_DATE = 1u << 7u,
+    DIVIDED_BY_ZERO_AS_WARNING = 1u << 8u,
+    IN_LOAD_DATA_STMT = 1u << 10u,
+};
+
+enum tidbSQLMode
+{
+    REAL_AS_FLOAT = 1ul,
+    PIPES_AS_CONCAT = 1ul << 1ul,
+    ANSI_QUOTES = 1ul << 2ul,
+    IGNORE_SPACE = 1ul << 3ul,
+    NOT_USED = 1ul << 4ul,
+    ONLY_FULL_GROUP_BY = 1ul << 5ul,
+    NO_UNSIGNED_SUBTRACTION = 1ul << 6ul,
+    NO_DIR_IN_CREATE = 1ul << 7ul,
+    POSTGRESQL = 1ul << 8ul,
+    ORACLE = 1ul << 9ul,
+    MSSQL = 1ul << 10ul,
+    DB2 = 1ul << 11ul,
+    MAXDB = 1ul << 12ul,
+    NO_KEY_OPTIONS = 1ul << 13ul,
+    NO_TABLE_OPTIONS = 1ul << 14ul,
+    NO_FIELD_OPTIONS = 1ul << 15ul,
+    MYSQL323 = 1ul << 16ul,
+    MYSQL40 = 1ul << 17ul,
+    ANSI = 1ul << 18ul,
+    NO_AUTO_VALUE_ON_ZERO = 1ul << 19ul,
+    NO_BACK_SLASH_ESCAPES = 1ul << 20ul,
+    STRICT_TRANS_TABLES = 1ul << 21ul,
+    STRICT_ALL_TABLES = 1ul << 22ul,
+    NO_ZERO_IN_DATE = 1ul << 23ul,
+    NO_ZERO_DATE = 1ul << 24ul,
+    INVALID_DATES = 1ul << 25ul,
+    ERROR_FOR_DIVISION_BY_ZERO = 1ul << 26ul,
+    TRADITIONAL = 1ul << 27ul,
+    NO_AUTO_CREATE_USER = 1ul << 28ul,
+    HIGH_NOT_PRECEDENCE = 1ul << 29ul,
+    NO_ENGINE_SUBSTITUTION = 1ul << 30ul,
+
+    // Duplicated with Flag::PAD_CHAR_TO_FULL_LENGTH
+    // PAD_CHAR_TO_FULL_LENGTH = 1ul << 31ul,
+
+    ALLOW_INVALID_DATES = 1ul << 32ul,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -147,6 +201,27 @@ public:
     const BlockIO & getBlockIO() const
     {
         return io;
+    }
+
+    UInt64 GetFlags()
+    {
+        return flags;
+    }
+    void SetFlags(UInt64 f)
+    {
+        flags = f;
+    }
+    void AddFlag(tidbSQLFlags f)
+    {
+        flags |= f;
+    }
+    void DelFlag(tidbSQLFlags f)
+    {
+        flags &= (~f);
+    }
+    bool HasFlag(tidbSQLFlags f)
+    {
+        return (flags & f);
     }
 
     const tipb::DAGRequest * dag_request;

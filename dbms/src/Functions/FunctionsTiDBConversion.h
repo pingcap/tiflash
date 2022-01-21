@@ -816,21 +816,24 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T outer_value, PrecType prec, ScaleType scale, const Context & context)
     {
+        // outer_value is the value that will expose to user. Such as cast(val_int to decimal), val_int is the outer_value which user used.
+        // And val_int * scale_mul is the inner_value, which is stored in deciaml internally.
         using UType = typename U::NativeType;
         UType scale_mul = getScaleMultiplier<U>(scale);
-        Int256 max_value = DecimalMaxValue::get(prec) / scale_mul;
-        if (value > max_value || value < -max_value)
+        Int256 inner_max_value = DecimalMaxValue::get(prec);
+        Int256 outer_max_value = inner_max_value / scale_mul;
+        if (outer_value > outer_max_value || outer_value < -outer_max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
+            if (outer_value > 0)
+                return static_cast<UType>(inner_max_value);
             else
-                return static_cast<UType>(-max_value);
+                return static_cast<UType>(-inner_max_value);
         }
-        U result = static_cast<UType>(value) * scale_mul;
-        return result;
+        U inner_result = static_cast<UType>(outer_value) * scale_mul;
+        return inner_result;
     }
 
     template <typename U>
