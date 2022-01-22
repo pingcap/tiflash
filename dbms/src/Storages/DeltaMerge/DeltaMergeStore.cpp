@@ -487,7 +487,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
         WriteBatches wbs(storage_pool, db_context.getWriteLimiter());
-        ColumnFilePtr write_pack;
+        ColumnFilePtr write_column_file;
         RowKeyRange write_range;
 
         // Keep trying until succeeded.
@@ -535,18 +535,18 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 // If pack haven't been written, or the pk range has changed since last write, then write it and
                 // delete former written pack.
-                if (!write_pack || (write_pack && write_range != rowkey_range))
+                if (!write_column_file || (write_column_file && write_range != rowkey_range))
                 {
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
-                    write_pack = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
+                    write_column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
                 }
 
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-                if (segment->writeToDisk(*dm_context, write_pack))
+                if (segment->writeToDisk(*dm_context, write_column_file))
                 {
                     updated_segments.push_back(segment);
                     break;
@@ -694,7 +694,7 @@ void DeltaMergeStore::ingestFiles(
             segment_range = segment->getRowKeyRange();
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-            ColumnFiles packs;
+            ColumnFiles column_files;
             WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
 
             for (const auto & file : files)
@@ -708,7 +708,7 @@ void DeltaMergeStore::ingestFiles(
                 auto pack = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
                 if (pack->getRows() != 0)
                 {
-                    packs.emplace_back(std::move(pack));
+                    column_files.emplace_back(std::move(pack));
                     wbs.data.putRefPage(ref_id, file_id);
                 }
             }
@@ -717,7 +717,7 @@ void DeltaMergeStore::ingestFiles(
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
+            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
             fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
             if (ingest_success)
             {

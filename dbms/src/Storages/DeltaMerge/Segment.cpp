@@ -1209,27 +1209,27 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
-    auto left_tail_packs = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFiles(), wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFiles(), wbs);
+    auto left_tail_files = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFiles(), wbs);
+    auto right_tail_files = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFiles(), wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
     /// Make sure saved packs are appended before unsaved packs.
-    ColumnFiles merged_packs;
+    ColumnFiles merged_files;
 
     auto l_first_unsaved
-        = std::find_if(left_tail_packs.begin(), left_tail_packs.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
+        = std::find_if(left_tail_files.begin(), left_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
     auto r_first_unsaved
-        = std::find_if(right_tail_packs.begin(), right_tail_packs.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
+        = std::find_if(right_tail_files.begin(), right_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
 
-    merged_packs.insert(merged_packs.end(), left_tail_packs.begin(), l_first_unsaved);
-    merged_packs.insert(merged_packs.end(), right_tail_packs.begin(), r_first_unsaved);
+    merged_files.insert(merged_files.end(), left_tail_files.begin(), l_first_unsaved);
+    merged_files.insert(merged_files.end(), right_tail_files.begin(), r_first_unsaved);
 
-    merged_packs.insert(merged_packs.end(), l_first_unsaved, left_tail_packs.end());
-    merged_packs.insert(merged_packs.end(), r_first_unsaved, right_tail_packs.end());
+    merged_files.insert(merged_files.end(), l_first_unsaved, left_tail_files.end());
+    merged_files.insert(merged_files.end(), r_first_unsaved, right_tail_files.end());
 
-    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
+    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_files);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
                                             merged_range,
