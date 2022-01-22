@@ -279,7 +279,7 @@ void Segment::serialize(WriteBatch & wb)
 
 bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
+    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isBigFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
     return delta->appendColumnFile(dm_context, column_file);
 }
 

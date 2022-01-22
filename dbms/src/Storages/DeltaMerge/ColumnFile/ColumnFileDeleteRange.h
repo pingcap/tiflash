@@ -9,7 +9,7 @@ namespace DM
 class ColumnFileDeleteRange;
 using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnFileDeleteRange>;
 
-/// A column file which contains a DeleteRange. It will remove all covered data in the previous column files.
+/// A column file that contains a DeleteRange. It will remove all covered data in the previous column files.
 class ColumnFileDeleteRange : public ColumnFilePersisted
 {
 private:
