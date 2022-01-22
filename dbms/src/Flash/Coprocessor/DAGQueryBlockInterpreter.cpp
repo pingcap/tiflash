@@ -283,6 +283,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     if (pipeline.streams.empty())
     {
         pipeline.streams.emplace_back(null_stream_if_empty);
+        // reset remote_read_streams_start_index for null_stream_if_empty.
+        remote_read_streams_start_index = 1;
     }
 
     pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
