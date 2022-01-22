@@ -41,24 +41,37 @@ private:
 Children getChildren(const tipb::Executor & executor);
 
 template <typename FF>
+void traverseExecutorArray(const google::protobuf::RepeatedPtrField<::tipb::Executor> & array, FF && f)
+{
+    for (const auto & executor : array)
+    {
+        if (!f(executor))
+            return;
+    }
+}
+
+template <typename FF>
+void traverseExecutorTree(const tipb::Executor & executor, FF && f)
+{
+    std::function<void(const tipb::Executor & executor)> traverse_tree;
+    traverse_tree = [&](const tipb::Executor & executor) {
+        if (f(executor))
+            getChildren(executor).forEach(traverse_tree);
+    };
+    traverse_tree(executor);
+}
+
+template <typename FF>
 void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
 {
     assert(dag_request->executors_size() > 0 || dag_request->has_root_executor());
     if (dag_request->executors_size() > 0)
     {
-        for (const auto & executor : dag_request->executors())
-        {
-            f(executor);
-        }
+        traverseExecutorArray(dag_request->executors(), std::forward<FF>(f));
     }
-    else /// dag_request->has_root_executor()
+    else // dag_request->has_root_executor()
     {
-        std::function<void(const tipb::Executor & executor)> traverse_tree;
-        traverse_tree = [&](const tipb::Executor & executor) {
-            f(executor);
-            getChildren(executor).template forEach(traverse_tree);
-        };
-        traverse_tree(dag_request->root_executor());
+        traverseExecutorTree(dag_request->root_executor(), std::forward<FF>(f));
     }
 }
 } // namespace DB
