@@ -1,13 +1,12 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
 namespace DB
 {
 namespace DM
 {
-struct ColumnStableFile_V2
+struct ColumnFile_V2
 {
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -17,34 +16,35 @@ struct ColumnStableFile_V2
 
     bool isDeleteRange() const { return !delete_range.none(); }
 };
-using ColumnStableFile_V2Ptr = std::shared_ptr<ColumnStableFile_V2>;
-using ColumnStableFiles_V2 = std::vector<ColumnStableFile_V2Ptr>;
+using ColumnFile_V2Ptr = std::shared_ptr<ColumnFile_V2>;
+using ColumnFiles_V2 = std::vector<ColumnFile_V2Ptr>;
 
-inline ColumnFiles transform_V2_to_V3(const ColumnStableFiles_V2 & column_files_v2)
+inline ColumnFiles transform_V2_to_V3(const ColumnFiles_V2 & column_files_v2)
 {
     ColumnFiles column_files_v3;
     for (const auto & f : column_files_v2)
     {
         ColumnFilePtr f_v3;
         if (f->isDeleteRange())
-            f_v3 = std::make_shared<ColumnDeleteRangeFile>(std::move(f->delete_range));
+            f_v3 = std::make_shared<ColumnFileDeleteRange>(std::move(f->delete_range));
         else
-            f_v3 = std::make_shared<ColumnTinyFile>(f->schema, f->rows, f->bytes, f->data_page_id);
+            f_v3 = std::make_shared<ColumnFileTiny>(f->schema, f->rows, f->bytes, f->data_page_id);
 
+        f_v3->setSaved();
         column_files_v3.push_back(f_v3);
     }
     return column_files_v3;
 }
 
-inline ColumnStableFiles_V2 transformSaved_V3_to_V2(const ColumnFiles & column_files_v3)
+inline ColumnFiles_V2 transformSaved_V3_to_V2(const ColumnFiles & column_files_v3)
 {
-    ColumnStableFiles_V2 column_files_v2;
+    ColumnFiles_V2 column_files_v2;
     for (const auto & f : column_files_v3)
     {
         if (!f->isSaved())
             break;
 
-        auto * f_v2 = new ColumnStableFile_V2();
+        auto * f_v2 = new ColumnFile_V2();
 
         if (auto * f_delete = f->tryToDeleteRange(); f_delete)
         {
@@ -62,12 +62,12 @@ inline ColumnStableFiles_V2 transformSaved_V3_to_V2(const ColumnFiles & column_f
             throw Exception("Unexpected column file type", ErrorCodes::LOGICAL_ERROR);
         }
 
-        column_files_v2.push_back(std::shared_ptr<ColumnStableFile_V2>(f_v2));
+        column_files_v2.push_back(std::shared_ptr<ColumnFile_V2>(f_v2));
     }
     return column_files_v2;
 }
 
-inline void serializeColumnFile_V2(const ColumnStableFile_V2 & column_file, const BlockPtr & schema, WriteBuffer & buf)
+inline void serializeColumnFile_V2(const ColumnFile_V2 & column_file, const BlockPtr & schema, WriteBuffer & buf)
 {
     writeIntBinary(column_file.rows, buf);
     writeIntBinary(column_file.bytes, buf);
@@ -89,11 +89,11 @@ inline void serializeColumnFile_V2(const ColumnStableFile_V2 & column_file, cons
     }
 }
 
-void serializeColumnFiles_V2(WriteBuffer & buf, const ColumnStableFiles_V2 & column_files)
+void serializeSavedColumnFiles_V2(WriteBuffer & buf, const ColumnFiles_V2 & column_files)
 {
     writeIntBinary(column_files.size(), buf);
     BlockPtr last_schema;
-    for (auto & column_file : column_files)
+    for (const auto & column_file : column_files)
     {
         // Do not encode the schema if it is the same as previous one.
         if (column_file->isDeleteRange())
@@ -115,14 +115,14 @@ void serializeColumnFiles_V2(WriteBuffer & buf, const ColumnStableFiles_V2 & col
     }
 }
 
-void serializeColumnStableFiles_V2(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFiles & column_files)
 {
-    serializeColumnFiles_V2(buf, transformSaved_V3_to_V2(column_files));
+    serializeSavedColumnFiles_V2(buf, transformSaved_V3_to_V2(column_files));
 }
 
-inline ColumnStableFile_V2Ptr deserializeColumnStableFile_V2(ReadBuffer & buf, UInt64 version)
+inline ColumnFile_V2Ptr deserializeColumnFile_V2(ReadBuffer & buf, UInt64 version)
 {
-    auto column_file = std::make_shared<ColumnStableFile_V2>();
+    auto column_file = std::make_shared<ColumnFile_V2>();
     readIntBinary(column_file->rows, buf);
     readIntBinary(column_file->bytes, buf);
     switch (version)
@@ -147,15 +147,15 @@ inline ColumnStableFile_V2Ptr deserializeColumnStableFile_V2(ReadBuffer & buf, U
     return column_file;
 }
 
-ColumnFiles deserializeColumnStableFiles_V2(ReadBuffer & buf, UInt64 version)
+ColumnFiles deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UInt64 version)
 {
     size_t size;
     readIntBinary(size, buf);
-    ColumnStableFiles_V2 column_files;
+    ColumnFiles_V2 column_files;
     BlockPtr last_schema;
     for (size_t i = 0; i < size; ++i)
     {
-        auto column_file = deserializeColumnStableFile_V2(buf, version);
+        auto column_file = deserializeColumnFile_V2(buf, version);
         if (!column_file->isDeleteRange())
         {
             if (!column_file->schema)

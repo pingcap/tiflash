@@ -96,7 +96,7 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
 {
     Page page = context.storage_pool.meta()->read(id, nullptr);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    auto column_files = deserializeColumnStableFiles(context, segment_range, buf);
+    auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<DeltaValueSpace>(id, column_files);
 }
 
@@ -104,7 +104,7 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
     // Only serialize saved packs.
-    serializeColumnStableFiles(buf, column_files);
+    serializeSavedColumnFiles(buf, column_files);
     auto data_size = buf.count();
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
@@ -320,7 +320,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         // Create a new pack.
         auto last_schema = lastSchema();
         auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
-        auto new_column_file = std::make_shared<ColumnInMemoryFile>(my_schema);
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(my_schema);
         appendColumnFileInner(new_column_file);
         success = new_column_file->append(context, block, offset, limit, append_bytes);
         if (unlikely(!success))
@@ -341,7 +341,7 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    auto p = std::make_shared<ColumnDeleteRangeFile>(delete_range);
+    auto p = std::make_shared<ColumnFileDeleteRange>(delete_range);
     appendColumnFileInner(p);
 
     return true;
@@ -356,7 +356,7 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
     // Prepend a DeleteRange to clean data before applying packs
     if (clear_data_in_range)
     {
-        auto p = std::make_shared<ColumnDeleteRangeFile>(range);
+        auto p = std::make_shared<ColumnFileDeleteRange>(range);
         appendColumnFileInner(p);
     }
 

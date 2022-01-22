@@ -1,16 +1,16 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
 namespace DB
 {
 namespace DM
 {
-class ColumnTinyFile;
-using ColumnTinyFilePtr = std::shared_ptr<ColumnTinyFile>;
+class ColumnFileTiny;
+using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 
 /// A column file which is persisted on disk.
-class ColumnTinyFile : public ColumnFile
+class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnTinyFileReader;
 
@@ -45,7 +45,7 @@ private:
     }
 
 public:
-    ColumnTinyFile(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
+    ColumnFileTiny(const BlockPtr & schema_, UInt64 rows_, UInt64 bytes_, PageId data_page_id_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , rows(rows_)
         , bytes(bytes_)
@@ -71,7 +71,7 @@ public:
 
     ColumnTinyFilePtr cloneWith(PageId new_data_page_id)
     {
-        auto new_tiny_file = std::make_shared<ColumnTinyFile>(*this);
+        auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
         new_tiny_file->data_page_id = new_data_page_id;
         return new_tiny_file;
     }
@@ -111,7 +111,7 @@ public:
 class ColumnTinyFileReader : public ColumnFileReader
 {
 private:
-    const ColumnTinyFile & tiny_file;
+    const ColumnFileTiny & tiny_file;
     const StorageSnapshotPtr storage_snap;
     const ColumnDefinesPtr col_defs;
 
@@ -119,7 +119,7 @@ private:
     bool read_done = false;
 
 public:
-    ColumnTinyFileReader(const ColumnTinyFile & tiny_file_,
+    ColumnTinyFileReader(const ColumnFileTiny & tiny_file_,
                          const StorageSnapshotPtr & storage_snap_,
                          const ColumnDefinesPtr & col_defs_,
                          const Columns & cols_data_cache_)
@@ -130,7 +130,7 @@ public:
     {
     }
 
-    ColumnTinyFileReader(const ColumnTinyFile & tiny_file_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
+    ColumnTinyFileReader(const ColumnFileTiny & tiny_file_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
         : tiny_file(tiny_file_)
         , storage_snap(storage_snap_)
         , col_defs(col_defs_)

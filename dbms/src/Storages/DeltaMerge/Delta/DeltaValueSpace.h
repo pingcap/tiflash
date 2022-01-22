@@ -4,11 +4,11 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>

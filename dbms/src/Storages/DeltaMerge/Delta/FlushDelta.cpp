@@ -120,7 +120,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             if (task.sorted)
                 delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
 
-            task.data_page = ColumnTinyFile::writeColumnFileData(context, task.block_data, 0, task.block_data.rows(), wbs);
+            task.data_page = ColumnFileTiny::writeColumnFileData(context, task.block_data, 0, task.block_data.rows(), wbs);
         }
 
         wbs.writeLogAndData();
@@ -191,7 +191,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                 bool is_small_file = dp_block->getRows() < context.delta_small_pack_rows || dp_block->getBytes() < context.delta_small_pack_bytes;
                 if (is_small_file)
                 {
-                    new_pack = std::make_shared<ColumnTinyFile>(dp_block->getSchema(),
+                    new_pack = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
                                                                 dp_block->getRows(),
                                                                 dp_block->getBytes(),
                                                                 task.data_page,
@@ -199,7 +199,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                 }
                 else
                 {
-                    new_pack = std::make_shared<ColumnTinyFile>(dp_block->getSchema(),
+                    new_pack = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
                                                                 dp_block->getRows(),
                                                                 dp_block->getBytes(),
                                                                 task.data_page,
@@ -208,15 +208,15 @@ bool DeltaValueSpace::flush(DMContext & context)
             }
             else if (auto * t_file = task.pack->tryToTinyFile(); t_file)
             {
-                new_pack = std::make_shared<ColumnTinyFile>(*t_file);
+                new_pack = std::make_shared<ColumnFileTiny>(*t_file);
             }
             else if (auto * dp_file = task.pack->tryToBigFile(); dp_file)
             {
-                new_pack = std::make_shared<ColumnBigFile>(*dp_file);
+                new_pack = std::make_shared<ColumnFileBig>(*dp_file);
             }
             else if (auto * dp_delete = task.pack->tryToDeleteRange(); dp_delete)
             {
-                new_pack = std::make_shared<ColumnDeleteRangeFile>(*dp_delete);
+                new_pack = std::make_shared<ColumnFileDeleteRange>(*dp_delete);
             }
             else
             {
@@ -254,7 +254,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Save the new metadata of packs to disk.
         MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-        serializeColumnStableFiles(buf, packs_copy);
+        serializeSavedColumnFiles(buf, packs_copy);
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);

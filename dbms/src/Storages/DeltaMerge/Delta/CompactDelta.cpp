@@ -159,7 +159,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         // Note that after compact, caches are no longer exist.
 
         // Use the original schema instance, so that we can avoid serialize the new schema instance.
-        auto compact_pack = ColumnTinyFile::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
+        auto compact_pack = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
         compact_pack->setSaved();
 
         wbs.writeLogAndData();
@@ -216,7 +216,7 @@ bool DeltaValueSpace::compact(DMContext & context)
 
         /// Save the new metadata of packs to disk.
         MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-        serializeColumnStableFiles(buf, new_packs);
+        serializeSavedColumnFiles(buf, new_packs);
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);

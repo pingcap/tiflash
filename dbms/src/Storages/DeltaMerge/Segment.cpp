@@ -296,7 +296,7 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto pack = ColumnTinyFile::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
+    auto pack = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
     if (delta->appendColumnFile(dm_context, pack))

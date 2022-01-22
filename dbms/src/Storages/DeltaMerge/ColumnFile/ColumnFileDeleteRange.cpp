@@ -1,11 +1,11 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
 namespace DB
 {
 namespace DM
 {
-ColumnFileReaderPtr ColumnDeleteRangeFile::getReader(
+ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
     const DMContext & /*context*/,
     const StorageSnapshotPtr & /*storage_snap*/,
     const ColumnDefinesPtr & /*col_defs*/) const
@@ -13,14 +13,14 @@ ColumnFileReaderPtr ColumnDeleteRangeFile::getReader(
     return std::make_shared<ColumnFileEmptyReader>();
 }
 
-void ColumnDeleteRangeFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
+void ColumnFileDeleteRange::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
 {
     delete_range.serialize(buf);
 }
 
-ColumnFilePtr ColumnDeleteRangeFile::deserializeMetadata(ReadBuffer & buf)
+ColumnFilePtr ColumnFileDeleteRange::deserializeMetadata(ReadBuffer & buf)
 {
-    return std::make_shared<ColumnDeleteRangeFile>(RowKeyRange::deserialize(buf));
+    return std::make_shared<ColumnFileDeleteRange>(RowKeyRange::deserialize(buf));
 }
 
 ColumnFileReaderPtr ColumnFileEmptyReader::createNewReader(const ColumnDefinesPtr &)

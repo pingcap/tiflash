@@ -1,13 +1,13 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
 namespace DB
 {
 namespace DM
 {
-void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFiles & column_files)
 {
     size_t saved_packs = std::find_if(column_files.begin(), column_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); }) - column_files.begin();
 
@@ -50,7 +50,7 @@ void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column
     }
 }
 
-ColumnFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
+ColumnFiles deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
 {
     size_t column_file_count;
     readIntBinary(column_file_count, buf);
@@ -64,16 +64,16 @@ ColumnFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRan
         switch (column_file_type)
         {
         case ColumnFile::Type::DELETE_RANGE:
-            column_file = ColumnDeleteRangeFile::deserializeMetadata(buf);
+            column_file = ColumnFileDeleteRange::deserializeMetadata(buf);
             break;
         case ColumnFile::Type::TINY_FILE:
         {
-            std::tie(column_file, last_schema) = ColumnTinyFile::deserializeMetadata(buf, last_schema);
+            std::tie(column_file, last_schema) = ColumnFileTiny::deserializeMetadata(buf, last_schema);
             break;
         }
         case ColumnFile::Type::BIG_FILE:
         {
-            column_file = ColumnBigFile::deserializeMetadata(context, segment_range, buf);
+            column_file = ColumnFileBig::deserializeMetadata(context, segment_range, buf);
             break;
         }
         default:

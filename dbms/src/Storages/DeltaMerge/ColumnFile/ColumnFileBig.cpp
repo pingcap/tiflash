@@ -1,4 +1,4 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
@@ -9,14 +9,14 @@ namespace DB
 {
 namespace DM
 {
-ColumnBigFile::ColumnBigFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
+ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
     : file(file_)
     , segment_range(segment_range_)
 {
     calculateStat(context);
 }
 
-void ColumnBigFile::calculateStat(const DMContext & context)
+void ColumnFileBig::calculateStat(const DMContext & context)
 {
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
     auto hash_salt = context.hash_salt;
@@ -28,19 +28,19 @@ void ColumnBigFile::calculateStat(const DMContext & context)
 }
 
 ColumnFileReaderPtr
-ColumnBigFile::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnBigFileReader>(context, *this, col_defs);
 }
 
-void ColumnBigFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
+void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
 {
     writeIntBinary(file->refId(), buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
 }
 
-ColumnFilePtr ColumnBigFile::deserializeMetadata(DMContext & context, //
+ColumnFilePtr ColumnFileBig::deserializeMetadata(DMContext & context, //
                                                  const RowKeyRange & segment_range,
                                                  ReadBuffer & buf)
 {
@@ -56,8 +56,8 @@ ColumnFilePtr ColumnBigFile::deserializeMetadata(DMContext & context, //
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-    auto dp_file = new ColumnBigFile(dmfile, valid_rows, valid_bytes, segment_range);
-    return std::shared_ptr<ColumnBigFile>(dp_file);
+    auto dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
+    return std::shared_ptr<ColumnFileBig>(dp_file);
 }
 
 void ColumnBigFileReader::initStream()

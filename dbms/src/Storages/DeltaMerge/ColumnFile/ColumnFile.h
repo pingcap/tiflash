@@ -16,10 +16,10 @@ static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 struct DMContext;
 class ColumnFile;
 using ColumnFilePtr = std::shared_ptr<ColumnFile>;
-class ColumnInMemoryFile;
-class ColumnTinyFile;
-class ColumnDeleteRangeFile;
-class ColumnBigFile;
+class ColumnFileInMemory;
+class ColumnFileTiny;
+class ColumnFileDeleteRange;
+class ColumnFileBig;
 
 using ColumnFiles = std::vector<ColumnFilePtr>;
 class ColumnStableFile;
@@ -90,10 +90,10 @@ public:
     /// Is a ColumnBigFile or not.
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
 
-    ColumnInMemoryFile * tryToInMemoryFile();
-    ColumnTinyFile * tryToTinyFile();
-    ColumnDeleteRangeFile * tryToDeleteRange();
-    ColumnBigFile * tryToBigFile();
+    ColumnFileInMemory * tryToInMemoryFile();
+    ColumnFileTiny * tryToTinyFile();
+    ColumnFileDeleteRange * tryToDeleteRange();
+    ColumnFileBig * tryToBigFile();
 
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
@@ -144,24 +144,6 @@ size_t copyColumnsData(
     size_t rows_offset,
     size_t rows_limit,
     const RowKeyRange * range);
-
-void serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
-BlockPtr deserializeSchema(ReadBuffer & buf);
-
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
-
-/// Serialize those packs' metadata into buf.
-/// Note that this method stop at the first unsaved pack.
-void serializeColumnStableFiles(WriteBuffer & buf, const ColumnFiles & column_files);
-/// Recreate pack instances from buf.
-ColumnFiles deserializeColumnStableFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
-
-void serializeColumnStableFiles_V2(WriteBuffer & buf, const ColumnFiles & column_files);
-ColumnFiles deserializeColumnStableFiles_V2(ReadBuffer & buf, UInt64 version);
-
-void serializeColumnStableFiles_V3(WriteBuffer & buf, const ColumnFiles & column_files);
-ColumnFiles deserializeColumnStableFiles_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
 
 
 /// Debugging string

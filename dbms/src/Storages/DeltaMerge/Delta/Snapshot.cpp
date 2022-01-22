@@ -7,7 +7,7 @@
 
 namespace DB::DM
 {
-std::pair<size_t, size_t> findPack(const ColumnFiles & packs, size_t rows_offset, size_t deletes_offset)
+std::pair<size_t, size_t> findColumnFile(const ColumnFiles & packs, size_t rows_offset, size_t deletes_offset)
 {
     size_t rows_count = 0;
     size_t deletes_count = 0;
@@ -16,7 +16,7 @@ std::pair<size_t, size_t> findPack(const ColumnFiles & packs, size_t rows_offset
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
             return {pack_index, 0};
-        auto & pack = packs[pack_index];
+        const auto & pack = packs[pack_index];
 
         if (pack->isDeleteRange())
         {
@@ -99,13 +99,13 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
             {
                 // Flush threads could update the value of ColumnInMemoryFile::cache,
                 // and since ColumnFile is not mult-threads safe, we should create a new column file object.
-                snap->column_files.push_back(std::make_shared<ColumnInMemoryFile>(*b));
+                snap->column_files.push_back(std::make_shared<ColumnFileInMemory>(*b));
             }
             else if (auto * t = pack->tryToTinyFile(); (t && t->getCache()))
             {
                 // Compact threads could update the value of ColumnTinyFile::cache,
                 // and since ColumnFile is not mult-threads safe, we should create a new column file object.
-                snap->column_files.push_back(std::make_shared<ColumnTinyFile>(*t));
+                snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
             }
             else
             {
@@ -241,8 +241,8 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
 
     auto & packs = delta_snap->getColumnFiles();
 
-    auto [start_pack_index, rows_start_in_start_pack] = findPack(packs, rows_begin, deletes_begin);
-    auto [end_pack_index, rows_end_in_end_pack] = findPack(packs, rows_end, deletes_end);
+    auto [start_pack_index, rows_start_in_start_pack] = findColumnFile(packs, rows_begin, deletes_begin);
+    auto [end_pack_index, rows_end_in_end_pack] = findColumnFile(packs, rows_end, deletes_end);
 
     size_t block_rows_start = rows_begin;
     size_t block_rows_end = rows_begin;

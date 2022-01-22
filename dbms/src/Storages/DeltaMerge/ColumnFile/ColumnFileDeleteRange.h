@@ -1,28 +1,28 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
 namespace DB
 {
 namespace DM
 {
-class ColumnDeleteRangeFile;
-using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnDeleteRangeFile>;
+class ColumnFileDeleteRange;
+using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnFileDeleteRange>;
 
-/// A column file which contains a DeleteRange. It will remove all covered data in the previous packs.
-class ColumnDeleteRangeFile : public ColumnFile
+/// A column file which contains a DeleteRange. It will remove all covered data in the previous column files.
+class ColumnFileDeleteRange : public ColumnFilePersisted
 {
 private:
     RowKeyRange delete_range;
 
 public:
-    explicit ColumnDeleteRangeFile(const RowKeyRange & delete_range_)
+    explicit ColumnFileDeleteRange(const RowKeyRange & delete_range_)
         : delete_range(delete_range_)
     {}
-    explicit ColumnDeleteRangeFile(RowKeyRange && delete_range_)
+    explicit ColumnFileDeleteRange(RowKeyRange && delete_range_)
         : delete_range(std::move(delete_range_))
     {}
-    ColumnDeleteRangeFile(const ColumnDeleteRangeFile &) = default;
+    ColumnFileDeleteRange(const ColumnFileDeleteRange &) = default;
 
     ColumnFileReaderPtr getReader(const DMContext & /*context*/,
                                   const StorageSnapshotPtr & /*storage_snap*/,
@@ -32,9 +32,9 @@ public:
 
     ColumnDeleteRangeFilePtr cloneWith(const RowKeyRange & range)
     {
-        auto new_dpdr = new ColumnDeleteRangeFile(*this);
+        auto new_dpdr = new ColumnFileDeleteRange(*this);
         new_dpdr->delete_range = range;
-        return std::shared_ptr<ColumnDeleteRangeFile>(new_dpdr);
+        return std::shared_ptr<ColumnFileDeleteRange>(new_dpdr);
     }
 
     Type getType() const override { return Type::DELETE_RANGE; }

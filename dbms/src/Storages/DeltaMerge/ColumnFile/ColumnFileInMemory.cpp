@@ -1,5 +1,5 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
@@ -8,7 +8,7 @@ namespace DB
 {
 namespace DM
 {
-void ColumnInMemoryFile::fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const
+void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const
 {
     if (result.size() >= col_count)
         return;
@@ -42,12 +42,12 @@ void ColumnInMemoryFile::fillColumns(const ColumnDefines & col_defs, size_t col_
 }
 
 ColumnFileReaderPtr
-ColumnInMemoryFile::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnInMemoryFileReader>(*this, col_defs);
 }
 
-bool ColumnInMemoryFile::append(DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
+bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
 {
     if (disable_append)
         return false;
@@ -73,7 +73,7 @@ bool ColumnInMemoryFile::append(DMContext & context, const Block & data, size_t 
     return true;
 }
 
-Block ColumnInMemoryFile::readDataForFlush() const
+Block ColumnFileInMemory::readDataForFlush() const
 {
     std::scoped_lock lock(cache->mutex);
 

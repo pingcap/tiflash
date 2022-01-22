@@ -6,11 +6,11 @@ namespace DB
 {
 namespace DM
 {
-class ColumnInMemoryFile;
-using ColumnInMemoryFilePtr = std::shared_ptr<ColumnInMemoryFile>;
+class ColumnFileInMemory;
+using ColumnInMemoryFilePtr = std::shared_ptr<ColumnFileInMemory>;
 
 /// A column file which is only resides in memory
-class ColumnInMemoryFile : public ColumnFile
+class ColumnFileInMemory : public ColumnFile
 {
     friend class ColumnInMemoryFileReader;
 
@@ -39,7 +39,7 @@ private:
     }
 
 public:
-    explicit ColumnInMemoryFile(const BlockPtr & schema_, const CachePtr & cache_ = nullptr)
+    explicit ColumnFileInMemory(const BlockPtr & schema_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(*schema_))
     {
@@ -62,7 +62,7 @@ public:
 
     ColumnInMemoryFilePtr clone()
     {
-        return std::make_shared<ColumnInMemoryFile>(*this);
+        return std::make_shared<ColumnFileInMemory>(*this);
     }
 
     ColumnFileReaderPtr
@@ -100,14 +100,14 @@ public:
 class ColumnInMemoryFileReader : public ColumnFileReader
 {
 private:
-    const ColumnInMemoryFile & memory_file;
+    const ColumnFileInMemory & memory_file;
     const ColumnDefinesPtr col_defs;
 
     Columns cols_data_cache;
     bool read_done = false;
 
 public:
-    ColumnInMemoryFileReader(const ColumnInMemoryFile & memory_file_,
+    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_,
                              const ColumnDefinesPtr & col_defs_,
                              const Columns & cols_data_cache_)
         : memory_file(memory_file_)
@@ -116,7 +116,7 @@ public:
     {
     }
 
-    ColumnInMemoryFileReader(const ColumnInMemoryFile & memory_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
     {
