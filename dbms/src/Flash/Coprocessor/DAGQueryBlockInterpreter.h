@@ -41,6 +41,8 @@ public:
 private:
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeCastAfterTableScan(const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
+    void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
