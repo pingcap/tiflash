@@ -86,7 +86,6 @@ size_t copyColumnsData(
 }
 
 
-
 String columnFilesToString(const ColumnFiles & column_files)
 {
     String column_files_info = "[";

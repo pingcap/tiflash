@@ -16,20 +16,24 @@ static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 struct DMContext;
 class ColumnFile;
 using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+using ColumnFiles = std::vector<ColumnFilePtr>;
 class ColumnFileInMemory;
 class ColumnFileTiny;
 class ColumnFileDeleteRange;
 class ColumnFileBig;
-
-using ColumnFiles = std::vector<ColumnFilePtr>;
-class ColumnStableFile;
-using ColumnStableFilePtr = std::shared_ptr<ColumnStableFile>;
-using ColumnStableFiles = std::vector<ColumnStableFilePtr>;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
+/// ColumnFile have four concrete sub classes represents different kinds of data.
+///   ColumnFileInMemory
+///   ColumnFileTiny
+///   ColumnFileDeleteRange
+///   ColumnFileBig
+///
+/// There is also an abstract class `ColumnFilePersisted` inherit from `ColumnFile` which represents column file that can be persisted on disk.
+/// And `ColumnFileTiny` `ColumnFileDeleteRange` `ColumnFileBig` inherit from `ColumnFilePersisted`.
 class ColumnFile
 {
 protected:
@@ -70,7 +74,7 @@ public:
 public:
     /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
     UInt64 getId() const { return id; }
-    /// This pack is already saved to disk or not. Only saved packs can be recovered after reboot.
+    /// This column file is already saved to disk or not. Only saved packs can be recovered after reboot.
     /// "saved" can only be true, after the content data and the metadata are all written to disk.
     bool isSaved() const { return saved; }
     void setSaved() { saved = true; }
