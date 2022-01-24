@@ -1,4 +1,4 @@
-set (BOOST_CONTEXT_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/context)
+set (BOOST_CONTEXT_LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/boost/libs/context)
 
 # Build features
 
