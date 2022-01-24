@@ -1,8 +1,10 @@
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <mutex>
@@ -360,7 +362,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
         if (stat->sm_valid_rate > 1.0)
         {
-            LOG_FMT_ERROR(log, "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {}", stat->sm_valid_rate, stat->sm_total_size, stat->sm_valid_size, right_margin);
+            LOG_FMT_ERROR(
+                log,
+                "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {}",
+                stat->sm_valid_rate,
+                stat->sm_total_size,
+                stat->sm_valid_size,
+                right_margin);
             assert(false);
         }
 
@@ -406,15 +414,14 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     LOG_FMT_INFO(log, "BlobStore will migrate {}M into new Blobs", total_page_size / DB::MB);
 
     const auto config_file_limit = config.file_limit_size.get();
-
     auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
+    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
 
     // We could make the memory consumption smooth during GC.
     char * data_buf = static_cast<char *>(alloc(alloc_size));
     SCOPE_EXIT({
         free(data_buf, alloc_size);
     });
-    BlobFileOffset remain_page_size = total_page_size - alloc_size;
 
     char * data_pos = data_buf;
     BlobFileOffset offset_in_data = 0;
@@ -422,20 +429,22 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     BlobFileOffset file_offset_beg;
     std::tie(blobfile_id, file_offset_beg) = getPosFromStats(alloc_size);
 
-    auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & blobfile_id_,
-                                                                              char * data_buf_,
-                                                                              const BlobFileOffset & file_offset_beg_,
-                                                                              const BlobFileOffset & offset_in_data_) {
+    auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
+                                                                              char * data_beg,
+                                                                              const BlobFileOffset & file_offset,
+                                                                              const BlobFileOffset & data_size) {
         try
         {
-            auto blob_file_ = getBlobFile(blobfile_id_);
-            written_blobs.emplace_back(std::make_tuple(blobfile_id_, file_offset_beg_, offset_in_data_));
-            LOG_FMT_INFO(this->log, "Blob write [blib_id={}, offset={}, size={}]", blobfile_id_, file_offset_beg_, offset_in_data_);
-            blob_file_->write(data_buf_, file_offset_beg_, offset_in_data_, write_limiter);
+            auto blob_file = getBlobFile(file_id);
+            // Should append before calling BlobStore::write, so that we can rollback the
+            // first allocated span from stats.
+            written_blobs.emplace_back(file_id, file_offset, data_size);
+            LOG_FMT_INFO(this->log, "Blob write [blib_id={}, offset={}, size={}]", file_id, file_offset, data_size);
+            blob_file->write(data_beg, file_offset, data_size, write_limiter);
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(this->log, "Blob [Blobid={}, offset={}, size={}] write failed.", blobfile_id_, file_offset_beg_, total_page_size);
+            LOG_FMT_ERROR(this->log, "Blob [Blobid={}, offset={}, size={}] write failed.", file_id, file_offset, total_page_size);
             for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
             {
                 removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
@@ -459,24 +468,24 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 if (offset_in_data + entry.size > config_file_limit)
                 {
                     assert(file_offset_beg == 0);
+                    // Remove the span that is not actually used
                     if (offset_in_data != alloc_size)
                     {
                         removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
                     }
-                    remain_page_size += alloc_size - offset_in_data;
+                    remaining_page_size += alloc_size - offset_in_data;
 
                     // Write data into Blob.
                     write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
 
-                    // reset the position
+                    // Reset the position to reuse the buffer allocated
                     data_pos = data_buf;
                     offset_in_data = 0;
 
-                    auto loop_alloc_size = remain_page_size > config_file_limit ? config_file_limit : remain_page_size;
-
-                    remain_page_size -= loop_alloc_size;
-
-                    std::tie(blobfile_id, file_offset_beg) = getPosFromStats(loop_alloc_size);
+                    // Acquire a span from stats for remaining data
+                    auto next_alloc_size = (remaining_page_size > config_file_limit ? config_file_limit : remaining_page_size);
+                    remaining_page_size -= next_alloc_size;
+                    std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
                 }
 
                 PageEntryV3 new_entry;
@@ -539,8 +548,6 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
 
 BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
 {
-    BlobStatPtr stat = nullptr;
-
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
     {
@@ -560,9 +567,8 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
         }
     }
 
-    stat = std::make_shared<BlobStat>();
-
     LOG_FMT_DEBUG(log, "Created a new BlobStat [BlobFileId= {}]", blob_file_id);
+    BlobStatPtr stat = std::make_shared<BlobStat>();
     stat->id = blob_file_id;
     stat->smap = SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size);
     stat->sm_max_caps = config.file_limit_size;
