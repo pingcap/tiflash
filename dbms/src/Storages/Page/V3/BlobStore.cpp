@@ -412,7 +412,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_INFO(log, "BlobStore will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
     const auto config_file_limit = config.file_limit_size.get();
     auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
@@ -440,12 +440,24 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // Should append before calling BlobStore::write, so that we can rollback the
             // first allocated span from stats.
             written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_FMT_INFO(this->log, "Blob write [blob_id={}] [offset={}] [size={}]", file_id, file_offset, data_size);
+            LOG_FMT_INFO(
+                log,
+                "BlobStore gc write (partially) done [blobid={}] [file_offset={}] [size={}] [total_size={}]",
+                file_id,
+                file_offset,
+                data_size,
+                total_page_size);
             blob_file->write(data_beg, file_offset, data_size, write_limiter);
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(this->log, "Blob [blob_id={}] [offset={}] [size={}] write failed.", file_id, file_offset, total_page_size);
+            LOG_FMT_ERROR(
+                log,
+                "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
+                file_id,
+                file_offset,
+                data_size,
+                total_page_size);
             for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
             {
                 removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
