@@ -1,4 +1,4 @@
-include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 
 add_executable (gtests_libdaemon EXCLUDE_FROM_ALL gtest_daemon_config.cpp)
 target_link_libraries (gtests_libdaemon gtest_main daemon)
@@ -8,4 +8,4 @@ if (APPLE)
 endif ()
 add_check(gtests_libdaemon)
 
-target_include_directories (gtests_libdaemon PRIVATE ${ClickHouse_SOURCE_DIR}/libs/libpocoext/include)
+target_include_directories (gtests_libdaemon PRIVATE ${TiFlash_SOURCE_DIR}/libs/libpocoext/include)

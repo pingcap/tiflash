@@ -148,19 +148,19 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-            assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
-            limitOrTopN_name = current->executor_id();
+            assignOrThrowException(&limit_or_topn, current, LIMIT_NAME);
+            limit_or_topn_name = current->executor_id();
             current = &current->limit().child();
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-            assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
-            limitOrTopN_name = current->executor_id();
+            assignOrThrowException(&limit_or_topn, current, TOPN_NAME);
+            limit_or_topn_name = current->executor_id();
             current = &current->topn().child();
             break;
         case tipb::ExecType::TypeExchangeSender:
             GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
-            assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
+            assignOrThrowException(&exchange_sender, current, EXCHANGE_SENDER_NAME);
             exchange_sender_name = current->executor_id();
             current = &current->exchange_sender().child();
             break;
@@ -269,19 +269,19 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-            assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
+            assignOrThrowException(&limit_or_topn, &executors[i], TOPN_NAME);
             if (executors[i].has_executor_id())
-                limitOrTopN_name = executors[i].executor_id();
+                limit_or_topn_name = executors[i].executor_id();
             else
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-            assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
+            assignOrThrowException(&limit_or_topn, &executors[i], LIMIT_NAME);
             if (executors[i].has_executor_id())
-                limitOrTopN_name = executors[i].executor_id();
+                limit_or_topn_name = executors[i].executor_id();
             else
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
             break;
         default:
             throw TiFlashException(
@@ -295,10 +295,10 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
 void DAGQueryBlock::fillOutputFieldTypes()
 {
     /// the top block has exchangeSender, which decides the output fields, keeping the same with exchangeReceiver
-    if (exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
+    if (exchange_sender != nullptr && exchange_sender->has_exchange_sender() && !exchange_sender->exchange_sender().all_field_types().empty())
     {
         output_field_types.clear();
-        for (auto & field_type : exchangeSender->exchange_sender().all_field_types())
+        for (const auto & field_type : exchange_sender->exchange_sender().all_field_types())
         {
             output_field_types.push_back(field_type);
         }

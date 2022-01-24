@@ -48,9 +48,9 @@ public:
     std::vector<String> window_op_list;
     const tipb::Executor * having = nullptr;
     String having_name;
-    const tipb::Executor * limitOrTopN = nullptr;
-    String limitOrTopN_name;
-    const tipb::Executor * exchangeSender = nullptr;
+    const tipb::Executor * limit_or_topn = nullptr;
+    String limit_or_topn_name;
+    const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
