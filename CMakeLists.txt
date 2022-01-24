@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
+set(RUN_HAVE_STD_REGEX 0 CACHE BOOL "Skip STD Regex Tests (For clang)" FORCE)
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -207,6 +208,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 include (cmake/test_compiler.cmake)
 
 if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set (TIFLASH_LLVM_TOOLCHAIN 1)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
