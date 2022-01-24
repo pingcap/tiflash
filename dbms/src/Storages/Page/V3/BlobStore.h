@@ -175,7 +175,7 @@ public:
         FieldReadInfo(PageId id_, PageEntryV3 entry_, std::vector<size_t> fields_)
             : page_id(id_)
             , entry(entry_)
-            , fields(fields_)
+            , fields(std::move(fields_))
         {}
     };
     using FieldReadInfos = std::vector<FieldReadInfo>;

@@ -176,11 +176,18 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
                     std::this_thread::sleep_for(ms);
                 });
 
-                const auto snapshot_lifetime = iter->lock()->elapsedSeconds();
+                auto snapshot_ptr = iter->lock();
+                if (snapshot_ptr == nullptr)
+                {
+                    ++iter;
+                    continue;
+                }
+
+                const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
                 if (snapshot_lifetime > longest_living_seconds)
                 {
                     longest_living_seconds = snapshot_lifetime;
-                    longest_living_from_thread_id = iter->lock()->getTid();
+                    longest_living_from_thread_id = snapshot_ptr->getTid();
                 }
                 num_valid_snapshots++;
                 ++iter;
