@@ -13,7 +13,7 @@ class Children
 public:
     Children() = default;
 
-    explicit Children(const tipb::Executor * child)
+    Children(const tipb::Executor * child) // NOLINT(google-explicit-constructor)
         : left(child)
     {}
 

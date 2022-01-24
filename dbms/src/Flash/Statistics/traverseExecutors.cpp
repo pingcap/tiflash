@@ -14,18 +14,18 @@ Children getChildren(const tipb::Executor & executor)
     case tipb::ExecType::TypeIndexScan:
         throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
     case tipb::ExecType::TypeSelection:
-        return Children{&executor.selection().child()};
+        return &executor.selection().child();
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
-        return Children{&executor.aggregation().child()};
+        return &executor.aggregation().child();
     case tipb::ExecType::TypeTopN:
-        return Children{&executor.topn().child()};
+        return &executor.topn().child();
     case tipb::ExecType::TypeLimit:
-        return Children{&executor.limit().child()};
+        return &executor.limit().child();
     case tipb::ExecType::TypeProjection:
-        return Children{&executor.projection().child()};
+        return &executor.projection().child();
     case tipb::ExecType::TypeExchangeSender:
-        return Children{&executor.exchange_sender().child()};
+        return &executor.exchange_sender().child();
     case tipb::ExecType::TypeExchangeReceiver:
         return {};
     case tipb::ExecType::TypeKill:
