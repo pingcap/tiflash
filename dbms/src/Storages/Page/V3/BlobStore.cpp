@@ -169,7 +169,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
         throw e;
     }
 
@@ -247,7 +247,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 
     if (stat->isReadOnly() && stat->sm_valid_size == 0)
     {
-        LOG_FMT_INFO(log, "Removing BlobFile [BlobId={}]", blob_id);
+        LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
         getBlobFile(blob_id)->remove();
@@ -352,7 +352,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     {
         if (stat->isReadOnly())
         {
-            LOG_FMT_TRACE(log, "Current [BlobFileId={}] is read-only", stat->id);
+            LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
             continue;
         }
 
@@ -364,18 +364,19 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         {
             LOG_FMT_ERROR(
                 log,
-                "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {}",
+                "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
                 stat->sm_valid_rate,
                 stat->sm_total_size,
                 stat->sm_valid_size,
-                right_margin);
+                right_margin,
+                stat->id);
             assert(false);
         }
 
         // Check if GC is required
         if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
         {
-            LOG_FMT_TRACE(log, "Current [BlobFileId={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+            LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
             stat->sm_total_size = stat->sm_valid_size;
             blob_need_gc.emplace_back(stat->id);
 
@@ -384,7 +385,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         }
         else
         {
-            LOG_FMT_TRACE(log, "Current [BlobFileId={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+            LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
         }
 
         if (right_margin != stat->sm_total_size)
@@ -411,7 +412,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_INFO(log, "BlobStore will migrate {}M into new Blobs", total_page_size / DB::MB);
+    LOG_FMT_INFO(log, "BlobStore will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
     const auto config_file_limit = config.file_limit_size.get();
     auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
@@ -439,12 +440,12 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // Should append before calling BlobStore::write, so that we can rollback the
             // first allocated span from stats.
             written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_FMT_INFO(this->log, "Blob write [blib_id={}, offset={}, size={}]", file_id, file_offset, data_size);
+            LOG_FMT_INFO(this->log, "Blob write [blob_id={}] [offset={}] [size={}]", file_id, file_offset, data_size);
             blob_file->write(data_beg, file_offset, data_size, write_limiter);
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(this->log, "Blob [Blobid={}, offset={}, size={}] write failed.", file_id, file_offset, total_page_size);
+            LOG_FMT_ERROR(this->log, "Blob [blob_id={}] [offset={}] [size={}] write failed.", file_id, file_offset, total_page_size);
             for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
             {
                 removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
@@ -551,7 +552,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
     {
-        throw Exception(fmt::format("BlobStats won't create [BlobFileId={}], which is bigger than [RollMaxId={}]",
+        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [RollMaxId={}]",
                                     blob_file_id,
                                     roll_id),
                         ErrorCodes::LOGICAL_ERROR);
@@ -561,13 +562,13 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     {
         if (stat->id == blob_file_id)
         {
-            throw Exception(fmt::format("BlobStats won't create [BlobFileId={}] which is exist",
+            throw Exception(fmt::format("BlobStats won't create [blob_id={}] which is exist",
                                         blob_file_id),
                             ErrorCodes::LOGICAL_ERROR);
         }
     }
 
-    LOG_FMT_DEBUG(log, "Created a new BlobStat [BlobFileId= {}]", blob_file_id);
+    LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
     BlobStatPtr stat = std::make_shared<BlobStat>();
     stat->id = blob_file_id;
     stat->smap = SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size);
@@ -606,11 +607,11 @@ void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::l
 
     if (stat == nullptr)
     {
-        LOG_FMT_ERROR(log, "No exist BlobStat [BlobFileId={}]", blob_file_id);
+        LOG_FMT_ERROR(log, "BlobStat not exist [blob_id={}]", blob_file_id);
         return;
     }
 
-    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
+    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [blob_id={}]", blob_file_id);
 
     eraseStat(std::move(stat), lock);
 }
