@@ -1,18 +1,16 @@
 #pragma once
 
-#include <fmt/format.h>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Delta/FlushColumnFileTask.h>
 #include <Storages/DeltaMerge/Delta/MinorCompaction.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
@@ -22,6 +20,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
+#include <fmt/format.h>
 
 
 namespace DB

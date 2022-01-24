@@ -1,8 +1,8 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 
 namespace DB
 {
@@ -28,9 +28,9 @@ inline ColumnStableFiles transform_V2_to_V3(const ColumnStableFiles_V2 & column_
     {
         ColumnStableFilePtr f_v3;
         if (f->isDeleteRange())
-            f_v3 = std::make_shared<ColumnDeleteRangeFile>(std::move(f->delete_range));
+            f_v3 = std::make_shared<ColumnFileDeleteRange>(std::move(f->delete_range));
         else
-            f_v3 = std::make_shared<ColumnTinyFile>(f->schema, f->rows, f->bytes, f->data_page_id);
+            f_v3 = std::make_shared<ColumnFileTiny>(f->schema, f->rows, f->bytes, f->data_page_id);
 
         column_files_v3.push_back(f_v3);
     }

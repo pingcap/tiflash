@@ -1,7 +1,7 @@
 #include "MinorCompaction.h"
 
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -42,7 +42,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         auto compact_rows = compact_block.rows();
-        auto compact_column_file = ColumnTinyFile::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
+        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
         wbs.writeLogAndData();
         task.result = compact_column_file;
 

@@ -7,7 +7,7 @@ namespace DB
 namespace DM
 {
 
-class ColumnInMemoryFile : public ColumnFile
+class ColumnFileInMemory : public ColumnFile
 {
     friend class ColumnInMemoryFileReader;
 
@@ -36,7 +36,7 @@ private:
     }
 
 public:
-    explicit ColumnInMemoryFile(const Block & schema_)
+    explicit ColumnFileInMemory(const Block & schema_)
         : schema(std::make_shared<Block>(schema_.cloneEmpty()))
         , cache(std::make_shared<Cache>(schema_))
     {
@@ -87,14 +87,14 @@ public:
 class ColumnInMemoryFileReader : public ColumnFileReader
 {
 private:
-    const ColumnInMemoryFile & memory_file;
+    const ColumnFileInMemory & memory_file;
     const ColumnDefinesPtr col_defs;
 
     Columns cols_data_cache;
     bool read_done = false;
 
 public:
-    ColumnInMemoryFileReader(const ColumnInMemoryFile & memory_file_,
+    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_,
                   const ColumnDefinesPtr & col_defs_,
                   const Columns & cols_data_cache_)
         : memory_file(memory_file_)
@@ -103,7 +103,7 @@ public:
     {
     }
 
-    ColumnInMemoryFileReader(const ColumnInMemoryFile & memory_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
     {

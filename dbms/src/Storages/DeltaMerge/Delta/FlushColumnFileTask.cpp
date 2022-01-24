@@ -1,10 +1,10 @@
 #include "FlushColumnFileTask.h"
 
-#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Delta/MemTableSet.h>
 #include <Storages/DeltaMerge/Delta/ColumnStableFileSet.h>
+#include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
 
 namespace DB
@@ -25,7 +25,7 @@ DeltaIndex::Updates FlushColumnFileTask::prepare(WriteBatches & wbs)
     {
         if (!task.block_data)
         {
-            results.push_back(std::static_pointer_cast<ColumnStableFile>(task.column_file));
+            results.push_back(std::static_pointer_cast<ColumnFilePersisted>(task.column_file));
         }
         else
         {
@@ -40,11 +40,11 @@ DeltaIndex::Updates FlushColumnFileTask::prepare(WriteBatches & wbs)
             // FIXME: cannot reuse cache if sorted
             if (mem_file->getCache() && (mem_file->getRows() < context.delta_small_pack_rows || mem_file->getBytes() < context.delta_small_pack_bytes))
             {
-                tiny_file = ColumnTinyFile::writeColumnFile(context, task.block_data, 0, task.block_data.rows(), wbs, mem_file->getSchema(), mem_file->getCache());
+                tiny_file = ColumnFileTiny::writeColumnFile(context, task.block_data, 0, task.block_data.rows(), wbs, mem_file->getSchema(), mem_file->getCache());
             }
             else
             {
-                tiny_file = ColumnTinyFile::writeColumnFile(context, task.block_data, 0, task.block_data.rows(), wbs, mem_file->getSchema());
+                tiny_file = ColumnFileTiny::writeColumnFile(context, task.block_data, 0, task.block_data.rows(), wbs, mem_file->getSchema());
             }
             results.push_back(tiny_file);
         }

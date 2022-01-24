@@ -8,7 +8,7 @@ namespace DM
 {
 /// ColumnStableFile is saved on disk(include the content data and the metadata).
 /// It can be recovered after reboot.
-class ColumnStableFile : public ColumnFile
+class ColumnFilePersisted : public ColumnFile
 {
 public:
     /// Put the data's page id into the corresponding WriteBatch.

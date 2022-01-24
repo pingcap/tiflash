@@ -1,33 +1,33 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
 namespace DB
 {
 namespace DM
 {
-ColumnInMemoryFile * ColumnFile::tryToInMemoryFile()
+ColumnFileInMemory * ColumnFile::tryToInMemoryFile()
 {
-    return !isInMemoryFile() ? nullptr : static_cast<ColumnInMemoryFile *>(this);
+    return !isInMemoryFile() ? nullptr : static_cast<ColumnFileInMemory *>(this);
 }
 
-ColumnTinyFile * ColumnFile::tryToTinyFile()
+ColumnFileTiny * ColumnFile::tryToTinyFile()
 {
-    return !isTinyFile() ? nullptr : static_cast<ColumnTinyFile *>(this);
+    return !isTinyFile() ? nullptr : static_cast<ColumnFileTiny *>(this);
 }
 
-ColumnDeleteRangeFile * ColumnFile::tryToDeleteRange()
+ColumnFileDeleteRange * ColumnFile::tryToDeleteRange()
 {
-    return !isDeleteRange() ? nullptr : static_cast<ColumnDeleteRangeFile *>(this);
+    return !isDeleteRange() ? nullptr : static_cast<ColumnFileDeleteRange *>(this);
 }
 
-ColumnBigFile * ColumnFile::tryToBigFile()
+ColumnFileBig * ColumnFile::tryToBigFile()
 {
-    return !isBigFile() ? nullptr : static_cast<ColumnBigFile *>(this);
+    return !isBigFile() ? nullptr : static_cast<ColumnFileBig *>(this);
 }
 
 

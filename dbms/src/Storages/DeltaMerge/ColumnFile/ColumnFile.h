@@ -16,14 +16,14 @@ static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 struct DMContext;
 class ColumnFile;
 using ColumnFilePtr = std::shared_ptr<ColumnFile>;
-class ColumnInMemoryFile;
-class ColumnTinyFile;
-class ColumnDeleteRangeFile;
-class ColumnBigFile;
+class ColumnFileInMemory;
+class ColumnFileTiny;
+class ColumnFileDeleteRange;
+class ColumnFileBig;
 
 using ColumnFiles = std::vector<ColumnFilePtr>;
-class ColumnStableFile;
-using ColumnStableFilePtr = std::shared_ptr<ColumnStableFile>;
+class ColumnFilePersisted;
+using ColumnStableFilePtr = std::shared_ptr<ColumnFilePersisted>;
 using ColumnStableFiles = std::vector<ColumnStableFilePtr>;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
@@ -84,10 +84,10 @@ public:
     /// Is a ColumnBigFile or not.
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
 
-    ColumnInMemoryFile * tryToInMemoryFile();
-    ColumnTinyFile * tryToTinyFile();
-    ColumnDeleteRangeFile * tryToDeleteRange();
-    ColumnBigFile * tryToBigFile();
+    ColumnFileInMemory * tryToInMemoryFile();
+    ColumnFileTiny * tryToTinyFile();
+    ColumnFileDeleteRange * tryToDeleteRange();
+    ColumnFileBig * tryToBigFile();
 
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;

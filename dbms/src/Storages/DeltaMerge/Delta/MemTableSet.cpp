@@ -1,7 +1,7 @@
-#include <Storages/DeltaMerge/ColumnFile/ColumnInMemoryFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnBigFile.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
 namespace DB
@@ -68,7 +68,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
 
     if (!success)
     {
-        auto new_column_file = std::make_shared<ColumnInMemoryFile>(block);
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(block);
         success = new_column_file->append(context, block, offset, limit, append_bytes);
         if (unlikely(!success))
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
@@ -79,7 +79,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
 {
-    auto f = std::make_shared<ColumnDeleteRangeFile>(delete_range);
+    auto f = std::make_shared<ColumnFileDeleteRange>(delete_range);
     appendColumnFileInner(f);
 }
 
@@ -88,7 +88,7 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     // Prepend a DeleteRange to clean data before applying packs
     if (clear_data_in_range)
     {
-        auto f = std::make_shared<ColumnDeleteRangeFile>(range);
+        auto f = std::make_shared<ColumnFileDeleteRange>(range);
         appendColumnFileInner(f);
     }
 

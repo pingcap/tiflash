@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Storages/DeltaMerge/ColumnFile/ColumnStableFile.h"
-#include "Storages/DeltaMerge/ColumnFile/ColumnTinyFile.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h"
 
 namespace DB
 {

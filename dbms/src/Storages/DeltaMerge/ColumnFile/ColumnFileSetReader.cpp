@@ -2,10 +2,10 @@
 
 #include <Storages/DeltaMerge/DMContext.h>
 
-#include "ColumnInMemoryFile.h"
-#include "ColumnTinyFile.h"
-#include "Storages/DeltaMerge/ColumnFile/ColumnBigFile.h"
-#include "Storages/DeltaMerge/ColumnFile/ColumnDeleteRangeFile.h"
+#include "ColumnFileInMemory.h"
+#include "ColumnFileTiny.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileBig.h"
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h"
 
 namespace DB
 {

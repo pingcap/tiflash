@@ -540,7 +540,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
-                    column_file = ColumnTinyFile::writeColumnFile(*dm_context, block, offset, limit, wbs);
+                    column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
                 }
@@ -705,7 +705,7 @@ void DeltaMergeStore::ingestFiles(
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto big_file = std::make_shared<ColumnBigFile>(*dm_context, ref_file, segment_range);
+                auto big_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
                 if (big_file->getRows() != 0)
                 {
                     column_files.emplace_back(std::move(big_file));

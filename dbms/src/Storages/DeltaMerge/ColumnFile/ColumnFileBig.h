@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/ColumnFile/ColumnStableFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
 namespace DB
 {
@@ -9,12 +9,12 @@ namespace DM
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
-class ColumnBigFile;
-using ColumnBigFilePtr = std::shared_ptr<ColumnBigFile>;
+class ColumnFileBig;
+using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
 
 
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
-class ColumnBigFile : public ColumnStableFile
+class ColumnFileBig : public ColumnFilePersisted
 {
     friend class ColumnBigFileReader;
 
@@ -25,7 +25,7 @@ private:
 
     RowKeyRange segment_range;
 
-    ColumnBigFile(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
+    ColumnFileBig(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
         : file(file_)
         , valid_rows(valid_rows_)
         , valid_bytes(valid_bytes_)
@@ -36,18 +36,18 @@ private:
     void calculateStat(const DMContext & context);
 
 public:
-    ColumnBigFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
+    ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
 
-    ColumnBigFile(const ColumnBigFile &) = default;
+    ColumnFileBig(const ColumnFileBig &) = default;
 
     ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
-        auto new_column_file = new ColumnBigFile(*this);
+        auto new_column_file = new ColumnFileBig(*this);
         new_column_file->file = new_file;
         new_column_file->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
         new_column_file->calculateStat(context);
-        return std::shared_ptr<ColumnBigFile>(new_column_file);
+        return std::shared_ptr<ColumnFileBig>(new_column_file);
     }
 
     Type getType() const override { return Type::BIG_FILE; }
@@ -88,7 +88,7 @@ class ColumnBigFileReader : public ColumnFileReader
 {
 private:
     const DMContext & context;
-    const ColumnBigFile & column_file;
+    const ColumnFileBig & column_file;
     const ColumnDefinesPtr col_defs;
 
     bool pk_ver_only;
@@ -113,7 +113,7 @@ private:
     size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
-    ColumnBigFileReader(const DMContext & context_, const ColumnBigFile & column_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnBigFileReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
         : context(context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
