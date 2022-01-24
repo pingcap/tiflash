@@ -12,12 +12,6 @@
 - (macOS) Apple Clang 12.0.0
 - (CentOS) GCC 7.3.0
 
-### Install gRPC Systemwise(skip if already have protoc 3.8.x and gRPC 1.26.0 installed)
-
-**You'd better remove any other `protoc` installation except 3.8.x to get a clean build.**
-
-You should use exact gRPC 1.26.0. Refer to gRPC [document](https://github.com/grpc/grpc/blob/master/BUILDING.md) or our test settings [example](https://github.com/pingcap/kvproto/blob/master/.github/workflows/cpp-test.yaml) for how to do it.
-
 ### Checkout Source Code
 
 ```
