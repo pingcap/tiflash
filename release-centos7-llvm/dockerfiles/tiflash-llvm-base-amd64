@@ -1,4 +1,4 @@
-FROM centos:7
+FROM hub.pingcap.net/tiflash/centos:7.9.2009-amd64
 
 COPY misc /misc
 

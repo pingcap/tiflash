@@ -43,10 +43,6 @@ function bake_llvm_base_amd64() {
     # Curl
     source $SCRIPTPATH/install_curl.sh
     install_curl "7.80.0"
-
-    # gRPC
-    source $SCRIPTPATH/install_grpc.sh
-    install_grpc "1.26.0"
 }
 
 bake_llvm_base_amd64

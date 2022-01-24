@@ -1,4 +1,4 @@
-FROM hub.pingcap.net/tiflash/centos:centos7.6.1810
+FROM hub.pingcap.net/tiflash/centos:7.9.2009-amd64
 
 USER root
 WORKDIR /root/
