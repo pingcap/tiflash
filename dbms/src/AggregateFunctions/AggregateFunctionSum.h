@@ -37,7 +37,7 @@ struct AggregateFunctionSumData
     using Impl = AggregateFunctionSumAddImpl<T>;
     T sum{};
 
-    AggregateFunctionSumData() {}
+    AggregateFunctionSumData() = default;
 
     template <typename U>
     void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(U value)
@@ -290,11 +290,11 @@ public:
     ScaleType result_scale;
     PrecType result_prec;
 
-    AggregateFunctionSum() {}
+    AggregateFunctionSum() = default;
 
     AggregateFunctionSum(PrecType prec, ScaleType scale)
     {
-        SumDecimalInferer::infer(prec, scale, result_prec, result_scale);
+        std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
     };
 
     DataTypePtr getReturnType() const override

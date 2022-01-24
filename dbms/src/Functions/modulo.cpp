@@ -109,7 +109,7 @@ struct ModuloByConstantImpl : BinaryOperationImplBase<A, B, ModuloImpl<A, B>>
 {
     using ResultType = typename ModuloImpl<A, B>::ResultType;
 
-    static void vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
+    static void vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
     {
         if (unlikely(b == 0))
             throw Exception("Division by zero", ErrorCodes::ILLEGAL_DIVISION);

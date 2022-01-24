@@ -1,4 +1,6 @@
-#include <Encryption/ReadBufferFromFileProvider.h>
+#pragma once
+
+#include <IO/ReadBufferFromFileBase.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <AggregateFunctions/AggregateFunctionGroupUniqArray.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 

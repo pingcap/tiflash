@@ -1,3 +1,5 @@
+#pragma once
+
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <Common/TypeList.h>
 #include <Common/typeid_cast.h>
