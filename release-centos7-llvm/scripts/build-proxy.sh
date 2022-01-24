@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Tiflash-Proxy Building script
+# TiFlash-Proxy Building script
 # Copyright PingCAP, Inc
 # THIS SCRIPT SHOULD ONLY BE INVOKED IN DOCKER
 
