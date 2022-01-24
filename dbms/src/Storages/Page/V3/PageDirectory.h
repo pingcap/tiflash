@@ -49,7 +49,7 @@ using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
 public:
-    PageLock acquireLock() const
+    [[nodiscard]] PageLock acquireLock() const
     {
         return std::make_unique<std::lock_guard<std::mutex>>(m);
     }
