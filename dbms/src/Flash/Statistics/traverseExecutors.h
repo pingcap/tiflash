@@ -7,13 +7,13 @@
 
 namespace DB
 {
-/// tipb::executor.children().size() <= 2
+// tipb::executor.children().size() <= 2
 class Children
 {
 public:
     Children() = default;
 
-    Children(const tipb::Executor * child) // NOLINT(google-explicit-constructor)
+    explicit Children(const tipb::Executor * child)
         : left(child)
     {}
 
@@ -40,8 +40,9 @@ private:
 
 Children getChildren(const tipb::Executor & executor);
 
-template <typename FF>
-void traverseExecutorArray(const google::protobuf::RepeatedPtrField<::tipb::Executor> & array, FF && f)
+/// traverse tipb::executor array and apply function.
+template <typename Container, typename FF>
+void traverseExecutorArray(const Container & array, FF && f)
 {
     for (const auto & executor : array)
     {
@@ -50,17 +51,15 @@ void traverseExecutorArray(const google::protobuf::RepeatedPtrField<::tipb::Exec
     }
 }
 
+/// traverse tipb::executor tree and apply function.
 template <typename FF>
 void traverseExecutorTree(const tipb::Executor & executor, FF && f)
 {
-    std::function<void(const tipb::Executor & executor)> traverse_tree;
-    traverse_tree = [&](const tipb::Executor & executor) {
-        if (f(executor))
-            getChildren(executor).forEach(traverse_tree);
-    };
-    traverse_tree(executor);
+    if (f(executor))
+        getChildren(executor).forEach([&f](const tipb::Executor & child) { traverseExecutorTree(child, f); });
 }
 
+/// traverse tipb::executor of DAGRequest and apply function.
 template <typename FF>
 void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
 {

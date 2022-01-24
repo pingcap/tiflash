@@ -67,21 +67,21 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectOutputFieldTypesForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
 bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
+    // collect output_field_types of children
     std::vector<std::vector<tipb::FieldType>> children_output_field_types;
     children_output_field_types.resize(2);
     size_t child_index = 0;
-    // for join, dag_request.has_root_executor() == true.
+    // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
     getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
         auto & child_output_field_types = children_output_field_types[child_index++];
-        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & executor_) {
-            return collectOutputFieldTypesForExecutor(child_output_field_types, executor_);
-        });
+        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
     });
     assert(child_index == 2);
 
+    // collect output_field_types for join self
     for (auto & field_type : children_output_field_types[0])
     {
         if (executor.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
@@ -117,7 +117,7 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
     return false;
 }
 
-bool collectOutputFieldTypesForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     assert(output_field_types.empty());
     switch (executor.tp())
@@ -143,9 +143,7 @@ bool collectOutputFieldTypesForExecutor(std::vector<tipb::FieldType> & output_fi
 std::vector<tipb::FieldType> collectOutputFieldTypes(const tipb::DAGRequest & dag_request)
 {
     std::vector<tipb::FieldType> output_field_types;
-    traverseExecutors(&dag_request, [&output_field_types](const tipb::Executor & executor) {
-        return collectOutputFieldTypesForExecutor(output_field_types, executor);
-    });
+    traverseExecutors(&dag_request, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
     return output_field_types;
 }
 } // namespace DB
