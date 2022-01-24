@@ -422,22 +422,20 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     BlobFileOffset file_offset_beg;
     std::tie(blobfile_id, file_offset_beg) = getPosFromStats(alloc_size);
 
-
-    auto write_blob = [this, written_blobs, total_page_size](BlobFileId blobfile_id_,
-                                                             char * data_buf_,
-                                                             BlobFileOffset & file_offset_beg_,
-                                                             BlobFileOffset & offset_in_data_,
-                                                             const WriteLimiterPtr & write_limiter_,
-                                                             Poco::Logger * log_) {
+    auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & blobfile_id_,
+                                                                              char * data_buf_,
+                                                                              const BlobFileOffset & file_offset_beg_,
+                                                                              const BlobFileOffset & offset_in_data_) {
         try
         {
             auto blob_file_ = getBlobFile(blobfile_id_);
-            LOG_FMT_INFO(log_, "Blob write [blib_id={}, offset={}, size={}]", blobfile_id_, file_offset_beg_, offset_in_data_);
-            blob_file_->write(data_buf_, file_offset_beg_, offset_in_data_, write_limiter_);
+            written_blobs.emplace_back(std::make_tuple(blobfile_id_, file_offset_beg_, offset_in_data_));
+            LOG_FMT_INFO(this->log, "Blob write [blib_id={}, offset={}, size={}]", blobfile_id_, file_offset_beg_, offset_in_data_);
+            blob_file_->write(data_buf_, file_offset_beg_, offset_in_data_, write_limiter);
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(log_, "Blob [Blobid={}, offset={}, size={}] write failed.", blobfile_id_, file_offset_beg_, total_page_size);
+            LOG_FMT_ERROR(this->log, "Blob [Blobid={}, offset={}, size={}] write failed.", blobfile_id_, file_offset_beg_, total_page_size);
             for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
             {
                 removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
@@ -468,8 +466,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                     remain_page_size += alloc_size - offset_in_data;
 
                     // Write data into Blob.
-                    written_blobs.emplace_back(std::make_tuple(blobfile_id, file_offset_beg, offset_in_data));
-                    write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data, write_limiter, log);
+                    write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
 
                     // reset the position
                     data_pos = data_buf;
@@ -508,8 +505,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
     if (offset_in_data != 0)
     {
-        written_blobs.emplace_back(std::make_tuple(blobfile_id, file_offset_beg, offset_in_data));
-        write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data, write_limiter, log);
+        write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
     }
 
     return edit;
@@ -592,19 +588,17 @@ void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_
 void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
 {
     BlobStatPtr stat = nullptr;
-    bool found = false;
 
     for (auto & stat_in_map : stats_map)
     {
-        stat = stat_in_map;
-        if (stat->id == blob_file_id)
+        if (stat_in_map->id == blob_file_id)
         {
-            found = true;
+            stat = stat_in_map;
             break;
         }
     }
 
-    if (!found)
+    if (stat == nullptr)
     {
         LOG_FMT_ERROR(log, "No exist BlobStat [BlobFileId={}]", blob_file_id);
         return;
