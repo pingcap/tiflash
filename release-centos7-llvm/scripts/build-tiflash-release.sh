@@ -57,7 +57,6 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 
 # Vendor dependencies
-vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
