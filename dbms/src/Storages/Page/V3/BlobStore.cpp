@@ -243,7 +243,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     auto lock = stat->lock();
     stat->removePosFromStat(offset, size);
 
-    if (stat->sm_valid_size == 0)
+    if (stat->isReadOnly() && stat->sm_valid_size == 0)
     {
         LOG_FMT_INFO(log, "Removing BlobFile [BlobId={}]", blob_id);
         auto lock_stats = blob_stats.lock();
