@@ -109,7 +109,7 @@ public:
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
           max_buffer_size(max_buffer_size_),
-          live_connections(0),
+          live_connections(pb_exchange_receiver.encoded_task_meta_size()),
           state(NORMAL),
           log(&Logger::get("exchange_receiver"))
     {
