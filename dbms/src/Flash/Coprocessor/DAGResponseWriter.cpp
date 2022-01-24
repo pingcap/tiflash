@@ -58,7 +58,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
-        for (auto & stream_ptr : map_entry.second)
+        for (const auto & stream_ptr : map_entry.second)
         {
             if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
             {
@@ -80,9 +80,9 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & streamPtr : p.second.input_streams)
+        for (auto & stream_ptr : p.second.input_streams)
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
                 current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
@@ -97,19 +97,14 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                 current.merge(remote, false);
         }
         /// part 3: for join need to add the build time
-        for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
+        for (auto & join_executor_id : dag_context.getQBIdToJoinIdMap()[p.second.qb_id])
         {
-            UInt64 process_time_for_build = 0;
-            if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
-                != dag_context.getProfileStreamsMapForJoinBuildSide().end())
+            auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
+            if (it != dag_context.getJoinExecuteInfoMap().end())
             {
-                for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
-                {
-                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
-                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
-                }
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(it->second.build_side_stream.get()))
+                    current.time_processed_ns += p_stream->getProfileInfo().execution_time;
             }
-            current.time_processed_ns += process_time_for_build;
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;

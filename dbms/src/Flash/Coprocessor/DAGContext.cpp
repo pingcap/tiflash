@@ -88,14 +88,9 @@ std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
     return profile_streams_map;
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
+std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinIdMap()
 {
-    return profile_streams_map_for_join_build_side;
-}
-
-std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap()
-{
-    return qb_id_to_join_alias_map;
+    return qb_id_to_join_id_map;
 }
 
 std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
