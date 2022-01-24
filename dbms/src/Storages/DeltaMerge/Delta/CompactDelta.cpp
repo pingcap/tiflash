@@ -19,17 +19,17 @@ struct CompackTask
 {
     CompackTask() {}
 
-    DeltaPacks to_compact;
+    ColumnFiles to_compact;
     size_t total_rows = 0;
     size_t total_bytes = 0;
 
-    DeltaPackPtr result;
+    ColumnFilePtr result;
 
-    void addPack(const DeltaPackPtr & pack)
+    void addColumnFile(const ColumnFilePtr & column_file)
     {
-        total_rows += pack->getRows();
-        total_bytes += pack->getBytes();
-        to_compact.push_back(pack);
+        total_rows += column_file->getRows();
+        total_bytes += column_file->getBytes();
+        to_compact.push_back(column_file);
     }
 };
 using CompackTasks = std::vector<CompackTask>;
@@ -67,7 +67,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
 
         CompackTask cur_task;
-        for (auto & pack : packs)
+        for (auto & pack : column_files)
         {
             if (!pack->isSaved())
                 break;
@@ -82,28 +82,25 @@ bool DeltaValueSpace::compact(DMContext & context)
                     // Maybe this pack is small, but it cannot be merged with other packs, so also remove it's cache.
                     for (auto & p : cur_task.to_compact)
                     {
-                        p->tryToBlock()->clearCache();
+                        p->tryToTinyFile()->clearCache();
                     }
                 }
 
                 cur_task = {};
             };
 
-            if (auto dp_block = pack->tryToBlock(); dp_block)
+            if (auto dp_block = pack->tryToTinyFile(); dp_block)
             {
-                if (unlikely(!dp_block->getDataPageId()))
-                    throw Exception("Saved DeltaPackBlock does not have data_page_id", ErrorCodes::LOGICAL_ERROR);
-
                 bool cur_task_full = cur_task.total_rows >= context.delta_small_pack_rows;
                 bool small_pack = pack->getRows() < context.delta_small_pack_rows;
                 bool schema_ok
-                    = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToBlock()->getSchema();
+                    = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToTinyFile()->getSchema();
 
                 if (cur_task_full || !small_pack || !schema_ok)
                     packup_cur_task();
 
                 if (small_pack)
-                    cur_task.addPack(pack);
+                    cur_task.addColumnFile(pack);
                 else
                     // Then this pack's cache should not exist.
                     dp_block->clearCache();
@@ -135,18 +132,18 @@ bool DeltaValueSpace::compact(DMContext & context)
     PageReader reader(context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
     for (auto & task : tasks)
     {
-        auto & schema = *(task.to_compact[0]->tryToBlock()->getSchema());
+        auto & schema = *(task.to_compact[0]->tryToTinyFile()->getSchema());
         auto compact_columns = schema.cloneEmptyColumns();
 
         // Read data from old packs
         for (auto & pack : task.to_compact)
         {
-            auto dp_block = pack->tryToBlock();
+            auto dp_block = pack->tryToTinyFile();
             if (unlikely(!dp_block))
                 throw Exception("The compact candidate is not a DeltaPackBlock", ErrorCodes::LOGICAL_ERROR);
 
             // We ensure schema of all packs are the same
-            Block block = dp_block->isCached() ? dp_block->readFromCache() : dp_block->readFromDisk(reader);
+            Block block = dp_block->readBlockForMinorCompaction(reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)
             {
@@ -161,13 +158,12 @@ bool DeltaValueSpace::compact(DMContext & context)
 
         // Note that after compact, caches are no longer exist.
 
-        auto compact_pack = DeltaPackBlock::writePack(context, compact_block, 0, compact_rows, wbs);
         // Use the original schema instance, so that we can avoid serialize the new schema instance.
-        compact_pack->tryToBlock()->setSchema(task.to_compact.front()->tryToBlock()->getSchema());
-        compact_pack->tryToBlock()->setSaved();
+        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
+        compact_column_file->setSaved();
 
         wbs.writeLogAndData();
-        task.result = compact_pack;
+        task.result = compact_column_file;
 
         total_compact_packs += task.to_compact.size();
         total_compact_rows += compact_rows;
@@ -184,13 +180,13 @@ bool DeltaValueSpace::compact(DMContext & context)
             return false;
         }
 
-        DeltaPacks new_packs;
-        auto old_packs_offset = packs.begin();
+        ColumnFiles new_packs;
+        auto old_packs_offset = column_files.begin();
         for (auto & task : tasks)
         {
             auto old_it = old_packs_offset;
-            auto locate_it = [&](const DeltaPackPtr & pack) {
-                for (; old_it != packs.end(); ++old_it)
+            auto locate_it = [&](const ColumnFilePtr & pack) {
+                for (; old_it != column_files.end(); ++old_it)
                 {
                     if (*old_it == pack)
                         return old_it;
@@ -201,7 +197,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             auto start_it = locate_it(task.to_compact.front());
             auto end_it = locate_it(task.to_compact.back());
 
-            if (unlikely(start_it == packs.end() || end_it == packs.end()))
+            if (unlikely(start_it == column_files.end() || end_it == column_files.end()))
             {
                 LOG_WARNING(log, "Structure has been updated during compact");
                 wbs.rollbackWrittenLogAndData();
@@ -214,22 +210,22 @@ bool DeltaValueSpace::compact(DMContext & context)
 
             old_packs_offset = end_it + 1;
         }
-        new_packs.insert(new_packs.end(), old_packs_offset, packs.end());
+        new_packs.insert(new_packs.end(), old_packs_offset, column_files.end());
 
-        checkPacks(new_packs);
+        checkColumnFiles(new_packs);
 
         /// Save the new metadata of packs to disk.
-        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
-        serializeSavedPacks(buf, new_packs);
+        MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
+        serializeSavedColumnFiles(buf, new_packs);
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
         wbs.writeMeta();
 
         /// Update packs in memory.
-        packs.swap(new_packs);
+        column_files.swap(new_packs);
 
-        last_try_compact_packs = std::min(packs.size(), last_try_compact_packs.load());
+        last_try_compact_packs = std::min(column_files.size(), last_try_compact_packs.load());
 
         LOG_DEBUG(log,
                   simpleInfo() << " Successfully compacted " << total_compact_packs << " packs into " << tasks.size() << " packs, total "
