@@ -26,14 +26,15 @@ using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
 static std::atomic_uint64_t MAX_COLUMN_FILE_ID{0};
 
-/// ColumnFile have four concrete sub classes represents different kinds of data.
-///   ColumnFileInMemory
-///   ColumnFileTiny
-///   ColumnFileDeleteRange
-///   ColumnFileBig
+/// ColumnFile represents the files stored in a Segment, like the "SST File" of LSM-Tree.
+/// ColumnFile has several concrete sub-classes that represent different kinds of data.
 ///
-/// There is also an abstract class `ColumnFilePersisted` inherit from `ColumnFile` which represents column file that can be persisted on disk.
-/// And `ColumnFileTiny` `ColumnFileDeleteRange` `ColumnFileBig` inherit from `ColumnFilePersisted`.
+///   ColumnFile
+///   |-- ColumnFileInMemory
+///   |-- ColumnFilePersisted (column file that can be persisted on disk)
+///         |-- ColumnFileTiny
+///         |-- ColumnFileDeleteRange
+///         |-- ColumnFileBig
 class ColumnFile
 {
 protected:
