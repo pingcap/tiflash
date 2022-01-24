@@ -182,7 +182,7 @@ void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
     {
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
-        schema.push_back(std::make_pair(name, info));
+        schema.emplace_back(std::move(name), std::move(info));
     }
 }
 

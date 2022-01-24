@@ -7,7 +7,7 @@
 
 namespace DB::DM
 {
-std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset, size_t deletes_offset)
+std::pair<size_t, size_t> findColumnFile(const ColumnFiles & packs, size_t rows_offset, size_t deletes_offset)
 {
     size_t rows_count = 0;
     size_t deletes_count = 0;
@@ -16,7 +16,7 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
             return {pack_index, 0};
-        auto & pack = packs[pack_index];
+        const auto & pack = packs[pack_index];
 
         if (pack->isDeleteRange())
         {
@@ -74,7 +74,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;
-    snap->packs.reserve(packs.size());
+    snap->column_files.reserve(column_files.size());
 
     snap->shared_delta_index = delta_index;
 
@@ -89,22 +89,28 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     size_t check_deletes = 0;
     size_t total_rows = 0;
     size_t total_deletes = 0;
-    for (const auto & pack : packs)
+    for (const auto & pack : column_files)
     {
         // If `for_update` is false, it will create a snapshot with all packs in DeltaValueSpace.
         // If `for_update` is true, only persisted packs are used.
         if (!for_update || pack->isSaved())
         {
-            if (auto b = pack->tryToBlock(); (b && b->isCached()))
+            if (auto * b = pack->tryToInMemoryFile(); b)
             {
-                // Flush and compact threads could update the value of DeltaPackBlock::cache,
-                // and since DeltaPack is not mult-threads safe, we should create a new pack object.
-                snap->packs.push_back(std::make_shared<DeltaPackBlock>(*b));
+                // Flush threads could update the value of ColumnInMemoryFile::cache,
+                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
+                snap->column_files.push_back(std::make_shared<ColumnFileInMemory>(*b));
+            }
+            else if (auto * t = pack->tryToTinyFile(); (t && t->getCache()))
+            {
+                // Compact threads could update the value of ColumnTinyFile::cache,
+                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
+                snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
             }
             else
             {
                 // For other packs, everything we use is constant, so no need to create a new object.
-                snap->packs.push_back(pack);
+                snap->column_files.push_back(pack);
             }
 
             check_rows += pack->getRows();
@@ -123,7 +129,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
 RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 {
     RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
-    for (auto iter = packs.cbegin(); iter != packs.cend(); ++iter)
+    for (auto iter = column_files.cbegin(); iter != column_files.cend(); ++iter)
     {
         const auto & pack = *iter;
         if (auto dp_delete = pack->tryToDeleteRange(); dp_delete)
@@ -146,7 +152,7 @@ DeltaValueReader::DeltaValueReader(
     , segment_range(segment_range_)
 {
     size_t total_rows = 0;
-    for (auto & p : delta_snap->getPacks())
+    for (auto & p : delta_snap->getColumnFiles())
     {
         total_rows += p->getRows();
         pack_rows.push_back(p->getRows());
@@ -233,10 +239,10 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
 
     BlockOrDeletes res;
 
-    auto & packs = delta_snap->getPacks();
+    auto & packs = delta_snap->getColumnFiles();
 
-    auto [start_pack_index, rows_start_in_start_pack] = findPack(packs, rows_begin, deletes_begin);
-    auto [end_pack_index, rows_end_in_end_pack] = findPack(packs, rows_end, deletes_end);
+    auto [start_pack_index, rows_start_in_start_pack] = findColumnFile(packs, rows_begin, deletes_begin);
+    auto [end_pack_index, rows_end_in_end_pack] = findColumnFile(packs, rows_end, deletes_end);
 
     size_t block_rows_start = rows_begin;
     size_t block_rows_end = rows_begin;
@@ -245,7 +251,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     {
         auto & pack = *packs[pack_index];
 
-        if (pack.isDeleteRange() || pack.isFile())
+        if (pack.isDeleteRange() || pack.isBigFile())
         {
             // First, compact the DeltaPackBlocks before this pack into one block.
             if (block_rows_end != block_rows_start)
@@ -259,7 +265,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
             {
                 res.emplace_back(pack_delete->getDeleteRange());
             }
-            else if (pack.isFile() && pack.getRows())
+            else if (pack.isBigFile() && pack.getRows())
             {
                 auto block = readPKVersion(block_rows_end, pack.getRows());
                 res.emplace_back(std::move(block), block_rows_end);
@@ -299,7 +305,7 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
                                    UInt64 max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-    auto & packs = delta_snap->getPacks();
+    auto & packs = delta_snap->getColumnFiles();
 
     // Already placed.
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
@@ -317,7 +323,7 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
         auto & pack = packs[pack_index];
 
         // Always do place index if DeltaPackFile exists.
-        if (pack->isFile())
+        if (pack->isBigFile())
             return true;
         if (unlikely(pack->isDeleteRange()))
             throw Exception("pack is delete range", ErrorCodes::LOGICAL_ERROR);
@@ -326,10 +332,18 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
         size_t rows_end_in_pack = pack_rows[pack_index];
 
         auto & pack_reader = pack_readers[pack_index];
-        auto & dpb_reader = typeid_cast<DPBlockReader &>(*pack_reader);
-        auto pk_column = dpb_reader.getPKColumn();
-        auto version_column = dpb_reader.getVersionColumn();
-
+        ColumnPtr pk_column;
+        ColumnPtr version_column;
+        if (auto m_reader = std::dynamic_pointer_cast<ColumnInMemoryFileReader>(pack_reader); m_reader)
+        {
+            pk_column = m_reader->getPKColumn();
+            version_column = m_reader->getVersionColumn();
+        }
+        else if (auto t_reader = std::dynamic_pointer_cast<ColumnTinyFileReader>(pack_reader); t_reader)
+        {
+            pk_column = t_reader->getPKColumn();
+            version_column = t_reader->getVersionColumn();
+        }
         auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(version_column);
 
