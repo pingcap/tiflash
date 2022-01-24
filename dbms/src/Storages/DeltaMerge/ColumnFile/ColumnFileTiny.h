@@ -9,7 +9,11 @@ namespace DM
 class ColumnFileTiny;
 using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 
-/// A column file which is persisted on disk.
+/// A column file which data is stored in PageStorage.
+/// It may be created in two ways:
+///   1. created directly when writing to storage if the data is large enough
+///   2. created when flushed `ColumnFileInMemory` to disk
+/// And it may have cache data is the column file is small enough(The details is in the flush process).
 class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnTinyFileReader;
