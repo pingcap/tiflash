@@ -1,4 +1,4 @@
-FROM FROM hub.pingcap.net/tiflash/centos:7.9.2009-aarch64
+FROM hub.pingcap.net/tiflash/centos:7.9.2009-aarch64
 
 COPY misc /misc
 
