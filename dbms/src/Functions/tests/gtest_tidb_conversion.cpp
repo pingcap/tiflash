@@ -172,8 +172,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
 TEST_F(TestTidbConversion, StrToDateTypeTest)
 try
 {
@@ -260,7 +258,5 @@ try
 }
 CATCH
 
-} // namespace
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
 } // namespace tests
 } // namespace DB
