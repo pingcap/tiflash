@@ -1,6 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -817,8 +818,9 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
         }
         String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
 
+
         window_function_description.column_name = func_string;
-        window_function_description.window_function = dynamic_cast<WindowFunction *>(static_cast<IAggregateFunction *>(AggregateFunctionFactory::instance().get(window_func_name, types, {}, 0, window.partition_by_size() == 0).get()));
+        window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
 
         DataTypePtr result_type = window_function_description.window_function->getReturnType();
 

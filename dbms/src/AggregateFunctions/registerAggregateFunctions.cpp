@@ -1,5 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
+
 #include <AggregateFunctions/registerAggregateFunctions.h>
 
 
@@ -30,8 +32,7 @@ void registerAggregateFunctionCombinatorState(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorMerge(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory &);
 
-void registerWindowFunctions(AggregateFunctionFactory & factory);
-
+void registerWindowFunctions(WindowFunctionFactory & factory);
 
 void registerAggregateFunctions()
 {
@@ -56,7 +57,8 @@ void registerAggregateFunctions()
         registerAggregateFunctionsBitwise(factory);
         registerAggregateFunctionsMaxIntersections(factory);
 
-        registerWindowFunctions(factory);
+        auto & window_factory = WindowFunctionFactory::instance();
+        registerWindowFunctions(window_factory);
     }
 
     {

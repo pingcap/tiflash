@@ -1,24 +1,23 @@
 #pragma once
 
-#include <Core/Field.h>
-#include <Parsers/IAST.h>
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/WindowFunction.h>
-#include <Interpreters/AggregateDescription.h>
-#include <Core/SortDescription.h>
-#include <DataTypes/IDataType.h>
+#include <WindowFunctions/WindowFunction.h>
+#include <Core/Field.h>
 #include <Core/Names.h>
+#include <Core/SortDescription.h>
 #include <Core/Types.h>
+#include <DataTypes/IDataType.h>
+#include <Interpreters/AggregateDescription.h>
+#include <Parsers/IAST.h>
 #include <tipb/select.pb.h>
+
 
 namespace DB
 {
 
-class ASTFunction;
-
 struct WindowFunctionDescription
 {
-    WindowFunction * window_function = nullptr;
+    WindowFunctionPtr window_function;
     Array parameters;
     ColumnNumbers arguments;
     Names argument_names;
@@ -79,7 +78,8 @@ struct WindowFrame
             ;
     }
 };
-
+class ExpressionActions;
+using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 struct WindowDescription
 {
     std::string window_name;

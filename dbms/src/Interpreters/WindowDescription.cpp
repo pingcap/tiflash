@@ -3,9 +3,7 @@
 #include <Core/Field.h>
 #include <Common/FieldVisitors.h>
 #include <IO/Operators.h>
-#include <Parsers/ASTFunction.h>
 #include <Core/SortDescription.h>
-
 
 namespace DB
 {
@@ -222,6 +220,8 @@ WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameMode type)
         return WindowFrame::FrameType::Range;
     case tipb::WindowFrameMode::Rows:
         return WindowFrame::FrameType::Rows;
+    case tipb::WindowFrameMode::Groups:
+        return WindowFrame::FrameType::Groups;
     }
     throw Exception(ErrorCodes::BAD_ARGUMENTS,
                     "Unknowed frame type {}",
