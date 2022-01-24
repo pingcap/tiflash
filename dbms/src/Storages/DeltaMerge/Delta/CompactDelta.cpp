@@ -25,11 +25,11 @@ struct CompackTask
 
     ColumnFilePtr result;
 
-    void addPack(const ColumnFilePtr & pack)
+    void addColumnFile(const ColumnFilePtr & column_file)
     {
-        total_rows += pack->getRows();
-        total_bytes += pack->getBytes();
-        to_compact.push_back(pack);
+        total_rows += column_file->getRows();
+        total_bytes += column_file->getBytes();
+        to_compact.push_back(column_file);
     }
 };
 using CompackTasks = std::vector<CompackTask>;
@@ -100,7 +100,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                     packup_cur_task();
 
                 if (small_pack)
-                    cur_task.addPack(pack);
+                    cur_task.addColumnFile(pack);
                 else
                     // Then this pack's cache should not exist.
                     dp_block->clearCache();
@@ -159,11 +159,11 @@ bool DeltaValueSpace::compact(DMContext & context)
         // Note that after compact, caches are no longer exist.
 
         // Use the original schema instance, so that we can avoid serialize the new schema instance.
-        auto compact_pack = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
-        compact_pack->setSaved();
+        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
+        compact_column_file->setSaved();
 
         wbs.writeLogAndData();
-        task.result = compact_pack;
+        task.result = compact_column_file;
 
         total_compact_packs += task.to_compact.size();
         total_compact_rows += compact_rows;

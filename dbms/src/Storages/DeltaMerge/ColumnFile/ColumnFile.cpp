@@ -1,5 +1,3 @@
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
@@ -13,26 +11,6 @@ namespace DB
 {
 namespace DM
 {
-ColumnFileInMemory * ColumnFile::tryToInMemoryFile()
-{
-    return !isInMemoryFile() ? nullptr : static_cast<ColumnFileInMemory *>(this);
-}
-
-ColumnFileTiny * ColumnFile::tryToTinyFile()
-{
-    return !isTinyFile() ? nullptr : static_cast<ColumnFileTiny *>(this);
-}
-
-ColumnFileDeleteRange * ColumnFile::tryToDeleteRange()
-{
-    return !isDeleteRange() ? nullptr : static_cast<ColumnFileDeleteRange *>(this);
-}
-
-ColumnFileBig * ColumnFile::tryToBigFile()
-{
-    return !isBigFile() ? nullptr : static_cast<ColumnFileBig *>(this);
-}
-
 
 /// ======================================================
 /// Helper methods.
@@ -85,6 +63,25 @@ size_t copyColumnsData(
     }
 }
 
+ColumnFileInMemory * ColumnFile::tryToInMemoryFile()
+{
+    return !isInMemoryFile() ? nullptr : static_cast<ColumnFileInMemory *>(this);
+}
+
+ColumnFileTiny * ColumnFile::tryToTinyFile()
+{
+    return !isTinyFile() ? nullptr : static_cast<ColumnFileTiny *>(this);
+}
+
+ColumnFileDeleteRange * ColumnFile::tryToDeleteRange()
+{
+    return !isDeleteRange() ? nullptr : static_cast<ColumnFileDeleteRange *>(this);
+}
+
+ColumnFileBig * ColumnFile::tryToBigFile()
+{
+    return !isBigFile() ? nullptr : static_cast<ColumnFileBig *>(this);
+}
 
 String columnFilesToString(const ColumnFiles & column_files)
 {

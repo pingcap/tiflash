@@ -125,7 +125,7 @@ public:
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const
     {
-        return "{Delta [" + DB::toString(id) + "]: " + DB::toString(column_files.size()) + " packs, " + DB::toString(rows.load()) + " rows, "
+        return "{Delta [" + DB::toString(id) + "]: " + DB::toString(column_files.size()) + " column files, " + DB::toString(rows.load()) + " rows, "
             + DB::toString(unsaved_rows.load()) + " unsaved_rows, " + DB::toString(unsaved_bytes.load()) + " unsaved_bytes, "
             + DB::toString(deletes.load()) + " deletes, " + DB::toString(unsaved_deletes.load()) + " unsaved_deletes}";
     }
@@ -158,7 +158,7 @@ public:
 
     PageId getId() const { return id; }
 
-    size_t getPackCount() const { return column_files.size(); }
+    size_t getColumnFileCount() const { return column_files.size(); }
     size_t getRows(bool use_unsaved = true) const { return use_unsaved ? rows.load() : rows - unsaved_rows; }
     size_t getBytes(bool use_unsaved = true) const { return use_unsaved ? bytes.load() : bytes - unsaved_bytes; }
     size_t getDeletes() const { return deletes; }

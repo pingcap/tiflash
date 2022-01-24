@@ -181,53 +181,53 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         // Create a temporary packs copy, used to generate serialized data.
         // Save the previous saved packs, and the packs we are saving, and the later packs appended during the period we did not held the lock.
-        ColumnFiles packs_copy(column_files.begin(), flush_start_point);
+        ColumnFiles column_files_copy(column_files.begin(), flush_start_point);
         for (auto & task : tasks)
         {
-            // Use a new pack instance to do the serializing.
-            ColumnFilePtr new_pack;
+            // Use a new column file instance to do the serializing.
+            ColumnFilePtr new_column_file;
             if (auto * dp_block = task.pack->tryToInMemoryFile(); dp_block)
             {
                 bool is_small_file = dp_block->getRows() < context.delta_small_pack_rows || dp_block->getBytes() < context.delta_small_pack_bytes;
                 if (is_small_file)
                 {
-                    new_pack = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
-                                                                dp_block->getRows(),
-                                                                dp_block->getBytes(),
-                                                                task.data_page,
-                                                                !task.sorted ? dp_block->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
+                    new_column_file = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
+                                                                       dp_block->getRows(),
+                                                                       dp_block->getBytes(),
+                                                                       task.data_page,
+                                                                       !task.sorted ? dp_block->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
                 }
                 else
                 {
-                    new_pack = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
-                                                                dp_block->getRows(),
-                                                                dp_block->getBytes(),
-                                                                task.data_page,
-                                                                nullptr);
+                    new_column_file = std::make_shared<ColumnFileTiny>(dp_block->getSchema(),
+                                                                       dp_block->getRows(),
+                                                                       dp_block->getBytes(),
+                                                                       task.data_page,
+                                                                       nullptr);
                 }
             }
             else if (auto * t_file = task.pack->tryToTinyFile(); t_file)
             {
-                new_pack = std::make_shared<ColumnFileTiny>(*t_file);
+                new_column_file = std::make_shared<ColumnFileTiny>(*t_file);
             }
             else if (auto * dp_file = task.pack->tryToBigFile(); dp_file)
             {
-                new_pack = std::make_shared<ColumnFileBig>(*dp_file);
+                new_column_file = std::make_shared<ColumnFileBig>(*dp_file);
             }
             else if (auto * dp_delete = task.pack->tryToDeleteRange(); dp_delete)
             {
-                new_pack = std::make_shared<ColumnFileDeleteRange>(*dp_delete);
+                new_column_file = std::make_shared<ColumnFileDeleteRange>(*dp_delete);
             }
             else
             {
                 throw Exception("Unexpected column file type", ErrorCodes::LOGICAL_ERROR);
             }
 
-            new_pack->setSaved();
+            new_column_file->setSaved();
 
-            packs_copy.push_back(new_pack);
+            column_files_copy.push_back(new_column_file);
         }
-        packs_copy.insert(packs_copy.end(), flush_end_point, column_files.end());
+        column_files_copy.insert(column_files_copy.end(), flush_end_point, column_files.end());
 
         if constexpr (DM_RUN_CHECK)
         {
@@ -235,7 +235,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             size_t check_unsaved_deletes = 0;
             size_t total_rows = 0;
             size_t total_deletes = 0;
-            for (auto & pack : packs_copy)
+            for (auto & pack : column_files_copy)
             {
                 if (!pack->isSaved())
                 {
@@ -254,14 +254,14 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Save the new metadata of packs to disk.
         MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-        serializeSavedColumnFiles(buf, packs_copy);
+        serializeSavedColumnFiles(buf, column_files_copy);
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
         wbs.writeMeta();
 
         /// Commit updates in memory.
-        column_files.swap(packs_copy);
+        column_files.swap(column_files_copy);
 
         /// Update delta tree
         if (new_delta_index)
