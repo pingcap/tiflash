@@ -13,8 +13,10 @@ BlockPtr MemTableSet::lastSchema()
 {
     for (auto it = column_files.rbegin(); it != column_files.rend(); ++it)
     {
-        if (auto m_file = (*it)->tryToInMemoryFile(); m_file)
+        if (auto * m_file = (*it)->tryToInMemoryFile(); m_file)
             return m_file->getSchema();
+        else if (auto * t_file = (*it)->tryToTinyFile(); t_file)
+            return t_file->getSchema();
     }
     return {};
 }
@@ -72,6 +74,7 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
         appendColumnFileInner(new_column_file);
     }
+    // FIXME: update rows and bytes and etc.
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)

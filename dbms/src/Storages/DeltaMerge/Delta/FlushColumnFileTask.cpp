@@ -37,6 +37,7 @@ DeltaIndex::Updates FlushColumnFileTask::prepare(WriteBatches & wbs)
             auto * mem_file = task.column_file->tryToInMemoryFile();
             ColumnStableFilePtr tiny_file;
             // check whether to keep the cache from `mem_file`
+            // FIXME: cannot reuse cache if sorted
             if (mem_file->getCache() && (mem_file->getRows() < context.delta_small_pack_rows || mem_file->getBytes() < context.delta_small_pack_bytes))
             {
                 tiny_file = ColumnTinyFile::writeColumnFile(context, task.block_data, 0, task.block_data.rows(), wbs, mem_file->getSchema(), mem_file->getCache());
