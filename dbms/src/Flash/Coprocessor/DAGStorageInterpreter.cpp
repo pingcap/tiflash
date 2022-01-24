@@ -294,14 +294,17 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
 void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block_size)
 {
     const DAGContext & dag_context = *context.getDAGContext();
+    size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     auto table_query_infos = generateSelectQueryInfos();
     for (auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
         TableID table_id = table_query_info.first;
         SelectQueryInfo & query_info = table_query_info.second;
-        if (query_info.mvcc_query_info->regions_query_info.empty())
+        size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
+        if (region_num == 0)
             continue;
+        size_t current_max_streams = (max_streams * region_num + total_local_region_num - 1) / total_local_region_num;
 
         QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
         // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
@@ -314,7 +317,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
         {
             try
             {
-                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
 
                 // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
                 // In case the versions of regions have changed, those `streams` may contain different data other than expected.
