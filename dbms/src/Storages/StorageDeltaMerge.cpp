@@ -1429,7 +1429,7 @@ void StorageDeltaMerge::shutdown()
     }
 }
 
-void StorageDeltaMerge::removeFromTMTContext()
+void StorageDeltaMerge::removeFromTiFlashContext()
 {
     // remove this table from TiFlashContext
     TiFlashContext & tmt_context = global_context.getTMTContext();

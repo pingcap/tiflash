@@ -125,7 +125,7 @@ public:
     }
 
     /// Remove this storage from TiFlashContext. Should be called after its metadata and data have been removed from disk.
-    virtual void removeFromTMTContext() = 0;
+    virtual void removeFromTiFlashContext() = 0;
 
     PKType getPKType() const
     {

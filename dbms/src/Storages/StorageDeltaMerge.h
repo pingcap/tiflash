@@ -103,7 +103,7 @@ public:
 
     void shutdown() override;
 
-    void removeFromTMTContext() override;
+    void removeFromTiFlashContext() override;
 
     SortDescription getPrimarySortDescription() const override;
 

@@ -483,9 +483,8 @@ void DatabaseTiFlash::shutdown()
         (void)name;
         storage->shutdown();
 
-        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-        if (managed_storage)
-            managed_storage->removeFromTMTContext();
+        if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
+            managed_storage->removeFromTiFlashContext();
     }
 
     std::lock_guard<std::mutex> lock(mutex);

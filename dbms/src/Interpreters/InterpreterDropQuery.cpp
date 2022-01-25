@@ -151,7 +151,7 @@ BlockIO InterpreterDropQuery::execute()
             SCOPE_EXIT({
                 // Once the storage's metadata removed from disk, we should ensure that it is removed from ManagedStorages
                 if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
-                    storage->removeFromTMTContext();
+                    storage->removeFromTiFlashContext();
             });
 
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_drop_meta_and_data);

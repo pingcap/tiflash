@@ -8,8 +8,8 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <pingcap/pd/MockPDClient.h>
 
 namespace DB
