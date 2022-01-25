@@ -324,11 +324,13 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(
-                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
-                                                      context.getTMTContext().getMPPTaskManager(),
-                                                      context.getSettingsRef().enable_local_tunnel),
-                tipb_exchange_receiver,
-                root_tm,
+                std::make_shared<GRPCReceiverContext>(
+                    tipb_exchange_receiver,
+                    root_tm,
+                    context.getTMTContext().getKVCluster(),
+                    context.getTMTContext().getMPPTaskManager(),
+                    context.getSettingsRef().enable_local_tunnel),
+                tipb_exchange_receiver.encoded_task_meta_size(),
                 10,
                 nullptr);
         BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);

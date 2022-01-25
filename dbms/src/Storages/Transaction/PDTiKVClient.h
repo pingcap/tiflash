@@ -2,6 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <Core/Types.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
@@ -19,14 +20,14 @@ using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 
 namespace DB
 {
-
 struct PDClientHelper
 {
-
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
 
     static Timestamp getGCSafePointWithRetry(
-        const pingcap::pd::ClientPtr & pd_client, bool ignore_cache = true, Int64 safe_point_update_interval_seconds = 30)
+        const pingcap::pd::ClientPtr & pd_client,
+        bool ignore_cache = true,
+        Int64 safe_point_update_interval_seconds = 30)
     {
         if (!ignore_cache)
         {

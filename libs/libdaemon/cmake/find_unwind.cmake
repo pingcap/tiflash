@@ -42,7 +42,7 @@ if (NOT USE_LLVM_LIBUNWIND)
             set (USE_UNWIND 1)
         elseif (CMAKE_SYSTEM MATCHES "Linux")
             set (USE_INTERNAL_UNWIND_LIBRARY 1)
-            set (UNWIND_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind/include")
+            set (UNWIND_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/libunwind/include")
             set (UNWIND_INCREMENTAL_DIR "${PROJECT_BINARY_DIR}/contrib/libunwind-cmake/include")
             set (UNWIND_LIBRARY unwind)
             set (USE_UNWIND 1)
@@ -54,7 +54,7 @@ else()
     # LLVM exposes libunwind.h recently, but it is not yet avaiable in 13.0.0
     # https://lists.llvm.org/pipermail/llvm-dev/2021-December/154418.html
     find_library (UNWIND_LIBRARY unwind)
-    set(UNWIND_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind-llvm")
+    set(UNWIND_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/libunwind-llvm")
     set (USE_UNWIND 1)
 endif ()
 

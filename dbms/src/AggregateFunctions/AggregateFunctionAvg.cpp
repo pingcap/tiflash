@@ -2,6 +2,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -10,12 +11,10 @@ namespace
 template <typename T>
 AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p)
 {
-    if (auto dec_type = typeid_cast<const T *>(p))
+    if (const auto * dec_type = typeid_cast<const T *>(p))
     {
         AggregateFunctionPtr res;
-        PrecType result_prec;
-        ScaleType result_scale;
-        AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale);
+        auto [result_prec, result_scale] = AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale());
         auto result_type = createDecimal(result_prec, result_scale);
         if (checkDecimal<Decimal32>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal32>(
@@ -70,7 +69,7 @@ AggregateFunctionPtr createAggregateFunctionAvg(const std::string & name, const 
         res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*p));
     if (!res)
         throw Exception(
-            "Illegal type " + p->getName() + " of argument for aggregate function " + name,
+            fmt::format("Illegal type {} of argument for aggregate function {}", p->getName(), name),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;

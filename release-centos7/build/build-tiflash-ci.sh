@@ -96,11 +96,6 @@ else
 fi
 ccache -z
 
-pushd ${SRCPATH}/cluster_manage/
-rm -rf ./dist
-./release.sh
-popd
-
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 
@@ -151,12 +146,9 @@ fi
 
 # Reduce binary size by compressing.
 objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
-cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/flash_cluster_manager
 cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 ldd "${INSTALL_DIR}/tiflash"
-
-ldd "${INSTALL_DIR}/tiflash" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
 
 cd "${INSTALL_DIR}"
 chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
