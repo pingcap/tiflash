@@ -173,7 +173,7 @@ bool WALStore::compactLogs()
         auto [compact_log, log_filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 1}, logger, /*manual_flush*/ true);
         in_mem_directory.dumpTo(compact_log);
         compact_log->flush();
-        compact_log.reset();
+        compact_log.reset(); // close fd explictly before renaming file.
 
         // Rename it to be a normal log file.
         const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);

@@ -31,6 +31,8 @@ LogWriter::~LogWriter()
     if (dest)
     {
         flush();
+
+        dest->close(); // close explicitly
     }
 }
 
