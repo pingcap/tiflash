@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 #include <atomic>
 #include <ext/scope_guard.h>

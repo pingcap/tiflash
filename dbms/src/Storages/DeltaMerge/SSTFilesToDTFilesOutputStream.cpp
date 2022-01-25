@@ -12,7 +12,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 
 namespace ProfileEvents
@@ -35,7 +35,7 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     TiDB::SnapshotApplyMethod method_,
     FileConvertJobType job_type_,
-    TMTContext & tmt_)
+    TiFlashContext & tmt_)
     : child(std::move(child_))
     , //
     storage(std::move(storage_))

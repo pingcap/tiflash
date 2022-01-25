@@ -23,7 +23,7 @@
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <boost/algorithm/string/join.hpp>

@@ -46,7 +46,7 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
 MakeRegionQueryInfos(
     const RegionInfoMap & dag_region_infos,
     const std::unordered_set<RegionID> & region_force_retry,
-    TMTContext & tmt,
+    TiFlashContext & tmt,
     MvccQueryInfo & mvcc_info,
     TableID table_id,
     bool batch_cop [[maybe_unused]])

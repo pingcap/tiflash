@@ -6,7 +6,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB::tests
@@ -27,7 +27,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
     // Theses global variables should be initialized by the following order
     // 1. capacity
     // 2. path pool
-    // 3. TMTContext
+    // 3. TiFlashContext
 
     if (testdata_path.empty())
     {

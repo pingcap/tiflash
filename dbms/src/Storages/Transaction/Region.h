@@ -25,7 +25,7 @@ class RegionTable;
 class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
 class Context;
-class TMTContext;
+class TiFlashContext;
 struct WriteCmdsView;
 enum class EngineStoreApplyRes : uint32_t;
 struct SSTViewVec;
@@ -147,7 +147,7 @@ public:
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TiFlashContext & tmt);
 
     UInt64 appliedIndex() const;
 
@@ -173,7 +173,7 @@ public:
     raft_serverpb::MergeState getMergeState() const;
 
     TableID getMappedTableID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & tmt);
     void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 

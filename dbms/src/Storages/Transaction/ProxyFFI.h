@@ -17,13 +17,13 @@ class ReadIndexRequest;
 
 namespace DB
 {
-class TMTContext;
+class TiFlashContext;
 struct EngineStoreServerWrap;
 struct TiFlashRaftProxyHelper;
 
 struct EngineStoreServerWrap
 {
-    TMTContext * tmt{nullptr};
+    TiFlashContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
     std::atomic<EngineStoreServerStatus> status{EngineStoreServerStatus::Idle};
 };

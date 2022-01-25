@@ -43,8 +43,8 @@ class Compiler;
 class MarkCache;
 class UncompressedCache;
 class DBGInvoker;
-class TMTContext;
-using TMTContextPtr = std::shared_ptr<TMTContext>;
+class TiFlashContext;
+using TMTContextPtr = std::shared_ptr<TiFlashContext>;
 class ProcessList;
 class ProcessListElement;
 class Macros;
@@ -342,7 +342,7 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TMTContext & getTMTContext() const;
+    TiFlashContext & getTMTContext() const;
 
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);

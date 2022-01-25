@@ -8,7 +8,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 #include <ext/scope_guard.h>
@@ -558,7 +558,7 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TiFlashContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
@@ -716,7 +716,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & tmt)
 {
     if (index <= appliedIndex())
     {

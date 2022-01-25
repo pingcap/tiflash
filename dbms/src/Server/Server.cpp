@@ -49,7 +49,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <common/ErrorHandlers.h>
@@ -942,7 +942,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Note that theses global variables should be initialized by the following order:
     // 1. capacity
     // 2. path pool
-    // 3. TMTContext
+    // 3. TiFlashContext
 
     // Deprecated settings.
     // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
@@ -1145,7 +1145,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
-        /// create TMTContext
+        /// create TiFlashContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
@@ -1218,7 +1218,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
-        /// initialize TMTContext
+        /// initialize TiFlashContext
         global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 

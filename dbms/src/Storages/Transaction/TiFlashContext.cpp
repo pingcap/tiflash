@@ -8,7 +8,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
 
@@ -19,7 +19,7 @@ extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
 // default wait-index timeout is 5 * 60_000ms.
 extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
-TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+TiFlashContext::TiFlashContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
     , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
@@ -38,7 +38,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
 {}
 
-void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
+void TiFlashContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
     kvstore->restore(proxy_helper);
     region_table.restore();
@@ -51,104 +51,104 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
     }
 }
 
-KVStorePtr & TMTContext::getKVStore()
+KVStorePtr & TiFlashContext::getKVStore()
 {
     return kvstore;
 }
 
-const KVStorePtr & TMTContext::getKVStore() const
+const KVStorePtr & TiFlashContext::getKVStore() const
 {
     return kvstore;
 }
 
-ManagedStorages & TMTContext::getStorages()
+ManagedStorages & TiFlashContext::getStorages()
 {
     return storages;
 }
 
-const ManagedStorages & TMTContext::getStorages() const
+const ManagedStorages & TiFlashContext::getStorages() const
 {
     return storages;
 }
 
-RegionTable & TMTContext::getRegionTable()
+RegionTable & TiFlashContext::getRegionTable()
 {
     return region_table;
 }
 
-const RegionTable & TMTContext::getRegionTable() const
+const RegionTable & TiFlashContext::getRegionTable() const
 {
     return region_table;
 }
 
-BackgroundService & TMTContext::getBackgroundService()
+BackgroundService & TiFlashContext::getBackgroundService()
 {
     return *background_service;
 }
 
-const BackgroundService & TMTContext::getBackgroundService() const
+const BackgroundService & TiFlashContext::getBackgroundService() const
 {
     return *background_service;
 }
 
-GCManager & TMTContext::getGCManager()
+GCManager & TiFlashContext::getGCManager()
 {
     return gc_manager;
 }
 
-Context & TMTContext::getContext()
+Context & TiFlashContext::getContext()
 {
     return context;
 }
 
-const Context & TMTContext::getContext() const
+const Context & TiFlashContext::getContext() const
 {
     return context;
 }
 
-bool TMTContext::isInitialized() const
+bool TiFlashContext::isInitialized() const
 {
     return getStoreStatus() != StoreStatus::Idle;
 }
 
-void TMTContext::setStatusRunning()
+void TiFlashContext::setStatusRunning()
 {
     store_status = StoreStatus::Running;
 }
 
-TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const
+TiFlashContext::StoreStatus TiFlashContext::getStoreStatus(std::memory_order memory_order) const
 {
     return store_status.load(memory_order);
 }
 
-SchemaSyncerPtr TMTContext::getSchemaSyncer() const
+SchemaSyncerPtr TiFlashContext::getSchemaSyncer() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return schema_syncer;
 }
 
-void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
+void TiFlashContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
     schema_syncer = rhs;
 }
 
-pingcap::pd::ClientPtr TMTContext::getPDClient() const
+pingcap::pd::ClientPtr TiFlashContext::getPDClient() const
 {
     return cluster->pd_client;
 }
 
-MPPTaskManagerPtr TMTContext::getMPPTaskManager()
+MPPTaskManagerPtr TiFlashContext::getMPPTaskManager()
 {
     return mpp_task_manager;
 }
 
-const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
+const std::unordered_set<std::string> & TiFlashContext::getIgnoreDatabases() const
 {
     return ignore_databases;
 }
 
-void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
+void TiFlashContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
@@ -180,49 +180,49 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     }
 }
 
-bool TMTContext::checkShuttingDown(std::memory_order memory_order) const
+bool TiFlashContext::checkShuttingDown(std::memory_order memory_order) const
 {
     return getStoreStatus(memory_order) >= StoreStatus::Stopping;
 }
-bool TMTContext::checkTerminated(std::memory_order memory_order) const
+bool TiFlashContext::checkTerminated(std::memory_order memory_order) const
 {
     return getStoreStatus(memory_order) == StoreStatus::Terminated;
 }
-bool TMTContext::checkRunning(std::memory_order memory_order) const
+bool TiFlashContext::checkRunning(std::memory_order memory_order) const
 {
     return getStoreStatus(memory_order) == StoreStatus::Running;
 }
 
-void TMTContext::setStatusStopping()
+void TiFlashContext::setStatusStopping()
 {
     store_status = StoreStatus::Stopping;
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }
 
-void TMTContext::setStatusTerminated()
+void TiFlashContext::setStatusTerminated()
 {
     store_status = StoreStatus::Terminated;
 }
 
-UInt64 TMTContext::replicaReadMaxThread() const
+UInt64 TiFlashContext::replicaReadMaxThread() const
 {
     return replica_read_max_thread.load(std::memory_order_relaxed);
 }
-UInt64 TMTContext::batchReadIndexTimeout() const
+UInt64 TiFlashContext::batchReadIndexTimeout() const
 {
     return batch_read_index_timeout_ms.load(std::memory_order_relaxed);
 }
-UInt64 TMTContext::waitIndexTimeout() const
+UInt64 TiFlashContext::waitIndexTimeout() const
 {
     return wait_index_timeout_ms.load(std::memory_order_relaxed);
 }
-Int64 TMTContext::waitRegionReadyTimeout() const
+Int64 TiFlashContext::waitRegionReadyTimeout() const
 {
     return wait_region_ready_timeout_sec.load(std::memory_order_relaxed);
 }
 
-const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
+const std::string & IntoStoreStatusName(TiFlashContext::StoreStatus status)
 {
     static const std::string StoreStatusName[] = {
         "Idle",
@@ -233,7 +233,7 @@ const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
     };
     static const std::string Unknown = "Unknown";
     auto idx = static_cast<uint8_t>(status);
-    return idx > static_cast<uint8_t>(TMTContext::StoreStatus::_MIN) && idx < static_cast<uint8_t>(TMTContext::StoreStatus::_MAX)
+    return idx > static_cast<uint8_t>(TiFlashContext::StoreStatus::_MIN) && idx < static_cast<uint8_t>(TiFlashContext::StoreStatus::_MAX)
         ? StoreStatusName[idx - 1]
         : Unknown;
 }

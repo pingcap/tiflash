@@ -13,7 +13,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <grpcpp/server_builder.h>
 
 #include <ext/scope_guard.h>

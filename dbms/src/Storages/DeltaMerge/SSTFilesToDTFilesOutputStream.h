@@ -15,7 +15,7 @@ class Logger;
 
 namespace DB
 {
-class TMTContext;
+class TiFlashContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
@@ -53,7 +53,7 @@ public:
                                   DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                   TiDB::SnapshotApplyMethod method_,
                                   FileConvertJobType job_type_,
-                                  TMTContext & tmt_);
+                                  TiFlashContext & tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -77,7 +77,7 @@ private:
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
-    TMTContext & tmt;
+    TiFlashContext & tmt;
     Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;

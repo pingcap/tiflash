@@ -13,7 +13,7 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 

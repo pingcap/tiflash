@@ -11,7 +11,7 @@
 #include <Server/IServer.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <daemon/BaseDaemon.h>
 #include <pingcap/Config.h>
 
@@ -280,7 +280,7 @@ class ImitativeEnv
         // Theses global variables should be initialized by the following order
         // 1. capacity
         // 2. path pool
-        // 3. TMTContext
+        // 3. TiFlashContext
         auto path = Poco::Path{workdir}.absolute().toString();
         global_context->initializePathCapacityMetric(0, {path}, {}, {}, {});
         global_context->setPathPool(

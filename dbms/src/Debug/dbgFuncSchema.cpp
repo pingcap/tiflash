@@ -8,8 +8,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -42,7 +42,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
@@ -67,7 +67,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->reset();
 

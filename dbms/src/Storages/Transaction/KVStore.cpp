@@ -10,7 +10,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 #include <chrono>
 #include <ext/scope_guard.h>
@@ -96,7 +96,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(region.first, region.second);
 }
 
-void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
+void KVStore::tryFlushRegionCacheInStorage(TiFlashContext & tmt, const Region & region, Poco::Logger * log)
 {
     if (tmt.isBgFlushDisabled())
     {
@@ -209,7 +209,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -250,7 +250,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
         tmt);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TiFlashContext & tmt)
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -264,7 +264,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
     return res;
 }
 
-void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
+void KVStore::handleDestroy(UInt64 region_id, TiFlashContext & tmt)
 {
     auto task_lock = genTaskLock();
     const auto region = getRegion(region_id);
@@ -301,7 +301,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     UInt64 curr_region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
@@ -362,7 +362,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                                                 UInt64 curr_region_id,
                                                 UInt64 index,
                                                 UInt64 term,
-                                                TMTContext & tmt)
+                                                TiFlashContext & tmt)
 {
     Stopwatch watch;
     SCOPE_EXIT({
@@ -548,7 +548,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     }
 }
 
-void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & terminate_signals_counter)
+void WaitCheckRegionReady(const TiFlashContext & tmt, const std::atomic_size_t & terminate_signals_counter)
 {
     constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
 

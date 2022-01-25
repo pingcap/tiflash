@@ -29,7 +29,7 @@ using BlockUPtr = std::unique_ptr<Block>;
 /**
  * An interface for Storages synced from TiDB.
  *
- * Note that you must override `startup` and `shutdown` to register/remove this table into TMTContext.
+ * Note that you must override `startup` and `shutdown` to register/remove this table into TiFlashContext.
  */
 class IManageableStorage : public IStorage
 {
@@ -124,7 +124,7 @@ public:
         throw Exception("Method modifyASTStorage is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
+    /// Remove this storage from TiFlashContext. Should be called after its metadata and data have been removed from disk.
     virtual void removeFromTMTContext() = 0;
 
     PKType getPKType() const

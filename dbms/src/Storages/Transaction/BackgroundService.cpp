@@ -3,17 +3,17 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 namespace DB
 {
-BackgroundService::BackgroundService(TMTContext & tmt_)
+BackgroundService::BackgroundService(TiFlashContext & tmt_)
     : tmt(tmt_)
     , background_pool(tmt.getContext().getBackgroundPool())
     , log(&Poco::Logger::get("BackgroundService"))
 {
     if (!tmt.isInitialized())
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("TiFlashContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     single_thread_task_handle = background_pool.addTask(
         [this] {

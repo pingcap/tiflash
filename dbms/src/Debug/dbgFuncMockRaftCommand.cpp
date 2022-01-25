@@ -8,7 +8,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <fmt/core.h>
 

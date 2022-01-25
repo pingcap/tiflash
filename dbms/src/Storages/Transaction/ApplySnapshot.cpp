@@ -15,7 +15,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 #include <ext/scope_guard.h>
 
@@ -36,7 +36,7 @@ extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
 template <typename RegionPtrWrap>
-void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & tmt)
 {
     auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
@@ -109,7 +109,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 }
 
 template <typename RegionPtrWrap>
-void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
 
@@ -213,7 +213,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
     const SSTViewVec snaps,
     uint64_t /*index*/,
     uint64_t /*term*/,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     RegionPreDecodeBlockDataPtr cache{nullptr};
     {
@@ -275,7 +275,7 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     return preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
 }
@@ -288,7 +288,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     uint64_t /*index*/,
     uint64_t /*term*/,
     DM::FileConvertJobType job_type,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     auto context = tmt.getContext();
     bool force_decode = false;
@@ -398,7 +398,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 }
 
 template <typename RegionPtrWrap>
-void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & tmt)
 {
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
@@ -412,12 +412,12 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
     LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
 }
 
-template void KVStore::handlePreApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
-template void KVStore::handlePreApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
-template void KVStore::checkAndApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
-template void KVStore::checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
-template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
-template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, RegionPtr, UInt64, TMTContext &);
+template void KVStore::handlePreApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TiFlashContext &);
+template void KVStore::handlePreApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TiFlashContext &);
+template void KVStore::checkAndApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TiFlashContext &);
+template void KVStore::checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TiFlashContext &);
+template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TiFlashContext &);
+template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, RegionPtr, UInt64, TiFlashContext &);
 
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
@@ -455,7 +455,7 @@ void KVStore::handleApplySnapshot(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
-    TMTContext & tmt)
+    TiFlashContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
     if (snapshot_apply_method == TiDB::SnapshotApplyMethod::Block)
@@ -464,7 +464,7 @@ void KVStore::handleApplySnapshot(
         handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, tmt)}, tmt);
 }
 
-EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -547,7 +547,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
 }
 
-RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & tmt)
 {
     if (index <= region->appliedIndex())
         return nullptr;

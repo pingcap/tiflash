@@ -11,7 +11,7 @@
 
 namespace DB
 {
-class TMTContext;
+class TiFlashContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -21,14 +21,14 @@ class BackgroundProcessingPool;
 class BackgroundService : boost::noncopyable
 {
 public:
-    explicit BackgroundService(TMTContext &);
+    explicit BackgroundService(TiFlashContext &);
 
     ~BackgroundService();
 
     void addRegionToFlush(const RegionPtr & region);
 
 private:
-    TMTContext & tmt;
+    TiFlashContext & tmt;
     BackgroundProcessingPool & background_pool;
 
     Poco::Logger * log;

@@ -11,7 +11,7 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <fmt/core.h>
 
 namespace DB

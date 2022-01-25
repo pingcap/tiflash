@@ -46,7 +46,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/SchemaSyncService.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -1359,7 +1359,7 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-TMTContext & Context::getTMTContext() const
+TiFlashContext & Context::getTMTContext() const
 {
     auto lock = getLock();
     if (!shared->tmt_context)
@@ -1472,8 +1472,8 @@ void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::C
 {
     auto lock = getLock();
     if (shared->tmt_context)
-        throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
+        throw Exception("TiFlashContext has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->tmt_context = std::make_shared<TiFlashContext>(*this, raft_config, cluster_config);
 }
 
 void Context::initializePathCapacityMetric( //

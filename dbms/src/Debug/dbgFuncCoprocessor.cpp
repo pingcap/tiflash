@@ -30,7 +30,7 @@
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 

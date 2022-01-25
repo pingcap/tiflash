@@ -1,6 +1,6 @@
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 namespace DB
 {

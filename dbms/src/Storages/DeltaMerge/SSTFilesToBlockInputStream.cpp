@@ -12,7 +12,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -31,7 +31,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     Timestamp gc_safepoint_,
     bool force_decode_,
-    TMTContext & tmt_,
+    TiFlashContext & tmt_,
     size_t expected_size_)
     : region(std::move(region_))
     , snaps(snaps_)

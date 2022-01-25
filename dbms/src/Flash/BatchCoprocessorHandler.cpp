@@ -4,7 +4,7 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 #include <ext/scope_guard.h>
 

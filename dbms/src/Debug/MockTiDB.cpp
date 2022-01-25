@@ -13,8 +13,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB

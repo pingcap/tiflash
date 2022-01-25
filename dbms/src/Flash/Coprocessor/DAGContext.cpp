@@ -2,7 +2,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 namespace DB
 {

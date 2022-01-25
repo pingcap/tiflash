@@ -42,7 +42,7 @@ struct MockRaftCommand;
 struct MockTiDBTable;
 struct TiKVRangeKey;
 
-class TMTContext;
+class TiFlashContext;
 
 struct SSTViewVec;
 struct WriteCmdsView;
@@ -72,7 +72,7 @@ public:
 
     void tryPersist(const RegionID region_id);
 
-    static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log);
+    static void tryFlushRegionCacheInStorage(TiFlashContext & tmt, const Region & region, Poco::Logger * log);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
@@ -80,34 +80,34 @@ public:
                                            UInt64 region_id,
                                            UInt64 index,
                                            UInt64 term,
-                                           TMTContext & tmt);
+                                           TiFlashContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+        TiFlashContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TiFlashContext & tmt);
 
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TiFlashContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
         uint64_t term,
-        TMTContext & tmt);
+        TiFlashContext & tmt);
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
         uint64_t term,
-        TMTContext & tmt);
+        TiFlashContext & tmt);
     template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void handlePreApplySnapshot(const RegionPtrWrap &, TiFlashContext & tmt);
 
-    void handleDestroy(UInt64 region_id, TMTContext & tmt);
+    void handleDestroy(UInt64 region_id, TiFlashContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -147,14 +147,14 @@ private:
         uint64_t index,
         uint64_t term,
         DM::FileConvertJobType,
-        TMTContext & tmt);
+        TiFlashContext & tmt);
 
     template <typename RegionPtrWrap>
-    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplySnapshot(const RegionPtrWrap &, TiFlashContext & tmt);
     template <typename RegionPtrWrap>
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & tmt);
 
-    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
@@ -177,7 +177,7 @@ private:
         UInt64 curr_region_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt);
+        TiFlashContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
@@ -223,6 +223,6 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
+void WaitCheckRegionReady(const TiFlashContext &, const std::atomic_size_t & terminate_signals_counter);
 
 } // namespace DB

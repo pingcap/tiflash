@@ -3,7 +3,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <fmt/core.h>
 
 namespace DB

@@ -15,7 +15,7 @@ class Logger;
 
 namespace DB
 {
-class TMTContext;
+class TiFlashContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
@@ -45,7 +45,7 @@ public:
                                DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                Timestamp gc_safepoint_,
                                bool force_decode_,
-                               TMTContext & tmt_,
+                               TiFlashContext & tmt_,
                                size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
 
@@ -77,7 +77,7 @@ private:
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
-    TMTContext & tmt;
+    TiFlashContext & tmt;
     const Timestamp gc_safepoint;
     size_t expected_size;
     Poco::Logger * log;

@@ -38,7 +38,7 @@ doLearnerRead(
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
-    TMTContext & tmt,
+    TiFlashContext & tmt,
     const LogWithPrefixPtr & log);
 
 } // namespace DB

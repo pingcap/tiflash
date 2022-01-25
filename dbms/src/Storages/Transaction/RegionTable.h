@@ -27,7 +27,7 @@ struct ColumnsDescription;
 class Context;
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
-class TMTContext;
+class TiFlashContext;
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class Block;
@@ -149,7 +149,7 @@ public:
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
-    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TMTContext & tmt,
+    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TiFlashContext & tmt,
                                                                     const TiDB::TableID table_id,
                                                                     const RegionPtr & region,
                                                                     const Timestamp start_ts,

@@ -20,7 +20,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <fmt/core.h>
@@ -171,7 +171,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
                         ErrorCodes::BAD_ARGUMENTS);
 
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
 
     metapb::Region region_info;
 

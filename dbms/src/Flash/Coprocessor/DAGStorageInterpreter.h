@@ -9,8 +9,8 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/ManagedStorages.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/Types.h>
 
 #pragma GCC diagnostic push
@@ -84,7 +84,7 @@ private:
 
     TableID table_id;
     const Settings & settings;
-    TMTContext & tmt;
+    TiFlashContext & tmt;
 
     /// Intermediate variables shared by multiple member functions
 

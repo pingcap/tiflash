@@ -9,7 +9,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
 #include <common/ThreadPool.h>
@@ -101,7 +101,7 @@ class MvccQueryInfoWrap
     Base::RegionsQueryInfo * regions_info_ptr;
 
 public:
-    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id)
+    MvccQueryInfoWrap(Base & mvcc_query_info, TiFlashContext & tmt, const TiDB::TableID table_id)
         : inner(mvcc_query_info)
     {
         if (likely(!inner.regions_query_info.empty()))
@@ -427,7 +427,7 @@ LearnerReadSnapshot doLearnerRead(
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
-    TMTContext & tmt,
+    TiFlashContext & tmt,
     const LogWithPrefixPtr & log)
 {
     RegionException::UnavailableRegions fail_region_ids;

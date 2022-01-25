@@ -12,12 +12,12 @@ using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
+AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & tmt);
 
 Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TMTContext & tmt);
+                                   TiFlashContext & tmt);
 
 } // namespace DB

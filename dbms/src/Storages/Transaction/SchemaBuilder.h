@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/SchemaGetter.h>
 #include <Storages/Transaction/ManagedStorages.h>
+#include <Storages/Transaction/SchemaGetter.h>
 
 namespace DB
 {

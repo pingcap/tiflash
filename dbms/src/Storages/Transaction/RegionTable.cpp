@@ -7,7 +7,7 @@
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 namespace DB
@@ -222,7 +222,7 @@ void removeObsoleteDataInStorage(
     const TableID table_id,
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
-    TMTContext & tmt = context->getTMTContext();
+    TiFlashContext & tmt = context->getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     // For DT only now
     if (!storage || storage->engineType() != TiDB::StorageEngine::DT)

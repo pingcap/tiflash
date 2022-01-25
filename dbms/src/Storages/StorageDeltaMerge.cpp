@@ -29,7 +29,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
@@ -599,9 +599,9 @@ BlockInputStreams StorageDeltaMerge::read(
     if (unlikely(!query_info.mvcc_query_info))
         throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
 
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     if (unlikely(!tmt.isInitialized()))
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("TiFlashContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
@@ -1414,7 +1414,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 
 void StorageDeltaMerge::startup()
 {
-    TMTContext & tmt = global_context.getTMTContext();
+    TiFlashContext & tmt = global_context.getTMTContext();
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
@@ -1431,8 +1431,8 @@ void StorageDeltaMerge::shutdown()
 
 void StorageDeltaMerge::removeFromTMTContext()
 {
-    // remove this table from TMTContext
-    TMTContext & tmt_context = global_context.getTMTContext();
+    // remove this table from TiFlashContext
+    TiFlashContext & tmt_context = global_context.getTMTContext();
     tmt_context.getStorages().remove(tidb_table_info.id);
     tmt_context.getRegionTable().removeTable(tidb_table_info.id);
 }

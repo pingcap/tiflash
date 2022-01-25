@@ -14,7 +14,7 @@
 #include <Poco/FileStream.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/ThreadPool.h>
 
 #include <future>

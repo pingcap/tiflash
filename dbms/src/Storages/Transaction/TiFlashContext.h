@@ -28,7 +28,7 @@ using GCManagerPtr = std::shared_ptr<GCManager>;
 
 struct TiFlashRaftConfig;
 
-class TMTContext : private boost::noncopyable
+class TiFlashContext : private boost::noncopyable
 {
 public:
     enum class StoreStatus : uint8_t
@@ -63,7 +63,7 @@ public:
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
+    explicit TiFlashContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -127,6 +127,6 @@ private:
     std::atomic_int64_t wait_region_ready_timeout_sec;
 };
 
-const std::string & IntoStoreStatusName(TMTContext::StoreStatus status);
+const std::string & IntoStoreStatusName(TiFlashContext::StoreStatus status);
 
 } // namespace DB

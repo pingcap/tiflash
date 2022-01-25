@@ -20,9 +20,9 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 

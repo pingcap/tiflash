@@ -13,7 +13,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
 #include <common/logger_useful.h>
@@ -397,7 +397,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                       region_data_lock);
 }
 
-RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
+RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TiFlashContext & tmt,
                                                                                    const TiDB::TableID table_id,
                                                                                    const RegionPtr & region,
                                                                                    const Timestamp start_ts,
@@ -528,7 +528,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 }
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
+AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & tmt)
 {
     TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
@@ -605,7 +605,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TMTContext & tmt)
+                                   TiFlashContext & tmt)
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.

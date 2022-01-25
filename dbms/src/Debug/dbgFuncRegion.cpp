@@ -10,7 +10,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <fmt/core.h>
 
@@ -59,7 +59,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
             end_keys.emplace_back(end_datum.field());
         }
 
-        TMTContext & tmt = context.getTMTContext();
+        TiFlashContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
@@ -70,7 +70,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         HandleID start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
         HandleID end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
-        TMTContext & tmt = context.getTMTContext();
+        TiFlashContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
@@ -80,7 +80,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegions();
 
     output("region_table try flush regions");
@@ -95,7 +95,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 
     RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
 
     output(fmt::format("region_table try flush region {}", region_id));
@@ -178,7 +178,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
 
     RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
-    TMTContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTMTContext();
     KVStorePtr & kvstore = tmt.getKVStore();
     RegionTable & region_table = tmt.getRegionTable();
     kvstore->mockRemoveRegion(region_id, region_table);

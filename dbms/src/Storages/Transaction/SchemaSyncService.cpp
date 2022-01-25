@@ -8,7 +8,7 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 
 namespace DB

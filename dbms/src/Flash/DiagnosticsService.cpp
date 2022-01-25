@@ -5,7 +5,7 @@
 //#include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiFlashContext.h>
 //#include <fmt/core.h>
 //#include <re2/re2.h>
 #include <Poco/DirectoryIterator.h>

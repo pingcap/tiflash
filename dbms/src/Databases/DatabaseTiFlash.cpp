@@ -15,8 +15,8 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/ManagedStorages.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
@@ -252,7 +252,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     if (!to_database_concrete)
         throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
-    // DatabaseTiFlash should only manage tables in TMTContext.
+    // DatabaseTiFlash should only manage tables in TiFlashContext.
     ManageableStoragePtr table;
     {
         StoragePtr table_ = tryGetTable(context, table_name);

@@ -11,9 +11,9 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/ManagedStorages.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
+#include <Storages/Transaction/TiFlashContext.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/ThreadPool.h>
