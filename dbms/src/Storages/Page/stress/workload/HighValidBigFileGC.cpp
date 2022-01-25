@@ -42,7 +42,7 @@ public:
         {
             stop_watch.start();
 
-            PageStorage::Config config;
+            DB::PageStorage::Config config;
             config.file_max_size = 8ULL * DB::GB;
             config.file_roll_size = 8ULL * DB::GB;
             initPageStorage(config, name());
@@ -63,7 +63,7 @@ public:
 
         // Generate normal data in the same Pagefile
         {
-            PageStorage::Config config;
+            DB::PageStorage::Config config;
             config.file_max_size = DB::PAGE_FILE_MAX_SIZE;
             config.file_roll_size = DB::PAGE_FILE_ROLL_SIZE;
             initPageStorage(config, name());

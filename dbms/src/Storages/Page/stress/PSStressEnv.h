@@ -1,18 +1,17 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/PageStorage.h>
 #include <fmt/format.h>
 
 #include <atomic>
 
-using namespace DB::PS::V2;
 namespace Poco
 {
 class Logger;
 }
 
-using PSPtr = std::shared_ptr<DB::PS::V2::PageStorage>;
+using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 enum StressEnvStat
 {
@@ -70,6 +69,7 @@ struct StressEnv
     size_t status_interval = 1;
     size_t situation_mask = 0;
     bool verify = true;
+    size_t running_ps_version = 3;
 
     std::vector<std::string> paths;
     std::vector<std::string> failpoints;
@@ -81,7 +81,8 @@ struct StressEnv
             "num_writers: {}, num_readers: {}, init_pages: {}, clean_before_run: {}"
             ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
             ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
-            ", status_interval: {}, situation_mask: {}, verify: {}."
+            ", status_interval: {}, situation_mask: {}, verify: {}"
+            ", running_pagestorage_version : {}."
             "}}",
             num_writers,
             num_readers,
@@ -95,7 +96,8 @@ struct StressEnv
             fmt::join(failpoints.begin(), failpoints.end(), ","),
             status_interval,
             situation_mask,
-            verify
+            verify,
+            running_ps_version
             //
         );
     }

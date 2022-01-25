@@ -15,14 +15,6 @@ target_compile_options(gtests_page_storage PRIVATE -Wno-unknown-pragmas)
 target_compile_definitions(gtests_page_storage PRIVATE DBMS_PUBLIC_GTEST)
 add_check(gtests_page_storage)
 
-# non googletest
-add_headers_and_sources(page_stress_testing stress)
-add_headers_and_sources(page_stress_testing stress/workload)
-add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_sources})
-target_link_libraries(page_stress_testing page_storage_v2)
-target_include_directories(page_stress_testing PRIVATE stress)
-target_compile_options(page_stress_testing PRIVATE -Wno-format -lc++) # turn off printf format check
-
 # FIXME: mock disk full by FailPoint, and move this test into a unittest case.
 add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_full.cpp)
 target_link_libraries(test_page_storage_write_disk_full dbms)
