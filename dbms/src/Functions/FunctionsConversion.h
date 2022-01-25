@@ -1614,20 +1614,16 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception(fmt::format("Function {} only accept 2 arguments", getName()), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception("Function " + getName() + " only accept 2 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         // TODO: Maybe FixedString?
         if (!removeNullable(arguments[0].type)->isString())
-<<<<<<< HEAD
             throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
-=======
-            throw Exception(fmt::format("First argument for function {} must be String, but get {}", getName(), arguments[0].type->getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
         if (!removeNullable(arguments[1].type)->isString())
-            throw Exception(fmt::format("Second argument for function {} must be String, but get {}", getName(), arguments[1].type->getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Second argument for function " + getName() + " must be String, but get " + arguments[1].type->getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
         {
@@ -1642,7 +1638,7 @@ public:
         }
         else
         {
-            throw Exception(fmt::format("Unknown name for FunctionStrToDate: {}", getName()), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unknown name for FunctionStrToDate:" + getName(), ErrorCodes::LOGICAL_ERROR);
         }
     }
 
