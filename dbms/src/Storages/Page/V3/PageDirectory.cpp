@@ -221,26 +221,29 @@ PageDirectory::PageDirectory()
 {
 }
 
-void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
+PageDirectory PageDirectory::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
 {
     // TODO: Speedup restoring
     CollapsingPageDirectory in_mem_directory;
     auto callback = [&in_mem_directory](PageEntriesEdit && edit) {
         in_mem_directory.apply(std::move(edit));
     };
-    wal = WALStore::create(callback, provider, delegator, write_limiter);
+
+    PageDirectory dir;
+    // Reset the `sequence` to the maximum of persisted.
+    // PageId max_page_id = in_mem_directory.max_applied_page_id; // TODO: return it to outer function
+    dir.sequence = in_mem_directory.max_applied_ver.sequence;
+    dir.wal = WALStore::create(callback, provider, delegator, write_limiter);
     for (const auto & [page_id, versioned_entry] : in_mem_directory.table_directory)
     {
         const auto & version = versioned_entry.first;
         const auto & entry = versioned_entry.second;
-        auto [iter, created] = mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
+        auto [iter, created] = dir.mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
             iter->second = std::make_shared<VersionedPageEntries>();
         iter->second->createNewVersion(version.sequence, version.epoch, entry);
     }
-    // Reset the `sequence` to the maximum of persisted.
-    // PageId max_page_id = in_mem_directory.max_applied_page_id; // TODO: return it to outer function
-    sequence = in_mem_directory.max_applied_ver.sequence;
+    return dir;
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const

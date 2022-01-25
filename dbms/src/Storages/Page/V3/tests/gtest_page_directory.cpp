@@ -33,7 +33,7 @@ public:
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        dir.restore(provider, delegator, nullptr);
+        dir = PageDirectory::create(provider, delegator, nullptr);
     }
 
     void TearDown() override
