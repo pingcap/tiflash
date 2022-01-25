@@ -33,7 +33,7 @@ function bootstrap_llvm() {
 
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
-        -DLLVM_ENABLE_PROJECTS="clang;lld;polly" \
+        -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
         -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DLIBCXX_USE_COMPILER_RT=ON \
