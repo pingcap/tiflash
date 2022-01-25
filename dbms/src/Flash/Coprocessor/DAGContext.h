@@ -17,6 +17,7 @@ namespace DB
 {
 class Context;
 class MPPTunnelSet;
+class ExchangeReceiver;
 
 struct ProfileStreamsInfo
 {
@@ -105,7 +106,7 @@ public:
     void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
-    bool shouldClipToZero();
+    bool shouldClipToZero() const;
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
@@ -149,13 +150,16 @@ public:
         return io;
     }
 
+    void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
     bool has_read_wait_index = false;
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
-    String table_scan_executor_id = "";
+    String table_scan_executor_id;
     String tidb_host = "Unknown";
     bool collect_execution_summaries;
     bool return_executor_id;
@@ -202,6 +206,9 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    /// key: executor_id of ExchangeReceiver nodes in dag.
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
+    bool mpp_exchange_receiver_map_inited = false;
 };
 
 } // namespace DB
