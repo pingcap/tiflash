@@ -7,12 +7,9 @@
 #include <Poco/ThreadPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V3/PageStorageImpl.h>
 #include <fmt/format.h>
 
 #define NORMAL_WORKLOAD 0
-using namespace DB::PS::V2;
 template <typename Child>
 class StressWorkloadFunc
 {

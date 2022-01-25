@@ -1,13 +1,11 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/PageStorage.h>
 #include <fmt/format.h>
 
 #include <atomic>
 
-using namespace DB::PS::V2;
 namespace Poco
 {
 class Logger;

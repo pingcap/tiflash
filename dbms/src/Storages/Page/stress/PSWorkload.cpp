@@ -2,6 +2,8 @@
 #include <Encryption/MockKeyManager.h>
 #include <PSWorkload.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <TestUtils/MockDiskDelegator.h>
 
 void StressWorkload::onDumpResult()
