@@ -1,0 +1,84 @@
+#pragma once
+
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
+
+namespace DB
+{
+namespace DM
+{
+/// MemTableSet contains column file which data just resides in memory.
+/// And the column files will be flushed periodically to ColumnFilePersistedSet.
+///
+/// This class is not thread safe, manipulate on it requires acquire extra synchronization
+class MemTableSet : public std::enable_shared_from_this<MemTableSet>
+    , private boost::noncopyable
+{
+private:
+    ColumnFiles column_files;
+
+    std::atomic<size_t> rows = 0;
+    std::atomic<size_t> bytes = 0;
+    std::atomic<size_t> deletes = 0;
+
+    Poco::Logger * log;
+
+private:
+    BlockPtr lastSchema();
+
+    void appendColumnFileInner(const ColumnFilePtr & column_file);
+
+public:
+    MemTableSet(const ColumnFiles & in_memory_files = {})
+        : column_files(in_memory_files)
+        , log(&Poco::Logger::get("MemTableSet"))
+    {
+        for (const auto & file : column_files)
+        {
+            rows += file->getRows();
+            bytes += file->getBytes();
+            deletes += file->getDeletes();
+        }
+    }
+
+    String info() const
+    {
+        return fmt::format("MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
+                           column_files.size(),
+                           rows.load(),
+                           bytes.load(),
+                           deletes.load());
+    }
+
+    ColumnFiles cloneColumnFiles() { return column_files; }
+
+    size_t getColumnFileCount() const { return column_files.size(); }
+    size_t getRows() const { return rows; }
+    size_t getBytes() const { return bytes; }
+    size_t getDeletes() const { return deletes; }
+
+    /// The following methods returning false means this operation failed, caused by other threads could have done
+    /// some updates on this instance. E.g. this instance have been abandoned.
+    /// Caller should try again from the beginning.
+    void appendColumnFile(const ColumnFilePtr & column_file);
+
+    void appendToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
+
+    void appendDeleteRange(const RowKeyRange & delete_range);
+
+    void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & column_files_, bool clear_data_in_range);
+
+    /// Create a constant snapshot for read.
+    /// Returns empty if this instance is abandoned, you should try again.
+    ColumnFileSetSnapshotPtr createSnapshot();
+
+    FlushColumnFileTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
+
+    void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);
+};
+
+using MemTableSetPtr = std::shared_ptr<MemTableSet>;
+
+} // namespace DM
+} // namespace DB
