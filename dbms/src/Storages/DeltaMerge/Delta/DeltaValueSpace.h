@@ -4,10 +4,11 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/Delta/DeltaPack.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackBlock.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackDeleteRange.h>
-#include <Storages/DeltaMerge/Delta/DeltaPackFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -75,7 +76,7 @@ public:
 
 private:
     PageId id;
-    DeltaPacks packs;
+    ColumnFiles column_files;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -87,8 +88,6 @@ private:
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
     std::atomic_bool abandoned = false;
-    /// We need to run compact.
-    std::atomic_bool shouldCompact = false;
     /// Current segment is being compacted, split, merged or merged delta.
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
@@ -112,12 +111,12 @@ private:
 private:
     BlockPtr lastSchema();
 
-    void checkPacks(const DeltaPacks & new_packs);
+    void checkColumnFiles(const ColumnFiles & new_column_files);
 
-    void appendPackInner(const DeltaPackPtr & pack);
+    void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    DeltaValueSpace(PageId id_, const DeltaPacks & packs_ = {});
+    DeltaValueSpace(PageId id_, const ColumnFiles & column_files_ = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
@@ -126,7 +125,7 @@ public:
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const
     {
-        return "{Delta [" + DB::toString(id) + "]: " + DB::toString(packs.size()) + " packs, " + DB::toString(rows.load()) + " rows, "
+        return "{Delta [" + DB::toString(id) + "]: " + DB::toString(column_files.size()) + " column files, " + DB::toString(rows.load()) + " rows, "
             + DB::toString(unsaved_rows.load()) + " unsaved_rows, " + DB::toString(unsaved_bytes.load()) + " unsaved_bytes, "
             + DB::toString(deletes.load()) + " deletes, " + DB::toString(unsaved_deletes.load()) + " unsaved_deletes}";
     }
@@ -154,12 +153,12 @@ public:
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
-    DeltaPacks
-    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const DeltaPacks & head_packs, WriteBatches & wbs) const;
+    ColumnFiles
+    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 
-    size_t getPackCount() const { return packs.size(); }
+    size_t getColumnFileCount() const { return column_files.size(); }
     size_t getRows(bool use_unsaved = true) const { return use_unsaved ? rows.load() : rows - unsaved_rows; }
     size_t getBytes(bool use_unsaved = true) const { return use_unsaved ? bytes.load() : bytes - unsaved_bytes; }
     size_t getDeletes() const { return deletes; }
@@ -173,7 +172,6 @@ public:
     size_t getValidCacheRows() const;
 
     bool isUpdating() const { return is_updating; }
-    bool isShouldCompact() const { return shouldCompact; }
 
     bool tryLockUpdating()
     {
@@ -237,13 +235,13 @@ public:
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
 
-    bool appendPack(DMContext & context, const DeltaPackPtr & pack);
+    bool appendColumnFile(DMContext & context, const ColumnFilePtr & column_file);
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
     bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
-    bool ingestPacks(DMContext & context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & context, const RowKeyRange & range, const ColumnFiles & packs, bool clear_data_in_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);
@@ -270,7 +268,7 @@ private:
 
     StorageSnapshotPtr storage_snap;
 
-    DeltaPacks packs;
+    ColumnFiles column_files;
     size_t rows;
     size_t bytes;
     size_t deletes;
@@ -293,7 +291,7 @@ public:
         c->is_update = is_update;
         c->shared_delta_index = shared_delta_index;
         c->storage_snap = storage_snap;
-        c->packs = packs;
+        c->column_files = column_files;
         c->rows = rows;
         c->bytes = bytes;
         c->deletes = deletes;
@@ -318,9 +316,9 @@ public:
         CurrentMetrics::sub(type);
     }
 
-    DeltaPacks & getPacks() { return packs; }
+    ColumnFiles & getColumnFiles() { return column_files; }
 
-    size_t getPackCount() const { return packs.size(); }
+    size_t getPackCount() const { return column_files.size(); }
     size_t getRows() const { return rows; }
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
@@ -350,7 +348,7 @@ private:
     // The cumulative rows of packs. Used to fast locate specific packs according to rows offset by binary search.
     std::vector<size_t> pack_rows_end;
 
-    std::vector<DeltaPackReaderPtr> pack_readers;
+    std::vector<ColumnFileReaderPtr> pack_readers;
 
 private:
     DeltaValueReader() = default;
@@ -391,10 +389,10 @@ class DeltaValueInputStream : public IBlockInputStream
 {
 private:
     DeltaValueReader reader;
-    DeltaPacks & packs;
+    ColumnFiles & packs;
     size_t pack_count;
 
-    DeltaPackReaderPtr cur_pack_reader = {};
+    ColumnFileReaderPtr cur_pack_reader = {};
     size_t next_pack_index = 0;
 
 public:
@@ -403,7 +401,7 @@ public:
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
         : reader(context_, delta_snap_, col_defs_, segment_range_)
-        , packs(reader.delta_snap->getPacks())
+        , packs(reader.delta_snap->getColumnFiles())
         , pack_count(packs.size())
     {
     }
