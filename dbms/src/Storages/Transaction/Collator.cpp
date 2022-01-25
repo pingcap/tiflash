@@ -89,7 +89,7 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = static_cast<unsigned char>(escape);
+                        c = escape;
                 }
             }
             else if (c == '_')
