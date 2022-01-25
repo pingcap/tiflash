@@ -151,7 +151,7 @@ public:
     }
 
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const { return mpp_exchange_receiver_map; }
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
