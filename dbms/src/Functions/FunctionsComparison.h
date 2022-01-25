@@ -290,7 +290,7 @@ struct StringComparisonWithCollatorImpl
             size_t a_offset = StringUtil::offsetAt(a_offsets, i);
             size_t b_offset = StringUtil::offsetAt(b_offsets, i);
 
-            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[a_offset]), a_size, reinterpret_cast<const char *>(&b_data[b_offset]), b_size), 0);
+            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[a_offset]), a_size + 1, reinterpret_cast<const char *>(&b_data[b_offset]), b_size + 1), 0);
         }
     }
 
