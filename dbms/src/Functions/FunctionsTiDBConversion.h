@@ -816,27 +816,27 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T outer_value, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, PrecType prec, ScaleType scale, const Context & context)
     {
-        // outer_value is the value that exposes to user. Such as cast(val_int to decimal), val_int is the outer_value which used by user.
-        // And val_int * scale_mul is the inner_value, which is stored in ColumnDecimal internally.
+        // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
+        // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
         static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
         UType scale_mul = getScaleMultiplier<U>(scale);
 
-        Int256 inner_value = static_cast<Int256>(outer_value) * static_cast<Int256>(scale_mul);
-        Int256 inner_max_value = DecimalMaxValue::get(prec);
+        Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
+        Int256 scaled_max_value = DecimalMaxValue::get(prec);
 
-        if (inner_value > inner_max_value || inner_value < -inner_max_value)
+        if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (outer_value > 0)
-                return static_cast<UType>(inner_max_value);
+            if (int_value > 0)
+                return static_cast<UType>(scaled_max_value);
             else
-                return static_cast<UType>(-inner_max_value);
+                return static_cast<UType>(-scaled_max_value);
         }
 
-        return static_cast<UType>(inner_value);
+        return static_cast<UType>(scaled_value);
     }
 
     template <typename U>
