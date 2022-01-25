@@ -1,3 +1,5 @@
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <Functions/FunctionFactory.h>
@@ -81,7 +83,20 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     if (!ret)
         return ret;
 
-    return columnEqual(expected.column, actual.column);
+    ret = columnEqual(expected.column, actual.column);
+    if (!ret)
+        return ret;
+
+    // check if valid value in nullable column.
+    if (actual.type->isNullable())
+    {
+        ColumnPtr data_column = actual.column->isColumnConst() ? dynamic_cast<const ColumnConst *>(actual.column.get())->getDataColumnPtr() : actual.column;
+        ColumnPtr nest_column = dynamic_cast<const ColumnNullable *>(data_column.get())->getNestedColumnPtr();
+        for (size_t i = 0; i < nest_column->size(); ++i)
+            assert(!(*nest_column)[i].isNull());
+    }
+
+    return ret;
 }
 
 ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
