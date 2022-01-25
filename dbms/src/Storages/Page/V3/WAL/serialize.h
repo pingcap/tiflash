@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Storages/Page/V3/PageEntriesEdit.h>
 
 #include <string_view>

@@ -32,7 +32,7 @@ public:
 
     std::tuple<bool, PageEntriesEdit> next();
 
-    Format::LogNumberType logNum()
+    Format::LogNumberType logNum() const
     {
         if (reader == nullptr)
             return 0;

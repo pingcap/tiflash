@@ -22,7 +22,7 @@ LogReader::LogReader(
     std::unique_ptr<ReadBufferFromFileBase> && file_,
     Reporter * reporter_,
     bool verify_checksum_,
-    UInt32 log_num_,
+    Format::LogNumberType log_num_,
     WALRecoveryMode recovery_mode_,
     Poco::Logger * log_)
     : verify_checksum(verify_checksum_)
