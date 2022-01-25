@@ -17,13 +17,6 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-
-#ifdef FIU_ENABLE
-#include <Common/randomSeed.h>
-
-#include <pcg_random.hpp>
-#include <thread>
-#endif
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
@@ -90,7 +83,7 @@ using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
 public:
-    [[nodiscard]] PageLock acquireLock() const
+    PageLock acquireLock() const
     {
         return std::make_unique<std::lock_guard<std::mutex>>(m);
     }

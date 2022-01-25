@@ -12,6 +12,13 @@
 #include <mutex>
 #include <type_traits>
 
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#include <thread>
+#endif
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
@@ -163,7 +170,8 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
-            if (iter->expired())
+            auto snapshot_ptr = iter->lock();
+            if (!snapshot_ptr)
             {
                 iter = snapshots.erase(iter);
                 num_snapshots_removed++;
@@ -175,13 +183,6 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
                     std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
                     std::this_thread::sleep_for(ms);
                 });
-
-                auto snapshot_ptr = iter->lock();
-                if (snapshot_ptr == nullptr)
-                {
-                    ++iter;
-                    continue;
-                }
 
                 const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
                 if (snapshot_lifetime > longest_living_seconds)
@@ -421,7 +422,6 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
         return {};
     }
 
-    // Write lock inside
     return getAllPageIds();
 }
 
