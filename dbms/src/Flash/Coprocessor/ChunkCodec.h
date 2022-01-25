@@ -17,7 +17,7 @@ public:
     {}
     virtual String getString() = 0;
     virtual void clear() = 0;
-    void resizeAndRestart(size_t){};
+    virtual void resizeAndRestart(size_t) { throw Exception("resizeAndRestart is virtual"); };
     virtual void encode(const Block & block, size_t start, size_t end) = 0;
     virtual ~ChunkCodecStream() = default;
 

@@ -47,10 +47,13 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     {
     case tipb::EncodeType::TypeDefault:
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
     case tipb::EncodeType::TypeChunk:
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
     case tipb::EncodeType::TypeCHBlock:
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
     }
 }
 

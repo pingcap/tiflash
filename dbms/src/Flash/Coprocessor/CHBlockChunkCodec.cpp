@@ -25,7 +25,7 @@ public:
         return output->releaseStr();
     }
 
-    void resizeAndRestart(size_t size)
+    void resizeAndRestart(size_t size) override
     {
         if (nullptr == output)
         {
