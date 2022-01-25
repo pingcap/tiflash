@@ -6,7 +6,6 @@
 function prepare_basic() {
     yum install -y epel-release centos-release-scl
     yum install -y \
-         ccache \
          devscripts \
          fakeroot \
          debhelper \

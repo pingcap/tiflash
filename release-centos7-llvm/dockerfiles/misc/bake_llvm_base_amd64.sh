@@ -43,6 +43,10 @@ function bake_llvm_base_amd64() {
     # Curl
     source $SCRIPTPATH/install_curl.sh
     install_curl "7.80.0"
+
+    # ccache
+    source $SCRIPTPATH/install_ccache.sh
+    install_ccache "7.80.0"
 }
 
 bake_llvm_base_amd64
