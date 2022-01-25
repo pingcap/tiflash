@@ -250,7 +250,7 @@ try
     //scan a whole year to scan days.
     for (UInt16 year = 2000; year <= 2000; year++)
     {
-        for (UInt8 month = 1; month < 12; month++)
+        for (UInt8 month = 1; month <= 12; month++)
         {
             for (UInt8 day = 1; day < 31; day++)
             {
