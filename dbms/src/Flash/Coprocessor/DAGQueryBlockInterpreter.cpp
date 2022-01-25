@@ -44,15 +44,13 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
     bool keep_session_timezone_info_,
-    std::vector<SubqueriesForSets> & subqueries_for_sets_,
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
+    std::vector<SubqueriesForSets> & subqueries_for_sets_)
     : context(context_)
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
     , max_streams(max_streams_)
     , subqueries_for_sets(subqueries_for_sets_)
-    , exchange_receiver_map(exchange_receiver_map_)
     , log(getMPPTaskLog(dagContext(), "DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
@@ -806,8 +804,8 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 
 void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
 {
-    auto it = exchange_receiver_map.find(query_block.source_name);
-    if (unlikely(it == exchange_receiver_map.end()))
+    auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
+    if (unlikely(it == dagContext().getMPPExchangeReceiverMap().end()))
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
