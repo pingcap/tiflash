@@ -327,8 +327,6 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        // Sort fields to get better read on disk
-        std::sort(fields.begin(), fields.end());
         buf_size += entry.size;
     }
 
@@ -344,6 +342,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     {
         read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
+        // TODO : This could lead to allocating a large buffer than we actually required when the table contains large amount of columns.
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
             ChecksumClass digest;
