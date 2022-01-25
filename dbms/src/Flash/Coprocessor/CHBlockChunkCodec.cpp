@@ -34,6 +34,22 @@ public:
         output->resizeAndRestart(size);
     }
 
+    size_t getExtraInfoSize(const Block & block) override
+    {
+        size_t size = 128;
+        size_t columns = block.columns();
+        for (size_t i = 0; i < columns; i++)
+        {
+            const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
+            size += column.name.size();
+            size += column.type->getName().size();
+            if (column.column->isColumnConst())
+            {
+                size += column.column->byteSize() * column.column->size();
+            }
+        }
+        return size;
+    }
     void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
