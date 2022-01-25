@@ -80,7 +80,7 @@ public:
 
     String getActions(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        ExpressionActionsPtr & actions_out,
         bool output_as_uint8_type = false);
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
@@ -103,12 +103,12 @@ public:
         const tipb::TableScan & table_scan);
 
     /// return true if some actions is needed
-    bool appendJoinKeyAndJoinFilters(
+    bool appendJoinKeysAndFilters(
         ExpressionActionsChain & chain,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & join_keys,
         const DataTypes & key_types,
-        Names & key_names,
-        bool left,
+        Names & key_names_out,
+        bool is_left_side,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);

@@ -541,9 +541,7 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
         ColumnsWithTypeAndName argument_columns;
         for (auto & c : expr->children())
         {
-            Field value = decodeLiteral(c);
-            DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-            DataTypePtr target_type = inferDataType4Literal(c);
+            auto [value, flash_type, target_type] = inferDataTypeForLiteral(c);
             ColumnWithTypeAndName column;
             column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
             column.name = exprToString(c, {}) + "_" + target_type->getName();

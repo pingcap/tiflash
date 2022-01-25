@@ -44,12 +44,12 @@ public:
 private:
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
-    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    SubqueryForSet executeJoin(const tipb::Join & join, DAGPipeline & pipeline);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
         DAGPipeline & pipeline,
-        Names & key_names,
+        Names & key_names_out,
         bool left,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,

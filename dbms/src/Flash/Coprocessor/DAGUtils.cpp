@@ -995,20 +995,20 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
     return false;
 }
 
-DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
+std::tuple<Field, DataTypePtr, DataTypePtr> inferDataTypeForLiteral(const tipb::Expr & expr)
 {
     Field value = decodeLiteral(expr);
     DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
     /// need to extract target_type from expr.field_type() because the flash_type derived from
     /// value is just a `memory type`, which does not have enough information, for example:
     /// for date literal, the flash_type is `UInt64`
-    DataTypePtr target_type{};
+    DataTypePtr target_type;
     if (expr.tp() == tipb::ExprType::Null)
     {
-        // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
-        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing: when
-        //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
-        //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
+        // TODO: We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
+        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing:
+        //  when TiFlash tries to return data to TiDB or exchange data between TiFlash nodes, since codec only recognizes
+        //  TiDB type, using DataTypeNothing will cause error in the codec, so DO NOT use DataTypeNothing until
         //  we fix the codec issue.
         if (exprHasValidFieldType(expr))
         {
@@ -1042,7 +1042,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
         target_type = removeNullable(target_type);
     }
-    return target_type;
+    return std::make_tuple(value, flash_type, target_type);
 }
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp)

@@ -227,8 +227,8 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        DataTypePtr type = inferDataType4Literal(child);
-        argument_types.push_back(type);
+        auto [value [[maybe_unused]], flash_type [[maybe_unused]], target_type] = inferDataTypeForLiteral(child);
+        argument_types.push_back(target_type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
     if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
@@ -998,12 +998,12 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 
-bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
+bool DAGExpressionAnalyzer::appendJoinKeysAndFilters(
     ExpressionActionsChain & chain,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & join_keys,
     const DataTypes & key_types,
-    Names & key_names,
-    bool left,
+    Names & key_names_out, // output variable
+    bool is_left_side,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
@@ -1013,9 +1013,9 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
     UniqueNameGenerator unique_name_generator;
 
-    for (int i = 0; i < keys.size(); i++)
+    for (int i = 0; i < join_keys.size(); i++)
     {
-        const auto & key = keys.at(i);
+        const auto & key = join_keys.at(i);
         bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
 
         String key_name = getActions(key, actions);
@@ -1026,19 +1026,24 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!has_actions && (!left || is_right_out_join))
+        if (!has_actions && (!is_left_side || is_right_out_join))
         {
             /// if the join key is a columnRef, then add a new column as the join key if needed.
             /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
-            /// where left_columns and right_columns don't include the join keys if they are ColumnRef
-            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join keys
-            /// are ColumnRef, they will be included in both left_columns and right_columns
-            /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
-            /// In ClickHouse, it returns id,t1_value,t2_value
-            /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
-            /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
-            /// join, add a new key for right join key, for right join, add new key for both left and right join key
-            String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
+            /// where left_columns and right_columns don't include the join_keys if they are ColumnRef.
+            /// In TiDB, however, the columns returned by join are left_columns and right_columns.
+            /// If the join join_keys are ColumnRef, they will be included in both left_columns and right_columns.
+            /// E.g, for table t1(id, value), t2(id, value) and query `select * from t1 join t2 on t1.id = t2.id`
+            /// the output is as following
+            /// ┌────────────┬───────────┬─────────────────┬─────────────────┐
+            /// │            │ join_keys │  left_columns   │  right_columns  │
+            /// ├────────────┼───────────┼─────────────────┼─────────────────┤
+            /// │ ClickHouse │ id        │ t1.value        │ t2.value        │
+            /// │ TiDB       │           │ t1.id, t1.value │ t2.id, t2.value │
+            /// └────────────┴───────────┴─────────────────┴─────────────────┘
+            /// So in order to make the join compatible with TiDB: if the join key is a columnRef, for inner/left join,
+            /// add a new key for right join key; for right join, add new key for both left and right join key
+            String updated_key_name = unique_name_generator.toUniqueName((is_left_side ? "_l_k_" : "_r_k_") + key_name);
             /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
             /// key names, so just copy a key with new name
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
@@ -1057,7 +1062,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
                 has_actions = true;
             }
         }
-        key_names.push_back(key_name);
+        key_names_out.push_back(key_name);
         ret |= has_actions;
     }
 
@@ -1071,27 +1076,19 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         }
         filter_column_name = appendWhere(chain, filter_vector);
     }
-    /// remove useless columns to avoid duplicate columns
-    /// as when compiling the key/filter expression, the origin
-    /// streams may be added some columns that have the
-    /// same name on left streams and right streams, for
-    /// example, if the join condition is something like:
-    /// id + 1 = id + 1,
-    /// the left streams and the right streams will have the
-    /// same constant column for `1`
-    /// Note that the origin left streams and right streams
-    /// will never have duplicated columns because in
-    /// DAGQueryBlockInterpreter we add qb_column_prefix in
-    /// final project step, so if the join condition is not
-    /// literal expression, the key names should never be
-    /// duplicated. In the above example, the final key names should be
-    /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
+    /// remove useless columns to avoid duplicate columns as when compiling the key/filter expression,
+    /// some columns with the same name on the left and right streams may be added into the original streams.
+    /// For example, if the join condition is `id + 1 = id + 1`, the left and right streams will have the same constant column for `1`.
+    /// Note that the original left and right streams will never have duplicated columns in itself,
+    /// because qb_column_prefix is added in DAGQueryBlockInterpreter in the final project step.
+    /// So if the join condition is not a literal expression, the key names should never be duplicated.
+    /// In the example above, the final key names should be something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
     if (ret)
     {
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
-        for (const auto & s : key_names)
+        for (const auto & s : key_names_out)
             needed_columns.insert(s);
         if (!filter_column_name.empty())
             needed_columns.insert(filter_column_name);
@@ -1365,35 +1362,36 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type)
+// construct actions according to tipb::Expr, and add into actions_out
+String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions_out, bool output_as_uint8_type)
 {
     String ret;
     if (isLiteralExpr(expr))
     {
-        Field value = decodeLiteral(expr);
-        DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-        DataTypePtr target_type = inferDataType4Literal(expr);
+        auto [value, flash_type, target_type] = inferDataTypeForLiteral(expr);
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
-        if (!actions->getSampleBlock().has(ret))
+        /// add column
+        if (!actions_out->getSampleBlock().has(ret))
         {
             ColumnWithTypeAndName column;
             column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
             column.name = ret;
             column.type = target_type;
-            actions->add(ExpressionAction::addColumn(column));
+            actions_out->add(ExpressionAction::addColumn(column));
         }
+        /// append timezone cast for timestamp column
         if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
         {
-            /// append timezone cast for timestamp literal
             tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffsetFromUTC";
-            String tz_col = getActions(tz_expr, actions);
-            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
+            String tz_col = getActions(tz_expr, actions_out);
+            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions_out);
             ret = casted_name;
         }
     }
     else if (isColumnExpr(expr))
     {
+        /// no additional actions
         ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
     else if (isScalarFunctionExpr(expr))
@@ -1401,19 +1399,19 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         const String & func_name = getFunctionName(expr);
         if (DAGExpressionAnalyzerHelper::function_builder_map.count(func_name) != 0)
         {
-            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions);
+            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions_out);
         }
         else
         {
-            ret = buildFunction(expr, actions);
+            ret = buildFunction(expr, actions_out);
         }
     }
     else
     {
-        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
+        throw TiFlashException("Unsupported tipb::Expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
     }
 
-    ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
+    ret = alignReturnType(expr, actions_out, ret, output_as_uint8_type);
     return ret;
 }
 
