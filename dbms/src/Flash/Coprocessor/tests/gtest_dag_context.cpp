@@ -5,7 +5,6 @@ namespace DB
 {
 namespace tests
 {
-
 TEST(DAGContextTest, FlagsTest)
 {
     DAGContext context(1024);
@@ -26,4 +25,3 @@ TEST(DAGContextTest, FlagsTest)
 
 } // namespace tests
 } // namespace DB
-
