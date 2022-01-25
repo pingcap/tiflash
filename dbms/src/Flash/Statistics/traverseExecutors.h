@@ -41,6 +41,7 @@ private:
 Children getChildren(const tipb::Executor & executor);
 
 /// traverse tipb::executor array and apply function.
+/// f: (const tipb::Executor &) -> bool, return true to continue traverse.
 template <typename Container, typename FF>
 void traverseExecutorArray(const Container & array, FF && f)
 {
@@ -52,6 +53,7 @@ void traverseExecutorArray(const Container & array, FF && f)
 }
 
 /// traverse tipb::executor tree and apply function.
+/// f: (const tipb::Executor &) -> bool, return true to continue traverse.
 template <typename FF>
 void traverseExecutorTree(const tipb::Executor & executor, FF && f)
 {
@@ -60,6 +62,7 @@ void traverseExecutorTree(const tipb::Executor & executor, FF && f)
 }
 
 /// traverse tipb::executor of DAGRequest and apply function.
+/// f: (const tipb::Executor &) -> bool, return true to continue traverse.
 template <typename FF>
 void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
 {
