@@ -88,7 +88,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         return ret;
 
     // check if valid value in nullable column.
-    if (actual.type->isNullable() && !actual.column->onlyNull())
+    if (actual.type->isNullable() && !actual.type->onlyNull())
     {
         ColumnPtr data_column = actual.column->isColumnConst() ? dynamic_cast<const ColumnConst *>(actual.column.get())->getDataColumnPtr() : actual.column;
         ColumnPtr nest_column = dynamic_cast<const ColumnNullable *>(data_column.get())->getNestedColumnPtr();
