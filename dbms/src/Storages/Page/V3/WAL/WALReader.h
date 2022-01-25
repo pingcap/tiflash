@@ -15,8 +15,17 @@ class ReportCollector : public LogReader::Reporter
 public:
     void corruption(size_t /*bytes*/, const String & /*msg*/) override
     {
-        // FIXME: handle corruption
+        error_happened = true;
+        // FIXME: store the reason of corruption
     }
+
+    bool hasError() const
+    {
+        return error_happened;
+    }
+
+private:
+    bool error_happened = false;
 };
 
 class WALStoreReader
@@ -31,6 +40,14 @@ public:
     bool remained() const;
 
     std::tuple<bool, PageEntriesEdit> next();
+
+    void throwIfError() const
+    {
+        if (reporter.hasError())
+        {
+            throw Exception("Something worong while reading log file");
+        }
+    }
 
     Format::LogNumberType logNum() const
     {

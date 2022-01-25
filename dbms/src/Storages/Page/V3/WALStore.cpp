@@ -42,7 +42,11 @@ WALStorePtr WALStore::create(
         auto [ok, edit] = reader->next();
         if (!ok)
         {
-            // TODO: Handle error
+            // TODO: Handle error, some error could be ignored.
+            // If the file happened to some error,
+            // should truncate it to throw away incomplete data.
+            reader->throwIfError();
+            // else it just run to the end of file.
             break;
         }
         // apply the edit read
@@ -154,7 +158,9 @@ bool WALStore::compactLogs()
         auto [ok, edit] = reader->next();
         if (!ok)
         {
-            // TODO: Handle error
+            // TODO: Handle error, some error could be ignored.
+            reader->throwIfError();
+            // else it just run to the end of file.
             break;
         }
         // callback(edit); apply to the in-mem PageDirectory
