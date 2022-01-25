@@ -24,7 +24,7 @@ using QualifiedName = std::pair<String, String>;
 
 std::optional<String> mappedDatabase(Context & context, const String & database_name)
 {
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     auto syncer = tmt.getSchemaSyncer();
     auto db_info = syncer->getDBInfoByName(database_name);
     if (db_info == nullptr)
@@ -37,7 +37,7 @@ std::optional<QualifiedName> mappedTable(Context & context, const String & datab
     auto mapped_db = mappedDatabase(context, database_name);
     if (mapped_db == std::nullopt)
         return std::nullopt;
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
     if (storage == nullptr)
         return std::nullopt;

@@ -855,7 +855,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     req->start_ts = context.getSettingsRef().read_tso;
     bool has_enforce_encode_type = dag_req.has_force_encode_type() && dag_req.force_encode_type();
 
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    pingcap::kv::Cluster * cluster = context.getTiFlashContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
     auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));

@@ -54,8 +54,8 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     if (it_by_name == tables_by_name.end())
         return nullptr;
 
-    auto & kvstore = context.getTMTContext().getKVStore();
-    auto & region_table = context.getTMTContext().getRegionTable();
+    auto & kvstore = context.getTiFlashContext().getKVStore();
+    auto & region_table = context.getTiFlashContext().getRegionTable();
 
     auto table = it_by_name->second;
     if (table->isPartitionTable())

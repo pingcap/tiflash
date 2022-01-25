@@ -159,8 +159,8 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                     std::make_shared<GRPCReceiverContext>(
                         executor.exchange_receiver(),
                         getMPPTaskMeta(),
-                        context.getTMTContext().getKVCluster(),
-                        context.getTMTContext().getMPPTaskManager(),
+                        context.getTiFlashContext().getKVCluster(),
+                        context.getTiFlashContext().getMPPTaskManager(),
                         context.getSettingsRef().enable_local_tunnel),
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,

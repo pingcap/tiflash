@@ -52,7 +52,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
-    global_context->getTMTContext().restore();
+    global_context->getTiFlashContext().restore();
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
@@ -72,7 +72,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
 
 void TiFlashTestEnv::shutdown()
 {
-    global_context->getTMTContext().setStatusTerminated();
+    global_context->getTiFlashContext().setStatusTerminated();
     global_context->shutdown();
     global_context.reset();
 }

@@ -49,7 +49,7 @@ extern const char exception_after_step_3_in_exchange_partition[];
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
-    return context.getTMTContext().getIgnoreDatabases().count(database_name) > 0;
+    return context.getTiFlashContext().getIgnoreDatabases().count(database_name) > 0;
 }
 
 
@@ -364,7 +364,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, Table
     {
         throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), Errors::DDL::StaleSchema);
     }
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
@@ -384,7 +384,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(DBInfoPtr db_info
 
     if (table_info->isLogicalPartitionTable())
     {
-        auto & tmt_context = context.getTMTContext();
+        auto & tmt_context = context.getTiFlashContext();
 
         // Alter physical tables of a partition table.
         for (const auto & part_def : table_info->partition.definitions)
@@ -509,7 +509,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
                                Errors::DDL::TableTypeNotMatch);
     }
 
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
@@ -596,7 +596,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DBInfoPtr new_db_info, 
         throw Exception("miss table id in TiKV " + std::to_string(table_id));
     }
 
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_id);
     if (storage == nullptr)
     {
@@ -616,7 +616,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
 
     if (new_table_info->isLogicalPartitionTable())
     {
-        auto & tmt_context = context.getTMTContext();
+        auto & tmt_context = context.getTiFlashContext();
         for (const auto & part_def : new_table_info->partition.definitions)
         {
             auto part_storage = tmt_context.getStorages().get(part_def.id);
@@ -697,7 +697,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto table_info = getter.getTableInfo(pt_db_info->id, pt_table_info);
     if (table_info == nullptr)
         throw TiFlashException("miss table in TiKV : " + std::to_string(pt_table_info), Errors::DDL::StaleSchema);
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException(
@@ -883,7 +883,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this database;
     // 2. Use the same GC safe point as TiDB.
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone);
 
@@ -978,7 +978,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
 
     /// Check if this is a RECOVER table.
     {
-        auto & tmt_context = context.getTMTContext();
+        auto & tmt_context = context.getTiFlashContext();
         if (auto storage = tmt_context.getStorages().get(table_info->id).get(); storage)
         {
             if (!storage->isTombstone())
@@ -1006,7 +1006,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     /// Normal CREATE table.
     if (table_info->engine_type == StorageEngine::UNSPECIFIED)
     {
-        auto & tmt_context = context.getTMTContext();
+        auto & tmt_context = context.getTiFlashContext();
         table_info->engine_type = tmt_context.getEngineType();
     }
 
@@ -1063,7 +1063,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateLogicalTable(TiDB::DBInfoPtr 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db_name, TableID table_id)
 {
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_id);
     if (storage == nullptr)
     {
@@ -1092,7 +1092,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableID table_id)
 {
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
@@ -1121,7 +1121,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
     {
         throw TiFlashException("miss table in TiKV : " + DB::toString(table_id), Errors::DDL::StaleSchema);
     }
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     auto storage = tmt_context.getStorages().get(latest_table_info->id);
     if (unlikely(storage == nullptr))
     {
@@ -1165,7 +1165,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
     LOG_INFO(log, "Syncing all schemas.");
 
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
 
     /// Create all databases.
     std::unordered_set<String> db_set;

@@ -131,7 +131,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , log(getMPPTaskLog(*context.getDAGContext(), "DAGStorageInterpreter"))
     , table_id(ts.table_id())
     , settings(context.getSettingsRef())
-    , tmt(context.getTMTContext())
+    , tmt(context.getTiFlashContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
 }

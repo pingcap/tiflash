@@ -977,7 +977,7 @@ try
     (void)context;
 
 #if defined(USE_PROXY_ENV_INFO)
-    const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
+    const TiFlashRaftProxyHelper * helper = server.context().getTiFlashContext().getKVStore()->getProxyHelper();
     if (helper)
     {
         std::string req = request->SerializeAsString();

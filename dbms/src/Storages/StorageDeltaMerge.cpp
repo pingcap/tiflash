@@ -599,7 +599,7 @@ BlockInputStreams StorageDeltaMerge::read(
     if (unlikely(!query_info.mvcc_query_info))
         throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     if (unlikely(!tmt.isInitialized()))
         throw Exception("TiFlashContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
@@ -1414,7 +1414,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 
 void StorageDeltaMerge::startup()
 {
-    TiFlashContext & tmt = global_context.getTMTContext();
+    TiFlashContext & tmt = global_context.getTiFlashContext();
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
@@ -1432,7 +1432,7 @@ void StorageDeltaMerge::shutdown()
 void StorageDeltaMerge::removeFromTiFlashContext()
 {
     // remove this table from TiFlashContext
-    TiFlashContext & tmt_context = global_context.getTMTContext();
+    TiFlashContext & tmt_context = global_context.getTiFlashContext();
     tmt_context.getStorages().remove(tidb_table_info.id);
     tmt_context.getRegionTable().removeTable(tidb_table_info.id);
 }

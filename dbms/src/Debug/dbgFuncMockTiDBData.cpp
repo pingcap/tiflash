@@ -24,7 +24,7 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
     auto bytes = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto seconds = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
 
     output(fmt::format("set flush threshold to ({} bytes, {} seconds)", bytes, seconds));

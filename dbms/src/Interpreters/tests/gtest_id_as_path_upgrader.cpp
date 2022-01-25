@@ -75,7 +75,7 @@ try
     loadMetadata(ctx);
 
     ASSERT_TRUE(ctx.isDatabaseExist("db_2")); // "test"
-    auto & storages = ctx.getTMTContext().getStorages();
+    auto & storages = ctx.getTiFlashContext().getStorages();
     ASSERT_NE(storages.get(45), nullptr); // `test`.`abc`
     ASSERT_NE(storages.get(48), nullptr); // `test`.`emp_bak`
     ASSERT_NE(storages.get(49), nullptr);
@@ -116,7 +116,7 @@ try
 
     ASSERT_TRUE(ctx.isDatabaseExist("db_2"));
     ASSERT_TRUE(ctx.isDatabaseExist("db_3"));
-    auto & storages = ctx.getTMTContext().getStorages();
+    auto & storages = ctx.getTiFlashContext().getStorages();
     ASSERT_NE(storages.get(66), nullptr); // `test-db`.`test-tbl`
     ASSERT_NE(storages.get(666), nullptr); // `test`.`test-tbl`
 }
@@ -153,7 +153,7 @@ try
 
     ASSERT_TRUE(ctx.isDatabaseExist("db_2"));
     ASSERT_TRUE(ctx.isDatabaseExist("db_3"));
-    auto & storages = ctx.getTMTContext().getStorages();
+    auto & storages = ctx.getTiFlashContext().getStorages();
     ASSERT_NE(storages.get(66), nullptr); // `test-db`.`test-tbl`
     ASSERT_NE(storages.get(666), nullptr); // `test`.`test-tbl`
 }
@@ -187,7 +187,7 @@ try
     loadMetadata(ctx);
 
     ASSERT_TRUE(ctx.isDatabaseExist("db_2"));
-    auto & storages = ctx.getTMTContext().getStorages();
+    auto & storages = ctx.getTiFlashContext().getStorages();
     ASSERT_NE(storages.get(45), nullptr); // `test`.`#hello-world`
 }
 CATCH

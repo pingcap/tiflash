@@ -33,7 +33,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
                 /// They must be performed synchronously,
                 /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                 // GC safe point must be obtained ahead of syncing schema.
-                auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+                auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTiFlashContext().getPDClient());
                 stage = "Sync schemas";
                 done_anything = syncSchemas();
                 if (done_anything)
@@ -70,7 +70,7 @@ SchemaSyncService::~SchemaSyncService()
 
 bool SchemaSyncService::syncSchemas()
 {
-    return context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+    return context.getTiFlashContext().getSchemaSyncer()->syncSchemas(context);
 }
 
 template <typename DatabaseOrTablePtr>
@@ -81,7 +81,7 @@ inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
 
 bool SchemaSyncService::gc(Timestamp gc_safe_point)
 {
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context.getTiFlashContext();
     if (gc_safe_point == gc_context.last_gc_safe_point)
         return false;
 

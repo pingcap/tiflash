@@ -32,7 +32,7 @@ bool GCManager::work()
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
-    for (const auto & [table_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
+    for (const auto & [table_id, storage] : global_context.getTiFlashContext().getStorages().getAllStorage())
         storages.emplace(table_id, storage);
     auto iter = storages.begin();
     if (next_table_id != InvalidTableID)
@@ -42,7 +42,7 @@ bool GCManager::work()
     while (true)
     {
         // The TiFlash process receive a signal to terminate.
-        if (global_context.getTMTContext().checkShuttingDown())
+        if (global_context.getTiFlashContext().checkShuttingDown())
             break;
         // All storages have been checked, stop here
         if (checked_storage_num >= storages.size())

@@ -299,7 +299,7 @@ class ImitativeEnv
 
         global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
-        global_context->getTMTContext().restore();
+        global_context->getTiFlashContext().restore();
         return global_context;
     }
 
@@ -324,7 +324,7 @@ public:
 
     ~ImitativeEnv()
     {
-        global_context->getTMTContext().setStatusTerminated();
+        global_context->getTiFlashContext().setStatusTerminated();
         global_context->shutdown();
         global_context.reset();
     }

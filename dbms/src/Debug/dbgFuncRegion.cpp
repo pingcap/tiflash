@@ -59,7 +59,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
             end_keys.emplace_back(end_datum.field());
         }
 
-        TiFlashContext & tmt = context.getTMTContext();
+        TiFlashContext & tmt = context.getTiFlashContext();
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
@@ -70,7 +70,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         HandleID start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
         HandleID end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
-        TiFlashContext & tmt = context.getTMTContext();
+        TiFlashContext & tmt = context.getTiFlashContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
@@ -80,7 +80,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     tmt.getRegionTable().tryFlushRegions();
 
     output("region_table try flush regions");
@@ -95,7 +95,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 
     RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
 
     output(fmt::format("region_table try flush region {}", region_id));
@@ -104,7 +104,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
 {
     size_t size = 0;
-    context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    context.getTiFlashContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
         FmtBuffer fmt_buf;
         auto rawkeys = region->getRange()->rawKeys();
@@ -178,7 +178,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
 
     RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     KVStorePtr & kvstore = tmt.getKVStore();
     RegionTable & region_table = tmt.getRegionTable();
     kvstore->mockRemoveRegion(region_id, region_table);
@@ -251,7 +251,7 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
     if (args.size() > 2)
         mode = static_cast<Mode>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
 
     auto start = FromPdKey(start_key.data(), start_key.size());

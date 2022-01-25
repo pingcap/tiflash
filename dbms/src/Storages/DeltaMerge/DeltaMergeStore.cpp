@@ -1353,7 +1353,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
 bool DeltaMergeStore::updateGCSafePoint()
 {
-    if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
+    if (auto pd_client = global_context.getTiFlashContext().getPDClient(); !pd_client->isMock())
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(
             pd_client,

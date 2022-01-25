@@ -139,7 +139,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     RegionInfoList remote_regions;
 
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
-    TiFlashContext & tmt_context = context->getTMTContext();
+    TiFlashContext & tmt_context = context->getTiFlashContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
     /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without

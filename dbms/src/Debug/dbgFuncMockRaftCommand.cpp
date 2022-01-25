@@ -23,7 +23,7 @@ extern const int BAD_ARGUMENTS;
 
 void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -133,7 +133,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID target_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
     auto target_region = kvstore->getRegion(target_id);
@@ -173,7 +173,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
     RegionID source_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID current_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto source_region = kvstore->getRegion(source_id);
     auto current_region = kvstore->getRegion(current_id);
@@ -208,7 +208,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
     raft_cmdpb::AdminRequest request;

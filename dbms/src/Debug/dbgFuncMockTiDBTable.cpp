@@ -49,12 +49,12 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
     String engine_type("dt");
-    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
+    if (context.getTiFlashContext().getEngineType() == ::TiDB::StorageEngine::TMT)
         engine_type = "tmt";
     if (args.size() == 5)
         engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
 
-    auto tso = context.getTMTContext().getPDClient()->getTS();
+    auto tso = context.getTiFlashContext().getPDClient()->getTS();
 
     TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
 
@@ -86,7 +86,7 @@ void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & arg
     {
         is_add_part = typeid_cast<const ASTIdentifier &>(*args[3]).name == "true";
     }
-    auto tso = context.getTMTContext().getPDClient()->getTS();
+    auto tso = context.getTiFlashContext().getPDClient()->getTS();
 
     MockTiDB::instance().newPartition(database_name, table_name, partition_id, tso, is_add_part);
 
@@ -270,8 +270,8 @@ void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs &
 void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs &, DB::DBGInvoker::Printer output)
 {
     std::vector<RegionID> regions;
-    auto & kvstore = context.getTMTContext().getKVStore();
-    auto & region_table = context.getTMTContext().getRegionTable();
+    auto & kvstore = context.getTiFlashContext().getKVStore();
+    auto & region_table = context.getTiFlashContext().getRegionTable();
     {
         for (const auto & e : kvstore->regions())
             regions.emplace_back(e.first);

@@ -43,7 +43,7 @@ static void writeRegionDataToStorage(
     Poco::Logger * log)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
-    const auto & tmt = context.getTMTContext();
+    const auto & tmt = context.getTiFlashContext();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
@@ -432,7 +432,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// Pre-decode region data into block cache and remove committed data from `region`
 RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    const auto & tmt = context.getTMTContext();
+    const auto & tmt = context.getTiFlashContext();
     {
         Timestamp gc_safe_point = 0;
         if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())

@@ -104,7 +104,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
-    auto & tmt = context->getTMTContext();
+    auto & tmt = context->getTiFlashContext();
 
     if (tmt.isBgFlushDisabled())
     {
@@ -178,7 +178,7 @@ void RegionTable::restore()
 {
     LOG_INFO(log, "Start to restore");
 
-    const auto & tmt = context->getTMTContext();
+    const auto & tmt = context->getTiFlashContext();
 
     tmt.getKVStore()->traverseRegions([this](const RegionID, const RegionPtr & region) { updateRegion(*region); });
 
@@ -222,7 +222,7 @@ void removeObsoleteDataInStorage(
     const TableID table_id,
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
-    TiFlashContext & tmt = context->getTMTContext();
+    TiFlashContext & tmt = context->getTiFlashContext();
     auto storage = tmt.getStorages().get(table_id);
     // For DT only now
     if (!storage || storage->engineType() != TiDB::StorageEngine::DT)
@@ -298,7 +298,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
 
 RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
 {
-    auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
+    auto region = context->getTiFlashContext().getKVStore()->getRegion(region_id);
     if (!region)
     {
         LOG_WARNING(log, __FUNCTION__ << ": region " << region_id << " not found");
@@ -427,7 +427,7 @@ void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::func
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id) const
 {
-    auto & kvstore = context->getTMTContext().getKVStore();
+    auto & kvstore = context->getTiFlashContext().getKVStore();
     std::vector<std::pair<RegionID, RegionPtr>> regions;
     handleInternalRegionsByTable(table_id, [&](const InternalRegions & internal_regions) {
         for (const auto & region_info : internal_regions)

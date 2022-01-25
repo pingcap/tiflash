@@ -304,7 +304,7 @@ void insert( //
         if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
             throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
     }
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
 
@@ -360,7 +360,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     TiKVKey key = RecordKVFormat::genKey(table_info.id, handle_id);
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
 
@@ -462,7 +462,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
 {
     RegionPtr & region = batch_ctrl->region;
 
-    TiFlashContext & tmt = batch_ctrl->context->getTMTContext();
+    TiFlashContext & tmt = batch_ctrl->context->getTiFlashContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
 
     Int64 index = batch_ctrl->handle_begin;
@@ -487,7 +487,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
 
 void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen, UInt64 max_strlen, Context & context)
 {
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
 
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
@@ -528,7 +528,7 @@ Int64 concurrentRangeOperate(
     Regions regions;
 
     {
-        TiFlashContext & tmt = context.getTMTContext();
+        TiFlashContext & tmt = context.getTiFlashContext();
         for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(table_info.id))
         {
             std::ignore = _;

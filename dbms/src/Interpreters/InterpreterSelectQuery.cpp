@@ -202,7 +202,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     const String qualified_name = database_name + "." + table_name;
 
     /// Get current schema version in schema syncer for a chance to shortcut.
-    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    const auto global_schema_version = context.getTiFlashContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
@@ -274,7 +274,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     {
         log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        context.getTiFlashContext().getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema sync cost " << schema_sync_cost << "ms.");
 
@@ -837,7 +837,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             // and it is hard to move learner read before acuqiring table's lock.
 
             // Do learner read only For DeltaTree.
-            auto & tmt = context.getTMTContext();
+            auto & tmt = context.getTiFlashContext();
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
                 managed_storage && managed_storage->engineType() == TiDB::StorageEngine::DT)
             {

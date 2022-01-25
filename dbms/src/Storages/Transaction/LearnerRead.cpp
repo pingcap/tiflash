@@ -151,7 +151,7 @@ LearnerReadSnapshot doLearnerRead(
 {
     assert(log != nullptr);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
 
     MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
     const auto & regions_info = mvcc_query_info.getRegionsInfo();

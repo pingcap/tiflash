@@ -1359,7 +1359,7 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-TiFlashContext & Context::getTMTContext() const
+TiFlashContext & Context::getTiFlashContext() const
 {
     auto lock = getLock();
     if (!shared->tmt_context)

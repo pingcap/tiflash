@@ -276,7 +276,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             if (table_id != -1)
             {
                 /// contains a table scan
-                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+                auto regions = context.getTiFlashContext().getRegionTable().getRegionsByTable(table_id);
                 if (regions.size() < (size_t)properties.mpp_partition_num)
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); i++)
@@ -295,7 +295,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 }
             }
             pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-            context.getTMTContext().getCluster()->rpc_client->sendRequest(LOCAL_HOST, call, 1000);
+            context.getTiFlashContext().getCluster()->rpc_client->sendRequest(LOCAL_HOST, call, 1000);
             if (call.getResp()->has_error())
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
@@ -327,8 +327,8 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 std::make_shared<GRPCReceiverContext>(
                     tipb_exchange_receiver,
                     root_tm,
-                    context.getTMTContext().getKVCluster(),
-                    context.getTMTContext().getMPPTaskManager(),
+                    context.getTiFlashContext().getKVCluster(),
+                    context.getTiFlashContext().getMPPTaskManager(),
                     context.getSettingsRef().enable_local_tunnel),
                 tipb_exchange_receiver.encoded_task_meta_size(),
                 10,
@@ -343,7 +343,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         RegionPtr region;
         if (region_id == InvalidRegionID)
         {
-            auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+            auto regions = context.getTiFlashContext().getRegionTable().getRegionsByTable(table_id);
             if (regions.empty())
                 throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
             region = regions[0].second;
@@ -351,7 +351,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         }
         else
         {
-            region = context.getTMTContext().getKVStore()->getRegion(region_id);
+            region = context.getTiFlashContext().getKVStore()->getRegion(region_id);
             if (!region)
                 throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
         }
@@ -387,7 +387,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.size() == 3)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     DAGProperties properties = getDAGProperties(prop_string);
-    properties.start_ts = context.getTMTContext().getPDClient()->getTS();
+    properties.start_ts = context.getTiFlashContext().getPDClient()->getTS();
 
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
         context,
@@ -417,7 +417,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (args.size() >= 3)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
-        start_ts = context.getTMTContext().getPDClient()->getTS();
+        start_ts = context.getTiFlashContext().getPDClient()->getTS();
 
     String prop_string = "";
     if (args.size() == 4)

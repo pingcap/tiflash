@@ -144,8 +144,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
     auto cnt = region->writeCFCount();
 
     // Mock to apply a snapshot with data in `region`
-    auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>(region, tmt);
+    auto & tmt = context.getTiFlashContext();
+    context.getTiFlashContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>(region, tmt);
     output(fmt::format("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt));
 }
 
@@ -171,7 +171,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
                         ErrorCodes::BAD_ARGUMENTS);
 
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
 
     metapb::Region region_info;
 
@@ -475,7 +475,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
     auto region_id_str = std::to_string(region_id);
     GenMockSSTData(table->table_info, table->id(), region_id_str, start_handle, end_handle);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
 
@@ -570,7 +570,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(Context & context, con
     auto region = GenDbgRegionSnapshotWithData(context, args);
     const auto region_name = "__snap_" + std::to_string(region->id());
     fmt_buf.fmtAppend("pre-handle {} snapshot with data {}", region->toString(false), region->dataInfo());
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
     fmt_buf.append(", pre-decode block cache");
     fmt_buf.fmtAppend(" {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {} }}", block_cache->data_list_read.size(), block_cache->block.rows(), block_cache->block.columns(), block_cache->block.bytes());
@@ -587,8 +587,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value);
     auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
-    auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
+    auto & tmt = context.getTiFlashContext();
+    context.getTiFlashContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
 
     output(fmt::format("success apply {} with block cache", region->id()));
 }
@@ -652,7 +652,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
     GenMockSSTData(*mocked_table_info, table->id(), region_name, start_handle, end_handle, test_fields, cfs);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto old_region = kvstore->getRegion(region_id);
 
@@ -747,7 +747,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
     GenMockSSTDataByHandles(*mocked_table_info, table->id(), region_name, handles, test_fields, cfs);
 
-    auto & tmt = context.getTMTContext();
+    auto & tmt = context.getTiFlashContext();
     auto & kvstore = tmt.getKVStore();
     auto old_region = kvstore->getRegion(region_id);
 
@@ -803,8 +803,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value);
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
     auto [new_region, ingest_ids] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
-    auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
+    auto & tmt = context.getTiFlashContext();
+    context.getTiFlashContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
         RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
         tmt);
 

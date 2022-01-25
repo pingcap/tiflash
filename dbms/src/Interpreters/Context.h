@@ -342,7 +342,7 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TiFlashContext & getTMTContext() const;
+    TiFlashContext & getTiFlashContext() const;
 
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);

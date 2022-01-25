@@ -451,7 +451,7 @@ private:
 void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_store)
 {
     auto do_init_stores = [&global_context, log]() {
-        auto storages = global_context.getTMTContext().getStorages().getAllStorage();
+        auto storages = global_context.getTiFlashContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
         for (auto & [table_id, storage] : storages)
@@ -1084,7 +1084,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
-            global_context->getTMTContext().reloadConfig(*config);
+            global_context->getTiFlashContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
         },
@@ -1148,7 +1148,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// create TiFlashContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        global_context->getTMTContext().reloadConfig(config());
+        global_context->getTiFlashContext().reloadConfig(config());
     }
 
     {
@@ -1179,7 +1179,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         try
         {
-            global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+            global_context->getTiFlashContext().getSchemaSyncer()->syncSchemas(*global_context);
             break;
         }
         catch (Poco::Exception & e)
@@ -1219,7 +1219,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
         /// initialize TiFlashContext
-        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
+        global_context->getTiFlashContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 
     /// setting up elastic thread pool
@@ -1287,7 +1287,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         SessionCleaner session_cleaner(*global_context);
 
-        auto & tmt_context = global_context->getTMTContext();
+        auto & tmt_context = global_context->getTiFlashContext();
         if (proxy_conf.is_proxy_runnable)
         {
             tiflash_instance_wrap.tmt = &tmt_context;

@@ -487,7 +487,7 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
     {
         try
         {
-            auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
+            auto schema_syncer = global_context.getTiFlashContext().getSchemaSyncer();
             return schema_syncer->fetchAllDBs();
         }
         catch (Poco::Exception & e)

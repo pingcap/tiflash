@@ -42,7 +42,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
@@ -57,7 +57,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
     auto & service = context.getSchemaSyncService();
     Timestamp gc_safe_point = 0;
     if (args.size() == 0)
-        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTiFlashContext().getPDClient());
     else
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point);
@@ -67,7 +67,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TiFlashContext & tmt = context.getTMTContext();
+    TiFlashContext & tmt = context.getTiFlashContext();
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->reset();
 
