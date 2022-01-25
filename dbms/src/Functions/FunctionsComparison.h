@@ -302,12 +302,12 @@ struct StringComparisonWithCollatorImpl
         PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
-        ColumnString::Offset b_size = b.size();
+        ColumnString::Offset b_size = b.size() + 1;
         const char * b_data = reinterpret_cast<const char *>(b.data());
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
-            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), StringUtil::sizeAt(a_offsets, i), b_data, b_size + 1), 0);
+            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), StringUtil::sizeAt(a_offsets, i), b_data, b_size), 0);
         }
     }
 

@@ -9,7 +9,6 @@ namespace StringUtil
 /// Same as ColumnString's private offsetAt and sizeAt.
 inline size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
 {
-    assert(offsets[i - 1] > 0);
     return i == 0 ? 0 : offsets[i - 1];
 }
 
