@@ -27,6 +27,7 @@
 
 #include <cassert>
 #include <memory>
+#include <mutex>
 
 namespace DB::PS::V3
 {
@@ -87,16 +88,20 @@ void WALStore::apply(const PageEntriesEdit & edit)
 {
     const String serialized = ser::serializeTo(edit);
     ReadBufferFromString payload(serialized);
-    log_file->addRecord(payload, serialized.size());
 
-    // Roll to a new log file
-    // TODO: Make it configurable
-    if (log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
     {
-        auto log_num = log_file->logNumber() + 1;
-        auto [new_log_file, filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
-        (void)filename;
-        log_file.swap(new_log_file);
+        std::lock_guard lock(log_file_mutex);
+        log_file->addRecord(payload, serialized.size());
+
+        // Roll to a new log file
+        // TODO: Make it configurable
+        if (log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
+        {
+            auto log_num = log_file->logNumber() + 1;
+            auto [new_log_file, filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
+            (void)filename;
+            log_file.swap(new_log_file);
+        }
     }
 }
 
@@ -139,10 +144,15 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 // log files.
 bool WALStore::compactLogs()
 {
+    const auto current_writting_log_num = [this]() {
+        std::lock_guard lock(log_file_mutex);
+        return log_file->logNumber();
+    }();
+
     LogFilenameSet compact_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = compact_log_files.begin(); iter != compact_log_files.end(); /*empty*/)
     {
-        if (iter->log_num >= log_file->logNumber())
+        if (iter->log_num >= current_writting_log_num)
             iter = compact_log_files.erase(iter);
         else
             ++iter;

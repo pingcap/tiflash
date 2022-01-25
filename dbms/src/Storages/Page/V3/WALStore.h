@@ -100,6 +100,7 @@ private:
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     const WriteLimiterPtr write_limiter;
+    std::mutex log_file_mutex;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;
