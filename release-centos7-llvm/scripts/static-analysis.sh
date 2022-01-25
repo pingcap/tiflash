@@ -49,6 +49,9 @@ if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
     -DCMAKE_AR="/usr/local/bin/llvm-ar" \
     -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
     -GNinja
+  python3 ${SRCPATH}/release-centos7-llvm/scripts/fix_compile_commands.py \
+          --file_path=${BUILD_DIR}/compile_commands.json \
+          --load_diff_files_from "/tmp/tiflash-diff-files.json"
   python3 ${SRCPATH}/release-centos7-llvm/scripts/run-clang-tidy.py -p ${BUILD_DIR} -j ${NPROC} --files ".*/tics/dbms/*"
   export ENABLE_CLANG_TIDY_CHECK=false
 fi
