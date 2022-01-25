@@ -30,11 +30,11 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-class InMemoryPageDirectoryTest : public DB::base::TiFlashStorageTestBasic
+class CollapsingPageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    InMemoryPageDirectoryTest()
-        : logger(&Poco::Logger::get("InMemoryPageDirectoryTest"))
+    CollapsingPageDirectoryTest()
+        : logger(&Poco::Logger::get("CollapsingPageDirectoryTest"))
     {}
 
     void SetUp() override
@@ -86,7 +86,7 @@ public:
     }
 
 protected:
-    InMemoryPageDirectory dir;
+    CollapsingPageDirectory dir;
 
 private:
     ReportCollector reporter;
@@ -123,7 +123,7 @@ private:
         dir.apply(std::move(edit));                    \
     }
 
-TEST_F(InMemoryPageDirectoryTest, CollapseFromDifferentEdits)
+TEST_F(CollapsingPageDirectoryTest, CollapseFromDifferentEdits)
 try
 {
     // multiple-puts

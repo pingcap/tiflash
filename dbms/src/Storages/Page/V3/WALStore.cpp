@@ -148,7 +148,7 @@ bool WALStore::compactLogs()
     if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
         return false;
 
-    InMemoryPageDirectory in_mem_directory;
+    CollapsingPageDirectory in_mem_directory;
     auto reader = WALStoreReader::create(provider, compact_log_files);
     while (reader->remained())
     {

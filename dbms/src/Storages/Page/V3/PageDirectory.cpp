@@ -136,12 +136,12 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
 }
 
 /**********************************
-  * InMemoryPageDirectory methods *
+  * CollapsingPageDirectory methods *
   *********************************/
 
-InMemoryPageDirectory::InMemoryPageDirectory() = default;
+CollapsingPageDirectory::CollapsingPageDirectory() = default;
 
-void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
+void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 {
     for (const auto & record : edit.getRecords())
     {
@@ -149,6 +149,7 @@ void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
         {
             max_applied_ver = record.version;
         }
+        max_applied_page_id = std::max(record.page_id, max_applied_page_id);
 
         switch (record.type)
         {
@@ -196,7 +197,7 @@ void InMemoryPageDirectory::apply(PageEntriesEdit && edit)
     }
 }
 
-void InMemoryPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
+void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
 {
     PageEntriesEdit edit;
     for (const auto & [page_id, versioned_entry] : table_directory)
@@ -223,7 +224,7 @@ PageDirectory::PageDirectory()
 void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
 {
     // TODO: Speedup restoring
-    InMemoryPageDirectory in_mem_directory;
+    CollapsingPageDirectory in_mem_directory;
     auto callback = [&in_mem_directory](PageEntriesEdit && edit) {
         in_mem_directory.apply(std::move(edit));
     };
@@ -238,6 +239,7 @@ void PageDirectory::restore(FileProviderPtr & provider, PSDiskDelegatorPtr & del
         iter->second->createNewVersion(version.sequence, version.epoch, entry);
     }
     // Reset the `sequence` to the maximum of persisted.
+    // PageId max_page_id = in_mem_directory.max_applied_page_id; // TODO: return it to outer function
     sequence = in_mem_directory.max_applied_ver.sequence;
 }
 

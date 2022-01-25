@@ -161,10 +161,10 @@ private:
     std::map<PageVersionType, EntryOrDelete> entries;
 };
 
-class InMemoryPageDirectory
+class CollapsingPageDirectory
 {
 public:
-    InMemoryPageDirectory();
+    CollapsingPageDirectory();
 
     void apply(PageEntriesEdit && edit);
 
@@ -173,6 +173,7 @@ public:
     using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
     CollapsingMapType table_directory;
 
+    PageId max_applied_page_id = 0;
     PageVersionType max_applied_ver;
 };
 
