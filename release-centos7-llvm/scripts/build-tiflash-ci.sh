@@ -3,8 +3,8 @@
 command -v ccache >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install ccache"
-  wget http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/ccache.x86_64.rpm
-  rpm -Uvh ccache.x86_64.rpm
+  curl -o /usr/local/bin/ccache http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/ccache-4.5.1
+  chmod +x /usr/local/bin/ccache
 else
   echo "ccache has been installed"
 fi
