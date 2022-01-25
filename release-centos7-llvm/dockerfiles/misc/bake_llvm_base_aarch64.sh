@@ -44,6 +44,10 @@ function bake_llvm_base_aarch64() {
     # Curl
     source $SCRIPTPATH/install_curl.sh
     install_curl "7.80.0"
+
+    # ccache
+    source $SCRIPTPATH/install_ccache.sh
+    install_ccache "4.5.1"
 }
 
 bake_llvm_base_aarch64

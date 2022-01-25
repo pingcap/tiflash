@@ -46,7 +46,7 @@ function bake_llvm_base_amd64() {
 
     # ccache
     source $SCRIPTPATH/install_ccache.sh
-    install_ccache "7.80.0"
+    install_ccache "4.5.1"
 }
 
 bake_llvm_base_amd64
