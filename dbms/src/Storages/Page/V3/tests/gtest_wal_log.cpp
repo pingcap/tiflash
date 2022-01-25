@@ -76,7 +76,7 @@ public:
     String & contents;
 
     explicit StringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0)
+        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
         , contents(contents_)
     {}
 
@@ -102,7 +102,7 @@ public:
     String & contents;
 
     explicit OverwritingStringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0)
+        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
         , contents(contents_)
         , last_sync_pos(0)
     {}
