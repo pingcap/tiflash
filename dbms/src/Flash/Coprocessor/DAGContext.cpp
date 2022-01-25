@@ -230,6 +230,8 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
 
 const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
 {
+    if (!isMPPTask())
+        throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
     if (!mpp_exchange_receiver_map_inited)
         throw TiFlashException("mpp_exchange_receiver_map has not been initialized", Errors::Coprocessor::Internal);
     return mpp_exchange_receiver_map;
