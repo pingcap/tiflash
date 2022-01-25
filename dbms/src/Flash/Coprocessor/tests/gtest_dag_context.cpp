@@ -12,11 +12,11 @@ TEST(DAGContextTest, FlagsTest)
 
     ASSERT_EQ(context.getFlags(), static_cast<UInt64>(0));
 
-    UInt64 f = static_cast<UInt64>(TiDBSQLFlags::TRUNCATE_AS_WARNING) | static_cast<UInt64>(TiDBSQLFlags::IN_LOAD_DATA_STMT);
+    UInt64 f = TiDBSQLFlags::TRUNCATE_AS_WARNING | TiDBSQLFlags::IN_LOAD_DATA_STMT;
     context.setFlags(f);
     ASSERT_EQ(context.getFlags(), f);
 
-    UInt64 f1 = static_cast<UInt64>(f) | static_cast<UInt64>(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    UInt64 f1 = f | TiDBSQLFlags::OVERFLOW_AS_WARNING;
     context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
     ASSERT_EQ(context.getFlags(), f1);
 
