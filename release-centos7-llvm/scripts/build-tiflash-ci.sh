@@ -1,7 +1,8 @@
 #!/bin/bash
 
 command -v ccache >/dev/null 2>&1
-if [[ $? != 0 ]]; then
+ccache_major=$(ccache --version | head - -n 1 | tr '.' ' ' | awk -e '{ print $3 }')
+if [[ $? != 0 || $ccache_major -lt 4 ]]; then
   echo "try to install ccache"
   curl -o /usr/local/bin/ccache http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/ccache-4.5.1
   chmod +x /usr/local/bin/ccache
