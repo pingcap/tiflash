@@ -75,7 +75,7 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
                                                    {});
 }
 
-void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.delta, buf); // Add binary version
     switch (STORAGE_FORMAT_CURRENT.delta)
@@ -93,7 +93,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_fil
     }
 }
 
-ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;

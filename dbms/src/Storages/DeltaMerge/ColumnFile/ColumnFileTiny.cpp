@@ -106,7 +106,7 @@ void ColumnFileTiny::fillColumns(const PageReader & page_reader, const ColumnDef
 ColumnFileReaderPtr
 ColumnFileTiny::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnTinyFileReader>(*this, storage_snap, col_defs);
+    return std::make_shared<ColumnFileTinyReader>(*this, storage_snap, col_defs);
 }
 
 void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) const
@@ -191,7 +191,7 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;
-    for (auto & col : block)
+    for (const auto & col : block)
     {
         auto last_buf_size = write_buf.count();
         serializeColumn(write_buf, *col.column, col.type, offset, limit, true);
@@ -206,19 +206,19 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
 }
 
 
-ColumnPtr ColumnTinyFileReader::getPKColumn()
+ColumnPtr ColumnFileTinyReader::getPKColumn()
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 1, cols_data_cache);
     return cols_data_cache[0];
 }
 
-ColumnPtr ColumnTinyFileReader::getVersionColumn()
+ColumnPtr ColumnFileTinyReader::getVersionColumn()
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 2, cols_data_cache);
     return cols_data_cache[1];
 }
 
-size_t ColumnTinyFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
 
@@ -226,7 +226,7 @@ size_t ColumnTinyFileReader::readRows(MutableColumns & output_cols, size_t rows_
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
 }
 
-Block ColumnTinyFileReader::readNextBlock()
+Block ColumnFileTinyReader::readNextBlock()
 {
     if (read_done)
         return {};
@@ -239,10 +239,10 @@ Block ColumnTinyFileReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
-ColumnFileReaderPtr ColumnTinyFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.
-    return std::make_shared<ColumnTinyFileReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
+    return std::make_shared<ColumnFileTinyReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
 }
 
 } // namespace DM

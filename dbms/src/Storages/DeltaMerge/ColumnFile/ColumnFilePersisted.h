@@ -10,10 +10,15 @@ class ColumnFilePersisted;
 using ColumnFilePersistedPtr = std::shared_ptr<ColumnFilePersisted>;
 using ColumnFilePersisteds = std::vector<ColumnFilePersistedPtr>;
 
-// TODO: move `removeData` and `serializeMetadata` into this class
 // represents ColumnFile that can be saved on disk
 class ColumnFilePersisted : public ColumnFile
 {
+public:
+    /// Put the data's page id into the corresponding WriteBatch.
+    /// The actual remove will be done later.
+    virtual void removeData(WriteBatches &) const {};
+
+    virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 };
 
 void serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
@@ -24,15 +29,15 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
 
 /// Serialize those packs' metadata into buf.
 /// Note that this method stop at the first unsaved pack.
-void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_files);
+void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 /// Recreate pack instances from buf.
-ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
-void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFiles & column_files);
-ColumnFiles deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UInt64 version);
+void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
+ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UInt64 version);
 
-void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFiles & column_files);
-ColumnFiles deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
+void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
+ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
 
 } // namespace DM
 } // namespace DB
