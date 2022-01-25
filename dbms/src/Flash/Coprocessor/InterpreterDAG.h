@@ -16,7 +16,7 @@
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/ManagedStorages.h>
 
 namespace DB
 {

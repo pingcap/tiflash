@@ -2,7 +2,7 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/SchemaGetter.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/ManagedStorages.h>
 
 namespace DB
 {

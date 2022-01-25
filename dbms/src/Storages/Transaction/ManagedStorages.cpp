@@ -1,5 +1,5 @@
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/ManagedStorages.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB

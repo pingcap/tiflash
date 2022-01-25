@@ -16,7 +16,7 @@
 #include <Poco/Path.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/ManagedStorages.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 

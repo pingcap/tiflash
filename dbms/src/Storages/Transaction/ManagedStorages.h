@@ -13,6 +13,9 @@ class StorageDeltaMerge;
 using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 
+/**
+ * The tables synced from TiDB and managed by TiFlashContext
+ */
 class ManagedStorages : private boost::noncopyable
 {
 public:

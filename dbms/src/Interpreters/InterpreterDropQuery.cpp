@@ -149,7 +149,7 @@ BlockIO InterpreterDropQuery::execute()
             database->removeTable(context, current_table_name);
 
             SCOPE_EXIT({
-                // Once the storage's metadata removed from disk, we should ensure that it is removed from TMTStorages
+                // Once the storage's metadata removed from disk, we should ensure that it is removed from ManagedStorages
                 if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
                     storage->removeFromTMTContext();
             });

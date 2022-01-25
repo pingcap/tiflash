@@ -10,7 +10,7 @@
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/ManagedStorages.h>
 #include <Storages/Transaction/Types.h>
 
 #pragma GCC diagnostic push
