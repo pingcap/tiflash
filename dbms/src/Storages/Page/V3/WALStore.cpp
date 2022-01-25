@@ -45,7 +45,7 @@ WALStorePtr WALStore::create(
             // TODO: Handle error
             break;
         }
-        // callback(edit); apply to PageDirectory
+        // apply the edit read
         restore_callback(std::move(edit));
     }
 
@@ -82,7 +82,6 @@ void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version)
 void WALStore::apply(const PageEntriesEdit & edit)
 {
     const String serialized = ser::serializeTo(edit);
-    // LOG_FMT_TRACE(logger, "apply [size={}] [ser={}]", serialized.size(), Redact::keyToHexString(serialized.data(), serialized.size()));
     ReadBufferFromString payload(serialized);
     log_file->addRecord(payload, serialized.size());
 

@@ -19,6 +19,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
     PSDiskDelegatorPtr & delegator,
     Poco::Logger * logger)
 {
+    // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
     Strings filenames;
     for (const auto & p : delegator->listPaths())
@@ -31,7 +32,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
         all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
         filenames.clear();
     }
-    ASSERT(all_filenames.size() == 1); // TODO: multi-path
+    assert(all_filenames.size() == 1); // TODO: multi-path
 
     LogFilenameSet log_files;
     for (const auto & [parent_path, filenames] : all_filenames)
@@ -101,13 +102,6 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            // LOG_FMT_TRACE(
-            //     logger,
-            //     "deserialize [offset={}] [eof={}] [size={}] [deser={}]",
-            //     reader->lastRecordOffset(),
-            //     reader->isEOF(),
-            //     record.size(),
-            //     Redact::keyToHexString(record.data(), record.size()));
             return {true, ser::deserializeFrom(record)};
         }
 

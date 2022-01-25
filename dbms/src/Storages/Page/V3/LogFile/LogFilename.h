@@ -30,20 +30,21 @@ struct LogFilename
 
     static LogFilename parseFrom(const String & parent_path, const String & filename, Poco::Logger * log);
 
-    inline String filename(LogFileStage s) const
+    inline String filename(LogFileStage stage) const
     {
-        assert(s != LogFileStage::Invalid);
+        assert(stage != LogFileStage::Invalid);
         return fmt::format(
             "{}_{}_{}",
-            ((s == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
+            ((stage == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
             log_num,
             level_num);
     }
 
-    inline String fullname(LogFileStage s) const
+    inline String fullname(LogFileStage stage) const
     {
-        assert(s != LogFileStage::Invalid);
-        return fmt::format("{}/{}", parent_path, filename(s));
+        assert(stage != LogFileStage::Invalid);
+        assert(!parent_path.empty());
+        return fmt::format("{}/{}", parent_path, filename(stage));
     }
 };
 
