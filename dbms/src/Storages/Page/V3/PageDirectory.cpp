@@ -495,23 +495,25 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
 std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids)
 {
-    std::shared_lock read_lock(table_rw_mutex);
-    for (auto & record : migrated_edit.getMutRecords())
     {
-        auto iter = mvcc_table_directory.find(record.page_id);
-        if (unlikely(iter == mvcc_table_directory.end()))
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto & record : migrated_edit.getMutRecords())
         {
-            throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+            auto iter = mvcc_table_directory.find(record.page_id);
+            if (unlikely(iter == mvcc_table_directory.end()))
+            {
+                throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+            }
+
+            // Increase the epoch for migrated record.
+            record.version.epoch += 1;
+
+            // Append the gc version to version list
+            auto & versioned_entries = iter->second;
+            auto page_lock = versioned_entries->acquireLock();
+            versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
         }
-
-        // Increase the epoch for migrated record.
-        record.version.epoch += 1;
-
-        // Append the gc version to version list
-        auto & versioned_entries = iter->second;
-        auto page_lock = versioned_entries->acquireLock();
-        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
-    }
+    } // Then we should release the read lock on `table_rw_mutex`
 
     // Apply migrate edit into WAL with the increased epoch version
     wal->apply(migrated_edit);
