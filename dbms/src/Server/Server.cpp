@@ -1147,7 +1147,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// create TiFlashContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config, std::move(cluster_config));
+        global_context->createTiFlashContext(raft_config, std::move(cluster_config));
         global_context->getTiFlashContext().reloadConfig(config());
     }
 

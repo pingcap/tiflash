@@ -137,7 +137,7 @@ struct ContextShared
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
-    mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
+    mutable TiFlashContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
     /// Rules for selecting the compression settings, depending on the size of the part.
@@ -1468,7 +1468,7 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     return *shared->blockable_background_pool;
 }
 
-void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
+void Context::createTiFlashContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)

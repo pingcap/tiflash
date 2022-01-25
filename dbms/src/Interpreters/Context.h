@@ -44,7 +44,7 @@ class MarkCache;
 class UncompressedCache;
 class DBGInvoker;
 class TiFlashContext;
-using TMTContextPtr = std::shared_ptr<TiFlashContext>;
+using TiFlashContextPtr = std::shared_ptr<TiFlashContext>;
 class ProcessList;
 class ProcessListElement;
 class Macros;
@@ -371,7 +371,7 @@ public:
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
-    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
+    void createTiFlashContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
