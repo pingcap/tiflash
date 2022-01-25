@@ -101,18 +101,15 @@ AnalysisResult analyzeExpressions(
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    if (query_block.selection)
+    // selection on table scan had been executed in executeTs
+    if (query_block.selection && query_block.source->tp() != tipb::ExecType::TypeTableScan)
     {
-        // selection on table scan had been executed in executeTs
-        if (query_block.source->tp() != tipb::ExecType::TypeTableScan)
-        {
-            std::vector<const tipb::Expr *> where_conditions;
-            for (const auto & c : query_block.selection->selection().conditions())
-                where_conditions.push_back(&c);
-            res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
-            res.before_where = chain.getLastActions();
-            chain.addStep();
-        }
+        std::vector<const tipb::Expr *> where_conditions;
+        for (const auto & c : query_block.selection->selection().conditions())
+            where_conditions.push_back(&c);
+        res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
+        res.before_where = chain.getLastActions();
+        chain.addStep();
     }
     // There will be either Agg...
     if (query_block.aggregation)
@@ -293,10 +290,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 
-    /// handle cast and filter for local and remote table scan.
+    /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(storage_interpreter.is_need_add_cast_column, remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, query_block.source_name);
 
+    /// handle pushed down filter for local and remote table scan.
     if (query_block.selection)
     {
         executePushedDownFilter(conditions, remote_read_streams_start_index, pipeline);
