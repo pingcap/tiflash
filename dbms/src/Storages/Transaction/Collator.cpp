@@ -403,7 +403,7 @@ public:
                 }
                 else
                 {
-                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
+                    return signum((int)(s1_first & 0xFFFF) - (int)(s2_first & 0xFFFF));
                 }
             }
         }
