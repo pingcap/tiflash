@@ -14,7 +14,6 @@ inline size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
 
 inline size_t sizeAt(const ColumnString::Offsets & offsets, size_t i)
 {
-    assert(offsets[0] > 0 && offsets[i] - offsets[i - 1] > 0);
     return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
 }
 } // namespace StringUtil
