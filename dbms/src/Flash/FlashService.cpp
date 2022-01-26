@@ -164,8 +164,8 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    auto & tmt_context = context->getTiFlashContext();
-    response->set_available(tmt_context.checkRunning());
+    auto & flash_context = context->getTiFlashContext();
+    response->set_available(flash_context.checkRunning());
     return ::grpc::Status::OK;
 }
 
@@ -197,8 +197,8 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    auto & tmt_context = context->getTiFlashContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
+    auto & flash_context = context->getTiFlashContext();
+    auto task_manager = flash_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     std::string err_msg;
     MPPTunnelPtr tunnel = nullptr;
@@ -262,8 +262,8 @@ grpc::Status FlashService::Coprocessor(
         response->set_allocated_error(err.release());
         return status;
     }
-    auto & tmt_context = context->getTiFlashContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
+    auto & flash_context = context->getTiFlashContext();
+    auto task_manager = flash_context.getMPPTaskManager();
     task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
     return grpc::Status::OK;
 }

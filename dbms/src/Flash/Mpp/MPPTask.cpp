@@ -123,10 +123,10 @@ void MPPTask::unregisterTask()
     }
 }
 
-bool needRemoteRead(const RegionInfo & region_info, const TiFlashContext & tmt_context)
+bool needRemoteRead(const RegionInfo & region_info, const TiFlashContext & flash_context)
 {
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
-    RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
+    RegionPtr current_region = flash_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
         return true;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
@@ -139,7 +139,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     RegionInfoList remote_regions;
 
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
-    TiFlashContext & tmt_context = context->getTiFlashContext();
+    TiFlashContext & flash_context = context->getTiFlashContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
     /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without
@@ -164,7 +164,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
-        if (duplicated_region || needRemoteRead(region_info, tmt_context))
+        if (duplicated_region || needRemoteRead(region_info, flash_context))
             remote_regions.push_back(region_info);
         else
             local_regions.insert(std::make_pair(region_info.region_id, region_info));
@@ -244,7 +244,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
     dag_context->tunnel_set = tunnel_set;
     // register task.
-    auto task_manager = tmt_context.getMPPTaskManager();
+    auto task_manager = flash_context.getMPPTaskManager();
     LOG_FMT_DEBUG(log, "begin to register the task {}", id.toString());
 
     if (dag_context->isRootMPPTask())

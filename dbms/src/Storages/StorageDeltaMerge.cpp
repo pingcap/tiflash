@@ -1432,9 +1432,9 @@ void StorageDeltaMerge::shutdown()
 void StorageDeltaMerge::removeFromTiFlashContext()
 {
     // remove this table from TiFlashContext
-    TiFlashContext & tmt_context = global_context.getTiFlashContext();
-    tmt_context.getStorages().remove(tidb_table_info.id);
-    tmt_context.getRegionTable().removeTable(tidb_table_info.id);
+    TiFlashContext & flash_context = global_context.getTiFlashContext();
+    flash_context.getStorages().remove(tidb_table_info.id);
+    flash_context.getRegionTable().removeTable(tidb_table_info.id);
 }
 
 StorageDeltaMerge::~StorageDeltaMerge()
