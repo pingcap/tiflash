@@ -36,8 +36,6 @@ class DAGExpressionAnalyzer : private boost::noncopyable
 public:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
-    bool after_window;
-
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
 
@@ -129,6 +127,11 @@ private:
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
 
+    void appendWindowSelect(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window,
+        const NamesAndTypes window_columns);
+
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -202,7 +205,9 @@ private:
         ExpressionActionsPtr & actions);
 
     // all columns after window
-    std::vector<NameAndTypePair> after_window_columns;
+    std::vector<std::vector<NameAndTypePair>> windows_columns;
+    std::vector<std::vector<tipb::Expr>> windows_functions;
+
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;

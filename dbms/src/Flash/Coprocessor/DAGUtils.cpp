@@ -744,6 +744,8 @@ const String & getWindowFunctionName(const tipb::Expr & expr)
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
+
+
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
@@ -892,6 +894,21 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::JsonArrayAgg:
     case tipb::ExprType::JsonObjectAgg:
     case tipb::ExprType::ApproxCountDistinct:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::Rank:
+    case tipb::ExprType::Dense_rank:
+    case tipb::ExprType::Row_number:
+    case tipb::ExprType::Lag_in_frame:
+    case tipb::ExprType::Lead_in_frame:
         return true;
     default:
         return false;

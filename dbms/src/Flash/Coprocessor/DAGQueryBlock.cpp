@@ -74,14 +74,6 @@ void collectOutPutFieldTypesFromWindow(std::vector<tipb::FieldType> & field_type
         }
         field_type.push_back(expr.field_type());
     }
-    for (const auto & expr : window.window_func())
-    {
-        if (!exprHasValidFieldType(expr))
-        {
-            throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
-        }
-        field_type.push_back(expr.field_type());
-    }
 }
 
 /// construct DAGQueryBlock from a tree struct based executors, which is the

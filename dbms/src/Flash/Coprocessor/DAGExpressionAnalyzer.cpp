@@ -780,94 +780,111 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
+static bool checkWindowFunctionsInvalid(const tipb::Window & window)
+{
+    bool has_agg_func = false;
+    bool has_window_func = false;
+    for (const tipb::Expr & expr : window.agg_func())
+    {
+        has_agg_func = has_agg_func || isAggFunctionExpr(expr);
+        has_window_func = has_window_func || isWindowFunctionExpr(expr);
+    }
+
+    return has_agg_func && has_window_func;
+
+}
+
 WindowDescription DAGExpressionAnalyzer::appendWindow(
     ExpressionActionsChain & chain,
     const tipb::Window & window)
 {
     WindowDescription window_description;
-//    window_description.partition_by = window.partition_by();
-
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
 
-    if (window.partition_by_size() == 0 && window.agg_func_size() == 0 && window.window_func_size() == 0)
+    if (window.partition_by_size() == 0 || window.agg_func_size() == 0)
     {
         //should not reach here
-        throw TiFlashException("window executor without group by/agg exprs/window exprs", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("window executor without group by or agg exprs/window exprs", Errors::Coprocessor::BadRequest);
     }
 
-    if (window.window_func_size() != 0 && window.agg_func_size() != 0)
+    if (checkWindowFunctionsInvalid(window))
     {
         throw TiFlashException("can not have window and agg functions together in one window.", Errors::Coprocessor::BadRequest);
     }
 
-    // TODO: extract into function
-    for (const tipb::Expr & expr : window.window_func())
-    {
-        WindowFunctionDescription window_function_description;
-        String window_func_name = getWindowFunctionName(expr);
-        auto child_size = expr.children_size();
-        DataTypes types(child_size);
-        window_function_description.argument_names.resize(child_size);
-        TiDB::TiDBCollators arg_collators;
-        for (Int32 i = 0; i < child_size; i++)
-        {
-            String arg_name = getActions(expr.children(i), step.actions);
-            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-            if (removeNullable(types[i])->isString())
-                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
-            else
-                arg_collators.push_back(nullptr);
-            window_function_description.argument_names[i] = arg_name;
-            step.required_output.push_back(arg_name);
-        }
-        String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
-
-
-        window_function_description.column_name = func_string;
-        window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
-
-        DataTypePtr result_type = window_function_description.window_function->getReturnType();
-
-        window_description.window_functions_descriptions.push_back(window_function_description);
-
-        after_window_columns.emplace_back(func_string, result_type);
-    }
+    std::vector<NameAndTypePair> window_columns;
 
     for (const tipb::Expr & expr : window.agg_func())
     {
-        AggregateDescription aggregate_description;
-        String agg_func_name = getAggFunctionName(expr);
-        auto child_size = expr.children_size();
-        DataTypes types(child_size);
-        aggregate_description.argument_names.resize(child_size);
-        TiDB::TiDBCollators arg_collators;
-        for (Int32 i = 0; i < child_size; i++)
+        // TODO: extract into function
+        if (isAggFunctionExpr(expr))
         {
-            String arg_name = getActions(expr.children(i), step.actions);
-            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-            aggregate_description.argument_names[i] = arg_name;
-            if (removeNullable(types[i])->isString())
-                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
-            else
-                arg_collators.push_back(nullptr);
-            step.required_output.push_back(arg_name);
+            AggregateDescription aggregate_description;
+            String agg_func_name = getAggFunctionName(expr);
+            auto child_size = expr.children_size();
+            DataTypes types(child_size);
+            aggregate_description.argument_names.resize(child_size);
+            TiDB::TiDBCollators arg_collators;
+            for (Int32 i = 0; i < child_size; i++)
+            {
+                String arg_name = getActions(expr.children(i), step.actions);
+                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                aggregate_description.argument_names[i] = arg_name;
+                if (removeNullable(types[i])->isString())
+                    arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+                else
+                    arg_collators.push_back(nullptr);
+                step.required_output.push_back(arg_name);
+            }
+            String func_string = genFuncString(agg_func_name, aggregate_description.argument_names, arg_collators);
+            aggregate_description.column_name = func_string;
+            aggregate_description.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, window.partition_by_size() == 0);
+            DataTypePtr result_type = aggregate_description.function->getReturnType();
+            window_description.aggregate_descriptions.push_back(aggregate_description);
+            window_columns.emplace_back(func_string, result_type);
         }
-        String func_string = genFuncString(agg_func_name, aggregate_description.argument_names, arg_collators);
-
-        aggregate_description.column_name = func_string;
-        aggregate_description.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, window.partition_by_size() == 0);
-
-        DataTypePtr result_type = aggregate_description.function->getReturnType();
-        window_description.aggregate_descriptions.push_back(aggregate_description);
-        after_window_columns.emplace_back(func_string, result_type);
+        else if (isWindowFunctionExpr(expr))
+        {
+            WindowFunctionDescription window_function_description;
+            String window_func_name = getWindowFunctionName(expr);
+            auto child_size = expr.children_size();
+            DataTypes types(child_size);
+            window_function_description.argument_names.resize(child_size);
+            TiDB::TiDBCollators arg_collators;
+            for (Int32 i = 0; i < child_size; i++)
+            {
+                String arg_name = getActions(expr.children(i), step.actions);
+                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                if (removeNullable(types[i])->isString())
+                    arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+                else
+                    arg_collators.push_back(nullptr);
+                window_function_description.argument_names[i] = arg_name;
+                step.required_output.push_back(arg_name);
+            }
+            String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
+            window_function_description.column_name = func_string;
+            window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
+            DataTypePtr result_type = window_function_description.window_function->getReturnType();
+            window_description.window_functions_descriptions.push_back(window_function_description);
+            window_columns.emplace_back(func_string, result_type);
+        }
+        else
+        {
+            throw TiFlashException("unknow function expr.", Errors::Coprocessor::BadRequest);
+        }
     }
 
     if (window.has_window_frame())
     {
         window_description.setWindowFrame(window.window_frame());
     }
+    window_description.before_window = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
 
+    appendWindowSelect(chain, window, window_columns);
     return window_description;
 }
 
@@ -1221,6 +1238,46 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     }
     return ret;
 }
+
+void DAGExpressionAnalyzer::appendWindowSelect(
+    ExpressionActionsChain & chain,
+    const tipb::Window & window,
+    const NamesAndTypes after_window_columns)
+{
+    initChain(chain, after_window_columns);
+    bool need_update_source_columns = false;
+    std::vector<NameAndTypePair> updated_after_window_columns;
+    ExpressionActionsChain::Step & step = chain.steps.back();
+    for (Int32 i = 0; i < window.agg_func_size(); i++)
+    {
+        const String & name = after_window_columns[i].name;
+        String updated_name = appendCastIfNeeded(window.agg_func(i), step.actions, name);
+        if (name != updated_name)
+        {
+            need_update_source_columns = true;
+            DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
+            updated_after_window_columns.emplace_back(updated_name, type);
+            step.required_output.push_back(updated_name);
+        }
+        else
+        {
+            updated_after_window_columns.emplace_back(name, after_window_columns[i].type);
+            step.required_output.push_back(name);
+        }
+    }
+
+    if (need_update_source_columns)
+    {
+        for (auto & col : updated_after_window_columns)
+            source_columns.emplace_back(col.name, col.type);
+    }
+    else
+    {
+        for (auto & col : after_window_columns)
+            source_columns.emplace_back(col.name, col.type);
+    }
+}
+
 
 void DAGExpressionAnalyzer::appendAggSelect(
     ExpressionActionsChain & chain,

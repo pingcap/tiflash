@@ -205,7 +205,6 @@ AnalysisResult analyzeExpressions(
                     WindowDescription window_description = analyzer.appendWindow(
                         chain,
                         window->window());
-                    window_description.before_window = chain.getLastActions();
                     res.window_description_map.insert({name, window_description});
                     continue;
                 }
@@ -229,9 +228,6 @@ AnalysisResult analyzeExpressions(
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
 
-        analyzer.after_window = true;
-        chain.finalize();
-        chain.clear();
     }
 
     // Append final project results if needed.
