@@ -141,23 +141,6 @@ if(NOT GCOV_PATH)
     message(FATAL_ERROR "gcov not found! Aborting...")
 endif() # NOT GCOV_PATH
 
-get_property(LANGUAGES GLOBAL PROPERTY ENABLED_LANGUAGES)
-list(GET LANGUAGES 0 LANG)
-
-if("${CMAKE_${LANG}_COMPILER_ID}" MATCHES "(Apple)?[Cc]lang")
-    if("${CMAKE_${LANG}_COMPILER_VERSION}" VERSION_LESS 3)
-        message(FATAL_ERROR "Clang version must be 3.0.0 or greater! Aborting...")
-    endif()
-elseif(NOT CMAKE_COMPILER_IS_GNUCXX)
-    if("${CMAKE_Fortran_COMPILER_ID}" MATCHES "[Ff]lang")
-        # Do nothing; exit conditional without error if true
-    elseif("${CMAKE_Fortran_COMPILER_ID}" MATCHES "GNU")
-        # Do nothing; exit conditional without error if true
-    else()
-        message(FATAL_ERROR "Compiler is not GNU gcc! Aborting...")
-    endif()
-endif()
-
 set(COVERAGE_COMPILER_FLAGS "-g -fprofile-arcs -ftest-coverage"
         CACHE INTERNAL "")
 if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
