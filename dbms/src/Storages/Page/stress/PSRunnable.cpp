@@ -66,13 +66,13 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
 
     holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
 
-    return std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz);
+    return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
 }
 
 void PSWriter::updatedRandomData()
 {
     size_t memory_size = approx_page_mb * DB::MB * 2;
-    if (unlikely(memory != nullptr))
+    if (memory == nullptr)
     {
         memory = static_cast<char *>(malloc(memory_size));
         if (memory == nullptr)
@@ -131,7 +131,7 @@ void PSCommonWriter::updatedRandomData()
                                                                                            : batch_buffer_size);
     size_t memory_size = single_buff_size * batch_buffer_nums;
 
-    if (likely(memory == nullptr))
+    if (memory == nullptr)
     {
         memory = static_cast<char *>(malloc(memory_size));
         if (memory == nullptr)
@@ -170,7 +170,6 @@ bool PSCommonWriter::runImpl()
         bytes_used += buffptr->buffer().size();
     }
 
-    writing_page[index] = page_id;
     ps->write(std::move(wb));
     return (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
 }
@@ -302,7 +301,10 @@ DB::PageId PSWindowWriter::genRandomPageId()
     auto random = std::round(distribution(gen));
     // Move this "random" near the pageid_boundary, If "random" is still negative, then make it positive
     random = std::abs(random + pageid_boundary);
-    return static_cast<DB::PageId>(random > pageid_boundary ? pageid_boundary++ : random);
+
+    auto page_id = static_cast<DB::PageId>(random > pageid_boundary ? pageid_boundary++ : random);
+    writing_page[index] = page_id;
+    return page_id;
 }
 
 void PSWindowReader::setWindowSize(size_t window_size_)
