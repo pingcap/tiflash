@@ -161,12 +161,43 @@ private:
     std::map<PageVersionType, EntryOrDelete> entries;
 };
 
+// `CollapsingPageDirectory` only store the latest version
+// of entry for the same page id. It is a util class for
+// restoring from persisted logs and compacting logs.
+// There is no concurrent security guarantee for this class.
+class CollapsingPageDirectory
+{
+public:
+    CollapsingPageDirectory();
+
+    void apply(PageEntriesEdit && edit);
+
+    void dumpTo(std::unique_ptr<LogWriter> & log_writer);
+
+    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
+    CollapsingMapType table_directory;
+
+    PageId max_applied_page_id = 0;
+    PageVersionType max_applied_ver;
+
+    // No copying
+    CollapsingPageDirectory(const CollapsingPageDirectory &) = delete;
+    CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
+};
+
+// `PageDiectory` store multi-versions entries for the same
+// page id. User can acquire a snapshot from it and get a
+// consist result by the snapshot.
+// All its functions are consider concurrent safe.
+// User should call `gc` periodly to remove outdated version
+// of entries in order to keep the memory consumption as well
+// as the restoring time in a reasonable level.
 class PageDirectory
 {
 public:
     PageDirectory();
 
-    void restore();
+    static PageDirectory create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter);
 
     PageDirectorySnapshotPtr createSnapshot() const;
 
@@ -184,7 +215,8 @@ public:
 
     void apply(PageEntriesEdit && edit);
 
-    std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
+    std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
+    getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
     std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
 
@@ -194,6 +226,29 @@ public:
     {
         std::shared_lock read_lock(table_rw_mutex);
         return mvcc_table_directory.size();
+    }
+
+    // No copying
+    PageDirectory(const PageDirectory &) = delete;
+    PageDirectory & operator=(const PageDirectory &) = delete;
+    // Only moving
+    PageDirectory(PageDirectory && rhs) noexcept
+    {
+        *this = std::move(rhs);
+    }
+    PageDirectory & operator=(PageDirectory && rhs) noexcept
+    {
+        if (this != &rhs)
+        {
+            // Note: Not making it thread safe for moving, don't
+            // care about `table_rw_mutex` and `snapshots_mutex`
+            sequence.store(rhs.sequence.load());
+            mvcc_table_directory = std::move(rhs.mvcc_table_directory);
+            snapshots = std::move(rhs.snapshots);
+            wal = std::move(rhs.wal);
+            log = std::move(rhs.log);
+        }
+        return *this;
     }
 
 private:
