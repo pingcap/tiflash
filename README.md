@@ -91,7 +91,7 @@ Because all shared libs are shipped with `tiflash-env` and you may not add those
 cmake /path/to/tiflash/src/dir \
   -GNinja \
   -DENABLE_TESTS=ON \
-  -DTIFLASH_ENABLE_LLVM_DEVELOPMENT =ON \
+  -DTIFLASH_ENABLE_LLVM_DEVELOPMENT=ON \
   -DCMAKE_PREFIX_PATH=/path/to/tiflash-env/sysroot 
 ```
 Then, you can compile and run tifalsh or tests as normal in your IDE.
