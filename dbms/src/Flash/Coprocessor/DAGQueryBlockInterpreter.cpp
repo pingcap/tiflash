@@ -333,7 +333,6 @@ void DAGQueryBlockInterpreter::executePushedDownFilter(
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
     }
-    recordProfileStreams(pipeline, query_block.selection_name);
 }
 
 void DAGQueryBlockInterpreter::executeCastAfterTableScan(
