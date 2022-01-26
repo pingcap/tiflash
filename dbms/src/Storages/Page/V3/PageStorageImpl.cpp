@@ -4,6 +4,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 
+#include "Storages/Page/V3/PageDirectory.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -28,7 +30,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    page_directory = PageDirectory::create(file_provider, delegator, /*write_limiter*/ nullptr);
 }
 
 void PageStorageImpl::drop()
