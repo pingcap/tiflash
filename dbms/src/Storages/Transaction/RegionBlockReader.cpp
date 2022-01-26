@@ -352,7 +352,25 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
             }
         }
         else
-            column_map.getMutableColumnPtr(pk_column_ids[0])->insert(Field(static_cast<Int64>(pk)));
+        {
+            // The pk_type must be Int32/Uint32 or more narrow type
+            // so cannot tell its' exact type here, just use `insert(Field)`
+            HandleID handle_value(static_cast<Int64>(pk));
+            auto & pk_column = column_map.getMutableColumnPtr(pk_column_ids[0]);
+            pk_column->insert(Field(handle_value));
+            if (unlikely(pk_column->getInt(index) != handle_value))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow value when decoding pk column of type " + pk_column->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+        }
         index++;
     }
     decoded_data.checkValid();
