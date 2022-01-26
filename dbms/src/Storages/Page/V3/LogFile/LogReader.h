@@ -47,11 +47,6 @@ public:
     // successfully, false if we hit end of the input.
     virtual std::tuple<bool, String> readRecord();
 
-    // Returns the physical offset of the last record returned by readRecord.
-    //
-    // Undefined before the first call to readRecord.
-    UInt64 lastRecordOffset();
-
     bool isEOF() const { return eof; }
 
     Format::LogNumberType getLogNumber() const { return log_number; }
@@ -104,7 +99,8 @@ private:
 private:
     const bool verify_checksum;
     bool recycled;
-    bool eof; // Last Read() indicated EOF by returning < BlockSize
+    bool is_last_block; // Last Read() indicated EOF by returning < BlockSize
+    bool eof;
     bool read_error; // Error occrured while reading from file
     // Offset of the file position indicator within the last block when an EOF was detected.
     WALRecoveryMode recovery_mode;
@@ -112,12 +108,11 @@ private:
 
     const std::unique_ptr<ReadBufferFromFileBase> file;
     std::string_view buffer;
-    Reporter * reporter;
+    Reporter * const reporter;
 
-    UInt64 last_record_offset;
     UInt64 end_of_buffer_offset;
     // which log number it is
-    Format::LogNumberType log_number;
+    const Format::LogNumberType log_number;
 
     Poco::Logger * log;
 };

@@ -74,12 +74,12 @@ public:
 
             std::mutex sm_lock;
 
-            std::lock_guard<std::mutex> lock()
+            [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
                 return std::lock_guard(sm_lock);
             }
 
-            bool isReadOnly()
+            bool isReadOnly() const
             {
                 return type == BlobStatType::READ_ONLY;
             }
@@ -99,11 +99,13 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
-        std::lock_guard<std::mutex> lock() const;
+        [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        void eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
+
+        void eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.
@@ -137,7 +139,7 @@ public:
         Poco::Logger * log;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 0;
+        BlobFileId roll_id = 1;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         mutable std::mutex lock_stats;
@@ -161,6 +163,23 @@ public:
     PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
+
+    void read(PageIDAndEntriesV3 & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
+
+    struct FieldReadInfo
+    {
+        PageId page_id;
+        PageEntryV3 entry;
+        std::vector<size_t> fields;
+
+        FieldReadInfo(PageId id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+            : page_id(id_)
+            , entry(entry_)
+            , fields(std::move(fields_))
+        {}
+    };
+    using FieldReadInfos = std::vector<FieldReadInfo>;
+    PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

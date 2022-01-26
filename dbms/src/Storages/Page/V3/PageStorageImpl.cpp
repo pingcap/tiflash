@@ -4,6 +4,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 
+#include "Storages/Page/V3/PageDirectory.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -28,7 +30,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    page_directory = PageDirectory::create(file_provider, delegator, /*write_limiter*/ nullptr);
 }
 
 void PageStorageImpl::drop()
@@ -157,7 +159,7 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    page_directory.gcApply(std::move(gc_edit));
+    page_directory.gcApply(std::move(gc_edit), false);
     return true;
 }
 

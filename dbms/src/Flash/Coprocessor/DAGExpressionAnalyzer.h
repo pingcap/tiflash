@@ -201,8 +201,8 @@ private:
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
-    Settings settings;
     const Context & context;
+    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };
