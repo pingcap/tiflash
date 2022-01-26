@@ -13,9 +13,8 @@ namespace DB
 {
 namespace DM
 {
-inline void serializeColumnFilePersistedLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
+inline ColumnFilePersisteds flattenColumnFileLevels(const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
 {
-    MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
     ColumnFilePersisteds column_files;
     for (const auto & level : file_levels)
     {
@@ -24,6 +23,13 @@ inline void serializeColumnFilePersistedLevels(WriteBatches & wbs, PageId id, co
             column_files.emplace_back(file);
         }
     }
+    return column_files;
+}
+
+inline void serializeColumnFilePersistedLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
+{
+    MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
+    auto column_files = flattenColumnFileLevels(file_levels);
     serializeSavedColumnFiles(buf, column_files);
     auto data_size = buf.count();
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
@@ -51,22 +57,25 @@ void ColumnFilePersistedSet::updateColumnFileStats()
     deletes = new_deletes;
 }
 
-void ColumnFilePersistedSet::checkColumnFiles(const ColumnFiles & new_column_files)
+void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels)
 {
     if constexpr (!DM_RUN_CHECK)
         return;
     size_t new_rows = 0;
     size_t new_deletes = 0;
-
-    for (const auto & file : new_column_files)
+    for (const auto & level : new_column_file_levels)
     {
-        new_rows += file->getRows();
-        new_deletes += file->isDeleteRange();
+        for (const auto & file : level)
+        {
+            new_rows += file->getRows();
+            new_deletes += file->isDeleteRange();
+        }
     }
+
     if (unlikely(new_rows != rows || new_deletes != deletes))
     {
         LOG_ERROR(log,
-                  "Rows and deletes check failed. Current packs: " << columnFilesToString(new_column_files) << ", new packs: " << columnFilesToString(new_column_files));
+                  "Rows and deletes check failed. Current packs: " << columnFilesToString(flattenColumnFileLevels(new_column_file_levels)) << ", new packs: " << columnFilesToString(flattenColumnFileLevels(new_column_file_levels)));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 }
@@ -259,7 +268,7 @@ size_t ColumnFilePersistedSet::getValidCacheRows() const
     return cache_rows;
 }
 
-bool ColumnFilePersistedSet::checkAndUpdateFlushVersion(size_t task_flush_version) const
+bool ColumnFilePersistedSet::checkAndUpdateFlushVersion(size_t task_flush_version)
 {
     if (task_flush_version != flush_version)
     {
@@ -364,19 +373,19 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
-    ColumnFilePersistedLevels new_stable_files_levels;
+    ColumnFilePersistedLevels new_persisted_files_levels;
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
     {
-        auto & new_level = new_stable_files_levels.emplace_back();
+        auto & new_level = new_persisted_files_levels.emplace_back();
         for (const auto & f : persisted_files_levels[i])
             new_level.push_back(f);
     }
     // Create a new empty level for `compaction_src_level` because all the column files is compacted to next level
-    new_stable_files_levels.emplace_back();
+    new_persisted_files_levels.emplace_back();
 
     // Add new file to the target level
     auto target_level = compaction->compaction_src_level + 1;
-    auto & target_level_files = new_stable_files_levels.emplace_back();
+    auto & target_level_files = new_persisted_files_levels.emplace_back();
     if (persisted_files_levels.size() > target_level)
     {
         for (auto & column_file : persisted_files_levels[target_level])
@@ -393,17 +402,19 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     // Append remaining levels
     for (size_t i = target_level + 1; i < persisted_files_levels.size(); i++)
     {
-        auto & new_level = new_stable_files_levels.emplace_back();
+        auto & new_level = new_persisted_files_levels.emplace_back();
         for (const auto & f : persisted_files_levels[i])
             new_level.push_back(f);
     }
 
+    checkColumnFiles(new_persisted_files_levels);
+
     /// Save the new metadata of column files to disk.
-    serializeColumnFilePersistedLevels(wbs, metadata_id, new_stable_files_levels);
+    serializeColumnFilePersistedLevels(wbs, metadata_id, new_persisted_files_levels);
     wbs.writeMeta();
 
     /// Commit updates in memory.
-    persisted_files_levels.swap(new_stable_files_levels);
+    persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
 
     return true;

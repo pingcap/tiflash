@@ -57,7 +57,7 @@ private:
 private:
     inline void updateColumnFileStats();
 
-    void checkColumnFiles(const ColumnFiles & new_column_files);
+    void checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels);
 
 public:
     explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
@@ -111,7 +111,7 @@ public:
 
     size_t getCurrentFlushVersion() const { return flush_version; }
 
-    bool checkAndUpdateFlushVersion(size_t task_flush_version) const;
+    bool checkAndUpdateFlushVersion(size_t task_flush_version);
 
     bool appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 
