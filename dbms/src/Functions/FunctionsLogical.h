@@ -258,7 +258,7 @@ private:
     }
 
     template <typename T>
-    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null)
+    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -275,9 +275,28 @@ private:
         return true;
     }
 
+    bool convertOnlyNullToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
+    {
+        if (!column->onlyNull())
+            return false;
+
+        size_t n = res.size();
+        for (size_t i = 0; i < n; ++i)
+        {
+            res[i] = false;
+            if constexpr (special_impl_for_nulls)
+            {
+                res_not_null[i] |= Impl::resNotNull(res[i], true);
+                input_has_null[i] |= true;
+            }
+        }
+
+        return true;
+    }
+
     template <typename T>
     bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+            UInt8Container & input_has_null) const
     {
         auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
@@ -301,29 +320,29 @@ private:
 
         return true;
     }
-
-    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+    
+    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
     {
-        if (!convertTypeToUInt8<Int8>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int16>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int64>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt16>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt64>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Float32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Float64>(column, res, res_not_null) &&
-            !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null))
+        if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int16>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int64>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt16>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt32>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt64>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float64>(column, res, res_not_null)
+            && !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null)
+            && !convertOnlyNullToUInt8(column, res, res_not_null, input_has_null))
             throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
