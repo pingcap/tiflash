@@ -258,7 +258,7 @@ private:
     }
 
     template <typename T>
-    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null)
+    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -296,7 +296,7 @@ private:
 
     template <typename T>
     bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+            UInt8Container & input_has_null) const
     {
         auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
