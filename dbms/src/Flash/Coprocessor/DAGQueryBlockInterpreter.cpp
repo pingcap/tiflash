@@ -193,6 +193,7 @@ AnalysisResult analyzeExpressions(
             res.window_op_list.push_back(*reverse_iter);
         }
         String name;
+        NamesAndTypes output_columns;
         for (auto op_name : res.window_op_list)
         {
             auto iter = query_block.windows.find(op_name);
@@ -227,6 +228,7 @@ AnalysisResult analyzeExpressions(
             // should not reach here
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
+        analyzer.updateWindowSourceColumns();
     }
 
     // Append final project results if needed.
@@ -1120,6 +1122,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                 name = window_iter->first;
                 WindowDescription window_description = window_iter->second;
                 executeWindow(pipeline, window_description);
+                executeExpression(pipeline, window_description.before_window_select);
                 continue;
             }
 

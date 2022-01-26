@@ -53,6 +53,8 @@ public:
         ExpressionActionsChain & chain,
         const tipb::WindowSort & window_sort);
 
+    void updateWindowSourceColumns();
+
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
@@ -208,6 +210,7 @@ private:
     std::vector<std::vector<NameAndTypePair>> windows_columns;
     std::vector<std::vector<tipb::Expr>> windows_functions;
 
+    NamesAndTypes window_output_columns;
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;

@@ -884,6 +884,10 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     chain.clear();
 
     appendWindowSelect(chain, window, window_columns);
+    window_description.before_window_select = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
     return window_description;
 }
 
@@ -1016,6 +1020,16 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
     }
     return order_columns;
 }
+
+void DAGExpressionAnalyzer::updateWindowSourceColumns()
+{
+    source_columns.clear();
+    for (auto & col : window_output_columns)
+    {
+        source_columns.emplace_back(col.name, col.type);
+    }
+}
+
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
@@ -1268,12 +1282,18 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     if (need_update_source_columns)
     {
         for (auto & col : updated_after_window_columns)
+        {
+            window_output_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
+        }
     }
     else
     {
         for (auto & col : after_window_columns)
+        {
+            window_output_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
+        }
     }
 }
 
