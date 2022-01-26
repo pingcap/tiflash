@@ -5,13 +5,11 @@
 
 namespace DB
 {
-
 class Context;
 
 // TiDB table test tool
 struct MockTiDBTable
 {
-
     // Inject mocked TiDB table.
     // Usage:
 
@@ -86,7 +84,12 @@ struct MockTiDBTable
 
 private:
     static void dbgFuncDropTiDBTableImpl(
-        Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);
+        Context & context,
+        String database_name,
+        String table_name,
+        bool drop_regions,
+        bool is_drop_db,
+        DBGInvoker::Printer output);
 };
 
 } // namespace DB
