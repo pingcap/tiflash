@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -9,16 +10,36 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <common/types.h>
 #include <fmt/format.h>
+
+#include <memory>
 
 namespace DB
 {
 namespace PS::V3::tests
 {
-class PageDirectoryTest : public ::testing::Test
+class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
+public:
+    void SetUp() override
+    {
+        auto path = getTemporaryPath();
+        dropDataOnDisk(path);
+
+        auto ctx = DB::tests::TiFlashTestEnv::getContext();
+        FileProviderPtr provider = ctx.getFileProvider();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        dir = PageDirectory::create(provider, delegator, nullptr);
+    }
+
+    void TearDown() override
+    {
+    }
+
 protected:
     PageDirectory dir;
 };
@@ -1019,7 +1040,7 @@ try
     }
 
     // Full GC execute apply
-    dir.gcApply(std::move(gc_migrate_entries));
+    dir.gcApply(std::move(gc_migrate_entries), false);
 }
 CATCH
 
@@ -1080,7 +1101,7 @@ try
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
+    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries), false); }, DB::Exception);
 }
 CATCH
 

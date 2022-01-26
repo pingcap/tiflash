@@ -4,6 +4,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
+#include <fmt/format.h>
 
 namespace DB::PS::V3
 {
@@ -20,7 +21,7 @@ struct PageVersionType
         , epoch(0)
     {}
 
-    explicit PageVersionType(UInt64 seq, UInt64 epoch_)
+    PageVersionType(UInt64 seq, UInt64 epoch_)
         : sequence(seq)
         , epoch(epoch_)
     {}
@@ -34,6 +35,11 @@ struct PageVersionType
         if (sequence == rhs.sequence)
             return epoch < rhs.epoch;
         return sequence < rhs.sequence;
+    }
+
+    bool operator==(const PageVersionType & rhs) const
+    {
+        return (sequence == rhs.sequence) && (epoch == rhs.epoch);
     }
 };
 using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
@@ -141,3 +147,26 @@ public:
 };
 
 } // namespace DB::PS::V3
+
+/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
+template <>
+struct fmt::formatter<DB::PS::V3::PageVersionType>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageVersionType & ver, FormatContext & ctx)
+    {
+        return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
+    }
+};

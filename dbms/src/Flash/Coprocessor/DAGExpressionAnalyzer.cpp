@@ -938,10 +938,10 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
+    ExpressionActionsChain::Step & step = chain.getLastStep();
     // For TimeZone
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-    String tz_col = getActions(tz_expr, actions);
+    String tz_col = getActions(tz_expr, step.actions);
     static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
     static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
     const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
@@ -954,7 +954,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     {
         if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, step.actions);
             source_columns[i].name = casted_name;
             ret = true;
         }
@@ -965,17 +965,20 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
             auto fsp = columns[i].decimal() < 0 ? 0 : columns[i].decimal();
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
-            fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
+            fsp_col = getActions(fsp_expr, step.actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, step.actions);
             source_columns[i].name = casted_name;
-            source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
+            source_columns[i].type = step.actions->getSampleBlock().getByName(casted_name).type;
             ret = true;
         }
     }
     NamesWithAliases project_cols;
     for (auto & col : source_columns)
+    {
+        step.required_output.push_back(col.name);
         project_cols.emplace_back(col.name, col.name);
-    actions->add(ExpressionAction::project(project_cols));
+    }
+    step.actions->add(ExpressionAction::project(project_cols));
     return ret;
 }
 
