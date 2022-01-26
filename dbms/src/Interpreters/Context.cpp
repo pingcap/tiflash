@@ -137,7 +137,7 @@ struct ContextShared
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
-    mutable TiFlashContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
+    mutable TiFlashContextPtr tiflash_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
     /// Rules for selecting the compression settings, depending on the size of the part.
@@ -1362,9 +1362,9 @@ DBGInvoker & Context::getDBGInvoker() const
 TiFlashContext & Context::getTiFlashContext() const
 {
     auto lock = getLock();
-    if (!shared->tmt_context)
+    if (!shared->tiflash_context)
         throw Exception("no tmt context");
-    return *(shared->tmt_context);
+    return *(shared->tiflash_context);
 }
 
 void Context::setMarkCache(size_t cache_size_in_bytes)
@@ -1471,9 +1471,9 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 void Context::createTiFlashContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
-    if (shared->tmt_context)
+    if (shared->tiflash_context)
         throw Exception("TiFlashContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TiFlashContext>(*this, raft_config, cluster_config);
+    shared->tiflash_context = std::make_shared<TiFlashContext>(*this, raft_config, cluster_config);
 }
 
 void Context::initializePathCapacityMetric( //
