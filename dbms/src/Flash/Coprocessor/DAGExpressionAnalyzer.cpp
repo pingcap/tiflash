@@ -18,6 +18,7 @@
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
+#include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/DatumCodec.h>
@@ -366,20 +367,20 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
 {
     if (expr.children_size() != 3)
     {
-        throw TiFlashException(std::string() + Impl::name + " function requires three arguments", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(fmt::format("{} function requires three arguments", Impl::name), Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
     if (expr.children(2).tp() != tipb::ExprType::String)
     {
         throw TiFlashException(
-            std::string() + "3rd argument of " + Impl::name + " function must be string literal",
+            fmt::format("3rd argument of {} function must be string literal", Impl::name),
             Errors::Coprocessor::BadRequest);
     }
     String unit = expr.children(2).val();
     if (Impl::unit_to_func_name_map.find(unit) == Impl::unit_to_func_name_map.end())
         throw TiFlashException(
-            std::string() + Impl::name + " function does not support unit " + unit + " yet.",
+            fmt::format("{} function does not support unit {} yet.", Impl::name, unit),
             Errors::Coprocessor::Unimplemented);
     String func_name = Impl::unit_to_func_name_map.find(unit)->second;
     const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
@@ -485,9 +486,8 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_))
     , context(context_)
-{
-    settings = context.getSettings();
-}
+    , settings(context.getSettingsRef())
+{}
 
 void DAGExpressionAnalyzer::buildGroupConcat(
     const tipb::Expr & expr,
@@ -575,15 +575,15 @@ void DAGExpressionAnalyzer::buildGroupConcat(
         }
     }
 
-#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                       \
-    std::make_shared<AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>( \
-        aggregate.function,                                                              \
-        types,                                                                           \
-        delimiter,                                                                       \
-        max_len,                                                                         \
-        sort_description,                                                                \
-        all_columns_names_and_types,                                                     \
-        arg_collators,                                                                   \
+#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                         \
+    std::make_shared<AggregateFunctionGroupConcat<result_is_nullable, (only_one_column)>>( \
+        aggregate.function,                                                                \
+        types,                                                                             \
+        delimiter,                                                                         \
+        max_len,                                                                           \
+        sort_description,                                                                  \
+        all_columns_names_and_types,                                                       \
+        arg_collators,                                                                     \
         expr.has_distinct())
 
     if (result_is_nullable)
@@ -882,7 +882,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
+    throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
@@ -938,10 +938,10 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
+    ExpressionActionsChain::Step & step = chain.getLastStep();
     // For TimeZone
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-    String tz_col = getActions(tz_expr, actions);
+    String tz_col = getActions(tz_expr, step.actions);
     static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
     static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
     const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
@@ -954,7 +954,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     {
         if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, step.actions);
             source_columns[i].name = casted_name;
             ret = true;
         }
@@ -965,17 +965,20 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
             auto fsp = columns[i].decimal() < 0 ? 0 : columns[i].decimal();
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
-            fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
+            fsp_col = getActions(fsp_expr, step.actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, step.actions);
             source_columns[i].name = casted_name;
-            source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
+            source_columns[i].type = step.actions->getSampleBlock().getByName(casted_name).type;
             ret = true;
         }
     }
     NamesWithAliases project_cols;
     for (auto & col : source_columns)
+    {
+        step.required_output.push_back(col.name);
         project_cols.emplace_back(col.name, col.name);
-    actions->add(ExpressionAction::project(project_cols));
+    }
+    step.actions->add(ExpressionAction::project(project_cols));
     return ret;
 }
 
@@ -1410,7 +1413,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
+        throw TiFlashException(fmt::format("Unsupported expr type: {}", getTypeName(expr)), Errors::Coprocessor::Unimplemented);
     }
 
     ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
