@@ -42,8 +42,8 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TiFlashContext & tmt = context.getTiFlashContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
+    auto schema_syncer = flash_ctx.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
     output("schemas refreshed");
@@ -67,8 +67,8 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
-    TiFlashContext & tmt = context.getTiFlashContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
+    auto schema_syncer = flash_ctx.getSchemaSyncer();
     schema_syncer->reset();
 
     output("reset schemas");

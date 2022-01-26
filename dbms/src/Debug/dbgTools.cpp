@@ -304,9 +304,9 @@ void insert( //
         if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
             throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
     }
-    TiFlashContext & tmt = context.getTiFlashContext();
-    pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
-    RegionPtr region = tmt.getKVStore()->getRegion(region_id);
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
+    pingcap::pd::ClientPtr pd_client = flash_ctx.getPDClient();
+    RegionPtr region = flash_ctx.getKVStore()->getRegion(region_id);
 
     // Using the region meta's table ID rather than table_info's, as this could be a partition table so that the table ID should be partition ID.
     const auto range = region->getRange();
@@ -346,12 +346,12 @@ void insert( //
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    flash_ctx.getKVStore()->handleWriteRaftCmd(
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
-        tmt);
+        flash_ctx);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -360,21 +360,21 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     TiKVKey key = RecordKVFormat::genKey(table_info.id, handle_id);
 
-    TiFlashContext & tmt = context.getTiFlashContext();
-    pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
-    RegionPtr region = tmt.getKVStore()->getRegion(region_id);
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
+    pingcap::pd::ClientPtr pd_client = flash_ctx.getPDClient();
+    RegionPtr region = flash_ctx.getKVStore()->getRegion(region_id);
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, true);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    flash_ctx.getKVStore()->handleWriteRaftCmd(
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
-        tmt);
+        flash_ctx);
 }
 
 struct BatchCtrl
@@ -462,8 +462,8 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
 {
     RegionPtr & region = batch_ctrl->region;
 
-    TiFlashContext & tmt = batch_ctrl->context->getTiFlashContext();
-    pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
+    TiFlashContext & flash_ctx = batch_ctrl->context->getTiFlashContext();
+    pingcap::pd::ClientPtr pd_client = flash_ctx.getPDClient();
 
     Int64 index = batch_ctrl->handle_begin;
 
@@ -481,17 +481,17 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region->id(), MockTiKV::instance().getRaftIndex(region->id()), MockTiKV::instance().getRaftTerm(region->id()), tmt);
+        flash_ctx.getKVStore()->handleWriteRaftCmd(std::move(request), region->id(), MockTiKV::instance().getRaftIndex(region->id()), MockTiKV::instance().getRaftTerm(region->id()), flash_ctx);
     }
 }
 
 void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen, UInt64 max_strlen, Context & context)
 {
-    TiFlashContext & tmt = context.getTiFlashContext();
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
 
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
-    tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    flash_ctx.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
         const auto range = region->getRange();
         curr_max_handle_id = std::max(RecordKVFormat::getHandle(*range->rawKeys().second), curr_max_handle_id);
@@ -502,7 +502,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        flash_ctx.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, flash_ctx);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
@@ -528,8 +528,8 @@ Int64 concurrentRangeOperate(
     Regions regions;
 
     {
-        TiFlashContext & tmt = context.getTiFlashContext();
-        for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(table_info.id))
+        TiFlashContext & flash_ctx = context.getTiFlashContext();
+        for (auto && [_, r] : flash_ctx.getRegionTable().getRegionsByTable(table_info.id))
         {
             std::ignore = _;
             if (r == nullptr)

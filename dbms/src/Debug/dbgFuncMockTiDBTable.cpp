@@ -27,7 +27,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 {
     if (args.size() != 3 && args.size() != 4 && args.size() != 5)
         throw Exception(
-            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, engine-type(tmt|dt)]",
+            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, engine-type(flash_ctx|dt)]",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -50,7 +50,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 
     String engine_type("dt");
     if (context.getTiFlashContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-        engine_type = "tmt";
+        engine_type = "flash_ctx";
     if (args.size() == 5)
         engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
 

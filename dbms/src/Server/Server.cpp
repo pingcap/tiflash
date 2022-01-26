@@ -1287,10 +1287,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         SessionCleaner session_cleaner(*global_context);
 
-        auto & flash_context = global_context->getTiFlashContext();
+        auto & flash_ctx = global_context->getTiFlashContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.flash_ctx = &flash_context;
+            tiflash_instance_wrap.flash_ctx = &flash_ctx;
             LOG_FMT_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
@@ -1298,9 +1298,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", flash_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", flash_ctx.getKVStore()->getStoreID(std::memory_order_seq_cst));
 
-            WaitCheckRegionReady(flash_context, terminate_signals_counter);
+            WaitCheckRegionReady(flash_ctx, terminate_signals_counter);
         }
         SCOPE_EXIT({
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
@@ -1309,13 +1309,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 exit(-1);
             }
             LOG_FMT_INFO(log, "Set store context status Stopping");
-            flash_context.setStatusStopping();
+            flash_ctx.setStatusStopping();
             {
                 // Wait until there is no read-index task.
-                while (flash_context.getKVStore()->getReadIndexEvent())
+                while (flash_ctx.getKVStore()->getReadIndexEvent())
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
             }
-            flash_context.setStatusTerminated();
+            flash_ctx.setStatusTerminated();
             LOG_FMT_INFO(log, "Set store context status Terminated");
             {
                 // update status and let proxy stop all services except encryption.
@@ -1338,7 +1338,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        flash_context.setStatusRunning();
+        flash_ctx.setStatusRunning();
 
         try
         {

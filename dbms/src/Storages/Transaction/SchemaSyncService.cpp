@@ -81,7 +81,7 @@ inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
 
 bool SchemaSyncService::gc(Timestamp gc_safe_point)
 {
-    auto & flash_context = context.getTiFlashContext();
+    auto & flash_ctx = context.getTiFlashContext();
     if (gc_safe_point == gc_context.last_gc_safe_point)
         return false;
 
@@ -124,7 +124,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         const auto & table_info = storage->getTableInfo();
         auto canonical_name = [&]() {
             // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
-            auto db_info = flash_context.getSchemaSyncer()->getDBInfoByMappedName(database_name);
+            auto db_info = flash_ctx.getSchemaSyncer()->getDBInfoByMappedName(database_name);
             return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
                            : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
         }();

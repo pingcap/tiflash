@@ -23,8 +23,8 @@ extern const int BAD_ARGUMENTS;
 
 void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    auto & tmt = context.getTiFlashContext();
-    auto & kvstore = tmt.getKVStore();
+    auto & flash_ctx = context.getTiFlashContext();
+    auto & kvstore = flash_ctx.getKVStore();
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -118,7 +118,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
                                 region_id,
                                 MockTiKV::instance().getRaftIndex(region_id),
                                 MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+                                flash_ctx);
 
     output(fmt::format("execute batch split, region {} into ({},{})", region_id, region_id, region_id2));
 }
@@ -133,8 +133,8 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID target_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    auto & tmt = context.getTiFlashContext();
-    auto & kvstore = tmt.getKVStore();
+    auto & flash_ctx = context.getTiFlashContext();
+    auto & kvstore = flash_ctx.getKVStore();
     auto region = kvstore->getRegion(region_id);
     auto target_region = kvstore->getRegion(target_id);
     raft_cmdpb::AdminRequest request;
@@ -158,7 +158,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
                                 region_id,
                                 MockTiKV::instance().getRaftIndex(region_id),
                                 MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+                                flash_ctx);
 
     output(fmt::format("execute prepare merge, source {} target {}", region_id, target_id));
 }
@@ -173,8 +173,8 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
     RegionID source_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID current_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    auto & tmt = context.getTiFlashContext();
-    auto & kvstore = tmt.getKVStore();
+    auto & flash_ctx = context.getTiFlashContext();
+    auto & kvstore = flash_ctx.getKVStore();
     auto source_region = kvstore->getRegion(source_id);
     auto current_region = kvstore->getRegion(current_id);
     raft_cmdpb::AdminRequest request;
@@ -194,7 +194,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
                                 current_id,
                                 MockTiKV::instance().getRaftIndex(current_id),
                                 MockTiKV::instance().getRaftTerm(current_id),
-                                tmt);
+                                flash_ctx);
 
     output(fmt::format("execute commit merge, source {} current {}", source_id, current_id));
 }
@@ -208,8 +208,8 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
 
-    auto & tmt = context.getTiFlashContext();
-    auto & kvstore = tmt.getKVStore();
+    auto & flash_ctx = context.getTiFlashContext();
+    auto & kvstore = flash_ctx.getKVStore();
     auto region = kvstore->getRegion(region_id);
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -229,7 +229,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
                                 region_id,
                                 MockTiKV::instance().getRaftIndex(region_id),
                                 MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+                                flash_ctx);
 
     output(fmt::format("execute rollback merge, region {}", region_id));
 }
