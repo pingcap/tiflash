@@ -14,7 +14,7 @@ namespace tests
 class StringLRTrim : public DB::tests::FunctionTest
 {
 protected:
-    ColumnWithTypeAndName toConst(const String & s)
+    static ColumnWithTypeAndName toConst(const String & s)
     {
         return createConstColumn<String>(1, s);
     }

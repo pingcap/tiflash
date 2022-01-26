@@ -31,7 +31,14 @@ LogWriter::~LogWriter()
     if (dest)
     {
         flush();
+
+        dest->close(); // close explicitly
     }
+}
+
+size_t LogWriter::writtenBytes() const
+{
+    return dest->getMaterializedBytes();
 }
 
 void LogWriter::flush()
