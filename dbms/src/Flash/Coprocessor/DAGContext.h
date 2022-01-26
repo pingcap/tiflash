@@ -22,25 +22,6 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 
-<<<<<<< HEAD
-=======
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-struct JoinExecuteInfo
-{
-    String build_side_root_executor_id;
-    JoinPtr join_ptr;
-    BlockInputStreams non_joined_streams;
-};
-
-using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
-
-UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
-{
-    /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
-    return 1024;
-}
-
 namespace TiDBSQLFlags
 {
 constexpr UInt64 IGNORE_TRUNCATE = 1;
@@ -95,7 +76,6 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
->>>>>>> 6ea6c80198 (Fix cast to decimal overflow bug (#3922))
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -162,9 +142,8 @@ public:
         return 0;
     }
 
-<<<<<<< HEAD
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
-=======
+
     UInt64 getFlags() const
     {
         return flags;
@@ -185,10 +164,6 @@ public:
     {
         return (flags & f);
     }
-
-    void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
->>>>>>> 6ea6c80198 (Fix cast to decimal overflow bug (#3922))
 
     size_t final_concurrency;
     Int64 compile_time_ns;
