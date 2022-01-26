@@ -7,7 +7,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <fmt/core.h>
 
-
 namespace DB
 {
 namespace ErrorCodes
