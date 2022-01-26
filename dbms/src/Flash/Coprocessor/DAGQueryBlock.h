@@ -57,7 +57,8 @@ public:
     // kinds of project
     std::vector<Int32> output_offsets;
     void fillOutputFieldTypes();
-    void collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result);
+    /// return true if result[id] exists.
+    bool collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result);
     bool isRootQueryBlock() const { return id == 1; };
 };
 

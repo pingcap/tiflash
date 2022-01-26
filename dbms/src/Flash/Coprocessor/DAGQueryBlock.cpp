@@ -306,17 +306,26 @@ void DAGQueryBlock::fillOutputFieldTypes()
     }
 }
 
-void DAGQueryBlock::collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result)
+bool DAGQueryBlock::collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result)
 {
     std::vector<String> all_join_id;
     for (auto & child : children)
     {
-        child->collectAllPossibleChildrenJoinId(result);
-        all_join_id.insert(all_join_id.end(), result[child->id].begin(), result[child->id].end());
+        if (child->collectAllPossibleChildrenJoinId(result))
+            all_join_id.insert(all_join_id.end(), result[child->id].begin(), result[child->id].end());
     }
     if (source->has_join())
         all_join_id.push_back(source_name);
-    result[id] = all_join_id;
+
+    if (!all_join_id.empty())
+    {
+        result[id] = all_join_id;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 } // namespace DB
