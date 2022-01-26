@@ -6,12 +6,10 @@
 #include <vector>
 
 
-
 class ICollator;
 
 namespace DB
 {
-
 class Block;
 class WriteBuffer;
 /// Description of the sorting rule by one column.
@@ -46,7 +44,6 @@ struct SortColumnDescription
 
     /// For IBlockInputStream.
     std::string getID() const;
-
 };
 /// Description of the sorting rule for several columns.
 using SortDescription = std::vector<SortColumnDescription>;

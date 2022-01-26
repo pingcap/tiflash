@@ -1,8 +1,8 @@
 #include <Columns/Collator.h>
+#include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
-#include <Core/Block.h>
 
 #include <sstream>
 
@@ -35,7 +35,6 @@ void dumpSortDescription(const SortDescription & description, const Block & head
             out << " ASC";
         else
             out << " DESC";
-
     }
 }
 

@@ -9,7 +9,6 @@
 #include <vector>
 
 
-
 namespace Poco
 {
 class Logger;
@@ -30,8 +29,8 @@ public:
     {}
 
     // Format message with fmt::format, like the logging functions.
-    template <typename ...Args>
-    Exception(int code, const std::string & fmt, Args&&... args)
+    template <typename... Args>
+    Exception(int code, const std::string & fmt, Args &&... args)
         : Exception(fmt::format(fmt, std::forward<Args>(args)...), code)
     {}
 

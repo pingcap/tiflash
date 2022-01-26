@@ -1,7 +1,6 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <WindowFunctions/WindowFunction.h>
 #include <Core/Field.h>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
@@ -9,12 +8,12 @@
 #include <DataTypes/IDataType.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Parsers/IAST.h>
+#include <WindowFunctions/WindowFunction.h>
 #include <tipb/select.pb.h>
 
 
 namespace DB
 {
-
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
@@ -22,15 +21,24 @@ struct WindowFunctionDescription
     ColumnNumbers arguments;
     Names argument_names;
     std::string column_name;
-
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
 
 struct WindowFrame
 {
-    enum class FrameType { Rows, Groups, Range };
-    enum class BoundaryType { Unbounded, Current, Offset };
+    enum class FrameType
+    {
+        Rows,
+        Groups,
+        Range
+    };
+    enum class BoundaryType
+    {
+        Unbounded,
+        Current,
+        Offset
+    };
 
     // This flag signifies that the frame properties were not set explicitly by
     // user, but the fields of this structure still have to contain proper values
@@ -64,18 +72,17 @@ struct WindowFrame
     std::string toString() const;
     void toString(WriteBuffer & buf) const;
 
-    bool operator == (const WindowFrame & other) const
+    bool operator==(const WindowFrame & other) const
     {
         // We don't compare is_default because it's not a real property of the
         // frame, and only influences how we display it.
         return other.type == type
-               && other.begin_type == begin_type
-               && other.begin_offset == begin_offset
-               && other.begin_preceding == begin_preceding
-               && other.end_type == end_type
-               && other.end_offset == end_offset
-               && other.end_preceding == end_preceding
-            ;
+            && other.begin_type == begin_type
+            && other.begin_offset == begin_offset
+            && other.begin_preceding == begin_preceding
+            && other.end_type == end_type
+            && other.end_offset == end_offset
+            && other.end_preceding == end_preceding;
     }
 };
 class ExpressionActions;
@@ -113,4 +120,4 @@ struct WindowDescription
 
 using WindowDescriptions = std::vector<WindowDescription>;
 
-}
+} // namespace DB

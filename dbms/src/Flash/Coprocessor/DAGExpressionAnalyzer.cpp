@@ -1,7 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
-#include <WindowFunctions/WindowFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -23,6 +22,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
@@ -791,7 +791,6 @@ static bool checkWindowFunctionsInvalid(const tipb::Window & window)
     }
 
     return has_agg_func && has_window_func;
-
 }
 
 WindowDescription DAGExpressionAnalyzer::appendWindow(

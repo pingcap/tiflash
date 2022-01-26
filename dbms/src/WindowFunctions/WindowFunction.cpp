@@ -1,6 +1,6 @@
-#include <WindowFunctions/WindowFunction.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <WindowFunctions/WindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 
@@ -10,7 +10,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
-}
+} // namespace ErrorCodes
 
 struct WindowFunctionRank final : public WindowFunction
 {
@@ -20,13 +20,15 @@ struct WindowFunctionRank final : public WindowFunction
     {}
 
     DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
+    {
+        return std::make_shared<DataTypeUInt64>();
+    }
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-        size_t function_index) override
+                                size_t function_index) override
     {
         IColumn & to = *stream->blockAt(stream->current_row)
-            .output_columns[function_index];
+                            .output_columns[function_index];
         assert_cast<ColumnUInt64 &>(to).getData().push_back(
             stream->peer_group_start_row_number);
     }
@@ -40,14 +42,16 @@ struct WindowFunctionDenseRank final : public WindowFunction
     {}
 
     DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
+    {
+        return std::make_shared<DataTypeUInt64>();
+    }
 
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-        size_t function_index) override
+                                size_t function_index) override
     {
         IColumn & to = *stream->blockAt(stream->current_row)
-            .output_columns[function_index];
+                            .output_columns[function_index];
         assert_cast<ColumnUInt64 &>(to).getData().push_back(
             stream->peer_group_number);
     }
@@ -61,14 +65,16 @@ struct WindowFunctionRowNumber final : public WindowFunction
     {}
 
     DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
+    {
+        return std::make_shared<DataTypeUInt64>();
+    }
 
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-        size_t function_index) override
+                                size_t function_index) override
     {
         IColumn & to = *stream->blockAt(stream->current_row)
-            .output_columns[function_index];
+                            .output_columns[function_index];
         assert_cast<ColumnUInt64 &>(to).getData().push_back(
             stream->current_row_number);
     }
@@ -82,11 +88,11 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
                                  const DataTypes & argument_types_)
         : WindowFunction(name_, argument_types_)
     {
-
         if (argument_types.empty())
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                            "Function {} takes at least one argument", name_);
+                            "Function {} takes at least one argument",
+                            name_);
         }
 
         if (argument_types.size() == 1)
@@ -127,14 +133,15 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
                             "Function '{}' accepts at most 3 arguments, {} given",
-                            name, argument_types.size());
+                            name,
+                            argument_types.size());
         }
     }
 
     DataTypePtr getReturnType() const override { return argument_types[0]; }
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-        size_t function_index) override
+                                size_t function_index) override
     {
         const auto & current_block = stream->blockAt(stream->current_row);
         IColumn & to = *stream->blockAt(stream->current_row).output_columns[function_index];
@@ -143,21 +150,22 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
         int64_t offset = 1;
         if (argument_types.size() > 1)
         {
-            offset = (*current_block.input_columns[
-                workspace.argument_column_indices[1]])[
-                stream->current_row.row].get<Int64>();
+            offset = (*current_block.input_columns[workspace.argument_column_indices[1]])[stream->current_row.row].get<Int64>();
 
             /// Either overflow or really negative value, both is not acceptable.
             if (offset < 0)
             {
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                                 "The offset for function {} must be in (0, {}], {} given",
-                                name, INT64_MAX, offset);
+                                name,
+                                INT64_MAX,
+                                offset);
             }
         }
 
         const auto [target_row, offset_left] = stream->moveRowNumber(
-            stream->current_row, offset * (is_lead ? 1 : -1));
+            stream->current_row,
+            offset * (is_lead ? 1 : -1));
 
         if (offset_left != 0
             || target_row < stream->frame_start
@@ -171,8 +179,7 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
                 // subtypes of the argument type as a default value (for convenience),
                 // and it's a pain to write conversion that respects ColumnNothing
                 // and ColumnConst and so on.
-                const IColumn & default_column = *current_block.input_columns[
-                    workspace.argument_column_indices[2]].get();
+                const IColumn & default_column = *current_block.input_columns[workspace.argument_column_indices[2]].get();
                 to.insert(default_column[stream->current_row.row]);
             }
             else
@@ -183,8 +190,7 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
         else
         {
             // Offset is inside the frame.
-            to.insertFrom(*stream->blockAt(target_row).input_columns[
-                              workspace.argument_column_indices[0]],
+            to.insertFrom(*stream->blockAt(target_row).input_columns[workspace.argument_column_indices[0]],
                           target_row.row);
         }
     }
@@ -214,4 +220,4 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
         WindowFunctionFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

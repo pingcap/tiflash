@@ -10,9 +10,9 @@
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/WindowDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB

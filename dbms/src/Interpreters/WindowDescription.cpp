@@ -1,9 +1,8 @@
-#include <Interpreters/WindowDescription.h>
-
-#include <Core/Field.h>
 #include <Common/FieldVisitors.h>
-#include <IO/Operators.h>
+#include <Core/Field.h>
 #include <Core/SortDescription.h>
+#include <IO/Operators.h>
+#include <Interpreters/WindowDescription.h>
 
 namespace DB
 {
@@ -239,4 +238,4 @@ void WindowDescription::setWindowFrame(tipb::WindowFrame frame_)
     frame.end_preceding = frame_.end_preceding();
     frame.is_default = false;
 }
-}
+} // namespace DB

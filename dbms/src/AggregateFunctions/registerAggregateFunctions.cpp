@@ -1,8 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <WindowFunctions/WindowFunctionFactory.h>
-
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 
 namespace DB

@@ -11,10 +11,10 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/WindowBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -218,7 +218,7 @@ AnalysisResult analyzeExpressions(
                 std::vector<bool> sort_orders;
                 if (window_sort && window_sort->tp() == tipb::ExecType::TypeWindowSort)
                 {
-                    std::vector<NameAndTypePair> columns= analyzer.appendWindowOrderBy(chain, window_sort->window_sort());
+                    std::vector<NameAndTypePair> columns = analyzer.appendWindowOrderBy(chain, window_sort->window_sort());
                     res.window_sort_description_map.insert({name, getSortDescription(columns, window_sort->window_sort().order_by())});
                     continue;
                 }
@@ -227,7 +227,6 @@ AnalysisResult analyzeExpressions(
             // should not reach here
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
-
     }
 
     // Append final project results if needed.
@@ -729,7 +728,6 @@ void DAGQueryBlockInterpreter::executeWindow(
 
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs, taskLogger()), window_description);
         recordProfileStreams(pipeline, window_description.window_name);
-
     }
     else
     {

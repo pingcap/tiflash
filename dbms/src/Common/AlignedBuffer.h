@@ -1,13 +1,12 @@
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <cstdlib>
 #include <utility>
-#include <boost/noncopyable.hpp>
 
 
 namespace DB
 {
-
 /** Aligned piece of memory.
   * It can only be allocated and destroyed.
   * MemoryTracker is not used. AlignedBuffer is intended for small pieces of memory.
@@ -32,5 +31,4 @@ public:
     const char * data() const { return static_cast<const char *>(buf); }
 };
 
-}
-
+} // namespace DB

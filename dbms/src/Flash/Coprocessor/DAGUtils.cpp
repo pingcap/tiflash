@@ -745,7 +745,6 @@ const String & getWindowFunctionName(const tipb::Expr & expr)
 }
 
 
-
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))

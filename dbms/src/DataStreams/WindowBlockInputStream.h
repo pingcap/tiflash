@@ -4,13 +4,12 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
-#include <memory>
 
 #include <deque>
+#include <memory>
 
 namespace DB
 {
-
 // Interface for true window functions. It's not much of an interface, they just
 // accept the guts of WindowTransform and do 'something'. Given a small number of
 // true window functions, and the fact that the WindowTransform internals are
@@ -56,27 +55,26 @@ struct RowNumber
     uint64_t block = 0;
     uint64_t row = 0;
 
-    bool operator < (const RowNumber & other) const
+    bool operator<(const RowNumber & other) const
     {
         return block < other.block
-               || (block == other.block && row < other.row);
+            || (block == other.block && row < other.row);
     }
 
-    bool operator == (const RowNumber & other) const
+    bool operator==(const RowNumber & other) const
     {
         return block == other.block && row == other.row;
     }
 
-    bool operator <= (const RowNumber & other) const
+    bool operator<=(const RowNumber & other) const
     {
         return *this < other || *this == other;
     }
 };
 
-class WindowBlockInputStream : public IProfilingBlockInputStream, public std::enable_shared_from_this<WindowBlockInputStream>
+class WindowBlockInputStream : public IProfilingBlockInputStream
+    , public std::enable_shared_from_this<WindowBlockInputStream>
 {
-
-
 public:
     WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_);
 

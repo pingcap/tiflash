@@ -1,11 +1,9 @@
-#include <WindowFunctions/WindowFunctionFactory.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
-
-
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 
 namespace DB
@@ -72,8 +70,8 @@ WindowFunctionPtr WindowFunctionFactory::getImpl(
 WindowFunctionPtr WindowFunctionFactory::tryGet(const String & name, const DataTypes & argument_types) const
 {
     return isWindowFunctionName(name)
-           ? get(name, argument_types)
-           : nullptr;
+        ? get(name, argument_types)
+        : nullptr;
 }
 
 

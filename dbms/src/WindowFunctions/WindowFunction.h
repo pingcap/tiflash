@@ -3,6 +3,7 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypesNumber.h>
+
 #include <memory>
 
 
@@ -30,7 +31,8 @@ public:
     virtual DataTypePtr getReturnType() const = 0;
     // Must insert the result for current_row.
     virtual void windowInsertResultInto(WindowBlockInputStreamPtr streamPtr,
-    size_t function_index) = 0;
+                                        size_t function_index)
+        = 0;
 
 protected:
     std::string name;
@@ -39,4 +41,4 @@ protected:
 
 using WindowFunctionPtr = std::shared_ptr<WindowFunction>;
 
-}
+} // namespace DB

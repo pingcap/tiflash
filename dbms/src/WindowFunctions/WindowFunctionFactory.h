@@ -1,9 +1,10 @@
 #pragma once
 
-#include <WindowFunctions/WindowFunction.h>
-#include <ext/singleton.h>
-#include <Core/Types.h>
 #include <Core/Field.h>
+#include <Core/Types.h>
+#include <WindowFunctions/WindowFunction.h>
+
+#include <ext/singleton.h>
 #include <functional>
 #include <memory>
 #include <string>

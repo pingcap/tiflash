@@ -1,13 +1,13 @@
-#include <DataStreams/WindowBlockInputStream.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Columns/ColumnConst.h>
 #include <Common/Arena.h>
 #include <Common/FieldVisitors.h>
-#include <common/arithmeticOverflow.h>
-#include <Columns/ColumnConst.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/convertFieldToType.h>
+#include <common/arithmeticOverflow.h>
 
 namespace DB
 {
@@ -15,7 +15,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
-}
+} // namespace ErrorCodes
 
 
 // Compares ORDER BY column values at given rows to find the boundaries of frame:
@@ -23,7 +23,8 @@ extern const int NOT_IMPLEMENTED;
 // sorting predicates -- -1 means [compared] is less than [reference] +/- offset.
 template <typename ColumnType>
 static int compareValuesWithOffset(const IColumn * _compared_column,
-                                   size_t compared_row,   const IColumn * _reference_column,
+                                   size_t compared_row,
+                                   const IColumn * _reference_column,
                                    size_t reference_row,
                                    const Field & _offset,
                                    bool offset_is_preceding)
@@ -55,14 +56,14 @@ static int compareValuesWithOffset(const IColumn * _compared_column,
     else
         is_overflow = common::addOverflow(reference_value, offset, reference_value);
 
-//    fmt::print(stderr,
-//        "compared [{}] = {}, old ref {}, shifted ref [{}] = {}, offset {} preceding {} overflow {} to negative {}\n",
-//        compared_row, toString(compared_value),
-//        // fmt doesn't like char8_t.
-//        static_cast<Int64>(unalignedLoad<typename ColumnType::value_type>(reference_value_data.data)),
-//        reference_row, toString(reference_value),
-//        toString(offset), offset_is_preceding,
-//        is_overflow, offset_is_preceding);
+    //    fmt::print(stderr,
+    //        "compared [{}] = {}, old ref {}, shifted ref [{}] = {}, offset {} preceding {} overflow {} to negative {}\n",
+    //        compared_row, toString(compared_value),
+    //        // fmt doesn't like char8_t.
+    //        static_cast<Int64>(unalignedLoad<typename ColumnType::value_type>(reference_value_data.data)),
+    //        reference_row, toString(reference_value),
+    //        toString(offset), offset_is_preceding,
+    //        is_overflow, offset_is_preceding);
 
     if (is_overflow)
     {
@@ -82,14 +83,16 @@ static int compareValuesWithOffset(const IColumn * _compared_column,
     {
         // No overflow, compare normally.
         return compared_value < reference_value ? -1
-                                                : compared_value == reference_value ? 0 : 1;
+            : compared_value == reference_value ? 0
+                                                : 1;
     }
 }
 
 // A specialization of compareValuesWithOffset for floats.
 template <typename ColumnType>
 static int compareValuesWithOffsetFloat(const IColumn * _compared_column,
-                                        size_t compared_row, const IColumn * _reference_column,
+                                        size_t compared_row,
+                                        const IColumn * _reference_column,
                                         size_t reference_row,
                                         const Field & _offset,
                                         bool offset_is_preceding)
@@ -124,48 +127,49 @@ static int compareValuesWithOffsetFloat(const IColumn * _compared_column,
         reference_value += offset;
     }
 
-    const auto result =  compared_value < reference_value ? -1
-                                                          : compared_value == reference_value ? 0 : 1;
+    const auto result = compared_value < reference_value ? -1
+        : compared_value == reference_value              ? 0
+                                                         : 1;
 
-//    fmt::print(stderr, "compared {}, offset {}, reference {}, result {}\n",
-//        compared_value, offset, reference_value, result);
+    //    fmt::print(stderr, "compared {}, offset {}, reference {}, result {}\n",
+    //        compared_value, offset, reference_value, result);
 
     return result;
 }
 
 // Helper macros to dispatch on type of the ORDER BY column
-#define APPLY_FOR_ONE_TYPE(FUNCTION, TYPE) \
-else if (typeid_cast<const TYPE *>(column)) \
-{ \
-    /* clang-tidy you're dumb, I can't put FUNCTION in braces here. */ \
-    compare_values_with_offset = FUNCTION<TYPE>; /* NOLINT */ \
-}
+#define APPLY_FOR_ONE_TYPE(FUNCTION, TYPE)                                 \
+    else if (typeid_cast<const TYPE *>(column))                            \
+    {                                                                      \
+        /* clang-tidy you're dumb, I can't put FUNCTION in braces here. */ \
+        compare_values_with_offset = FUNCTION<TYPE>; /* NOLINT */          \
+    }
 
-#define APPLY_FOR_TYPES(FUNCTION) \
-if (false) /* NOLINT */ \
-{ \
-    /* Do nothing, a starter condition. */ \
-} \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt8>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt16>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt32>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt64>) \
-\
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int8>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int16>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int32>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int64>) \
-APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int128>) \
-\
-APPLY_FOR_ONE_TYPE(FUNCTION##Float, ColumnVector<Float32>) \
-APPLY_FOR_ONE_TYPE(FUNCTION##Float, ColumnVector<Float64>) \
-\
-else \
-{ \
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, \
-        "The RANGE OFFSET frame for '{}' ORDER BY column is not implemented", \
-        demangle(typeid(*column).name())); \
-}
+#define APPLY_FOR_TYPES(FUNCTION)                                                             \
+    if (false) /* NOLINT */                                                                   \
+    {                                                                                         \
+        /* Do nothing, a starter condition. */                                                \
+    }                                                                                         \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt8>)                                         \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt16>)                                        \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt32>)                                        \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt64>)                                        \
+                                                                                              \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int8>)                                          \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int16>)                                         \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int32>)                                         \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int64>)                                         \
+    APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Int128>)                                        \
+                                                                                              \
+    APPLY_FOR_ONE_TYPE(FUNCTION##Float, ColumnVector<Float32>)                                \
+    APPLY_FOR_ONE_TYPE(FUNCTION##Float, ColumnVector<Float64>)                                \
+                                                                                              \
+    else                                                                                      \
+    {                                                                                         \
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,                                          \
+                        "The RANGE OFFSET frame for '{}' ORDER BY column is not implemented", \
+                        demangle(typeid(*column).name()));                                    \
+    }
 
 WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_)
     : window_description(window_description_)
@@ -237,9 +241,9 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     // type of the ORDER BY column.
     if (window_description.frame.type == WindowFrame::FrameType::Range
         && (window_description.frame.begin_type
-            == WindowFrame::BoundaryType::Offset
+                == WindowFrame::BoundaryType::Offset
             || window_description.frame.end_type
-               == WindowFrame::BoundaryType::Offset))
+                == WindowFrame::BoundaryType::Offset))
     {
         assert(order_by_indices.size() == 1);
         const auto & entry = input_header.getByPosition(order_by_indices[0]);
@@ -257,7 +261,8 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
                 *entry.type);
 
             if (applyVisitor(FieldVisitorAccurateLess{},
-                             window_description.frame.begin_offset, Field(Int64(0))))
+                             window_description.frame.begin_offset,
+                             Field(Int64(0))))
             {
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                                 "Window frame start offset must be nonnegative, {} given",
@@ -272,7 +277,8 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
                 *entry.type);
 
             if (applyVisitor(FieldVisitorAccurateLess{},
-                             window_description.frame.end_offset, Field(Int64(0))))
+                             window_description.frame.end_offset,
+                             Field(Int64(0))))
             {
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                                 "Window frame start offset must be nonnegative, {} given",
@@ -312,7 +318,6 @@ Block WindowBlockInputStream::readImpl()
             input_is_finished = true;
         // if input_is_finished is true, we will do noting to the null block, and we need handle the last partition_start to partition_end data
         appendBlock(block);
-
     }
 
     return getOutputBlock();
@@ -327,7 +332,7 @@ void WindowBlockInputStream::advancePartitionEnd()
 
     const RowNumber end = blocksEnd();
 
-//    fmt::print(stderr, "end {}, partition_end {}\n", end, partition_end);
+    //    fmt::print(stderr, "end {}, partition_end {}\n", end, partition_end);
 
     // If we're at the total end of data, we must end the partition. This is one
     // of the few places in calculations where we need special handling for end
@@ -387,8 +392,8 @@ void WindowBlockInputStream::advancePartitionEnd()
     const auto block_rows = blockRowsNumber(partition_end);
     for (; partition_end.row < block_rows; ++partition_end.row)
     {
-//        fmt::print(stderr, "compare reference '{}' to compared '{}'\n",
-//            prev_frame_start, partition_end);
+        //        fmt::print(stderr, "compare reference '{}' to compared '{}'\n",
+        //            prev_frame_start, partition_end);
 
         size_t i = 0;
         for (; i < partition_by_columns; i++)
@@ -398,12 +403,14 @@ void WindowBlockInputStream::advancePartitionEnd()
             const auto * compared_column
                 = inputAt(partition_end)[partition_by_indices[i]].get();
 
-//            fmt::print(stderr, "reference '{}', compared '{}'\n",
-//                (*reference_column)[prev_frame_start.row],
-//                (*compared_column)[partition_end.row]);
+            //            fmt::print(stderr, "reference '{}', compared '{}'\n",
+            //                (*reference_column)[prev_frame_start.row],
+            //                (*compared_column)[partition_end.row]);
             if (compared_column->compareAt(partition_end.row,
-                                           prev_frame_start.row, *reference_column,
-                                           1 /* nan_direction_hint */) != 0)
+                                           prev_frame_start.row,
+                                           *reference_column,
+                                           1 /* nan_direction_hint */)
+                != 0)
             {
                 break;
             }
@@ -503,8 +510,8 @@ std::tuple<RowNumber, int64_t> WindowBlockInputStream::moveRowNumber(const RowNu
     // Check that it was reversible.
     auto [xx, oo] = moveRowNumberNoCheck(x, -(offset - o));
 
-//    fmt::print(stderr, "{} -> {}, result {}, {}, new offset {}, twice {}, {}\n",
-//        _x, offset, x, o, -(offset - o), xx, oo);
+    //    fmt::print(stderr, "{} -> {}, result {}, {}, new offset {}, twice {}, {}\n",
+    //        _x, offset, x, o, -(offset - o), xx, oo);
     assert(xx == _x);
     assert(oo == 0);
 #endif
@@ -518,14 +525,14 @@ void WindowBlockInputStream::advanceFrameStartRowsOffset()
     // Just recalculate it each time by walking blocks.
     const auto [moved_row, offset_left] = moveRowNumber(current_row,
                                                         window_description.frame.begin_offset.get<UInt64>()
-                                                        * (window_description.frame.begin_preceding ? -1 : 1));
+                                                            * (window_description.frame.begin_preceding ? -1 : 1));
 
     frame_start = moved_row;
 
     assertValid(frame_start);
 
-//    fmt::print(stderr, "frame start {} left {} partition start {}\n",
-//        frame_start, offset_left, partition_start);
+    //    fmt::print(stderr, "frame start {} left {} partition start {}\n",
+    //        frame_start, offset_left, partition_start);
 
     if (frame_start <= partition_start)
     {
@@ -559,7 +566,7 @@ void WindowBlockInputStream::advanceFrameStartRangeOffset()
     // See the comment for advanceFrameEndRangeOffset().
     const int direction = window_description.order_by[0].direction;
     const bool preceding = window_description.frame.begin_preceding
-                           == (direction > 0);
+        == (direction > 0);
     const auto * reference_column
         = inputAt(current_row)[order_by_indices[0]].get();
     for (; frame_start < partition_end; advanceRowNumber(frame_start))
@@ -568,11 +575,9 @@ void WindowBlockInputStream::advanceFrameStartRangeOffset()
         // while [frames_start] < [current_row] with offset.
         const auto * compared_column
             = inputAt(frame_start)[order_by_indices[0]].get();
-        if (compare_values_with_offset(compared_column, frame_start.row,
-                                       reference_column, current_row.row,
-                                       window_description.frame.begin_offset,
-                                       preceding)
-            * direction >= 0)
+        if (compare_values_with_offset(compared_column, frame_start.row, reference_column, current_row.row, window_description.frame.begin_offset, preceding)
+                * direction
+            >= 0)
         {
             frame_started = true;
             return;
@@ -677,8 +682,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
     {
         const auto * column_x = inputAt(x)[order_by_indices[i]].get();
         const auto * column_y = inputAt(y)[order_by_indices[i]].get();
-        if (column_x->compareAt(x.row, y.row, *column_y,
-                                1 /* nan_direction_hint */) != 0)
+        if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */) != 0)
         {
             return false;
         }
@@ -689,7 +693,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
 
 void WindowBlockInputStream::advanceFrameEndCurrentRow()
 {
-//    fmt::print(stderr, "starting from frame_end {}\n", frame_end);
+    //    fmt::print(stderr, "starting from frame_end {}\n", frame_end);
 
     // We only process one block here, and frame_end must be already in it: if
     // we didn't find the end in the previous block, frame_end is now the first
@@ -697,7 +701,7 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
     // (only loop over rows and not over blocks), that should hopefully be more
     // efficient.
     // partition_end is either in this new block or past-the-end.
-    assert(frame_end.block  == partition_end.block
+    assert(frame_end.block == partition_end.block
            || frame_end.block + 1 == partition_end.block);
 
     if (frame_end == partition_end)
@@ -726,14 +730,14 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
     // Equality would mean "no data to process", for which we checked above.
     assert(frame_end.row < rows_end);
 
-//    fmt::print(stderr, "first row {} last {}\n", frame_end.row, rows_end);
+    //    fmt::print(stderr, "first row {} last {}\n", frame_end.row, rows_end);
 
     // Advance frame_end while it is still peers with the current row.
     for (; frame_end.row < rows_end; ++frame_end.row)
     {
         if (!arePeers(current_row, frame_end))
         {
-//            fmt::print(stderr, "{} and {} don't match\n", reference, frame_end);
+            //            fmt::print(stderr, "{} and {} don't match\n", reference, frame_end);
             frame_ended = true;
             return;
         }
@@ -765,8 +769,8 @@ void WindowBlockInputStream::advanceFrameEndRowsOffset()
     // because the frame_end is a past-the-end pointer.
     const auto [moved_row, offset_left] = moveRowNumber(current_row,
                                                         window_description.frame.end_offset.get<UInt64>()
-                                                        * (window_description.frame.end_preceding ? -1 : 1)
-                                                        + 1);
+                                                                * (window_description.frame.end_preceding ? -1 : 1)
+                                                            + 1);
 
     if (partition_end <= moved_row)
     {
@@ -799,7 +803,7 @@ void WindowBlockInputStream::advanceFrameEndRangeOffset()
     // PRECEDING/FOLLOWING change direction for DESC order.
     const int direction = window_description.order_by[0].direction;
     const bool preceding = window_description.frame.end_preceding
-                           == (direction > 0);
+        == (direction > 0);
     const auto * reference_column
         = inputAt(current_row)[order_by_indices[0]].get();
     for (; frame_end < partition_end; advanceRowNumber(frame_end))
@@ -809,11 +813,9 @@ void WindowBlockInputStream::advanceFrameEndRangeOffset()
         // [frame_end] <= [current_row] with offset.
         const auto * compared_column
             = inputAt(frame_end)[order_by_indices[0]].get();
-        if (compare_values_with_offset(compared_column, frame_end.row,
-                                       reference_column, current_row.row,
-                                       window_description.frame.end_offset,
-                                       preceding)
-            * direction > 0)
+        if (compare_values_with_offset(compared_column, frame_end.row, reference_column, current_row.row, window_description.frame.end_offset, preceding)
+                * direction
+            > 0)
         {
             frame_ended = true;
             return;
@@ -855,7 +857,7 @@ void WindowBlockInputStream::advanceFrameEnd()
         break;
     }
 
-//    fmt::print(stderr, "frame_end {} -> {}\n", frame_end_before, frame_end);
+    //    fmt::print(stderr, "frame_end {} -> {}\n", frame_end_before, frame_end);
 
     // We might not have advanced the frame end if we found out we reached the
     // end of input or the partition, or if we still don't know the frame start.
@@ -868,8 +870,8 @@ void WindowBlockInputStream::advanceFrameEnd()
 // Update the aggregation states after the frame has changed.
 void WindowBlockInputStream::updateAggregationState()
 {
-//    fmt::print(stderr, "update agg states [{}, {}) -> [{}, {})\n",
-//        prev_frame_start, prev_frame_end, frame_start, frame_end);
+    //    fmt::print(stderr, "update agg states [{}, {}) -> [{}, {})\n",
+    //        prev_frame_start, prev_frame_end, frame_start, frame_end);
 
     // Assert that the frame boundaries are known, have proper order wrt each
     // other, and have not gone back wrt the previous frame.
@@ -918,7 +920,7 @@ void WindowBlockInputStream::updateAggregationState()
 
         if (reset_aggregation)
         {
-//            fmt::print(stderr, "(2) reset aggregation\n");
+            //            fmt::print(stderr, "(2) reset aggregation\n");
             a->destroy(buf);
             a->create(buf);
         }
@@ -928,8 +930,8 @@ void WindowBlockInputStream::updateAggregationState()
         // For this purpose, the past-the-end block can be different than the
         // block of the past-the-end row (it's usually the next block).
         const auto past_the_end_block = rows_to_add_end.row == 0
-                                        ? rows_to_add_end.block
-                                        : rows_to_add_end.block + 1;
+            ? rows_to_add_end.block
+            : rows_to_add_end.block + 1;
 
         for (auto block_number = rows_to_add_start.block;
              block_number < past_the_end_block;
@@ -941,8 +943,7 @@ void WindowBlockInputStream::updateAggregationState()
             {
                 for (size_t i = 0; i < ws.argument_column_indices.size(); ++i)
                 {
-                    ws.argument_columns[i] = block.input_columns[
-                        ws.argument_column_indices[i]].get();
+                    ws.argument_columns[i] = block.input_columns[ws.argument_column_indices[i]].get();
                 }
                 ws.cached_block_number = block_number;
             }
@@ -950,9 +951,11 @@ void WindowBlockInputStream::updateAggregationState()
             // First and last blocks may be processed partially, and other blocks
             // are processed in full.
             const auto first_row = block_number == rows_to_add_start.block
-                                   ? rows_to_add_start.row : 0;
+                ? rows_to_add_start.row
+                : 0;
             const auto past_the_end_row = block_number == rows_to_add_end.block
-                                          ? rows_to_add_end.row : block.rows;
+                ? rows_to_add_end.row
+                : block.rows;
 
             // We should add an addBatch analog that can accept a starting offset.
             // For now, add the values one by one.
@@ -995,8 +998,8 @@ void WindowBlockInputStream::writeOutCurrentRow()
         }
     }
 
-//    fmt::print(stderr, "wrote out aggregation state for current row '{}'\n",
-//        current_row);
+    //    fmt::print(stderr, "wrote out aggregation state for current row '{}'\n",
+    //        current_row);
 }
 
 static void assertSameColumns(const Columns & left_all,
@@ -1017,7 +1020,6 @@ static void assertSameColumns(const Columns & left_all,
 
         if ((*left_column).isColumnConst())
         {
-
             Field left_value = assert_cast<const ColumnConst &>(*left_column).getField();
             Field right_value = assert_cast<const ColumnConst &>(*right_column).getField();
 
@@ -1061,7 +1063,6 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
                 window_block.output_columns.push_back(ws.window_function->getReturnType()->createColumn());
                 current_block.insert({ws.window_function->getReturnType(), ws.column_name});
             }
-
         }
         assertSameColumns(input_header.getColumns(), window_block.input_columns);
     }
@@ -1231,4 +1232,4 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
     }
 }
 
-}
+} // namespace DB
