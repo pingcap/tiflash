@@ -23,9 +23,6 @@ using ColumnFileFlushTaskPtr = std::shared_ptr<ColumnFileFlushTask>;
 
 class ColumnFileFlushTask
 {
-    friend class MemTableSet;
-    friend class ColumnFilePersistedSet;
-
 public:
     struct Task
     {
@@ -46,7 +43,6 @@ public:
 
 private:
     Tasks tasks;
-    ColumnFilePersisteds results;
     DMContext & context;
     MemTableSetPtr mem_table_set;
     size_t flush_version;
@@ -54,8 +50,15 @@ private:
 public:
     ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t flush_version_);
 
+    inline Task & addColumnFile(ColumnFilePtr column_file) { return tasks.emplace_back(column_file); }
+
+    const Tasks & getAllTasks() const { return tasks; }
+
+    // Persist data in ColumnFileInMemory
     DeltaIndex::Updates prepare(WriteBatches & wbs);
 
+    // Add the flushed column file to ColumnFilePersistedSet and remove the corresponding column file from MemTableSet
+    // Needs extra synchronization on the DeltaValueSpace
     bool commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs);
 };
 } // namespace DM

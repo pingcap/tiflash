@@ -8,7 +8,10 @@ namespace DB
 {
 namespace DM
 {
-/// MemTableSet contains column file which data just resides in memory.
+class MemTableSet;
+using MemTableSetPtr = std::shared_ptr<MemTableSet>;
+
+/// MemTableSet contains column file which data just resides in memory and it cannot be restored after restart.
 /// And the column files will be flushed periodically to ColumnFilePersistedSet.
 ///
 /// This class is not thread safe, manipulate on it requires acquire extra synchronization
@@ -16,6 +19,9 @@ class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
 private:
+    // to avoid serialize the same schema between continuous ColumnFileInMemory and ColumnFileTiny instance
+    BlockPtr last_schema;
+
     ColumnFiles column_files;
 
     std::atomic<size_t> rows = 0;
@@ -25,13 +31,12 @@ private:
     Poco::Logger * log;
 
 private:
-    BlockPtr lastSchema();
-
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    explicit MemTableSet(const ColumnFiles & in_memory_files = {})
-        : column_files(in_memory_files)
+    explicit MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
+        : last_schema(last_schema_)
+        , column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
     {
         for (const auto & file : column_files)
@@ -67,18 +72,16 @@ public:
 
     void appendDeleteRange(const RowKeyRange & delete_range);
 
-    void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & column_files_, bool clear_data_in_range);
+    void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range);
 
     /// Create a constant snapshot for read.
-    /// Returns empty if this instance is abandoned, you should try again.
     ColumnFileSetSnapshotPtr createSnapshot();
 
+    /// Build a flush task which will try to flush all column files in MemTableSet now
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
 
     void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);
 };
-
-using MemTableSetPtr = std::shared_ptr<MemTableSet>;
 
 } // namespace DM
 } // namespace DB

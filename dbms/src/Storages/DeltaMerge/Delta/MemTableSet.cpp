@@ -1,36 +1,38 @@
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+}
+
 namespace DB
 {
 namespace DM
 {
-BlockPtr MemTableSet::lastSchema()
-{
-    for (auto it = column_files.rbegin(); it != column_files.rend(); ++it)
-    {
-        if (auto * m_file = (*it)->tryToInMemoryFile(); m_file)
-            return m_file->getSchema();
-        else if (auto * t_file = (*it)->tryToTinyFile(); t_file)
-            return t_file->getSchema();
-    }
-    return {};
-}
-
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    auto last_schema = lastSchema();
-
+    // If this column file's schema is identical to last_schema, then use the last_schema instance,
+    // so that we don't have to serialize my_schema instance.
     if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
     {
-        // If this pack's schema is identical to last_schema, then use the last_schema instance,
-        // so that we don't have to serialize my_schema instance.
         auto my_schema = m_file->getSchema();
         if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
             m_file->resetIdenticalSchema(last_schema);
+        else
+            last_schema = my_schema;
+    }
+    else if (auto * t_file = column_file->tryToTinyFile(); t_file)
+    {
+        auto my_schema = t_file->getSchema();
+        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
+            t_file->resetIdenticalSchema(last_schema);
+        else
+            last_schema = my_schema;
     }
 
     if (!column_files.empty())
@@ -68,9 +70,10 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     if (!success)
     {
         // Create a new column file.
-        auto last_schema = lastSchema();
         auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
         auto new_column_file = std::make_shared<ColumnFileInMemory>(my_schema);
+        // Must append the empty `new_column_file` to `column_files` before appending data to it,
+        // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);
         success = new_column_file->append(context, block, offset, limit, append_bytes);
         if (unlikely(!success))
@@ -86,16 +89,16 @@ void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
     appendColumnFileInner(f);
 }
 
-void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & column_files_, bool clear_data_in_range)
+void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range)
 {
-    // Prepend a DeleteRange to clean data before applying packs
+    // Prepend a DeleteRange to clean data before applying column files
     if (clear_data_in_range)
     {
         auto f = std::make_shared<ColumnFileDeleteRange>(range);
         appendColumnFileInner(f);
     }
 
-    for (auto & f : column_files_)
+    for (const auto & f : new_column_files)
     {
         appendColumnFileInner(f);
     }
@@ -113,7 +116,8 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     size_t total_deletes = 0;
     for (const auto & file : column_files)
     {
-        // TODO: check the thread safety of ColumnFile
+        // All column files in MemTableSet is constant(except append data to the cache object in ColumnFileInMemory),
+        // and we always create new column file object when flushing, so it's safe to reuse the column file object here.
         snap->column_files.push_back(file);
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
@@ -137,23 +141,21 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
     size_t cur_rows_offset = rows_offset;
     size_t cur_deletes_offset = deletes_offset;
     size_t flush_rows = 0;
-    size_t flush_bytes = 0;
     size_t flush_deletes = 0;
     auto flush_task = std::make_shared<ColumnFileFlushTask>(context, this->shared_from_this(), flush_version);
     for (auto & column_file : column_files)
     {
-        auto & task = flush_task->tasks.emplace_back(column_file);
-        if (auto * mfile = column_file->tryToInMemoryFile(); mfile)
+        auto & task = flush_task->addColumnFile(column_file);
+        if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
         {
             task.rows_offset = cur_rows_offset;
             task.deletes_offset = cur_deletes_offset;
-            task.block_data = mfile->readDataForFlush();
+            task.block_data = m_file->readDataForFlush();
         }
-        flush_rows += column_file->getRows();
-        flush_bytes += column_file->getBytes();
-        flush_deletes += column_file->getDeletes();
         cur_rows_offset += column_file->getRows();
         cur_deletes_offset += column_file->getDeletes();
+        flush_rows += column_file->getRows();
+        flush_deletes += column_file->getDeletes();
     }
     if (unlikely(flush_rows != rows || flush_deletes != deletes))
         throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
@@ -163,11 +165,12 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
 
 void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task)
 {
-    auto & tasks = flush_task.tasks;
+    const auto & tasks = flush_task.getAllTasks();
     if (unlikely(tasks.size() > column_files.size()))
         throw Exception("column_files num check failed", ErrorCodes::LOGICAL_ERROR);
 
     ColumnFiles new_column_files;
+    size_t flush_bytes = 0;
     auto column_file_iter = column_files.begin();
     for (const auto & task : tasks)
     {
@@ -175,6 +178,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         {
             throw Exception("column_files check failed", ErrorCodes::LOGICAL_ERROR);
         }
+        flush_bytes += task.column_file->getBytes();
         column_file_iter++;
     }
     size_t new_rows = 0;
@@ -191,6 +195,8 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
+
+    ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
 }
 
 

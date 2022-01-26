@@ -18,14 +18,14 @@ namespace DM
 // ================================================
 DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
     : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
-    , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema(), in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
     , log(&Poco::Logger::get("DeltaValueSpace"))
 {}
 
 DeltaValueSpace::DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_)
     : persisted_file_set(std::move(persisted_file_set_))
-    , mem_table_set(std::make_shared<MemTableSet>())
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema()))
     , delta_index(std::make_shared<DeltaIndex>())
     , log(&Poco::Logger::get("DeltaValueSpace"))
 {}

@@ -29,7 +29,7 @@ inline void serializeColumnFilePersistedLevels(WriteBatches & wbs, PageId id, co
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-void ColumnFilePersistedSet::updateStats()
+void ColumnFilePersistedSet::updateColumnFileStats()
 {
     size_t new_persisted_files_count = 0;
     size_t new_rows = 0;
@@ -78,7 +78,7 @@ ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const Column
     // TODO: place column file to different levels
     persisted_files_levels.push_back(persisted_column_files);
 
-    updateStats();
+    updateColumnFileStats();
 }
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
@@ -101,6 +101,19 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
         for (const auto & file : level)
             file->removeData(wbs);
     }
+}
+
+BlockPtr ColumnFilePersistedSet::getLastSchema()
+{
+    for (auto level_it = persisted_files_levels.rend(); level_it != persisted_files_levels.rbegin(); ++level_it)
+    {
+        for (auto it = level_it->begin(); it != level_it->end(); ++it)
+        {
+            if (auto * t_file = (*it)->tryToTinyFile(); t_file)
+                return t_file->getSchema();
+        }
+    }
+    return {};
 }
 
 
@@ -246,15 +259,19 @@ size_t ColumnFilePersistedSet::getValidCacheRows() const
     return cache_rows;
 }
 
-// TODO: reset schema if same as before
-bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnFilePersisteds & column_files, WriteBatches & wbs)
+bool ColumnFilePersistedSet::checkAndUpdateFlushVersion(size_t task_flush_version) const
 {
-    if (prev_flush_version != flush_version)
+    if (task_flush_version != flush_version)
     {
         LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
         return false;
     }
     flush_version += 1;
+    return true;
+}
+
+bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs)
+{
     ColumnFilePersistedLevels new_persisted_files_levels;
     for (auto & level : persisted_files_levels)
     {
@@ -265,6 +282,7 @@ bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_v
     if (new_persisted_files_levels.empty())
         new_persisted_files_levels.emplace_back();
     auto & new_level_0 = new_persisted_files_levels[0];
+
     for (const auto & f : column_files)
         new_level_0.push_back(f);
 
@@ -274,7 +292,7 @@ bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_v
 
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
-    updateStats();
+    updateColumnFileStats();
 
     return true;
 }
@@ -386,7 +404,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
 
     /// Commit updates in memory.
     persisted_files_levels.swap(new_stable_files_levels);
-    updateStats();
+    updateColumnFileStats();
 
     return true;
 }

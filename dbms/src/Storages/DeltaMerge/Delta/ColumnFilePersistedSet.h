@@ -47,15 +47,15 @@ private:
     std::atomic<size_t> bytes = 0;
     std::atomic<size_t> deletes = 0;
 
+    /// below are just state resides in memory
     UInt64 flush_version = 0;
-
     size_t next_compaction_level = 0;
     UInt64 minor_compaction_version = 0;
 
     Poco::Logger * log;
 
 private:
-    void updateStats();
+    inline void updateColumnFileStats();
 
     void checkColumnFiles(const ColumnFiles & new_column_files);
 
@@ -93,6 +93,8 @@ public:
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
+    BlockPtr getLastSchema();
+
     ColumnFilePersisteds
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
@@ -109,7 +111,9 @@ public:
 
     size_t getCurrentFlushVersion() const { return flush_version; }
 
-    bool appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnFilePersisteds & column_files, WriteBatches & wbs);
+    bool checkAndUpdateFlushVersion(size_t task_flush_version) const;
+
+    bool appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
 

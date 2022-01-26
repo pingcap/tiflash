@@ -212,10 +212,10 @@ public:
 
     bool ingestColumnFiles(DMContext & context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
-    /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
+    /// Flush the data of column files which haven't write to disk yet, and also save the metadata of column files.
     bool flush(DMContext & context);
 
-    /// Compacts fragment packs into bigger one, to save some IOPS during reading.
+    /// Compacts fragment column files into bigger one, to save some IOPS during reading.
     bool compact(DMContext & context);
 
     /// Create a constant snapshot for read.
