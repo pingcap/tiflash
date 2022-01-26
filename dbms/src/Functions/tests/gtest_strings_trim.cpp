@@ -23,7 +23,7 @@ class StringTrim : public DB::tests::FunctionTest
 };
 
 
-TEST_F(StringTrim, string_trim_string_unit_Test)
+TEST_F(StringTrim, stringTrimStringUnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
 
@@ -37,14 +37,14 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
         csp->insert(Field(str.c_str(), str.size()));
     }
 
-    Block testBlock;
+    Block test_block;
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_trim");
     ColumnsWithTypeAndName ctns{ctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert({});
-    testBlock.insert({});
-    testBlock.insert({});
+    test_block.insert({});
+    test_block.insert({});
+    test_block.insert({});
     ColumnNumbers cns{0};
 
     // test trim
@@ -52,17 +52,17 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    const IColumn * res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    const IColumn * res = test_block.getByPosition(1).column.get();
     const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
 
-    Field resField;
+    Field res_field;
 
     std::vector<String> results{"hello", "h e llo", "hello", "", "hello, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -71,15 +71,15 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"hello   ", "h e llo", "hello    ", "", "hello, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -88,21 +88,21 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 3);
-    res = testBlock.getByPosition(3).column.get();
+    bp->build(ctns)->execute(test_block, cns, 3);
+    res = test_block.getByPosition(3).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"  hello", "   h e llo", "hello", "", "hello, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
 
-TEST_F(StringTrim, string_trim_const_unit_Test)
+TEST_F(StringTrim, stringTrimConstUnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
@@ -110,17 +110,17 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     cp->insert(Field("  hello   ", 10));
 
     ColumnPtr csp = ColumnConst::create(cp->getPtr(), 5);
-    Block testBlock;
+    Block test_block;
     auto type = std::make_shared<DataTypeString>();
 
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, type, "test_trim_const");
 
     ColumnsWithTypeAndName ctns{ctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert({});
-    testBlock.insert({});
-    testBlock.insert({});
+    test_block.insert({});
+    test_block.insert({});
+    test_block.insert({});
     ColumnNumbers cns{0};
 
     // test trim
@@ -128,19 +128,19 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
+    bp->build(ctns)->execute(test_block, cns, 1);
 
-    const IColumn * res = testBlock.getByPosition(1).column.get();
+    const IColumn * res = test_block.getByPosition(1).column.get();
     const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
 
-    Field resField;
+    Field res_field;
 
     std::vector<String> results{"hello", "hello", "hello", "hello", "hello"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -149,15 +149,15 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"hello   ", "hello   ", "hello   ", "hello   ", "hello   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -166,8 +166,8 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 3);
-    res = testBlock.getByPosition(3).column.get();
+    bp->build(ctns)->execute(test_block, cns, 3);
+    res = test_block.getByPosition(3).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {
@@ -179,13 +179,13 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     };
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
-TEST_F(StringTrim, string_trimws_const_unit_Test)
+TEST_F(StringTrim, stringTrimwsConstUnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
@@ -196,18 +196,18 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
 
     ColumnPtr csp = ColumnConst::create(cp->getPtr(), 5);
     ColumnPtr excsp = ColumnConst::create(excp->getPtr(), 5);
-    Block testBlock;
+    Block test_block;
 
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, std::make_shared<DataTypeString>(), "test_trim_const");
     ColumnWithTypeAndName exctn = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim_const");
 
     ColumnsWithTypeAndName ctns{ctn, exctn};
-    testBlock.insert(ctn);
-    testBlock.insert(exctn);
+    test_block.insert(ctn);
+    test_block.insert(exctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert({});
-    testBlock.insert({});
-    testBlock.insert({});
+    test_block.insert({});
+    test_block.insert({});
+    test_block.insert({});
     ColumnNumbers cns{0, 1};
 
     // test trim
@@ -215,19 +215,19 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
+    bp->build(ctns)->execute(test_block, cns, 2);
 
-    const IColumn * res = testBlock.getByPosition(2).column.get();
+    const IColumn * res = test_block.getByPosition(2).column.get();
     const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
 
-    Field resField;
+    Field res_field;
 
     std::vector<String> results{"llo   ", "llo   ", "llo   ", "llo   ", "llo   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -236,15 +236,15 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"llo   ", "llo   ", "llo   ", "llo   ", "llo   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -253,8 +253,8 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 3);
-    res = testBlock.getByPosition(3).column.get();
+    bp->build(ctns)->execute(test_block, cns, 3);
+    res = test_block.getByPosition(3).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {
@@ -266,13 +266,13 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     };
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
-TEST_F(StringTrim, string_trimws_utf8_unit_Test)
+TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
 
@@ -290,14 +290,14 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     cp2->insert(Field(trim.c_str(), trim.size()));
     ColumnPtr excsp = ColumnConst::create(cp2->getPtr(), 5);
 
-    Block testBlock;
+    Block test_block;
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_trim");
     ColumnWithTypeAndName exctn = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim");
     ColumnsWithTypeAndName ctns{ctn, exctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert(exctn);
-    testBlock.insert({});
+    test_block.insert(exctn);
+    test_block.insert({});
     ColumnNumbers cns{0, 1};
 
     // test trim
@@ -305,16 +305,16 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    const IColumn * res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    const IColumn * res = test_block.getByPosition(2).column.get();
     const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
 
-    Field resField;
+    Field res_field;
     std::vector<String> results{"你好", "上海", "北京晨凯", "", "你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -323,15 +323,15 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"你好   ", "上海", "北京晨凯", "", "你好, world  "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -340,20 +340,20 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"  你好", "   上海", "北京晨凯", "", "  你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
-TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
+TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
 
@@ -369,14 +369,14 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     cp2->insert(Field(trim.c_str(), trim.size()));
     ColumnPtr excsp = ColumnConst::create(cp2->getPtr(), 5);
 
-    Block testBlock;
+    Block test_block;
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, std::make_shared<DataTypeString>(), "test_trim");
     ColumnWithTypeAndName exctn = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim");
     ColumnsWithTypeAndName ctns{ctn, exctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert(exctn);
-    testBlock.insert({});
+    test_block.insert(exctn);
+    test_block.insert({});
     ColumnNumbers cns{0, 1};
 
     // test trim
@@ -384,16 +384,16 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    const IColumn * res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    const IColumn * res = test_block.getByPosition(2).column.get();
     const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
-    Field resField;
+    Field res_field;
     std::vector<String> results{"好   ", "好   ", "好   ", "好   ", "好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -402,15 +402,15 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"好   ", "好   ", "好   ", "好   ", "好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -419,20 +419,20 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
+    bp->build(ctns)->execute(test_block, cns, 2);
+    res = test_block.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"  你好   ", "  你好   ", "  你好   ", "  你好   ", "  你好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
-TEST_F(StringTrim, string_trim_utf8_unit_Test)
+TEST_F(StringTrim, stringTrimUtf8UnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
 
@@ -446,12 +446,12 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
         csp->insert(Field(str.c_str(), str.size()));
     }
 
-    Block testBlock;
+    Block test_block;
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_trim");
     ColumnsWithTypeAndName ctns{ctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert({});
+    test_block.insert({});
     ColumnNumbers cns{0};
 
     // test trim
@@ -459,16 +459,16 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    const IColumn * res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    const IColumn * res = test_block.getByPosition(1).column.get();
     const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
 
-    Field resField;
+    Field res_field;
     std::vector<String> results{"你好", "上海", "北京晨凯", "", "你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -477,15 +477,15 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    res = test_block.getByPosition(1).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"你好   ", "上海", "北京晨凯", "", "你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -494,20 +494,20 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    res = test_block.getByPosition(1).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
     results = {"  你好", "   上海", "北京晨凯", "", "你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
 
-TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
+TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
 {
     const Context context = TiFlashTestEnv::getContext();
 
@@ -520,12 +520,12 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
 
     ColumnPtr csp = ColumnConst::create(cp->getPtr(), 5);
 
-    Block testBlock;
+    Block test_block;
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, std::make_shared<DataTypeString>(), "test_trim");
     ColumnsWithTypeAndName ctns{ctn};
-    testBlock.insert(ctn);
+    test_block.insert(ctn);
     // for result from trim, ltrim and rtrim
-    testBlock.insert({});
+    test_block.insert({});
     ColumnNumbers cns{0};
 
     // test trim
@@ -533,16 +533,16 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    const IColumn * res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    const IColumn * res = test_block.getByPosition(1).column.get();
     const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
-    Field resField;
+    Field res_field;
     std::vector<String> results{"你好", "你好", "你好", "你好", "你好"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -551,15 +551,15 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    res = test_block.getByPosition(1).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"你好   ", "你好   ", "你好   ", "你好   ", "你好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 
@@ -568,15 +568,15 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
-    bp->build(ctns)->execute(testBlock, cns, 1);
-    res = testBlock.getByPosition(1).column.get();
+    bp->build(ctns)->execute(test_block, cns, 1);
+    res = test_block.getByPosition(1).column.get();
     c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"  你好", "  你好", "  你好", "  你好", "  你好"};
     for (size_t t = 0; t < results.size(); t++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
+        c0_string->get(t, res_field);
+        String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
     }
 }
@@ -934,9 +934,9 @@ try
         //const
         for (size_t j = 0; j < results_columns_ws_with_core_text[i].size(); j++)
         {
-            auto input_itr = input_columns_ws_with_core_text.begin();
+            const auto * input_itr = input_columns_ws_with_core_text.begin();
             size_t cnt = 0;
-            for (auto res_itr = results_columns_ws_with_core_text[i].begin();
+            for (const auto * res_itr = results_columns_ws_with_core_text[i].begin();
                  res_itr != results_columns_ws_with_core_text[i].end() && input_itr != input_columns_ws_with_core_text.end();
                  res_itr++, input_itr++)
             {
