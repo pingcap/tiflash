@@ -1019,7 +1019,7 @@ try
     }
 
     // Full GC execute apply
-    dir.gcApply(std::move(gc_migrate_entries));
+    dir.gcApply(std::move(gc_migrate_entries), false);
 }
 CATCH
 
@@ -1080,7 +1080,7 @@ try
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
+    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries), false); }, DB::Exception);
 }
 CATCH
 
