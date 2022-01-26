@@ -1,5 +1,8 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -161,7 +164,7 @@ void DAGContext::appendWarning(const String & msg, int32_t code)
     appendWarning(warning);
 }
 
-bool DAGContext::shouldClipToZero()
+bool DAGContext::shouldClipToZero() const
 {
     return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
 }
@@ -178,9 +181,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     {
         if (p.first == table_scan_executor_id)
         {
-            for (auto & streamPtr : p.second.input_streams)
+            for (auto & stream_ptr : p.second.input_streams)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
                 {
                     time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                     num_produced_bytes += p_stream->getProfileInfo().bytes;
@@ -197,6 +200,41 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
 void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
+}
+void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams)
+{
+    if (isMPPTask())
+    {
+        if (mpp_exchange_receiver_map_inited)
+            throw TiFlashException("Repeatedly initialize mpp_exchange_receiver_map", Errors::Coprocessor::Internal);
+        traverseExecutors(dag_request, [&](const tipb::Executor & executor) {
+            if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
+            {
+                assert(executor.has_executor_id());
+                const auto & executor_id = executor.executor_id();
+                mpp_exchange_receiver_map[executor_id] = std::make_shared<ExchangeReceiver>(
+                    std::make_shared<GRPCReceiverContext>(
+                        executor.exchange_receiver(),
+                        getMPPTaskMeta(),
+                        context.getTMTContext().getKVCluster(),
+                        context.getTMTContext().getMPPTaskManager(),
+                        context.getSettingsRef().enable_local_tunnel),
+                    executor.exchange_receiver().encoded_task_meta_size(),
+                    max_streams,
+                    log);
+            }
+        });
+        mpp_exchange_receiver_map_inited = true;
+    }
+}
+
+const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
+{
+    if (!isMPPTask())
+        throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
+    if (!mpp_exchange_receiver_map_inited)
+        throw TiFlashException("mpp_exchange_receiver_map has not been initialized", Errors::Coprocessor::Internal);
+    return mpp_exchange_receiver_map;
 }
 
 } // namespace DB

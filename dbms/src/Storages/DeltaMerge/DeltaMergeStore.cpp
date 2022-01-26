@@ -487,7 +487,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
         WriteBatches wbs(storage_pool, db_context.getWriteLimiter());
-        DeltaPackPtr write_pack;
+        ColumnFilePtr write_column_file;
         RowKeyRange write_range;
 
         // Keep trying until succeeded.
@@ -518,9 +518,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
 
             limit = cur_limit;
-            auto bytes = block.bytes(offset, limit);
+            auto alloc_bytes = block.bytes(offset, limit);
 
-            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && bytes < dm_context->delta_cache_limit_bytes / 4;
+            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
             // Small packs are appended to Delta Cache, the flushed later.
             // While large packs are directly written to PageStorage.
             if (small_pack)
@@ -535,18 +535,18 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 // If pack haven't been written, or the pk range has changed since last write, then write it and
                 // delete former written pack.
-                if (!write_pack || (write_pack && write_range != rowkey_range))
+                if (!write_column_file || (write_column_file && write_range != rowkey_range))
                 {
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
-                    write_pack = DeltaPackBlock::writePack(*dm_context, block, offset, limit, wbs);
+                    write_column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
                 }
 
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-                if (segment->writeToDisk(*dm_context, write_pack))
+                if (segment->writeToDisk(*dm_context, write_column_file))
                 {
                     updated_segments.push_back(segment);
                     break;
@@ -694,7 +694,7 @@ void DeltaMergeStore::ingestFiles(
             segment_range = segment->getRowKeyRange();
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-            DeltaPacks packs;
+            ColumnFiles column_files;
             WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
 
             for (const auto & file : files)
@@ -705,10 +705,10 @@ void DeltaMergeStore::ingestFiles(
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto pack = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
+                auto pack = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
                 if (pack->getRows() != 0)
                 {
-                    packs.emplace_back(std::move(pack));
+                    column_files.emplace_back(std::move(pack));
                     wbs.data.putRefPage(ref_id, file_id);
                 }
             }
@@ -717,7 +717,7 @@ void DeltaMergeStore::ingestFiles(
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            bool ingest_success = segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
+            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
             fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
             if (ingest_success)
             {
@@ -1121,7 +1121,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     size_t delta_bytes = delta_saved_bytes + unsaved_bytes;
     size_t segment_rows = segment->getEstimatedRows();
     size_t segment_bytes = segment->getEstimatedBytes();
-    size_t pack_count = delta->getPackCount();
+    size_t pack_count = delta->getColumnFileCount();
 
     size_t placed_delta_rows = delta->getPlacedDeltaRows();
 
@@ -2169,7 +2169,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
         total_placed_rows += delta->getPlacedDeltaRows();
 
-        if (delta->getPackCount())
+        if (delta->getColumnFileCount())
         {
             stat.total_rows += delta->getRows();
             stat.total_size += delta->getBytes();
@@ -2177,7 +2177,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             stat.total_delete_ranges += delta->getDeletes();
 
             stat.delta_count += 1;
-            stat.total_pack_count_in_delta += delta->getPackCount();
+            stat.total_pack_count_in_delta += delta->getColumnFileCount();
 
             stat.total_delta_rows += delta->getRows();
             stat.total_delta_size += delta->getBytes();
@@ -2290,7 +2290,7 @@ SegmentStats DeltaMergeStore::getSegmentStats()
 
         stat.stable_size_on_disk = stable->getBytesOnDisk();
 
-        stat.delta_pack_count = delta->getPackCount();
+        stat.delta_pack_count = delta->getColumnFileCount();
         stat.stable_pack_count = stable->getPacks();
 
         stat.avg_delta_pack_rows = (Float64)delta->getRows() / stat.delta_pack_count;

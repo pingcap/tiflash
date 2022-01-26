@@ -10,9 +10,13 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -31,8 +35,7 @@ public:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        std::vector<SubqueriesForSets> & subqueries_for_sets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
+        std::vector<SubqueriesForSets> & subqueries_for_sets_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -109,7 +112,6 @@ private:
 
     std::vector<const tipb::Expr *> conditions;
     std::vector<SubqueriesForSets> & subqueries_for_sets;
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
     LogWithPrefixPtr log;
