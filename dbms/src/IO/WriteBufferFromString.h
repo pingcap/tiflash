@@ -37,7 +37,6 @@ public:
     void resizeAndRestart(size_t approx_size)
     {
         value.resize(approx_size);
-        value.reserve(approx_size);
         restart();
     }
 
