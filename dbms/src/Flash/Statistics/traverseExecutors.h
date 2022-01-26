@@ -43,18 +43,16 @@ private:
 
 Children getChildren(const tipb::Executor & executor);
 
-/// traverse tipb::executor array and apply function.
+/// traverse tipb::executor list and apply function.
 /// f: (const tipb::Executor &) -> bool, return true to continue traverse.
-/// traverse in reverse order, because the head of executor array is the leaf node like table scan.
+/// traverse in reverse order, because the head of executor list is the leaf node like table scan.
 template <typename Container, typename FF>
-void traverseExecutorArray(const Container & array, FF && f)
+void traverseExecutorList(const Container & list, FF && f)
 {
-    auto it = array.rbegin();
-    while (it != array.rend())
+    for (auto it = list.rbegin(); it != list.rend(); ++it)
     {
         if (!f(*it))
             return;
-        ++it;
     }
 }
 
@@ -75,7 +73,7 @@ void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
     assert(dag_request->executors_size() > 0 || dag_request->has_root_executor());
     if (dag_request->executors_size() > 0)
     {
-        traverseExecutorArray(dag_request->executors(), std::forward<FF>(f));
+        traverseExecutorList(dag_request->executors(), std::forward<FF>(f));
     }
     else // dag_request->has_root_executor()
     {
