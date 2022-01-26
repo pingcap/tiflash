@@ -5,5 +5,4 @@ if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/kvproto/proto/errorpb.proto")
 endif ()
 
 message(STATUS "Using kvproto: ${TiFlash_SOURCE_DIR}/contrib/kvproto/cpp")
-
 set (KVPROTO_FOUND TRUE)
