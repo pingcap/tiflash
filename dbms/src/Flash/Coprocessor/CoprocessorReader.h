@@ -6,7 +6,6 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>

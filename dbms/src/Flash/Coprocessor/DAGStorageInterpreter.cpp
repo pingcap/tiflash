@@ -10,7 +10,9 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 namespace DB
 {

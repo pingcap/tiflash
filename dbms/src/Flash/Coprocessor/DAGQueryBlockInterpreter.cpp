@@ -29,6 +29,8 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiFlashContext.h>
 
 namespace DB
 {

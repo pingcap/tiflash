@@ -7,7 +7,6 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TiFlashContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>

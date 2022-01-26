@@ -10,7 +10,7 @@
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/ManagedStorages.h>
-#include <Storages/Transaction/TiFlashContext.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/Types.h>
 
 #pragma GCC diagnostic push
@@ -23,6 +23,7 @@
 
 namespace DB
 {
+class TiFlashContext;
 using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
 
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
