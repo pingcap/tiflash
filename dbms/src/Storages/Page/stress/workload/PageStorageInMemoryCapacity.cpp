@@ -119,7 +119,7 @@ private:
 
         std::tie(total_mem, begin_virtual_size, begin_resident_size) = getCurrentMemory();
         pool.addCapacity(1 + options.num_writers + options.num_readers);
-        PageStorage::Config config;
+        DB::PageStorage::Config config;
         initPageStorage(config, name());
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);

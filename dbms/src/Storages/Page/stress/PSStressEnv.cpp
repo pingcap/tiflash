@@ -43,7 +43,8 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("status_interval,S", value<UInt32>()->default_value(1), "Status statistics interval. 0 means no statistics") //
         ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially, example -M 2") //
-        ("verify", value<bool>()->default_value(true), "Run special tests sequentially with verify."); //
+        ("verify", value<bool>()->default_value(true), "Run special tests sequentially with verify.") //
+        ("running_ps_version,V", value<UInt16>()->default_value(3), "Select a version of PageStorage. 2 or 3 can used");
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
@@ -68,6 +69,14 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.status_interval = options["status_interval"].as<UInt32>();
     opt.situation_mask = options["situation_mask"].as<UInt64>();
     opt.verify = options["verify"].as<bool>();
+    opt.running_ps_version = options["running_ps_version"].as<UInt16>();
+
+    if (opt.running_ps_version != 2 && opt.running_ps_version != 3)
+    {
+        std::cerr << "Invalid running_ps_version, this arg should be 2 or 3." << std::endl;
+        std::cerr << desc << std::endl;
+        exit(0);
+    }
 
     if (options.count("paths"))
         opt.paths = options["paths"].as<std::vector<std::string>>();
@@ -93,6 +102,8 @@ void StressEnv::setup()
 #ifdef FIU_ENABLE
     fiu_init(0);
 #endif
+
+
     for (const auto & fp : failpoints)
     {
         DB::FailPointHelper::enableFailPoint(fp);

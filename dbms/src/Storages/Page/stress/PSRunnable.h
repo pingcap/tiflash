@@ -254,5 +254,5 @@ public:
 protected:
     size_t snapshots_hold_num;
     size_t snapshot_get_interval_ms = 0;
-    std::list<PageStorage::SnapshotPtr> snapshots;
+    std::list<DB::PageStorage::SnapshotPtr> snapshots;
 };
