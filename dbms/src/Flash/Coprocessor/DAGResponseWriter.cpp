@@ -105,11 +105,11 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
             auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
             if (it != dag_context.getJoinExecuteInfoMap().end())
             {
-                auto build_side_it = dag_context.getProfileStreamsMap()).find(it->second.build_side_root_executor_id);
-                if (it != dag_context.getJoinExecuteInfoMap().end())
+                auto build_side_it = dag_context.getProfileStreamsMap().find(it->second.build_side_root_executor_id);
+                if (build_side_it != dag_context.getProfileStreamsMap().end())
                 {
                     UInt64 process_time_for_build = 0;
-                    for (auto & join_build_stream : it->second)
+                    for (auto & join_build_stream : build_side_it->second.input_streams)
                     {
                         if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()))
                             process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
