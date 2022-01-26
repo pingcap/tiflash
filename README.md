@@ -21,6 +21,8 @@ $ git clone --recursive https://github.com/pingcap/tics.git
 
 ### Build tiflash-proxy
 
+(this method may still compile, but it is not officially maintained)
+
 ```
 # WORKSPACE/tics
 $ pushd contrib/tiflash-proxy
@@ -31,6 +33,8 @@ $ cp contrib/tiflash-proxy/target/release/libtiflash_proxy* libs/libtiflash-prox
 ```
 
 ### Build TiFlash
+
+(this method may still compile, but it is not officially maintained)
 
 ```
 # WORKSPACE/tics
@@ -60,9 +64,19 @@ To start developing TiFlash, see [TiFlash Development Guide](/docs/DEVELOPMENT.m
 
 - [The architecture of TiFlash's distributed storage engine and transaction layer](/docs/design/0000-00-00-architecture-of-distributed-storage-and-transaction.md)
 
-## Develop TiFlash with LLVM
+## TiFlash with LLVM
 
-TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use [TiFlash Development Environment](https://github.com/SchrodingerZhu/tiflash-env/) (for faster access in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)).
+TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`) (for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)).
+
+### Create TiFlash Env
+
+The development environment can be easily created with following commands (`docker` and `tar xz` are needed):
+
+```
+cd release-centos7-llvm/env
+make tiflash-env-$(uname -m).tar.xz
+```
+Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place.
 
 ### Compiling TiFlash Proxy
 
