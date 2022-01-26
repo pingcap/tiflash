@@ -77,7 +77,7 @@ private:
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
-    TiFlashContext & tmt;
+    TiFlashContext & flash_ctx;
     Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;

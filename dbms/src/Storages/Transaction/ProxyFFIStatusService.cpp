@@ -53,15 +53,15 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     }
 
     std::stringstream ss;
-    auto & tmt = *server->tmt;
+    auto & flash_ctx = *server->flash_ctx;
 
     std::vector<RegionID> region_list;
     size_t count = 0;
 
     // if storage is not created in ch, flash replica should not be available.
-    if (tmt.getStorages().get(table_id))
+    if (flash_ctx.getStorages().get(table_id))
     {
-        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
+        flash_ctx.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
             count = regions.size();
             region_list.reserve(regions.size());
             for (const auto & region : regions)
@@ -86,7 +86,7 @@ HttpRequestRes HandleHttpRequestStoreStatus(
     std::string_view,
     std::string_view)
 {
-    auto * name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+    auto * name = RawCppString::New(IntoStoreStatusName(server->flash_ctx->getStoreStatus(std::memory_order_relaxed)));
     return HttpRequestRes{
         .status = HttpRequestStatus::Ok,
         .res = CppStrWithView{

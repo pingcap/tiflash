@@ -228,7 +228,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
             return;
         }
         tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
+        tiflash_instance_wrap.flash_ctx = nullptr;
         proxy_runner.join();
     });
 

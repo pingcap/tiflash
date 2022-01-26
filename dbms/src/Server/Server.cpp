@@ -900,7 +900,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         LOG_FMT_INFO(log, "Let tiflash proxy shutdown");
         tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
+        tiflash_instance_wrap.flash_ctx = nullptr;
         LOG_FMT_INFO(log, "Wait for tiflash proxy thread to join");
         proxy_runner.join();
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
@@ -1290,7 +1290,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & flash_context = global_context->getTiFlashContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &flash_context;
+            tiflash_instance_wrap.flash_ctx = &flash_context;
             LOG_FMT_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)

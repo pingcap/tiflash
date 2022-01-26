@@ -36,7 +36,7 @@ extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
 template <typename RegionPtrWrap>
-void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & tmt)
+void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & flash_ctx)
 {
     auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
@@ -68,8 +68,8 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashCon
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryFlushRegion(old_region, false);
-            tryFlushRegionCacheInStorage(tmt, *old_region, log);
+            flash_ctx.getRegionTable().tryFlushRegion(old_region, false);
+            tryFlushRegionCacheInStorage(flash_ctx, *old_region, log);
             persistRegion(*old_region, region_lock, "save previous region before apply");
         }
     }
@@ -89,7 +89,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashCon
 
     {
         auto table_id = new_region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        if (auto storage = flash_ctx.getStorages().get(table_id); storage)
         {
             switch (storage->engineType())
             {
@@ -105,21 +105,21 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TiFlashCon
         }
     }
 
-    onSnapshot(new_region, old_region, old_applied_index, tmt);
+    onSnapshot(new_region, old_region, old_applied_index, flash_ctx);
 }
 
 template <typename RegionPtrWrap>
-void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & tmt)
+void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & flash_ctx)
 {
     RegionID region_id = new_region_wrap->id();
 
     {
         auto table_id = new_region_wrap->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
+        if (auto storage = flash_ctx.getStorages().get(table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
         {
             try
             {
-                auto & context = tmt.getContext();
+                auto & context = flash_ctx.getContext();
                 // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -150,7 +150,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
     {
         const auto range = new_region_wrap->getRange();
-        auto & region_table = tmt.getRegionTable();
+        auto & region_table = flash_ctx.getRegionTable();
         // extend region to make sure data won't be removed.
         region_table.extendRegionRange(region_id, *range);
         // For `RegionPtrWithBlock`, try to flush data into storage first.
@@ -163,7 +163,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
                 }
-                tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
+                tryFlushRegionCacheInStorage(flash_ctx, *new_region_wrap, log);
             }
             catch (...)
             {
@@ -201,7 +201,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         persistRegion(*new_region, region_lock, "save current region after apply");
         region_range_index.add(new_region);
 
-        tmt.getRegionTable().shrinkRegionRange(*new_region);
+        flash_ctx.getRegionTable().shrinkRegionRange(*new_region);
     }
 }
 
@@ -213,7 +213,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
     const SSTViewVec snaps,
     uint64_t /*index*/,
     uint64_t /*term*/,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
     RegionPreDecodeBlockDataPtr cache{nullptr};
     {
@@ -227,7 +227,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
     }
 
     Stopwatch watch;
-    auto & ctx = tmt.getContext();
+    auto & ctx = flash_ctx.getContext();
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
@@ -275,9 +275,9 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
-    return preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
+    return preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, flash_ctx);
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
@@ -288,9 +288,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     uint64_t /*index*/,
     uint64_t /*term*/,
     DM::FileConvertJobType job_type,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
-    auto context = tmt.getContext();
+    auto context = flash_ctx.getContext();
     bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
@@ -307,7 +307,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstoned.
-            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, flash_ctx);
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
@@ -316,7 +316,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 
             // Get a gc safe point for compacting
             Timestamp gc_safepoint = 0;
-            if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
+            if (auto pd_client = flash_ctx.getPDClient(); !pd_client->isMock())
             {
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                        /* ignore_cache= */ false,
@@ -331,7 +331,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 schema_snap,
                 gc_safepoint,
                 force_decode,
-                tmt,
+                flash_ctx,
                 expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
@@ -340,7 +340,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 schema_snap,
                 snapshot_apply_method,
                 job_type,
-                tmt);
+                flash_ctx);
 
             stream->writePrefix();
             stream->write();
@@ -373,7 +373,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                          "Decoding Region snapshot data meet error, sync schema and try to decode again " //
                              << new_region->toString(true) << " [error=" << e.displayText() << "]");
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context);
+                flash_ctx.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
                 force_decode = true;
 
@@ -398,14 +398,14 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 }
 
 template <typename RegionPtrWrap>
-void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & tmt)
+void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TiFlashContext & flash_ctx)
 {
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
 
-    checkAndApplySnapshot(new_region, tmt);
+    checkAndApplySnapshot(new_region, flash_ctx);
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
@@ -455,16 +455,16 @@ void KVStore::handleApplySnapshot(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
     if (snapshot_apply_method == TiDB::SnapshotApplyMethod::Block)
-        handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshotToBlock(new_region, snaps, index, term, tmt)}, tmt);
+        handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshotToBlock(new_region, snaps, index, term, flash_ctx)}, flash_ctx);
     else
-        handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, tmt)}, tmt);
+        handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, flash_ctx)}, flash_ctx);
 }
 
-EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & tmt)
+EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & flash_ctx)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -506,8 +506,8 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
             return;
         try
         {
-            tmt.getRegionTable().tryFlushRegion(region, false);
-            tryFlushRegionCacheInStorage(tmt, *region, log);
+            flash_ctx.getRegionTable().tryFlushRegion(region, false);
+            tryFlushRegionCacheInStorage(flash_ctx, *region, log);
         }
         catch (Exception & e)
         {
@@ -529,7 +529,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     {
         // try to flush remain data in memory.
         func_try_flush();
-        auto tmp_region = handleIngestSSTByDTFile(region, snaps, index, term, tmt);
+        auto tmp_region = handleIngestSSTByDTFile(region, snaps, index, term, flash_ctx);
         region->finishIngestSSTByDTFile(std::move(tmp_region), index, term);
         // after `finishIngestSSTByDTFile`, try to flush committed data into storage
         func_try_flush();
@@ -547,7 +547,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
 }
 
-RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & tmt)
+RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TiFlashContext & flash_ctx)
 {
     if (index <= region->appliedIndex())
         return nullptr;
@@ -562,17 +562,17 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     }
 
     // Decode the KV pairs in ingesting SST into DTFiles
-    PageIds ingest_ids = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
+    PageIds ingest_ids = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, flash_ctx);
 
     // If `ingest_ids` is empty, ingest SST won't write delete_range for ingest region, it is safe to
     // ignore the step of calling `ingestFiles`
     if (!ingest_ids.empty())
     {
         auto table_id = region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        if (auto storage = flash_ctx.getStorages().get(table_id); storage)
         {
             // Ingest DTFiles into DeltaMerge storage
-            auto & context = tmt.getContext();
+            auto & context = flash_ctx.getContext();
             try
             {
                 // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.

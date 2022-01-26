@@ -2,6 +2,7 @@
 
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -10,14 +11,15 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
+class TiFlashContext;
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & tmt);
+AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & flash_ctx);
 
 Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TiFlashContext & tmt);
+                                   TiFlashContext & flash_ctx);
 
 } // namespace DB

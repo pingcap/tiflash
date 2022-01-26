@@ -28,7 +28,7 @@ public:
     void addRegionToFlush(const RegionPtr & region);
 
 private:
-    TiFlashContext & tmt;
+    TiFlashContext & flash_ctx;
     BackgroundProcessingPool & background_pool;
 
     Poco::Logger * log;

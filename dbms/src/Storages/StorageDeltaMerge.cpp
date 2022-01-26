@@ -599,8 +599,8 @@ BlockInputStreams StorageDeltaMerge::read(
     if (unlikely(!query_info.mvcc_query_info))
         throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
 
-    TiFlashContext & tmt = context.getTiFlashContext();
-    if (unlikely(!tmt.isInitialized()))
+    TiFlashContext & flash_ctx = context.getTiFlashContext();
+    if (unlikely(!flash_ctx.isInitialized()))
         throw Exception("TiFlashContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
@@ -608,8 +608,8 @@ BlockInputStreams StorageDeltaMerge::read(
     LOG_FMT_DEBUG(log, "Read with tso: {}", mvcc_query_info.read_tso);
 
     // Check whether tso is smaller than TiDB GcSafePoint
-    const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
-        auto pd_client = tmt.getPDClient();
+    const auto check_read_tso = [&flash_ctx, &context, this](UInt64 read_tso) {
+        auto pd_client = flash_ctx.getPDClient();
         if (likely(!pd_client->isMock()))
         {
             auto safe_point = PDClientHelper::getGCSafePointWithRetry(
@@ -1414,8 +1414,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 
 void StorageDeltaMerge::startup()
 {
-    TiFlashContext & tmt = global_context.getTiFlashContext();
-    tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
+    TiFlashContext & flash_ctx = global_context.getTiFlashContext();
+    flash_ctx.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
 void StorageDeltaMerge::shutdown()

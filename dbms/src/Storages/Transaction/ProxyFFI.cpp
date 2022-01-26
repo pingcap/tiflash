@@ -64,7 +64,7 @@ EngineStoreApplyRes HandleWriteRaftCmd(
 {
     try
     {
-        return server->tmt->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
+        return server->flash_ctx->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->flash_ctx);
     }
     catch (...)
     {
@@ -86,14 +86,14 @@ EngineStoreApplyRes HandleAdminRaftCmd(
         request.ParseFromArray(req_buff.data, static_cast<int>(req_buff.len));
         response.ParseFromArray(resp_buff.data, static_cast<int>(resp_buff.len));
 
-        auto & kvstore = server->tmt->getKVStore();
+        auto & kvstore = server->flash_ctx->getKVStore();
         return kvstore->handleAdminRaftCmd(
             std::move(request),
             std::move(response),
             header.region_id,
             header.index,
             header.term,
-            *server->tmt);
+            *server->flash_ctx);
     }
     catch (...)
     {
@@ -114,8 +114,8 @@ void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
-        auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleDestroy(region_id, *server->tmt);
+        auto & kvstore = server->flash_ctx->getKVStore();
+        kvstore->handleDestroy(region_id, *server->flash_ctx);
     }
     catch (...)
     {
@@ -128,8 +128,8 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
 {
     try
     {
-        auto & kvstore = server->tmt->getKVStore();
-        return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
+        auto & kvstore = server->flash_ctx->getKVStore();
+        return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->flash_ctx);
     }
     catch (...)
     {
@@ -144,7 +144,7 @@ StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
     StoreStats res{}; // res.fs_stats.ok = false by default
     try
     {
-        auto global_capacity = server->tmt->getContext().getPathCapacity();
+        auto global_capacity = server->flash_ctx->getContext().getPathCapacity();
         res.fs_stats = global_capacity->getFsStats();
         // TODO: set engine read/write stats
     }
@@ -281,15 +281,15 @@ RawCppPtr PreHandleSnapshot(
     {
         metapb::Region region;
         region.ParseFromArray(region_buff.data, static_cast<int>(region_buff.len));
-        auto & tmt = *server->tmt;
-        auto & kvstore = tmt.getKVStore();
+        auto & flash_ctx = *server->flash_ctx;
+        auto & kvstore = flash_ctx.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
         switch (kvstore->applyMethod())
         {
         case TiDB::SnapshotApplyMethod::Block:
         {
             // Pre-decode as a block
-            auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, tmt);
+            auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, flash_ctx);
             auto * res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
             return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithBlock);
         }
@@ -297,7 +297,7 @@ RawCppPtr PreHandleSnapshot(
         case TiDB::SnapshotApplyMethod::DTFile_Single:
         {
             // Pre-decode and save as DTFiles
-            auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+            auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, flash_ctx);
             auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
             return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
         }
@@ -321,14 +321,14 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
 
     try
     {
-        auto & kvstore = server->tmt->getKVStore();
+        auto & kvstore = server->flash_ctx->getKVStore();
         if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithBlock>)
         {
-            kvstore->handlePreApplySnapshot(RegionPtrWithBlock{snap->region, std::move(snap->cache)}, *server->tmt);
+            kvstore->handlePreApplySnapshot(RegionPtrWithBlock{snap->region, std::move(snap->cache)}, *server->flash_ctx);
         }
         else if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
         {
-            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->tmt);
+            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->flash_ctx);
         }
     }
     catch (...)
@@ -417,7 +417,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
     std::string config_file_path;
     try
     {
-        config_file_path = server->tmt->getContext().getConfigRef().getString("config-file");
+        config_file_path = server->flash_ctx->getContext().getConfigRef().getString("config-file");
         std::ifstream stream(config_file_path);
         if (!stream)
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
@@ -443,9 +443,9 @@ void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
     metapb::Store store{};
     store.ParseFromArray(buff.data, buff.len);
     assert(server);
-    assert(server->tmt);
+    assert(server->flash_ctx);
     assert(store.id() != 0);
-    server->tmt->getKVStore()->setStore(std::move(store));
+    server->flash_ctx->getKVStore()->setStore(std::move(store));
 }
 
 } // namespace DB

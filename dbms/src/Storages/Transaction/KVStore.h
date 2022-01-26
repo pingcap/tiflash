@@ -72,42 +72,54 @@ public:
 
     void tryPersist(const RegionID region_id);
 
-    static void tryFlushRegionCacheInStorage(TiFlashContext & tmt, const Region & region, Poco::Logger * log);
+    static void tryFlushRegionCacheInStorage(TiFlashContext & flash_ctx, const Region & region, Poco::Logger * log);
 
     size_t regionSize() const;
-    EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-                                           raft_cmdpb::AdminResponse && response,
-                                           UInt64 region_id,
-                                           UInt64 index,
-                                           UInt64 term,
-                                           TiFlashContext & tmt);
+    EngineStoreApplyRes handleAdminRaftCmd(
+        raft_cmdpb::AdminRequest && request,
+        raft_cmdpb::AdminResponse && response,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TiFlashContext & flash_ctx);
     EngineStoreApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
-        TiFlashContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TiFlashContext & tmt);
+        TiFlashContext & flash_ctx);
+    EngineStoreApplyRes handleWriteRaftCmd(
+        const WriteCmdsView & cmds,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TiFlashContext & flash_ctx);
 
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TiFlashContext & tmt);
+    void handleApplySnapshot(
+        metapb::Region && region,
+        uint64_t peer_id,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        TiFlashContext & flash_ctx);
     RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
         uint64_t term,
-        TiFlashContext & tmt);
+        TiFlashContext & flash_ctx);
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
         uint64_t term,
-        TiFlashContext & tmt);
+        TiFlashContext & flash_ctx);
     template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TiFlashContext & tmt);
+    void handlePreApplySnapshot(const RegionPtrWrap &, TiFlashContext & flash_ctx);
 
-    void handleDestroy(UInt64 region_id, TiFlashContext & tmt);
+    void handleDestroy(UInt64 region_id, TiFlashContext & flash_ctx);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & flash_ctx);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -147,14 +159,14 @@ private:
         uint64_t index,
         uint64_t term,
         DM::FileConvertJobType,
-        TiFlashContext & tmt);
+        TiFlashContext & flash_ctx);
 
     template <typename RegionPtrWrap>
-    void checkAndApplySnapshot(const RegionPtrWrap &, TiFlashContext & tmt);
+    void checkAndApplySnapshot(const RegionPtrWrap &, TiFlashContext & flash_ctx);
     template <typename RegionPtrWrap>
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & tmt);
+    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TiFlashContext & flash_ctx);
 
-    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & tmt);
+    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TiFlashContext & flash_ctx);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
@@ -177,7 +189,7 @@ private:
         UInt64 curr_region_id,
         UInt64 index,
         UInt64 term,
-        TiFlashContext & tmt);
+        TiFlashContext & flash_ctx);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 

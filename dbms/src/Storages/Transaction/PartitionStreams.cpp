@@ -43,14 +43,14 @@ static void writeRegionDataToStorage(
     Poco::Logger * log)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
-    const auto & tmt = context.getTiFlashContext();
+    const auto & flash_ctx = context.getTiFlashContext();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
     auto atomicReadWrite = [&](bool force_decode) {
         /// Get storage based on table ID.
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = flash_ctx.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
@@ -163,7 +163,7 @@ static void writeRegionDataToStorage(
     /// If first try failed, sync schema and force read then write.
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        flash_ctx.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicReadWrite(true))
             // Failure won't be tolerated this time.
@@ -397,7 +397,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                       region_data_lock);
 }
 
-RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TiFlashContext & tmt,
+RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TiFlashContext & flash_ctx,
                                                                                    const TiDB::TableID table_id,
                                                                                    const RegionPtr & region,
                                                                                    const Timestamp start_ts,
@@ -419,7 +419,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
                           [&](RegionDataReadInfoList & data_list_read) -> ResolveLocksAndWriteRegionRes {
                               if (data_list_read.empty())
                                   return RegionException::RegionReadStatus::OK;
-                              auto & context = tmt.getContext();
+                              auto & context = flash_ctx.getContext();
                               writeRegionDataToStorage(context, region, data_list_read, log);
                               RemoveRegionCommitCache(region, data_list_read);
                               return RegionException::RegionReadStatus::OK;
@@ -432,10 +432,10 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// Pre-decode region data into block cache and remove committed data from `region`
 RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    const auto & tmt = context.getTiFlashContext();
+    const auto & flash_ctx = context.getTiFlashContext();
     {
         Timestamp gc_safe_point = 0;
-        if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
+        if (auto pd_client = flash_ctx.getPDClient(); !pd_client->isMock())
         {
             gc_safe_point
                 = PDClientHelper::getGCSafePointWithRetry(pd_client, false, context.getSettingsRef().safe_point_update_interval_seconds);
@@ -473,7 +473,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     const auto atomicDecode = [&](bool force_decode) -> bool {
         Stopwatch watch;
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = flash_ctx.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
@@ -515,7 +515,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     if (!atomicDecode(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        flash_ctx.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicDecode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
@@ -528,16 +528,16 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 }
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & tmt)
+AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & flash_ctx)
 {
     TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
-    auto context = tmt.getContext();
+    auto context = flash_ctx.getContext();
     const auto atomicGet = [&](bool force_decode) -> bool {
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = flash_ctx.getStorages().get(table_id);
         if (storage == nullptr)
         {
             if (!force_decode)
@@ -558,7 +558,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TiFlashContext & tmt)
     if (!atomicGet(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        flash_ctx.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicGet(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
@@ -605,7 +605,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TiFlashContext & tmt)
+                                   TiFlashContext & flash_ctx)
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
@@ -621,7 +621,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
     if (!data_list_read)
         return res_block;
 
-    auto context = tmt.getContext();
+    auto context = flash_ctx.getContext();
 
     {
         Stopwatch watch;

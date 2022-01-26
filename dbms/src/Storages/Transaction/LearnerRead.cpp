@@ -101,7 +101,7 @@ class MvccQueryInfoWrap
     Base::RegionsQueryInfo * regions_info_ptr;
 
 public:
-    MvccQueryInfoWrap(Base & mvcc_query_info, TiFlashContext & tmt, const TiDB::TableID table_id)
+    MvccQueryInfoWrap(Base & mvcc_query_info, TiFlashContext & flash_ctx, const TiDB::TableID table_id)
         : inner(mvcc_query_info)
     {
         if (likely(!inner.regions_query_info.empty()))
@@ -113,7 +113,7 @@ public:
             regions_info = Base::RegionsQueryInfo();
             regions_info_ptr = &*regions_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
-            auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
+            auto regions = flash_ctx.getRegionTable().getRegionsByTable(table_id);
             regions_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
@@ -151,18 +151,18 @@ LearnerReadSnapshot doLearnerRead(
 {
     assert(log != nullptr);
 
-    auto & tmt = context.getTiFlashContext();
+    auto & flash_ctx = context.getTiFlashContext();
 
-    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
+    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, flash_ctx, table_id);
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
     size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
 
     // use single thread to do replica read by default because there is some overhead from thread pool itself.
-    concurrent_num = std::min(tmt.replicaReadMaxThread(), concurrent_num);
+    concurrent_num = std::min(flash_ctx.replicaReadMaxThread(), concurrent_num);
 
-    KVStorePtr & kvstore = tmt.getKVStore();
+    KVStorePtr & kvstore = flash_ctx.getKVStore();
     LearnerReadSnapshot regions_snapshot;
     // check region is not null and store region map.
     for (const auto & info : regions_info)
@@ -225,14 +225,14 @@ LearnerReadSnapshot doLearnerRead(
             }
         };
         [&]() {
-            if (!tmt.checkRunning(std::memory_order_relaxed))
+            if (!flash_ctx.checkRunning(std::memory_order_relaxed))
             {
                 make_default_batch_read_index_result(true);
                 return;
             }
             kvstore->addReadIndexEvent(1);
             SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
-            if (!tmt.checkRunning())
+            if (!flash_ctx.checkRunning())
             {
                 make_default_batch_read_index_result(true);
                 return;
@@ -242,7 +242,7 @@ LearnerReadSnapshot doLearnerRead(
             /// otherwise the desired index will be blocked by the lock of data read.
             if (const auto * proxy_helper = kvstore->getProxyHelper(); proxy_helper)
             {
-                auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+                auto res = proxy_helper->batchReadIndex(batch_read_index_req, flash_ctx.batchReadIndexTimeout());
                 for (auto && [resp, region_id] : res)
                 {
                     batch_read_index_result.emplace(region_id, std::move(resp));
@@ -303,7 +303,7 @@ LearnerReadSnapshot doLearnerRead(
             // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
             throw TiFlashException(fmt::format("Region {} is unavailable", region_id), Errors::Coprocessor::RegionError);
         };
-        const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
+        const auto wait_index_timeout_ms = flash_ctx.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
             const auto & region_to_query = regions_info[region_idx];
@@ -320,7 +320,7 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
+                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, flash_ctx);
                 if (wait_res != WaitIndexResult::Finished)
                 {
                     handle_wait_timeout_region(region_to_query.region_id);
@@ -347,7 +347,7 @@ LearnerReadSnapshot doLearnerRead(
             if (mvcc_query_info->resolve_locks)
             {
                 auto res = RegionTable::resolveLocksAndWriteRegion(
-                    tmt,
+                    flash_ctx,
                     table_id,
                     region,
                     mvcc_query_info->read_tso,
@@ -427,7 +427,7 @@ LearnerReadSnapshot doLearnerRead(
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
-    TiFlashContext & tmt,
+    TiFlashContext & flash_ctx,
     const LogWithPrefixPtr & log)
 {
     RegionException::UnavailableRegions fail_region_ids;
@@ -436,7 +436,7 @@ void validateQueryInfo(
     for (const auto & region_query_info : mvcc_query_info.regions_query_info)
     {
         RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
-        auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
+        auto region = flash_ctx.getKVStore()->getRegion(region_query_info.region_id);
         if (auto iter = regions_snapshot.find(region_query_info.region_id); //
             iter == regions_snapshot.end() || iter->second != region)
         {

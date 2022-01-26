@@ -96,12 +96,12 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(region.first, region.second);
 }
 
-void KVStore::tryFlushRegionCacheInStorage(TiFlashContext & tmt, const Region & region, Poco::Logger * log)
+void KVStore::tryFlushRegionCacheInStorage(TiFlashContext & flash_ctx, const Region & region, Poco::Logger * log)
 {
-    if (tmt.isBgFlushDisabled())
+    if (flash_ctx.isBgFlushDisabled())
     {
         auto table_id = region.getMappedTableID();
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = flash_ctx.getStorages().get(table_id);
         if (storage == nullptr)
         {
             LOG_WARNING(log,
@@ -119,7 +119,7 @@ void KVStore::tryFlushRegionCacheInStorage(TiFlashContext & tmt, const Region & 
                 region.getRange()->getMappedTableID(),
                 storage->isCommonHandle(),
                 storage->getRowKeyColumnSize());
-            storage->flushCache(tmt.getContext(), rowkey_range);
+            storage->flushCache(flash_ctx.getContext(), rowkey_range);
         }
         catch (DB::Exception & e)
         {
@@ -209,7 +209,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -247,10 +247,15 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
         region_id,
         index,
         term,
-        tmt);
+        flash_ctx);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TiFlashContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(
+    const WriteCmdsView & cmds,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TiFlashContext & flash_ctx)
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -260,11 +265,11 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
         return EngineStoreApplyRes::NotFound;
     }
 
-    auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
+    auto res = region->handleWriteRaftCmd(cmds, index, term, flash_ctx);
     return res;
 }
 
-void KVStore::handleDestroy(UInt64 region_id, TiFlashContext & tmt)
+void KVStore::handleDestroy(UInt64 region_id, TiFlashContext & flash_ctx)
 {
     auto task_lock = genTaskLock();
     const auto region = getRegion(region_id);
@@ -275,7 +280,7 @@ void KVStore::handleDestroy(UInt64 region_id, TiFlashContext & tmt)
     }
     LOG_INFO(log, "Handle destroy " << region->toString());
     region->setPendingRemove();
-    removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
+    removeRegion(region_id, /* remove_data */ true, flash_ctx.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
 void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
@@ -301,7 +306,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     UInt64 curr_region_id,
     UInt64 index,
     UInt64 term,
-    TiFlashContext & tmt)
+    TiFlashContext & flash_ctx)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
@@ -316,7 +321,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
               curr_region.toString(false) << " handle ignorable admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type)
                                           << " at [term: " << term << ", index: " << index << "]");
 
-    curr_region.handleWriteRaftCmd({}, index, term, tmt);
+    curr_region.handleWriteRaftCmd({}, index, term, flash_ctx);
 
     const auto check_sync_log = [&]() {
         if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
@@ -348,7 +353,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     if (check_sync_log())
     {
-        tryFlushRegionCacheInStorage(tmt, curr_region, log);
+        tryFlushRegionCacheInStorage(flash_ctx, curr_region, log);
         persistRegion(curr_region, region_task_lock, "compact raft log");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
@@ -362,7 +367,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                                                 UInt64 curr_region_id,
                                                 UInt64 index,
                                                 UInt64 term,
-                                                TiFlashContext & tmt)
+                                                TiFlashContext & flash_ctx)
 {
     Stopwatch watch;
     SCOPE_EXIT({
@@ -375,12 +380,12 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::CompactLog:
     case raft_cmdpb::AdminCmdType::VerifyHash:
     case raft_cmdpb::AdminCmdType::ComputeHash:
-        return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
+        return handleUselessAdminRaftCmd(type, curr_region_id, index, term, flash_ctx);
     default:
         break;
     }
 
-    RegionTable & region_table = tmt.getRegionTable();
+    RegionTable & region_table = flash_ctx.getRegionTable();
 
     auto task_lock = genTaskLock();
 
@@ -407,12 +412,12 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         RaftCommandResult & result = *raft_cmd_res;
 
         // After region split / merge, try to flush it
-        const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (tmt.isBgFlushDisabled())
+        const auto try_to_flush_region = [&flash_ctx](const RegionPtr & region) {
+            if (flash_ctx.isBgFlushDisabled())
             {
                 try
                 {
-                    tmt.getRegionTable().tryFlushRegion(region, false);
+                    flash_ctx.getRegionTable().tryFlushRegion(region, false);
                 }
                 catch (const Exception & e)
                 {
@@ -422,12 +427,12 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
             else
             {
                 if (region->writeCFCount() >= 8192)
-                    tmt.getBackgroundService().addRegionToFlush(region);
+                    flash_ctx.getBackgroundService().addRegionToFlush(region);
             }
         };
 
         const auto persist_and_sync = [&](const Region & region) {
-            tryFlushRegionCacheInStorage(tmt, region, log);
+            tryFlushRegionCacheInStorage(flash_ctx, region, log);
             persistRegion(region, region_task_lock, "admin raft cmd");
         };
 
@@ -548,13 +553,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     }
 }
 
-void WaitCheckRegionReady(const TiFlashContext & tmt, const std::atomic_size_t & terminate_signals_counter)
+void WaitCheckRegionReady(const TiFlashContext & flash_ctx, const std::atomic_size_t & terminate_signals_counter)
 {
     constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
 
     // wait interval to check region ready, not recommended to modify only if for tesing
-    auto wait_region_ready_tick = tmt.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
-    const double max_sleep_time = 0 == wait_region_ready_tick ? 20.0 : static_cast<double>(tmt.waitRegionReadyTimeout());
+    auto wait_region_ready_tick = flash_ctx.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
+    const double max_sleep_time = 0 == wait_region_ready_tick ? 20.0 : static_cast<double>(flash_ctx.waitRegionReadyTimeout());
     double sleep_time = 0 == wait_region_ready_tick ? 2.5 : static_cast<double>(wait_region_ready_tick); // default tick in TiKV is about 2s (without hibernate-region)
 
     Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
@@ -566,17 +571,17 @@ void WaitCheckRegionReady(const TiFlashContext & tmt, const std::atomic_size_t &
     Stopwatch region_check_watch;
     size_t total_regions_cnt = 0;
     {
-        tmt.getKVStore()->traverseRegions([&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
+        flash_ctx.getKVStore()->traverseRegions([&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
         total_regions_cnt = remain_regions.size();
     }
-    while (region_check_watch.elapsedSeconds() < tmt.waitRegionReadyTimeout() * batch_read_index_time_rate
+    while (region_check_watch.elapsedSeconds() < flash_ctx.waitRegionReadyTimeout() * batch_read_index_time_rate
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
         for (auto it = remain_regions.begin(); it != remain_regions.end();)
         {
             auto region_id = *it;
-            if (auto region = tmt.getKVStore()->getRegion(region_id); region)
+            if (auto region = flash_ctx.getKVStore()->getRegion(region_id); region)
             {
                 batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
                 it++;
@@ -586,7 +591,7 @@ void WaitCheckRegionReady(const TiFlashContext & tmt, const std::atomic_size_t &
                 it = remain_regions.erase(it);
             }
         }
-        auto read_index_res = tmt.getKVStore()->getProxyHelper()->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+        auto read_index_res = flash_ctx.getKVStore()->getProxyHelper()->batchReadIndex(batch_read_index_req, flash_ctx.batchReadIndexTimeout());
         for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
@@ -625,13 +630,13 @@ void WaitCheckRegionReady(const TiFlashContext & tmt, const std::atomic_size_t &
                 }
             } while (0));
     }
-    while (region_check_watch.elapsedSeconds() < static_cast<double>(tmt.waitRegionReadyTimeout())
+    while (region_check_watch.elapsedSeconds() < static_cast<double>(flash_ctx.waitRegionReadyTimeout())
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
         for (auto it = regions_to_check.begin(); it != regions_to_check.end();)
         {
             auto [region_id, latest_index] = *it;
-            if (auto region = tmt.getKVStore()->getRegion(region_id); region)
+            if (auto region = flash_ctx.getKVStore()->getRegion(region_id); region)
             {
                 if (region->appliedIndex() >= latest_index)
                 {

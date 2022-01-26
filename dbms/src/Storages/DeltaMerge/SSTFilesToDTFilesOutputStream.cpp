@@ -35,14 +35,14 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     TiDB::SnapshotApplyMethod method_,
     FileConvertJobType job_type_,
-    TiFlashContext & tmt_)
+    TiFlashContext & flash_ctx_)
     : child(std::move(child_))
     , //
     storage(std::move(storage_))
     , schema_snap(std::move(schema_snap_))
     , method(method_)
     , job_type(job_type_)
-    , tmt(tmt_)
+    , flash_ctx(flash_ctx_)
     , log(&Poco::Logger::get("SSTFilesToDTFilesOutputStream"))
 {
 }
@@ -131,7 +131,7 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
         child->getRegion()->toString(true),
         dt_file->path(),
         flags.isSingleFile());
-    dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap->column_defines), flags);
+    dt_stream = std::make_unique<DMFileBlockOutputStream>(flash_ctx.getContext(), dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
     return true;

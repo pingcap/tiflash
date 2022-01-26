@@ -77,7 +77,7 @@ private:
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
-    TiFlashContext & tmt;
+    TiFlashContext & flash_ctx;
     const Timestamp gc_safepoint;
     size_t expected_size;
     Poco::Logger * log;

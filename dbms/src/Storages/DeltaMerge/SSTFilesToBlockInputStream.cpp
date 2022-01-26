@@ -31,13 +31,13 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     Timestamp gc_safepoint_,
     bool force_decode_,
-    TiFlashContext & tmt_,
+    TiFlashContext & flash_ctx_,
     size_t expected_size_)
     : region(std::move(region_))
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
     , schema_snap(std::move(schema_snap_))
-    , tmt(tmt_)
+    , flash_ctx(flash_ctx_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
     , log(&Poco::Logger::get("SSTFilesToBlockInputStream"))
@@ -221,7 +221,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDataWithSchema(region, schema_snap, gc_safepoint, force_decode, tmt);
+        return GenRegionBlockDataWithSchema(region, schema_snap, gc_safepoint, force_decode, flash_ctx);
     }
     catch (DB::Exception & e)
     {

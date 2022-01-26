@@ -149,7 +149,7 @@ public:
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
-    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TiFlashContext & tmt,
+    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TiFlashContext & flash_ctx,
                                                                     const TiDB::TableID table_id,
                                                                     const RegionPtr & region,
                                                                     const Timestamp start_ts,

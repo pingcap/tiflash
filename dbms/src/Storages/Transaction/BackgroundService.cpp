@@ -7,25 +7,25 @@
 
 namespace DB
 {
-BackgroundService::BackgroundService(TiFlashContext & tmt_)
-    : tmt(tmt_)
-    , background_pool(tmt.getContext().getBackgroundPool())
+BackgroundService::BackgroundService(TiFlashContext & flash_ctx_)
+    : flash_ctx(flash_ctx_)
+    , background_pool(flash_ctx.getContext().getBackgroundPool())
     , log(&Poco::Logger::get("BackgroundService"))
 {
-    if (!tmt.isInitialized())
+    if (!flash_ctx.isInitialized())
         throw Exception("TiFlashContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     single_thread_task_handle = background_pool.addTask(
         [this] {
-            tmt.getKVStore()->gcRegionPersistedCache();
+            flash_ctx.getKVStore()->gcRegionPersistedCache();
             return false;
         },
         false);
 
-    if (!tmt.isBgFlushDisabled())
+    if (!flash_ctx.isBgFlushDisabled())
     {
         table_flush_handle = background_pool.addTask([this] {
-            RegionTable & region_table = tmt.getRegionTable();
+            RegionTable & region_table = flash_ctx.getRegionTable();
 
             return region_table.tryFlushRegions();
         });
@@ -46,14 +46,14 @@ BackgroundService::BackgroundService(TiFlashContext & tmt_)
                     }
                 }
                 if (region)
-                    tmt.getRegionTable().tryFlushRegion(region, true);
+                    flash_ctx.getRegionTable().tryFlushRegion(region, true);
             }
             return ok;
         });
 
         {
             std::vector<RegionPtr> regions;
-            tmt.getKVStore()->traverseRegions([&regions](RegionID, const RegionPtr & region) {
+            flash_ctx.getKVStore()->traverseRegions([&regions](RegionID, const RegionPtr & region) {
                 if (region->dataSize())
                     regions.emplace_back(region);
             });
@@ -62,9 +62,9 @@ BackgroundService::BackgroundService(TiFlashContext & tmt_)
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
-        auto & global_settings = tmt.getContext().getSettingsRef();
+        auto & global_settings = flash_ctx.getContext().getSettingsRef();
         storage_gc_handle = background_pool.addTask(
-            [this] { return tmt.getGCManager().work(); },
+            [this] { return flash_ctx.getGCManager().work(); },
             false,
             /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
         LOG_INFO(log, "Start background storage gc worker with interval " << global_settings.dt_bg_gc_check_interval << " seconds.");
@@ -73,7 +73,7 @@ BackgroundService::BackgroundService(TiFlashContext & tmt_)
 
 void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
 {
-    if (tmt.isBgFlushDisabled())
+    if (flash_ctx.isBgFlushDisabled())
         throw Exception("Try to addRegionToFlush while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
 
     {

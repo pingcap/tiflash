@@ -558,7 +558,7 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TiFlashContext & tmt)
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TiFlashContext & flash_ctx)
 {
     if (proxy_helper != nullptr)
     {
@@ -566,8 +566,8 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TiFlas
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            auto timeout_ms = tmt.waitIndexTimeout();
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+            auto timeout_ms = flash_ctx.waitIndexTimeout();
+            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&flash_ctx]() { return flash_ctx.checkRunning(); });
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
             {
@@ -716,7 +716,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & tmt)
+EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & flash_ctx)
 {
     if (index <= appliedIndex())
     {
@@ -724,7 +724,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         return EngineStoreApplyRes::None;
     }
 
-    auto & context = tmt.getContext();
+    auto & context = flash_ctx.getContext();
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
@@ -813,7 +813,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
-            if (tmt.isBgFlushDisabled())
+            if (flash_ctx.isBgFlushDisabled())
             {
                 /// Flush data right after they are committed.
                 RegionDataReadInfoList data_list_to_remove;

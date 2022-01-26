@@ -23,7 +23,7 @@ struct TiFlashRaftProxyHelper;
 
 struct EngineStoreServerWrap
 {
-    TiFlashContext * tmt{nullptr};
+    TiFlashContext * flash_ctx{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
     std::atomic<EngineStoreServerStatus> status{EngineStoreServerStatus::Idle};
 };

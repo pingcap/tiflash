@@ -104,9 +104,9 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
-    auto & tmt = context->getTiFlashContext();
+    auto & flash_ctx = context->getTiFlashContext();
 
-    if (tmt.isBgFlushDisabled())
+    if (flash_ctx.isBgFlushDisabled())
     {
         LOG_TRACE(log,
                   __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
@@ -132,12 +132,12 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
         {
             if (try_persist)
             {
-                KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
-                tmt.getKVStore()->tryPersist(region->id());
+                KVStore::tryFlushRegionCacheInStorage(flash_ctx, *region, log);
+                flash_ctx.getKVStore()->tryPersist(region->id());
             }
         }
 
-        if (tmt.isBgFlushDisabled())
+        if (flash_ctx.isBgFlushDisabled())
         {
             LOG_TRACE(log,
                       __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
@@ -178,9 +178,9 @@ void RegionTable::restore()
 {
     LOG_INFO(log, "Start to restore");
 
-    const auto & tmt = context->getTiFlashContext();
+    const auto & flash_ctx = context->getTiFlashContext();
 
-    tmt.getKVStore()->traverseRegions([this](const RegionID, const RegionPtr & region) { updateRegion(*region); });
+    flash_ctx.getKVStore()->traverseRegions([this](const RegionID, const RegionPtr & region) { updateRegion(*region); });
 
     LOG_INFO(log, "Restore " << tables.size() << " tables");
 }
@@ -222,8 +222,8 @@ void removeObsoleteDataInStorage(
     const TableID table_id,
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
-    TiFlashContext & tmt = context->getTiFlashContext();
-    auto storage = tmt.getStorages().get(table_id);
+    TiFlashContext & flash_ctx = context->getTiFlashContext();
+    auto storage = flash_ctx.getStorages().get(table_id);
     // For DT only now
     if (!storage || storage->engineType() != TiDB::StorageEngine::DT)
         return;

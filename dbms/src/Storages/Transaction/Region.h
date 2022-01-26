@@ -147,7 +147,7 @@ public:
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TiFlashContext & tmt);
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TiFlashContext & flash_ctx);
 
     UInt64 appliedIndex() const;
 
@@ -173,7 +173,7 @@ public:
     raft_serverpb::MergeState getMergeState() const;
 
     TableID getMappedTableID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TiFlashContext & flash_ctx);
     void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
