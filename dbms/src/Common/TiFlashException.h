@@ -55,6 +55,9 @@ namespace DB
         E(Internal, "TiFlash DDL internal error.",                                                                                   \
             "Please contact with developer, \n"                                                                                      \
             "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(StaleSchema, "Schema is stale and need to reload all schema.",                                                             \
+            "This error will be recover by reload all schema automatically.",                                                        \
             "");)                                                                                                                    \
     C(Coprocessor,                                                                                                                   \
         E(BadRequest, "Bad TiDB coprocessor request.",                                                                               \
