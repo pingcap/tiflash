@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+SCRIPTPATH="$(
+    cd "$(dirname "$0")"
+    pwd -P
+)"
+
+"${SCRIPTPATH}/sysroot/bin/clang" -Wl,-Bdynamic -l:libunwind.so -l:libc++abi.so -l:libc++.so "${SCRIPTPATH}/sysroot/lib/clang/13.0.0/lib/$(uname -m)-unknown-linux-gnu/libclang_rt.builtins.a" ${@//*gcc_s*}
