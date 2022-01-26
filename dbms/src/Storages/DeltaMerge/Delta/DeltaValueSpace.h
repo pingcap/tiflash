@@ -228,8 +228,6 @@ class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapsho
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
-    friend class DeltaValueReader;
-    friend class DeltaValueInputStream;
 
 private:
     bool is_update;
@@ -285,6 +283,9 @@ public:
         /// so `mem_table_snap` must be nullptr.
         return persisted_files_snap->getColumnFiles();
     }
+
+    ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
+    ColumnFileSetSnapshotPtr getPersistedFileSetSnapshot() const { return persisted_files_snap; }
 
     size_t getColumnFileCount() const { return (mem_table_snap ? mem_table_snap->getColumnFileCount() : 0) + persisted_files_snap->getColumnFileCount(); }
     size_t getRows() const { return (mem_table_snap ? mem_table_snap->getRows() : 0) + persisted_files_snap->getRows(); }
@@ -364,8 +365,8 @@ public:
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
-        : mem_table_input_stream(context_, delta_snap_->mem_table_snap, col_defs_, segment_range_)
-        , persisted_files_input_stream(context_, delta_snap_->persisted_files_snap, col_defs_, segment_range_)
+        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
+        , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
     {}
 
     String getName() const override { return "DeltaValue"; }

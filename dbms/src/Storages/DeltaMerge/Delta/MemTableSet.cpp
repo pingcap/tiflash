@@ -8,7 +8,6 @@ namespace DB
 {
 namespace DM
 {
-// FIXME: difference from previous implementation: cannot get lastSchema from saved column_files
 BlockPtr MemTableSet::lastSchema()
 {
     for (auto it = column_files.rbegin(); it != column_files.rend(); ++it)
@@ -25,7 +24,7 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
     auto last_schema = lastSchema();
 
-    if (auto m_file = column_file->tryToInMemoryFile(); m_file)
+    if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
     {
         // If this pack's schema is identical to last_schema, then use the last_schema instance,
         // so that we don't have to serialize my_schema instance.
@@ -36,9 +35,9 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 
     if (!column_files.empty())
     {
-        auto last_column_file = column_files.back();
-        if (last_column_file->isInMemoryFile())
-            last_column_file->tryToInMemoryFile()->disableAppend();
+        auto & last_column_file = column_files.back();
+        if (last_column_file->isAppendable())
+            last_column_file->disableAppend();
     }
 
     column_files.push_back(column_file);

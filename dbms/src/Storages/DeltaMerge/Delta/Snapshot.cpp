@@ -50,8 +50,8 @@ DeltaValueReader::DeltaValueReader(
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)
     : delta_snap(delta_snap_)
-    , mem_table_reader(delta_snap_->mem_table_snap ? std::make_shared<ColumnFileSetReader>(context, delta_snap_->mem_table_snap, col_defs_, segment_range_) : nullptr)
-    , persisted_files_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->persisted_files_snap, col_defs_, segment_range_))
+    , mem_table_reader(delta_snap_->getMemTableSetSnapshot() ? std::make_shared<ColumnFileSetReader>(context, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_) : nullptr)
+    , persisted_files_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {}

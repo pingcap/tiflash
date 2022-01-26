@@ -13,7 +13,7 @@ namespace DB
 {
 namespace DM
 {
-inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
+inline void serializeColumnFilePersistedLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
     ColumnFilePersisteds column_files;
@@ -31,13 +31,13 @@ inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const
 
 void ColumnFilePersistedSet::updateStats()
 {
-    size_t new_stable_files_count = 0;
+    size_t new_persisted_files_count = 0;
     size_t new_rows = 0;
     size_t new_bytes = 0;
     size_t new_deletes = 0;
-    for (auto & file_level : stable_files_levels)
+    for (auto & file_level : persisted_files_levels)
     {
-        new_stable_files_count += file_level.size();
+        new_persisted_files_count += file_level.size();
         for (auto & file : file_level)
         {
             new_rows += file->getRows();
@@ -45,7 +45,7 @@ void ColumnFilePersistedSet::updateStats()
             new_deletes += file->getDeletes();
         }
     }
-    stable_files_count = new_stable_files_count;
+    persisted_files_count = new_persisted_files_count;
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
@@ -71,12 +71,12 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFiles & new_column_fil
     }
 }
 
-ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & column_stable_files)
+ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
     , log(&Poco::Logger::get("ColumnStableFileSet"))
 {
     // TODO: place column file to different levels
-    stable_files_levels.push_back(column_stable_files);
+    persisted_files_levels.push_back(persisted_column_files);
 
     updateStats();
 }
@@ -91,12 +91,12 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, c
 
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
 {
-    serializeColumnStableFileLevels(wbs, metadata_id, stable_files_levels);
+    serializeColumnFilePersistedLevels(wbs, metadata_id, persisted_files_levels);
 }
 
 void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
-    for (const auto & level : stable_files_levels)
+    for (const auto & level : persisted_files_levels)
     {
         for (const auto & file : level)
             file->removeData(wbs);
@@ -112,17 +112,17 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
     // We check in the direction from the last level to the first level.
     // In every level, we check from the begin to the last.
     auto it_1 = head_column_files.begin();
-    auto level_it = stable_files_levels.rbegin();
+    auto level_it = persisted_files_levels.rbegin();
     auto it_2 = level_it->begin();
     bool check_success = true;
-    if (likely(head_column_files.size() <= stable_files_count.load()))
+    if (likely(head_column_files.size() <= persisted_files_count.load()))
     {
-        while (it_1 != head_column_files.end() && level_it != stable_files_levels.rend())
+        while (it_1 != head_column_files.end() && level_it != persisted_files_levels.rend())
         {
             if (it_2 == level_it->end())
             {
                 level_it++;
-                if (unlikely(level_it == stable_files_levels.rend()))
+                if (unlikely(level_it == persisted_files_levels.rend()))
                     throw Exception("Delta Check head algorithm broken", ErrorCodes::LOGICAL_ERROR);
                 it_2 = level_it->begin();
                 continue;
@@ -146,12 +146,12 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
     }
 
     ColumnFilePersisteds cloned_tail;
-    while (level_it != stable_files_levels.rend())
+    while (level_it != persisted_files_levels.rend())
     {
         if (it_2 == level_it->end())
         {
             level_it++;
-            if (level_it == stable_files_levels.rend())
+            if (level_it == persisted_files_levels.rend())
                 break;
             it_2 = level_it->begin();
         }
@@ -198,7 +198,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
 size_t ColumnFilePersistedSet::getTotalCacheRows() const
 {
     size_t cache_rows = 0;
-    for (const auto & level : stable_files_levels)
+    for (const auto & level : persisted_files_levels)
     {
         for (const auto & file : level)
         {
@@ -215,7 +215,7 @@ size_t ColumnFilePersistedSet::getTotalCacheRows() const
 size_t ColumnFilePersistedSet::getTotalCacheBytes() const
 {
     size_t cache_bytes = 0;
-    for (const auto & level : stable_files_levels)
+    for (const auto & level : persisted_files_levels)
     {
         for (const auto & file : level)
         {
@@ -232,7 +232,7 @@ size_t ColumnFilePersistedSet::getTotalCacheBytes() const
 size_t ColumnFilePersistedSet::getValidCacheRows() const
 {
     size_t cache_rows = 0;
-    for (const auto & level : stable_files_levels)
+    for (const auto & level : persisted_files_levels)
     {
         for (const auto & file : level)
         {
@@ -246,6 +246,7 @@ size_t ColumnFilePersistedSet::getValidCacheRows() const
     return cache_rows;
 }
 
+// TODO: reset schema if same as before
 bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_version, const ColumnFilePersisteds & column_files, WriteBatches & wbs)
 {
     if (prev_flush_version != flush_version)
@@ -254,25 +255,25 @@ bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_v
         return false;
     }
     flush_version += 1;
-    ColumnFilePersistedLevels new_stable_files_levels;
-    for (auto & level : stable_files_levels)
+    ColumnFilePersistedLevels new_persisted_files_levels;
+    for (auto & level : persisted_files_levels)
     {
-        auto & new_level = new_stable_files_levels.emplace_back();
+        auto & new_level = new_persisted_files_levels.emplace_back();
         for (auto & file : level)
             new_level.push_back(file);
     }
-    if (new_stable_files_levels.empty())
-        new_stable_files_levels.emplace_back();
-    auto & new_level_0 = new_stable_files_levels[0];
+    if (new_persisted_files_levels.empty())
+        new_persisted_files_levels.emplace_back();
+    auto & new_level_0 = new_persisted_files_levels[0];
     for (const auto & f : column_files)
         new_level_0.push_back(f);
 
     /// Save the new metadata of column files to disk.
-    serializeColumnStableFileLevels(wbs, metadata_id, new_stable_files_levels);
+    serializeColumnFilePersistedLevels(wbs, metadata_id, new_persisted_files_levels);
     wbs.writeMeta();
 
     /// Commit updates in memory.
-    stable_files_levels.swap(new_stable_files_levels);
+    persisted_files_levels.swap(new_persisted_files_levels);
     updateStats();
 
     return true;
@@ -285,13 +286,13 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
     // For ColumnDeleteRangeFile and ColumnBigFile, we will simply move them to the next level.
     // And only if there some small `ColumnTinyFile`s which can be combined together we will actually do the compaction.
     size_t check_level_num = 0;
-    while (check_level_num < stable_files_levels.size())
+    while (check_level_num < persisted_files_levels.size())
     {
-        if (next_compaction_level >= stable_files_levels.size())
+        if (next_compaction_level >= persisted_files_levels.size())
             next_compaction_level = 0;
 
         auto compaction = std::make_shared<MinorCompaction>(next_compaction_level);
-        auto & level = stable_files_levels[next_compaction_level];
+        auto & level = persisted_files_levels[next_compaction_level];
         if (!level.empty())
         {
             bool is_all_trivial_move = true;
@@ -349,7 +350,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
     {
         auto & new_level = new_stable_files_levels.emplace_back();
-        for (const auto & f : stable_files_levels[i])
+        for (const auto & f : persisted_files_levels[i])
             new_level.push_back(f);
     }
     // Create a new empty level for `compaction_src_level` because all the column files is compacted to next level
@@ -358,9 +359,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     // Add new file to the target level
     auto target_level = compaction->compaction_src_level + 1;
     auto & target_level_files = new_stable_files_levels.emplace_back();
-    if (stable_files_levels.size() > target_level)
+    if (persisted_files_levels.size() > target_level)
     {
-        for (auto & column_file : stable_files_levels[target_level])
+        for (auto & column_file : persisted_files_levels[target_level])
             target_level_files.emplace_back(column_file);
     }
     for (auto & task : compaction->tasks)
@@ -372,19 +373,19 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     }
 
     // Append remaining levels
-    for (size_t i = target_level + 1; i < stable_files_levels.size(); i++)
+    for (size_t i = target_level + 1; i < persisted_files_levels.size(); i++)
     {
         auto & new_level = new_stable_files_levels.emplace_back();
-        for (const auto & f : stable_files_levels[i])
+        for (const auto & f : persisted_files_levels[i])
             new_level.push_back(f);
     }
 
     /// Save the new metadata of column files to disk.
-    serializeColumnStableFileLevels(wbs, metadata_id, new_stable_files_levels);
+    serializeColumnFilePersistedLevels(wbs, metadata_id, new_stable_files_levels);
     wbs.writeMeta();
 
     /// Commit updates in memory.
-    stable_files_levels.swap(new_stable_files_levels);
+    persisted_files_levels.swap(new_stable_files_levels);
     updateStats();
 
     return true;
@@ -400,7 +401,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const DMContext 
 
     size_t total_rows = 0;
     size_t total_deletes = 0;
-    for (const auto & level : stable_files_levels)
+    for (const auto & level : persisted_files_levels)
     {
         for (const auto & file : level)
         {

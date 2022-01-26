@@ -40,8 +40,8 @@ public:
 
 private:
     PageId metadata_id;
-    ColumnFilePersistedLevels stable_files_levels;
-    std::atomic<size_t> stable_files_count;
+    ColumnFilePersistedLevels persisted_files_levels;
+    std::atomic<size_t> persisted_files_count;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -60,7 +60,7 @@ private:
     void checkColumnFiles(const ColumnFiles & new_column_files);
 
 public:
-    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & column_stable_files = {});
+    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
@@ -70,13 +70,13 @@ public:
     String info() const
     {
         String levels_summary;
-        for (size_t i = 0; i < stable_files_levels.size(); i++)
-            levels_summary += fmt::format("[{}]: {}", i, stable_files_levels[i].size());
+        for (size_t i = 0; i < persisted_files_levels.size(); i++)
+            levels_summary += fmt::format("[{}]: {}", i, persisted_files_levels[i].size());
 
-        return fmt::format("ColumnStableFileSet [{}][{}]: {} column files, {} rows, {} bytes, {} deletes",
+        return fmt::format("ColumnFilePersistedSet [{}][{}]: {} column files, {} rows, {} bytes, {} deletes",
                            metadata_id,
                            levels_summary,
-                           stable_files_count.load(),
+                           persisted_files_count.load(),
                            rows.load(),
                            bytes.load(),
                            deletes.load());
@@ -84,8 +84,8 @@ public:
     String levelsInfo() const
     {
         String levels_info;
-        for (size_t i = 0; i < stable_files_levels.size(); i++)
-            levels_info += fmt::format("[{}]: {}", i, columnFilesToString(stable_files_levels[i]));
+        for (size_t i = 0; i < persisted_files_levels.size(); i++)
+            levels_info += fmt::format("[{}]: {}", i, columnFilesToString(persisted_files_levels[i]));
         return levels_info;
     }
 
@@ -98,7 +98,7 @@ public:
 
     PageId getId() const { return metadata_id; }
 
-    size_t getColumnFileCount() const { return stable_files_count.load(); }
+    size_t getColumnFileCount() const { return persisted_files_count.load(); }
     size_t getRows() const { return rows.load(); }
     size_t getBytes() const { return bytes.load(); }
     size_t getDeletes() const { return deletes.load(); }

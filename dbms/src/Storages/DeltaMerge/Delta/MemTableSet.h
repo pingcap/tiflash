@@ -30,7 +30,7 @@ private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    MemTableSet(const ColumnFiles & in_memory_files = {})
+    explicit MemTableSet(const ColumnFiles & in_memory_files = {})
         : column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
     {

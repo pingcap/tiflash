@@ -130,8 +130,8 @@ bool DeltaValueSpace::flush(DMContext & context)
     LOG_DEBUG(log, info() << ", Flush start");
 
     /// We have two types of data needed to flush to disk:
-    ///  1. The cache data in DeltaPackBlock
-    ///  2. The serialized metadata of packs in DeltaValueSpace
+    ///  1. The cache data in ColumnFileInMemory
+    ///  2. The serialized metadata of column files in DeltaValueSpace
 
     ColumnFileFlushTaskPtr flush_task;
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());

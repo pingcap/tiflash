@@ -40,9 +40,10 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
             {
                 if (unlikely(deletes_count != deletes_offset))
                     throw Exception("deletes_count and deletes_offset are expected to be equal. pack_index: " + DB::toString(column_file_index)
-                                    + ", pack_size: " + DB::toString(column_files.size()) + ", rows_count: " + DB::toString(rows_count)
-                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
-                                    + ", deletes_offset: " + DB::toString(deletes_offset));
+                                        + ", pack_size: " + DB::toString(column_files.size()) + ", rows_count: " + DB::toString(rows_count)
+                                        + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                        + ", deletes_offset: " + DB::toString(deletes_offset),
+                                    ErrorCodes::LOGICAL_ERROR);
 
                 return {column_file_index, column_file->getRows() - (rows_count - rows_offset)};
             }
@@ -50,8 +51,9 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
     }
     if (rows_count != rows_offset || deletes_count != deletes_offset)
         throw Exception("illegal rows_offset and deletes_offset. pack_size: " + DB::toString(column_files.size())
-                        + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
-                        + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
+                            + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
+                            + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset),
+                        ErrorCodes::LOGICAL_ERROR);
 
     return {column_file_index, 0};
 }
@@ -234,7 +236,22 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
             auto version_column = dpb_reader.getVersionColumn();
 
             auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
-            auto & version_col_data = toColumnVectorData<UInt64>(version_column);
+            const auto & version_col_data = toColumnVectorData<UInt64>(version_column);
+
+            for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
+            {
+                if (version_col_data[i] <= max_version && relevant_range.check(rkcc.getRowKeyValue(i)))
+                    return true;
+            }
+        }
+        else if (column_file->isTinyFile())
+        {
+            auto & dpb_reader = typeid_cast<ColumnFileTinyReader &>(*column_file_reader);
+            auto pk_column = dpb_reader.getPKColumn();
+            auto version_column = dpb_reader.getVersionColumn();
+
+            auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
+            const auto & version_col_data = toColumnVectorData<UInt64>(version_column);
 
             for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
             {
@@ -244,18 +261,7 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
         }
         else
         {
-            auto & dpb_reader = typeid_cast<ColumnFileTinyReader &>(*column_file_reader);
-            auto pk_column = dpb_reader.getPKColumn();
-            auto version_column = dpb_reader.getVersionColumn();
-
-            auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
-            auto & version_col_data = toColumnVectorData<UInt64>(version_column);
-
-            for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
-            {
-                if (version_col_data[i] <= max_version && relevant_range.check(rkcc.getRowKeyValue(i)))
-                    return true;
-            }
+            throw Exception("Unknown column file: " + column_file->toString(), ErrorCodes::LOGICAL_ERROR);
         }
     }
 

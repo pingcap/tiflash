@@ -49,10 +49,10 @@ private:
     ColumnFilePersisteds results;
     DMContext & context;
     MemTableSetPtr mem_table_set;
-    size_t current_flush_version;
+    size_t flush_version;
 
 public:
-    ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t current_flush_version_);
+    ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t flush_version_);
 
     DeltaIndex::Updates prepare(WriteBatches & wbs);
 

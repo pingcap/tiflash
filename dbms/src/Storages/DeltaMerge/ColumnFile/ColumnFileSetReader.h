@@ -17,9 +17,9 @@ private:
     ColumnDefinesPtr col_defs;
     RowKeyRange segment_range;
 
-    // The row count of each pack. Cache here to speed up checking.
+    // The row count of each column file. Cache here to speed up checking.
     std::vector<size_t> column_file_rows;
-    // The cumulative rows of packs. Used to fast locate specific packs according to rows offset by binary search.
+    // The cumulative rows of column files. Used to fast locate specific column files according to rows offset by binary search.
     std::vector<size_t> column_file_rows_end;
 
     std::vector<ColumnFileReaderPtr> column_file_readers;

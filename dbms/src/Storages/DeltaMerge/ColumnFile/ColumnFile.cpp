@@ -107,6 +107,5 @@ String columnFilesToString(const T & column_files)
 
 template String columnFilesToString<ColumnFiles>(const ColumnFiles & column_files);
 template String columnFilesToString<ColumnFilePersisteds>(const ColumnFilePersisteds & column_files);
-
 } // namespace DM
 } // namespace DB

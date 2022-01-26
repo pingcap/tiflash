@@ -9,10 +9,10 @@ namespace DB
 {
 namespace DM
 {
-ColumnFileFlushTask::ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t current_flush_version_)
+ColumnFileFlushTask::ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t flush_version_)
     : context{context_}
     , mem_table_set{mem_table_set_}
-    , current_flush_version{current_flush_version_}
+    , flush_version{flush_version_}
 {}
 
 DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
@@ -62,7 +62,7 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
 bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs)
 {
     // update metadata
-    if (!persisted_file_set->appendColumnStableFilesToLevel0(current_flush_version, results, wbs))
+    if (!persisted_file_set->appendColumnStableFilesToLevel0(flush_version, results, wbs))
         return false;
 
     mem_table_set->removeColumnFilesInFlushTask(*this);
