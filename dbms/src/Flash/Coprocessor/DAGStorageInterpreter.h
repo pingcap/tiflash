@@ -84,7 +84,7 @@ private:
 
     TableID table_id;
     const Settings & settings;
-    TiFlashContext & tmt;
+    TiFlashContext & flash_ctx;
 
     /// Intermediate variables shared by multiple member functions
 

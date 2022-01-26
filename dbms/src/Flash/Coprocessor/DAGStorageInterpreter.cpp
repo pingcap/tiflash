@@ -46,7 +46,7 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
 MakeRegionQueryInfos(
     const RegionInfoMap & dag_region_infos,
     const std::unordered_set<RegionID> & region_force_retry,
-    TiFlashContext & tmt,
+    TiFlashContext & flash_ctx,
     MvccQueryInfo & mvcc_info,
     TableID table_id,
     bool batch_cop [[maybe_unused]])
@@ -69,7 +69,7 @@ MakeRegionQueryInfos(
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
+        auto status = GetRegionReadStatus(r, flash_ctx.getKVStore()->getRegion(id), region_range);
         fiu_do_on(FailPoints::force_remote_read_for_batch_cop, {
             if (batch_cop)
                 status = RegionException::RegionReadStatus::NOT_FOUND;
@@ -131,7 +131,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , log(getMPPTaskLog(*context.getDAGContext(), "DAGStorageInterpreter"))
     , table_id(ts.table_id())
     , settings(context.getSettingsRef())
-    , tmt(context.getTiFlashContext())
+    , flash_ctx(context.getTiFlashContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
 }
@@ -169,7 +169,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     auto [info_retry, status] = MakeRegionQueryInfos(
         context.getDAGContext()->getRegionsForLocalRead(),
         {},
-        tmt,
+        flash_ctx,
         *mvcc_query_info,
         table_id,
         false);
@@ -195,7 +195,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             auto [retry, status] = MakeRegionQueryInfos(
                 regions_for_local_read,
                 force_retry,
-                tmt,
+                flash_ctx,
                 *mvcc_query_info,
                 table_id,
                 true);
@@ -219,7 +219,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const RegionException & e)
         {
-            if (tmt.checkShuttingDown())
+            if (flash_ctx.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
             // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
             // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
@@ -279,7 +279,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, flash_ctx, log);
             break;
         }
         catch (RegionException & e)
@@ -364,7 +364,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     /// Get current schema version in schema syncer for a chance to shortcut.
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
-        auto storage_ = tmt.getStorages().get(table_id);
+        auto storage_ = flash_ctx.getStorages().get(table_id);
         if (!storage_)
         {
             throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
@@ -372,14 +372,14 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         return {storage_, storage_->lockStructureForShare(context.getCurrentQueryId())};
     }
 
-    auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion();
+    auto global_schema_version = flash_ctx.getSchemaSyncer()->getCurrentVersion();
 
     /// Align schema version under the read lock.
     /// Return: [storage, table_structure_lock, storage_schema_version, ok]
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = tmt.getStorages().get(table_id);
+        auto storage_ = flash_ctx.getStorages().get(table_id);
         if (!storage_)
         {
             if (schema_synced)
@@ -439,7 +439,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     auto sync_schema = [&] {
         auto start_time = Clock::now();
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        flash_ctx.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, table_id, schema_sync_cost);
     };
