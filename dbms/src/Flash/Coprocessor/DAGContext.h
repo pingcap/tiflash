@@ -34,65 +34,21 @@ public:
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           _warnings(std::numeric_limits<int>::max()){};
-    explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
+    explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
           is_mpp_task(true),
+	  is_root_mpp_task(is_root_mpp_task_),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
           _warnings(std::numeric_limits<int>::max())
-    {
-<<<<<<< HEAD
-        exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        const auto & exchangeSender = dag_request.root_executor().exchange_sender();
-        exchange_sender_execution_summary_key = exchangeSender.child().executor_id();
-        is_root_mpp_task = false;
-        if (exchangeSender.encoded_task_meta_size() == 1)
-        {
-            /// root mpp task always has 1 task_meta because there is only one TiDB
-            /// node for each mpp query
-            mpp::TaskMeta task_meta;
-            task_meta.ParseFromString(exchangeSender.encoded_task_meta(0));
-            is_root_mpp_task = task_meta.task_id() == -1;
-        }
-    };
-=======
-        assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
-        return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
-    }
-
-    DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
-        , return_executor_id(true)
-        , is_mpp_task(true)
-        , is_root_mpp_task(is_root_mpp_task_)
-        , tunnel_set(nullptr)
-        , flags(dag_request.flags())
-        , sql_mode(dag_request.sql_mode())
-        , mpp_task_meta(meta_)
-        , max_recorded_error_count(getMaxErrorCount(dag_request))
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
     {
         assert(dag_request.has_root_executor());
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
         exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
     }
 
-    explicit DAGContext(UInt64 max_error_count_)
-        : collect_execution_summaries(false)
-        , is_mpp_task(false)
-        , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
-        , flags(0)
-        , sql_mode(0)
-        , max_recorded_error_count(max_error_count_)
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
-    {}
-
->>>>>>> 5a37c13ec6 (Add retry when decode dag request failed (#3334))
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();

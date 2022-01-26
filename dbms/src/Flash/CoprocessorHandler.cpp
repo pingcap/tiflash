@@ -59,9 +59,8 @@ grpc::Status CoprocessorHandler::execute()
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_cop_dag).Increment();
                 SCOPE_EXIT({ GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
 
-<<<<<<< HEAD
                 tipb::DAGRequest dag_request;
-                dag_request.ParseFromString(cop_request->data());
+                getDAGRequestFromStringWithRetry(dag_request, cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                     throw TiFlashException(
@@ -69,18 +68,6 @@ grpc::Status CoprocessorHandler::execute()
                 tipb::SelectResponse dag_response;
                 RegionInfoMap regions;
                 RegionInfoList retry_regions;
-=======
-            tipb::DAGRequest dag_request;
-            getDAGRequestFromStringWithRetry(dag_request, cop_request->data());
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
-            if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                throw TiFlashException(
-                    "DAG request with rpn expression is not supported in TiFlash",
-                    Errors::Coprocessor::Unimplemented);
-            tipb::SelectResponse dag_response;
-            RegionInfoMap regions;
-            RegionInfoList retry_regions;
->>>>>>> 5a37c13ec6 (Add retry when decode dag request failed (#3334))
 
                 const std::unordered_set<UInt64> bypass_lock_ts(
                     cop_context.kv_context.resolved_locks().begin(), cop_context.kv_context.resolved_locks().end());
