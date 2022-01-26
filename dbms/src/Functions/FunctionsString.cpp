@@ -2929,7 +2929,7 @@ public:
 
         if (has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column = makeNullable(std::make_shared<DataTypeNothing>())->createColumnConst(block.rows(), Null());
             return;
         }
 
@@ -3380,21 +3380,21 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-
     {
         if (!removeNullable(arguments[0])->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isInteger())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[2])->isString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        bool has_null_constant = false;
+        for (const auto & arg : arguments)
+            has_null_constant |= arg->onlyNull();
+
+        return has_null_constant ? makeNullable(std::make_shared<DataTypeNothing>()) : makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
@@ -3517,18 +3517,19 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!removeNullable(arguments[0])->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isInteger())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[2])->isString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        bool has_null_constant = false;
+        for (const auto & arg : arguments)
+            has_null_constant |= arg->onlyNull();
+
+        return has_null_constant ? makeNullable(std::make_shared<DataTypeNothing>()) : makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
