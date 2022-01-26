@@ -9,6 +9,7 @@
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB

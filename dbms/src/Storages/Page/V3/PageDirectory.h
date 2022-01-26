@@ -196,8 +196,9 @@ class PageDirectory
 {
 public:
     PageDirectory();
+    PageDirectory(UInt64 init_seq, WALStorePtr && wal);
 
-    static PageDirectory create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter);
+    static PageDirectory create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal);
 
     PageDirectorySnapshotPtr createSnapshot() const;
 

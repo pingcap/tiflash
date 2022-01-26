@@ -29,7 +29,18 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    page_directory = PageDirectory::create(file_provider, delegator, /*write_limiter*/ nullptr);
+    // TODO: Speedup restoring
+    CollapsingPageDirectory collapsing_directory;
+    auto callback = [&collapsing_directory](PageEntriesEdit && edit) {
+        collapsing_directory.apply(std::move(edit));
+    };
+    // Restore `collapsing_directory` from disk
+    auto wal = WALStore::create(callback, file_provider, delegator, /*write_limiter*/ nullptr);
+    // PageId max_page_id = collapsing_directory.max_applied_page_id; // TODO: return it to outer function
+
+    page_directory = PageDirectory::create(collapsing_directory, std::move(wal));
+
+    // TODO: restore BlobStore
 }
 
 void PageStorageImpl::drop()
@@ -158,7 +169,7 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     }
 }
 
-bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & /*write_limiter*/, const ReadLimiterPtr & /*read_limiter*/)
+bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limiter*/, const ReadLimiterPtr & /*read_limiter*/)
 {
     // If another thread is running gc, just return;
     bool v = false;
