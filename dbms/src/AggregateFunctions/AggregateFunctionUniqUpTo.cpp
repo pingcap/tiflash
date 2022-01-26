@@ -6,7 +6,6 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeString.h>
 #include <fmt/core.h>
-#include <fmt/ranges.h>
 
 
 namespace DB
