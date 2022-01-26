@@ -78,7 +78,7 @@ make tiflash-env-$(uname -m).tar.xz
 ```
 Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place.
 
-### Compiling TiFlash Proxy
+### Compile TiFlash Proxy
 
 To compile `libtiflash-proxy.so`, you can first enter the development environment with the loader and then simply invoke the makefile to build. For example, the following commands will do the job:
 ```
@@ -88,7 +88,7 @@ cd /path/to/tiflash/proxy/src/dir
 make release
 ```
 
-### Compiling TiFlash
+### Compile TiFlash
 
 Similarly, you can simply enter the env to compile and run tiflash:
 ```
