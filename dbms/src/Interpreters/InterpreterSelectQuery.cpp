@@ -837,7 +837,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             // and it is hard to move learner read before acuqiring table's lock.
 
             // Do learner read only For DeltaTree.
-            auto & tmt = context.getTiFlashContext();
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
                 managed_storage && managed_storage->engineType() == TiDB::StorageEngine::DT)
             {
@@ -854,9 +853,10 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
 
+            auto & tiflash_context = context.getTiFlashContext();
             if (!learner_read_snapshot.empty())
             {
-                validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+                validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tiflash_context, log);
             }
         }
 

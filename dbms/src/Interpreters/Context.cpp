@@ -1363,7 +1363,7 @@ TiFlashContext & Context::getTiFlashContext() const
 {
     auto lock = getLock();
     if (!shared->tiflash_context)
-        throw Exception("no tmt context");
+        throw Exception("no tiflash context");
     return *(shared->tiflash_context);
 }
 
