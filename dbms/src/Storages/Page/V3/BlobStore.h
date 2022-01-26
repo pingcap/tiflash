@@ -74,12 +74,12 @@ public:
 
             std::mutex sm_lock;
 
-            std::lock_guard<std::mutex> lock()
+            [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
                 return std::lock_guard(sm_lock);
             }
 
-            bool isReadOnly()
+            bool isReadOnly() const
             {
                 return type == BlobStatType::READ_ONLY;
             }
@@ -99,11 +99,13 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
-        std::lock_guard<std::mutex> lock() const;
+        [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        void eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
+
+        void eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.
@@ -137,7 +139,7 @@ public:
         Poco::Logger * log;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 0;
+        BlobFileId roll_id = 1;
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         mutable std::mutex lock_stats;
