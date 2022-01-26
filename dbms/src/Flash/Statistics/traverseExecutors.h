@@ -45,13 +45,16 @@ Children getChildren(const tipb::Executor & executor);
 
 /// traverse tipb::executor array and apply function.
 /// f: (const tipb::Executor &) -> bool, return true to continue traverse.
+/// traverse in reverse order, because the head of executor array is the leaf node like table scan.
 template <typename Container, typename FF>
 void traverseExecutorArray(const Container & array, FF && f)
 {
-    for (const auto & executor : array)
+    auto it = array.rbegin();
+    while (it != array.rend())
     {
-        if (!f(executor))
+        if (!f(*it))
             return;
+        ++it;
     }
 }
 
