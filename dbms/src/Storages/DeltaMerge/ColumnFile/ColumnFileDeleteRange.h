@@ -42,7 +42,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePtr deserializeMetadata(ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
 
     String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };

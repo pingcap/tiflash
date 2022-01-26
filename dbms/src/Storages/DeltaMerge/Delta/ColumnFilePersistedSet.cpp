@@ -13,10 +13,10 @@ namespace DB
 {
 namespace DM
 {
-inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnStableFileLevels & file_levels)
+inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-    ColumnStableFiles column_files;
+    ColumnFilePersisteds column_files;
     for (const auto & level : file_levels)
     {
         for (const auto & file : level)
@@ -24,7 +24,7 @@ inline void serializeColumnStableFileLevels(WriteBatches & wbs, PageId id, const
             column_files.emplace_back(file);
         }
     }
-    serializeColumnStableFiles(buf, column_files);
+    serializeSavedColumnFiles(buf, column_files);
     auto data_size = buf.count();
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
@@ -51,7 +51,27 @@ void ColumnFilePersistedSet::updateStats()
     deletes = new_deletes;
 }
 
-ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnStableFiles & column_stable_files)
+void ColumnFilePersistedSet::checkColumnFiles(const ColumnFiles & new_column_files)
+{
+    if constexpr (!DM_RUN_CHECK)
+        return;
+    size_t new_rows = 0;
+    size_t new_deletes = 0;
+
+    for (const auto & file : new_column_files)
+    {
+        new_rows += file->getRows();
+        new_deletes += file->isDeleteRange();
+    }
+    if (unlikely(new_rows != rows || new_deletes != deletes))
+    {
+        LOG_ERROR(log,
+                  "Rows and deletes check failed. Current packs: " << columnFilesToString(new_column_files) << ", new packs: " << columnFilesToString(new_column_files));
+        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & column_stable_files)
     : metadata_id(metadata_id_)
     , log(&Poco::Logger::get("ColumnStableFileSet"))
 {
@@ -61,11 +81,11 @@ ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const Column
     updateStats();
 }
 
-ColumnStableFileSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
     Page page = context.storage_pool.meta()->read(id, nullptr);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    auto column_files = deserializeColumnStableFiles(context, segment_range, buf);
+    auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
 }
 
@@ -84,10 +104,10 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
 }
 
 
-ColumnStableFiles ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & context,
-                                                                const RowKeyRange & target_range,
-                                                                const ColumnFiles & head_column_files,
-                                                                WriteBatches & wbs) const
+ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & context,
+                                                                   const RowKeyRange & target_range,
+                                                                   const ColumnFiles & head_column_files,
+                                                                   WriteBatches & wbs) const
 {
     // We check in the direction from the last level to the first level.
     // In every level, we check from the begin to the last.
@@ -125,7 +145,7 @@ ColumnStableFiles ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & cont
         throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
-    ColumnStableFiles cloned_tail;
+    ColumnFilePersisteds cloned_tail;
     while (level_it != stable_files_levels.rend())
     {
         if (it_2 == level_it->end())
@@ -234,7 +254,7 @@ bool ColumnFilePersistedSet::appendColumnStableFilesToLevel0(size_t prev_flush_v
         return false;
     }
     flush_version += 1;
-    ColumnStableFileLevels new_stable_files_levels;
+    ColumnFilePersistedLevels new_stable_files_levels;
     for (auto & level : stable_files_levels)
     {
         auto & new_level = new_stable_files_levels.emplace_back();
@@ -325,7 +345,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
-    ColumnStableFileLevels new_stable_files_levels;
+    ColumnFilePersistedLevels new_stable_files_levels;
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
     {
         auto & new_level = new_stable_files_levels.emplace_back();

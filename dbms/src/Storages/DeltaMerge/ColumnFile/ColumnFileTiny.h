@@ -98,7 +98,7 @@ public:
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static std::tuple<ColumnFilePtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
+    static std::tuple<ColumnFilePersistedPtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
 
     String toString() const override
     {

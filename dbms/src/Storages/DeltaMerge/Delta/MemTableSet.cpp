@@ -68,13 +68,17 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
 
     if (!success)
     {
-        auto new_column_file = std::make_shared<ColumnFileInMemory>(block);
+        // Create a new column file.
+        auto last_schema = lastSchema();
+        auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
+        auto new_column_file = std::make_shared<ColumnFileInMemory>(my_schema);
+        appendColumnFileInner(new_column_file);
         success = new_column_file->append(context, block, offset, limit, append_bytes);
         if (unlikely(!success))
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
-        appendColumnFileInner(new_column_file);
     }
-    // FIXME: update rows and bytes and etc.
+    rows += limit;
+    bytes += append_bytes;
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
@@ -122,7 +126,7 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     return snap;
 }
 
-FlushColumnFileTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version)
+ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version)
 {
     if (column_files.empty())
         return nullptr;

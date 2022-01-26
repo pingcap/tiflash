@@ -71,9 +71,9 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePtr deserializeMetadata(DMContext & context, //
-                                             const RowKeyRange & segment_range,
-                                             ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+                                                      const RowKeyRange & segment_range,
+                                                      ReadBuffer & buf);
 
     String toString() const override
     {

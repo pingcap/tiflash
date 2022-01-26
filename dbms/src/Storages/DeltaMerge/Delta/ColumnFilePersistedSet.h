@@ -11,7 +11,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
-#include <Storages/DeltaMerge/Delta/FlushColumnFileTask.h>
+#include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
 #include <Storages/DeltaMerge/Delta/MinorCompaction.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -28,19 +28,19 @@ namespace DB
 namespace DM
 {
 class ColumnFilePersistedSet;
-using ColumnStableFileSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
+using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 
 /// This class is not thread safe, manipulate on it requires acquire extra synchronization
 class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
 public:
-    using ColumnStableFileLevel = ColumnStableFiles;
-    using ColumnStableFileLevels = std::vector<ColumnStableFileLevel>;
+    using ColumnFilePersistedLevel = ColumnFilePersisteds;
+    using ColumnFilePersistedLevels = std::vector<ColumnFilePersistedLevel>;
 
 private:
     PageId metadata_id;
-    ColumnStableFileLevels stable_files_levels;
+    ColumnFilePersistedLevels stable_files_levels;
     std::atomic<size_t> stable_files_count;
 
     std::atomic<size_t> rows = 0;
@@ -57,12 +57,14 @@ private:
 private:
     void updateStats();
 
+    void checkColumnFiles(const ColumnFiles & new_column_files);
+
 public:
-    ColumnFilePersistedSet(PageId metadata_id_, const ColumnStableFiles & column_stable_files = {});
+    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & column_stable_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnStableFileSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     String simpleInfo() const { return "ColumnStableFileSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
@@ -91,7 +93,7 @@ public:
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
-    ColumnStableFiles
+    ColumnFilePersisteds
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
     PageId getId() const { return metadata_id; }

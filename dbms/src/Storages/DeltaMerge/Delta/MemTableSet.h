@@ -73,7 +73,7 @@ public:
     /// Returns empty if this instance is abandoned, you should try again.
     ColumnFileSetSnapshotPtr createSnapshot();
 
-    FlushColumnFileTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
+    ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
 
     void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);
 };

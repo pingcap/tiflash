@@ -1,4 +1,5 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
 namespace DB

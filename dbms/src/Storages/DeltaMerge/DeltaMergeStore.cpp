@@ -520,10 +520,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
 
-            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
-            // Small packs are appended to Delta Cache, the flushed later.
-            // While large packs are directly written to PageStorage.
-            if (small_pack)
+            bool is_small = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
+            // Small column fies are appended to Delta Cache, the flushed later.
+            // While large column fies are directly written to PageStorage.
+            if (is_small)
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
@@ -533,8 +533,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
             else
             {
-                // If pack haven't been written, or the pk range has changed since last write, then write it and
-                // delete former written pack.
+                // If column file haven't been written, or the pk range has changed since last write, then write it and
+                // delete former written column file.
                 if (!write_column_file || (write_column_file && write_range != rowkey_range))
                 {
                     wbs.rollbackWrittenLogAndData();
@@ -705,10 +705,10 @@ void DeltaMergeStore::ingestFiles(
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto pack = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
-                if (pack->getRows() != 0)
+                auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
+                if (column_file->getRows() != 0)
                 {
-                    column_files.emplace_back(std::move(pack));
+                    column_files.emplace_back(std::move(column_file));
                     wbs.data.putRefPage(ref_id, file_id);
                 }
             }

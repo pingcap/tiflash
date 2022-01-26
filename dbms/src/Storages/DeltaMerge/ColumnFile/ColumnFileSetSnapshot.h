@@ -40,7 +40,7 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
     , private boost::noncopyable
 {
     friend class MemTableSet;
-    friend class ColumnStableFileSet;
+    friend class ColumnFilePersistedSet;
 
 private:
     StorageSnapshotPtr storage_snap;

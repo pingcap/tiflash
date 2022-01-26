@@ -99,7 +99,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    ColumnFiles column_files;
+    ColumnFilePersisteds column_files;
     switch (version)
     {
         // V1 and V2 share the same deserializer.
@@ -114,8 +114,6 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    for (auto & f : column_files)
-        f->setSaved();
     return column_files;
 }
 } // namespace DM

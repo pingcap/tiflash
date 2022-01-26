@@ -40,9 +40,9 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
-ColumnFilePtr ColumnFileBig::deserializeMetadata(DMContext & context, //
-                                                 const RowKeyRange & segment_range,
-                                                 ReadBuffer & buf)
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, //
+                                                          const RowKeyRange & segment_range,
+                                                          ReadBuffer & buf)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;

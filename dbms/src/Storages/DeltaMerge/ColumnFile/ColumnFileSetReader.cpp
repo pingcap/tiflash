@@ -226,10 +226,10 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
         size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
         size_t rows_end_in_pack = column_file_rows[pack_index];
 
-        auto & pack_reader = column_file_readers[pack_index];
+        auto & column_file_reader = column_file_readers[pack_index];
         if (column_file->isInMemoryFile())
         {
-            auto & dpb_reader = typeid_cast<ColumnInMemoryFileReader &>(*pack_reader);
+            auto & dpb_reader = typeid_cast<ColumnFileInMemoryReader &>(*column_file_reader);
             auto pk_column = dpb_reader.getPKColumn();
             auto version_column = dpb_reader.getVersionColumn();
 
@@ -244,7 +244,7 @@ bool ColumnFileSetReader::shouldPlace(const DMContext & context,
         }
         else
         {
-            auto & dpb_reader = typeid_cast<ColumnTinyFileReader &>(*pack_reader);
+            auto & dpb_reader = typeid_cast<ColumnFileTinyReader &>(*column_file_reader);
             auto pk_column = dpb_reader.getPKColumn();
             auto version_column = dpb_reader.getVersionColumn();
 

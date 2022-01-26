@@ -118,7 +118,7 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-std::tuple<ColumnFilePtr, BlockPtr> ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
