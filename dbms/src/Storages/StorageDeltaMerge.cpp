@@ -169,7 +169,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             {
                 if (!col.type->isValueRepresentedByInteger())
                 {
-                    throw Exception("pk column " + col.name + " is not representable by integer");
+                    throw Exception(fmt::format("pk column {} is not representable by integer", col.name));
                 }
                 pks_combined_bytes += col.type->getSizeOfValueInMemory();
                 if (pks_combined_bytes > sizeof(Handle))
@@ -410,7 +410,7 @@ public:
     }
     catch (DB::Exception & e)
     {
-        e.addMessage("(while writing to table `" + store->getDatabaseName() + "`.`" + store->getTableName() + "`)");
+        e.addMessage(fmt::format("(while writing to table `{}`.`{}`)", store->getDatabaseName(), store->getTableName()));
         throw;
     }
 
@@ -424,7 +424,7 @@ private:
 
 BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settings & settings)
 {
-    auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
+    const auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
     auto decorator = [&](const Block & block) { //
         return this->buildInsertBlock(insert_query.is_import, insert_query.is_delete, block);
     };
@@ -546,7 +546,7 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
             return ids;
     }
 
-    throw Exception("Unable to parse segment IDs in literal form: `" + partition_ast.fields_str.toString() + "`");
+    throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
 BlockInputStreams StorageDeltaMerge::read(
@@ -563,7 +563,7 @@ BlockInputStreams StorageDeltaMerge::read(
     // failed to parsed.
     ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    for (auto & n : column_names)
+    for (const auto & n : column_names)
     {
         ColumnDefine col_define;
         if (n == EXTRA_HANDLE_COLUMN_NAME)
@@ -894,14 +894,14 @@ void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, BlockUPtr blo
 //==========================================================================================
 void StorageDeltaMerge::alterFromTiDB(
     const TableLockHolder &,
-    const AlterCommands & params,
+    const AlterCommands & commands,
     const String & database_name,
     const TiDB::TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
     const Context & context)
 {
     alterImpl(
-        params,
+        commands,
         database_name,
         name_mapper.mapTableName(table_info),
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info),
@@ -981,14 +981,15 @@ try
         if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
         {
             // check that add primary key is forbidden
-            throw Exception("Storage engine " + getName() + " doesn't support modify primary key.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(fmt::format("Storage engine {} doesn't support modify primary key.", getName()), ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::DROP_COLUMN)
         {
             // check that drop hidden columns is forbidden
             if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception("Storage engine " + getName() + " doesn't support drop hidden column: " + command.column_name,
-                                ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    fmt::format("Storage engine {} doesn't support drop hidden column: {}", getName(), command.column_name),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::TOMBSTONE)
         {
@@ -1154,8 +1155,9 @@ void StorageDeltaMerge::rename(
     const String new_path = new_path_to_db + "/" + new_table_name;
 
     if (Poco::File{new_path}.exists())
-        throw Exception{"Target path already exists: " + new_path,
-                        ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+        throw Exception(
+            fmt::format("Target path already exists: {}", new_path),
+            ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
     // flush store and then reset store to new path
     store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
@@ -1247,7 +1249,7 @@ void updateDeltaMergeTableCreateStatement(
             }
             else
             {
-                throw Exception("Try to update table(" + database_name + "." + table_name + ") statement with no primary key. ");
+                throw Exception(fmt::format("Try to update table({}.{}) statement with no primary key. ", database_name, table_name));
             }
         }
 
@@ -1308,7 +1310,7 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
         args->children.at(1) = literal;
     else
         throw Exception(
-            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + this->getTableName() + " in modifyASTStorage",
+            fmt::format("Wrong arguments num: {} in table: {} in modifyASTStorage", args->children.size(), this->getTableName()),
             ErrorCodes::BAD_ARGUMENTS);
 }
 

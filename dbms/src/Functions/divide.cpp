@@ -210,7 +210,7 @@ struct DivideIntegralByConstantImpl : BinaryOperationImplBase<A, B, DivideIntegr
 {
     using ResultType = typename DivideIntegralImpl<A, B>::ResultType;
 
-    static void vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
+    static void vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
     {
         if (unlikely(b == 0))
             throw Exception("Division by zero", ErrorCodes::ILLEGAL_DIVISION);

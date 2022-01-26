@@ -45,9 +45,9 @@ public:
     String aggregation_name;
     const tipb::Executor * having = nullptr;
     String having_name;
-    const tipb::Executor * limitOrTopN = nullptr;
-    String limitOrTopN_name;
-    const tipb::Executor * exchangeSender = nullptr;
+    const tipb::Executor * limit_or_topn = nullptr;
+    String limit_or_topn_name;
+    const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
@@ -60,10 +60,6 @@ public:
     void fillOutputFieldTypes();
     void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
     bool isRootQueryBlock() const { return id == 1; };
-    bool isRemoteQuery() const
-    {
-        return source->tp() == tipb::ExecType::TypeTableScan && source->tbl_scan().next_read_engine() != tipb::EngineType::Local;
-    }
 };
 
 } // namespace DB
