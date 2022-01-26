@@ -180,11 +180,13 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 {
     for (const auto & entry : del_entries)
     {
+        // External page size is 0
         if (entry.size == 0)
         {
-            throw Exception(fmt::format("Invaild entry. entry size 0. [id={},offset={}]",
-                                        entry.file_id,
-                                        entry.offset));
+            continue;
+            // throw Exception(fmt::format("Invaild entry. entry size 0. [id={}] [offset={}]",
+            //                             entry.file_id,
+            //                             entry.offset));
         }
         removePosFromStats(entry.file_id, entry.offset, entry.size);
     }
