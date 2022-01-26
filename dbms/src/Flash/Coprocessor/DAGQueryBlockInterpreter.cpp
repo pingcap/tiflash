@@ -569,6 +569,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_condition_expr,
         max_block_size_for_cross_join);
 
+    recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
+
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     right_pipeline.transform(
@@ -578,8 +580,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-
-    recordJoinExecuteInfo(swap_join_side ? 0 : 1, right_query);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
@@ -618,15 +618,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, const SubqueryForSet & join_query)
+void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr)
 {
     const auto * build_side_root_executor = query_block.children[build_side_index]->root;
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_root_executor->executor_id();
-    join_execute_info.join_ptr = join_query.join;
+    join_execute_info.join_ptr = join_ptr;
     assert(join_execute_info.join_ptr);
-    join_execute_info.build_side_stream = join_query.source;
-    assert(join_execute_info.build_side_stream);
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 

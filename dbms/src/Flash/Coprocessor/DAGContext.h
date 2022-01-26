@@ -31,10 +31,6 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams non_joined_streams;
-    /// the last BlockInputStreams for join build side. In TiFlash, a hash join's build side is
-    /// finished before probe side starts, so the join probe side's running time does not include
-    /// hash table's build time, when construct ExecSummaries, we need add the build cost to probe executor
-    BlockInputStreamPtr build_side_stream;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
