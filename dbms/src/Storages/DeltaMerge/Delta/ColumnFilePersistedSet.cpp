@@ -82,9 +82,9 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersistedLevels & 
 
 ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
-    , log(&Poco::Logger::get("ColumnStableFileSet"))
+    , log(&Poco::Logger::get("ColumnFilePersistedSet"))
 {
-    // TODO: place column file to different levels
+    // TODO: place column file to different levels, but it seems no need to do it currently because we only do minor compaction on really small files?
     persisted_files_levels.push_back(persisted_column_files);
 
     updateColumnFileStats();
@@ -114,9 +114,9 @@ void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) co
 
 BlockPtr ColumnFilePersistedSet::getLastSchema()
 {
-    for (auto level_it = persisted_files_levels.rend(); level_it != persisted_files_levels.rbegin(); ++level_it)
+    for (const auto & level : persisted_files_levels)
     {
-        for (auto it = level_it->begin(); it != level_it->end(); ++it)
+        for (auto it = level.rbegin(); it != level.rend(); ++it)
         {
             if (auto * t_file = (*it)->tryToTinyFile(); t_file)
                 return t_file->getSchema();

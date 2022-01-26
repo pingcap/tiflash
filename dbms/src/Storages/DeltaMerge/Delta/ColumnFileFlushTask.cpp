@@ -57,23 +57,17 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
         ColumnFilePersistedPtr new_column_file;
         if (auto * m_file = task.column_file->tryToInMemoryFile(); m_file)
         {
-            bool is_small_file = m_file->getRows() < context.delta_small_pack_rows || m_file->getBytes() < context.delta_small_pack_bytes;
-            if (is_small_file)
+            // Just keep cache for really small column file
+            ColumnFile::CachePtr column_file_cache = nullptr;
+            if (m_file->getRows() < context.delta_small_pack_rows || m_file->getBytes() < context.delta_small_pack_bytes)
             {
-                new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
-                                                                   m_file->getRows(),
-                                                                   m_file->getBytes(),
-                                                                   task.data_page,
-                                                                   !task.sorted ? m_file->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data)));
+                column_file_cache = !task.sorted ? m_file->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data));
             }
-            else
-            {
-                new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
-                                                                   m_file->getRows(),
-                                                                   m_file->getBytes(),
-                                                                   task.data_page,
-                                                                   nullptr);
-            }
+            new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
+                                                               m_file->getRows(),
+                                                               m_file->getBytes(),
+                                                               task.data_page,
+                                                               column_file_cache);
         }
         else if (auto * t_file = task.column_file->tryToTinyFile(); t_file)
         {
