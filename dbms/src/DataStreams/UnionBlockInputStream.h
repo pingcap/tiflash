@@ -284,7 +284,8 @@ private:
             ///  and the exception is lost.
 
             parent.output_queue.push(exception);
-            parent.cancel(false);    /// Does not throw exceptions.
+            /// can not cancel parent inputStream or the exception might be lost
+            parent.processor.cancel(false); /// Does not throw exceptions.
         }
 
         Self & parent;
