@@ -100,7 +100,7 @@ std::optional<PageFile> PageStorage::tryGetCheckpoint(const String & storage_pat
 
     if (remove_old)
     {
-        for (auto &page_file : checkpoints)
+        for (auto & page_file : checkpoints)
         {
             if (page_file.fileIdLevel() != ret->fileIdLevel())
                 page_file.destroy();
