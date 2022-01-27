@@ -22,12 +22,6 @@ class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
 
-struct ProfileStreamsInfo
-{
-    UInt32 qb_id;
-    BlockInputStreams input_streams;
-};
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 struct JoinExecuteInfo
@@ -151,8 +145,11 @@ public:
     {}
 
     void attachBlockIO(const BlockIO & io_);
-    std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
-    std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinIdMap();
+    std::map<String, BlockInputStreams> & getProfileStreamsMap();
+
+    void initExecutorIdToJoinIdMap();
+    std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
+
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
@@ -258,11 +255,10 @@ public:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
-    std::map<String, ProfileStreamsInfo> profile_streams_map;
-    /// qb_id_to_join_id_map is a map that maps query block id to all the join executor_id
-    /// in this query block and all its children query block
-    std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_id_map;
+    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
+    std::map<String, BlockInputStreams> profile_streams_map;
+    /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
+    std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;

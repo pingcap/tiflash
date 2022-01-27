@@ -57,10 +57,6 @@ public:
     // only meaningful for root query block.
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
-  
-    void fillOutputFieldTypes();
-    /// return true if result[id] exists.
-    bool collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result);
 
     bool isRootQueryBlock() const { return id == 1; };
 };

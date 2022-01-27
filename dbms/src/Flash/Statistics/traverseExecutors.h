@@ -80,4 +80,39 @@ void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
         traverseExecutorTree(dag_request->root_executor(), std::forward<FF>(f));
     }
 }
+
+/// traverse tipb::executor list in reverse order and apply function.
+/// f: (const tipb::Executor &).
+/// traverse in order, because the head of executor list is the leaf node like table scan.
+template <typename Container, typename FF>
+void traverseExecutorListReverse(const Container & list, FF && f)
+{
+    for (const auto & executor : list)
+        f(executor);
+}
+
+/// traverse tipb::executor tree in reverse order and apply function.
+/// f: (const tipb::Executor &).
+template <typename FF>
+void traverseExecutorTreeReverse(const tipb::Executor & executor, FF && f)
+{
+    getChildren(executor).forEach([&f](const tipb::Executor & child) { traverseExecutorTreeReverse(child, f); });
+    f(executor);
+}
+
+/// traverse tipb::executor of DAGRequest in reverse order and apply function.
+/// f: (const tipb::Executor &).
+template <typename FF>
+void traverseExecutorsReverse(const tipb::DAGRequest * dag_request, FF && f)
+{
+    assert(dag_request->executors_size() > 0 || dag_request->has_root_executor());
+    if (dag_request->executors_size() > 0)
+    {
+        traverseExecutorListReverse(dag_request->executors(), std::forward<FF>(f));
+    }
+    else // dag_request->has_root_executor()
+    {
+        traverseExecutorTreeReverse(dag_request->root_executor(), std::forward<FF>(f));
+    }
+}
 } // namespace DB

@@ -198,26 +198,4 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     }
 }
 
-bool DAGQueryBlock::collectAllPossibleChildrenJoinId(std::unordered_map<UInt32, std::vector<String>> & result)
-{
-    std::vector<String> all_join_id;
-    for (auto & child : children)
-    {
-        if (child->collectAllPossibleChildrenJoinId(result))
-            all_join_id.insert(all_join_id.end(), result[child->id].begin(), result[child->id].end());
-    }
-    if (source->has_join())
-        all_join_id.push_back(source_name);
-
-    if (!all_join_id.empty())
-    {
-        result[id] = all_join_id;
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
 } // namespace DB

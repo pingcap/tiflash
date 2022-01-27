@@ -26,7 +26,7 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     }
 
     root_query_block->output_field_types = collectOutputFieldTypes(dag_request);
-    root_query_block->collectAllPossibleChildrenJoinId(getDAGContext().getQBIdToJoinIdMap());
+    getDAGContext().initExecutorIdToJoinIdMap();
 
     for (UInt32 i : dag_request.output_offsets())
     {

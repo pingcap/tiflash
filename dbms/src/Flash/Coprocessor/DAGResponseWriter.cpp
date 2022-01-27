@@ -80,7 +80,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & stream_ptr : p.second.input_streams)
+        for (auto & stream_ptr : p.second)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
@@ -100,8 +100,8 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         /// In TiFlash, a hash join's build side is finished before probe side starts,
         /// so the join probe side's running time does not include hash table's build time,
         /// when construct ExecSummaries, we need add the build cost to probe executor
-        auto all_join_id_it = dag_context.getQBIdToJoinIdMap().find(p.second.qb_id);
-        if (all_join_id_it != dag_context.getQBIdToJoinIdMap().end())
+        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(p.first);
+        if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
         {
             for (const auto & join_executor_id : all_join_id_it->second)
             {
@@ -112,7 +112,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                     if (build_side_it != dag_context.getProfileStreamsMap().end())
                     {
                         UInt64 process_time_for_build = 0;
-                        for (const auto & join_build_stream : build_side_it->second.input_streams)
+                        for (const auto & join_build_stream : build_side_it->second)
                         {
                             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()))
                                 process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);

@@ -838,9 +838,8 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::v
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
-    auto & profile_streams_info = dagContext().getProfileStreamsMap()[key];
-    profile_streams_info.qb_id = query_block.id;
-    pipeline.transform([&profile_streams_info](auto & stream) { profile_streams_info.input_streams.push_back(stream); });
+    auto & profile_streams = dagContext().getProfileStreamsMap()[key];
+    pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
