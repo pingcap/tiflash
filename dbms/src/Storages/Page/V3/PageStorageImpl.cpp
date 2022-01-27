@@ -105,11 +105,6 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot)
-{
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // 1. Do the MVCC gc, clean up expired snapshot.

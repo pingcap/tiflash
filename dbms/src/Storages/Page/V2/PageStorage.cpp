@@ -748,28 +748,6 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
     }
 }
 
-void PageStorage::traversePageEntries( //
-    const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor,
-    SnapshotPtr snapshot)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot();
-    }
-
-    // traverse over all Pages or RefPages
-    auto * concrete_snapshot = toConcreteSnapshot(snapshot);
-    auto valid_pages_ids = concrete_snapshot->version()->validPageIds();
-    for (auto page_id : valid_pages_ids)
-    {
-        const auto page_entry = concrete_snapshot->version()->find(page_id);
-        if (unlikely(!page_entry))
-            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries",
-                            ErrorCodes::LOGICAL_ERROR);
-        acceptor(page_id, *page_entry);
-    }
-}
-
 void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
 {
     assert(scanner != nullptr);

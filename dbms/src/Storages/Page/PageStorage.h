@@ -173,8 +173,6 @@ public:
 
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) = 0;
 
-    virtual void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot) = 0;
-
     virtual PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
     // We may skip the GC to reduce useless reading by default.
@@ -185,9 +183,7 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     virtual void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) = 0;
 
-#ifndef DBMS_PUBLIC_GTEST
 protected:
-#endif
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     Config config;
@@ -252,9 +248,7 @@ public:
         return storage->getEntry(page_id, snap);
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
     PageStoragePtr storage;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;
