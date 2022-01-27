@@ -4,6 +4,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 
+#include "Storages/Page/V3/PageDirectory.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -28,7 +30,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    page_directory = PageDirectory::create(file_provider, delegator, /*write_limiter*/ nullptr);
 }
 
 void PageStorageImpl::drop()
@@ -144,9 +146,8 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
-    const auto & copy_list = blob_store.gc(blob_gc_info, total_page_size);
-
-    if (copy_list.empty())
+    PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size);
+    if (gc_edit.empty())
     {
         throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
     }
@@ -154,7 +155,11 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     // 6. MVCC gc apply
     // MVCC will apply the migrated entries.
     // Also it will generate a new version for these entries.
-    page_directory.gcApply(copy_list);
+    // Note that if the process crash between step 5 and step 6, the stats in BlobStore will
+    // be reset to correct state during restore. If any exception thrown, then some BlobFiles
+    // will be remained as "read-only" files while entries in them are useless in actual.
+    // Those BlobFiles should be cleaned during next restore.
+    page_directory.gcApply(std::move(gc_edit), false);
     return true;
 }
 
