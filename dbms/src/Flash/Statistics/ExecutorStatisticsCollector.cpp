@@ -54,6 +54,7 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
                 fmt::format("Unknown executor type, executor_id: {}", executor_id),
                 Errors::Coprocessor::Internal);
         }
+        return true;
     });
 }
 
