@@ -12,6 +12,8 @@ using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 class MinorCompaction;
 using MinorCompactionPtr = std::shared_ptr<MinorCompaction>;
 
+/// Combine small `ColumnFileTiny`s to a bigger one and move it to the next level.
+/// For `ColumnFileBig` and `ColumnFileDeleteRange`, it just moves it to the next level.
 class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 {
     friend class ColumnFilePersistedSet;
@@ -47,7 +49,7 @@ private:
     size_t total_compact_rows = 0;
 
 public:
-    explicit MinorCompaction(size_t compaction_src_level_);
+    explicit MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
 
     // return whether this task is a trivial move
     inline bool packUpTask(Task && task)
@@ -58,7 +60,7 @@ public:
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            // Maybe this column file is small, but it cannot be merged with other packs, so also remove it's cache if possible.
+            // Maybe this column file is small, but it cannot be merged with other column files, so also remove it's cache if possible.
             for (auto & f : task.to_compact)
             {
                 if (auto * t_file = f->tryToTinyFile(); t_file)

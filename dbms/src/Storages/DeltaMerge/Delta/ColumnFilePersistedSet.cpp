@@ -319,7 +319,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
         if (next_compaction_level >= persisted_files_levels.size())
             next_compaction_level = 0;
 
-        auto compaction = std::make_shared<MinorCompaction>(next_compaction_level);
+        auto compaction = std::make_shared<MinorCompaction>(next_compaction_level, minor_compaction_version);
         auto & level = persisted_files_levels[next_compaction_level];
         if (!level.empty())
         {
@@ -374,6 +374,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
+    minor_compaction_version += 1;
     ColumnFilePersistedLevels new_persisted_files_levels;
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
     {

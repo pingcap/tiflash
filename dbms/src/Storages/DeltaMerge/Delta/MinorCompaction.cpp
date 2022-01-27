@@ -10,8 +10,9 @@ namespace DB
 {
 namespace DM
 {
-MinorCompaction::MinorCompaction(size_t compaction_src_level_)
+MinorCompaction::MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_)
     : compaction_src_level{compaction_src_level_}
+    , current_compaction_version{current_compaction_version_}
 {}
 
 void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader)
