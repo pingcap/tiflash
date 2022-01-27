@@ -4,6 +4,7 @@
 #include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <fmt/core.h>
 
 #define TOP_K_MAX_SIZE 0xFFFFFF
 
@@ -33,7 +34,7 @@ class AggregateFunctionTopKDateTime : public AggregateFunctionTopK<DataTypeDateT
 };
 
 
-static IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, UInt64 threshold)
+IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, UInt64 threshold)
 {
     if (typeid_cast<const DataTypeDate *>(argument_type.get()))
         return new AggregateFunctionTopKDate(threshold);
@@ -56,17 +57,21 @@ AggregateFunctionPtr createAggregateFunctionTopK(const std::string & name, const
     if (!params.empty())
     {
         if (params.size() != 1)
-            throw Exception("Aggregate function " + name + " requires one parameter or less.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Aggregate function {} requires one parameter or less.", name),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         UInt64 k = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), params[0]);
 
         if (k > TOP_K_MAX_SIZE)
-            throw Exception("Too large parameter for aggregate function " + name + ". Maximum: " + toString(TOP_K_MAX_SIZE),
-                            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(
+                fmt::format("Too large parameter for aggregate function {}. Maximum: {}", name, TOP_K_MAX_SIZE),
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
         if (k == 0)
-            throw Exception("Parameter 0 is illegal for aggregate function " + name,
-                            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(
+                fmt::format("Parameter 0 is illegal for aggregate function {}", name),
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
         threshold = k;
     }
@@ -77,7 +82,9 @@ AggregateFunctionPtr createAggregateFunctionTopK(const std::string & name, const
         res = AggregateFunctionPtr(createWithExtraTypes(argument_types[0], threshold));
 
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            fmt::format("Illegal type {} of argument for aggregate function {}", argument_types[0]->getName(), name),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
