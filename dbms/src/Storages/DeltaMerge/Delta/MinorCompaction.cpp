@@ -1,9 +1,8 @@
-#include "MinorCompaction.h"
-
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
+#include <Storages/DeltaMerge/Delta/MinorCompaction.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageStorage.h>
 
@@ -51,7 +50,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
     }
 }
 
-bool MinorCompaction::commit(WriteBatches & wbs)
+bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs)
 {
     return persisted_file_set->installCompactionResults(shared_from_this(), wbs);
 }

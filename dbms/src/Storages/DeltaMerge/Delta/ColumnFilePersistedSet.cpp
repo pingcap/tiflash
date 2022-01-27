@@ -309,12 +309,13 @@ bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFile
 MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & context)
 {
     // Every time we try to compact all column files in a specific level.
-    // For ColumnTinyFile, we will try to combine small `ColumnTinyFile`s to a bigger one.
-    // For ColumnDeleteRangeFile and ColumnBigFile, we will simply move them to the next level.
-    // And only if there some small `ColumnTinyFile`s which can be combined together we will actually do the compaction.
+    // For ColumnFileTiny, we will try to combine small `ColumnFileTiny`s to a bigger one.
+    // For ColumnFileDeleteRange and ColumnFileBig, we will simply move them to the next level.
+    // And only if there exists some small `ColumnFileTiny`s which can be combined together, we will actually do the compaction.
     size_t check_level_num = 0;
     while (check_level_num < persisted_files_levels.size())
     {
+        check_level_num += 1;
         if (next_compaction_level >= persisted_files_levels.size())
             next_compaction_level = 0;
 
@@ -326,7 +327,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
             MinorCompaction::Task cur_task;
             for (auto & file : level)
             {
-                auto packup_cur_task = [&]() {
+                auto pack_up_cur_task = [&]() {
                     bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
                     is_all_trivial_move = is_all_trivial_move && is_trivial_move;
                     cur_task = {};
@@ -336,8 +337,8 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                 {
                     bool cur_task_full = cur_task.total_rows >= context.delta_small_pack_rows;
                     bool small_column_file = t_file->getRows() < context.delta_small_pack_rows;
-                    bool schema_ok
-                        = cur_task.to_compact.empty();
+                    bool schema_ok = cur_task.to_compact.empty();
+
                     if (!schema_ok)
                     {
                         if (auto * last_t_file = cur_task.to_compact.back()->tryToTinyFile(); last_t_file)
@@ -345,13 +346,13 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                     }
 
                     if (cur_task_full || !small_column_file || !schema_ok)
-                        packup_cur_task();
+                        pack_up_cur_task();
 
                     cur_task.addColumnFile(file);
                 }
                 else
                 {
-                    packup_cur_task();
+                    pack_up_cur_task();
                     cur_task.addColumnFile(file);
                 }
             }
@@ -434,7 +435,16 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const DMContext 
     {
         for (const auto & file : level)
         {
-            snap->column_files.push_back(file);
+            if (auto * t = file->tryToTinyFile(); (t && t->getCache()))
+            {
+                // Compact threads could update the value of ColumnTinyFile::cache,
+                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
+                snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
+            }
+            else
+            {
+                snap->column_files.push_back(file);
+            }
             total_rows += file->getRows();
             total_deletes += file->getDeletes();
         }

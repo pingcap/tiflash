@@ -42,7 +42,6 @@ private:
 
     size_t compaction_src_level;
     size_t current_compaction_version;
-    ColumnFilePersistedSetPtr persisted_file_set;
 
     size_t total_compact_files = 0;
     size_t total_compact_rows = 0;
@@ -53,8 +52,8 @@ public:
     // return whether this task is a trivial move
     inline bool packUpTask(Task && task)
     {
-        if (unlikely(task.to_compact.empty()))
-            throw Exception("task shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+        if (task.to_compact.empty())
+            return true;
 
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
@@ -76,7 +75,7 @@ public:
 
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
-    bool commit(WriteBatches & wbs);
+    bool commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs);
 
     String info() const;
 };

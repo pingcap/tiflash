@@ -237,7 +237,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
             return false;
         }
-        if (!compaction_task->commit(wbs))
+        if (!compaction_task->commit(persisted_file_set, wbs))
         {
             LOG_WARNING(log, "Structure has been updated during compact");
             wbs.rollbackWrittenLogAndData();
