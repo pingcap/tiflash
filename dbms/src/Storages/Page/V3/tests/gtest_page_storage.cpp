@@ -11,7 +11,6 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include "TestUtils/MockDiskDelegator.h"
 
 namespace DB
 {
