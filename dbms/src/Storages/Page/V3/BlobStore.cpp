@@ -268,7 +268,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     for (const auto & p : entries)
         buf_size = std::max(buf_size, p.second.size);
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
