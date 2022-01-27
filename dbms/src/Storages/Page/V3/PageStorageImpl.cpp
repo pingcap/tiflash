@@ -44,6 +44,7 @@ PageId PageStorageImpl::getMaxId()
 }
 
 // FIXME: enable -Wunused-parameter
+// NOLINTBEGIN(misc-unused-parameters)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 PageId PageStorageImpl::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
@@ -162,6 +163,7 @@ void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanne
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
+// NOLINTEND(misc-unused-parameters)
 #pragma GCC diagnostic pop
 
 } // namespace PS::V3

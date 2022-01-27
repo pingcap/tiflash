@@ -164,7 +164,7 @@ try
         dump_all_entries(page_files, mode);
         return 0;
     case LIST_ALL_PAGE_FILE:
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             std::cout << page_file.toString() << std::endl;
         }
@@ -305,7 +305,7 @@ void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, co
     size_t global_total_valid_size = 0;
 
     printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (page_file.getType() != PageFile::Type::Formal)
         {
