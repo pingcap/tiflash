@@ -38,7 +38,12 @@ echo '```' >> /tiflash/profile/diff-coverage
 if [[ -z ${SOURCE_DELTA} ]]; then
 	echo 'no c/c++ source change detected' >> /tiflash/profile/diff-coverage
 else
-	llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA >> /tiflash/profile/diff-coverage
+	llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA > "/tiflash/profile/diff-for-delta"
+  if [[ $(wc -l "/tiflash/profile/diff-for-delta" | awk -e '{printf $1;}') -gt 32 ]]; then
+    echo 'too many lines from llvm-cov, please refer to full report instead' >> /tiflash/profile/diff-coverage
+  else
+    cat /tiflash/profile/diff-for-delta >> /tiflash/profile/diff-coverage
+  fi
 fi
 
 echo '```' >> /tiflash/profile/diff-coverage
