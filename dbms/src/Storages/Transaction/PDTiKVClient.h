@@ -3,10 +3,12 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <Core/Types.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
-
 #pragma GCC diagnostic pop
 
 #include <Core/Types.h>

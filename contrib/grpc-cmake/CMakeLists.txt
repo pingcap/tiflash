@@ -74,6 +74,16 @@ set(gRPC_BUILD_CSHARP_EXT OFF)
 
 add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
+# TODO: we had better update and lib to avoid warnings
+# But for now, the warnings are too annoying so we simply remote it
+
+if(TIFLASH_LLVM_TOOLCHAIN)
+  target_compile_options(grpc PRIVATE
+        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage -Wno-implicit-const-int-float-conversion)
+  target_compile_options(grpc++ PRIVATE
+        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage  -Wno-implicit-const-int-float-conversion)
+endif()
+
 # The contrib/grpc/CMakeLists.txt redefined the PROTOBUF_GENERATE_GRPC_CPP() function for its own purposes,
 # so we need to redefine it back.
 include("${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
