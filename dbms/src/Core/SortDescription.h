@@ -10,8 +10,6 @@ class ICollator;
 
 namespace DB
 {
-class Block;
-class WriteBuffer;
 /// Description of the sorting rule by one column.
 struct SortColumnDescription
 {
