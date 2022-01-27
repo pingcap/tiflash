@@ -44,11 +44,21 @@ public:
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
-    void traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot) override;
-
     bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+
+#ifndef NDEBUG
+    // Just for tests, refactor them out later
+    void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
+    DB::PageEntry getEntry(PageId page_id) { return getEntry(page_id, nullptr); }
+    DB::Page read(PageId page_id) { return read(page_id, nullptr, nullptr); }
+    PageMap read(const std::vector<PageId> & page_ids) { return read(page_ids, nullptr, nullptr); }
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return read(page_ids, handler, nullptr, nullptr); }
+    PageMap read(const std::vector<PageReadFields> & page_fields) { return read(page_fields, nullptr, nullptr); }
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverse(acceptor, nullptr); }
+    bool gc() { return gc(false, nullptr, nullptr); }
+#endif
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
