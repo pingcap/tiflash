@@ -42,5 +42,5 @@ if [ -f /.dockerenv ]; then
     chmod +x /root/tiflash-link
     sed -i -e 's/\/usr\/local\/bin\/clang/\/root\/tiflash-link/g' $HOME/.cargo/config
 fi
-
+export RUSTFLAGS="link-arg=-Wl,/usr/local/lib/clang/13.0.0/lib/$(uname -m)-unknown-linux-gnu/clang_rt.crtend.o ${RUSTFLAGS:+RUSTFLAGS:}"
 make release

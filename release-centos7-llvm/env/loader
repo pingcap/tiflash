@@ -5,6 +5,7 @@ import os.path as path
 import platform
 import subprocess
 import sys
+
 banner = """
  _________  ___  ________ ___       ________  ________  ___  ___          _______   ________   ___      ___ 
 |\___   ___\\  \|\  _____\\  \     |\   __  \|\   ____\|\  \|\  \        |\  ___ \ |\   ___  \|\  \    /  /|
@@ -19,36 +20,37 @@ TiFlash Development Environment Enabled
 
 if sys.stdout.isatty():
     print(banner)
-    
+
 sysroot = path.abspath(path.dirname(__file__) + "/sysroot") + "/"
-bindir  = "{}bin/".format(sysroot)
-libdir  = "{}lib/".format(sysroot)
-triple  = "{}-unknown-linux-gnu".format(platform.machine())
-shell   = os.getenv('SHELL', '/bin/sh')     
-env     = {
-    "OPENSSL_ROOT_DIR"   : sysroot,
-    "PS1"                : "[\\u@\\h \\W] (TiFlash) > ",
-    "CMAKE_PREFIX_PATH"  : sysroot,
-    "PATH"               : ":".join([bindir, sysroot + "go/bin/", os.getenv("PATH", "")]),
-    "CMAKE"              : bindir + "cmake",
-    "LD_LIBRARY_PATH"    : ":".join([libdir, libdir + triple + "/", os.getenv("LD_LIBRARY_PATH", "")]),
-    "LIBRARY_PATH"       : ":".join([libdir, libdir + triple + "/", os.getenv("LIBRARY_PATH", "")]),
-    "CPLUS_INCLUDE_PATH" : ":".join([sysroot + "include/" + triple + "/c++/v1/", os.getenv("CPLUS_INCLUDE_PATH", "")]),
-    "AR"                 : bindir + "llvm-ar",
-    "OBJCOPY"            : bindir + "llvm-objcopy",
-    "AS"                 : bindir + "llvm-as",
-    "CXX"                : bindir + "clang++",
-    "CC"                 : bindir + "clang",
-    "LD"                 : bindir + "ld.lld",
-    "CXXSTDLIB"          : "c++",
-    "RUSTFLAGS"          : " ".join([
-                                "-C", 
-				"linker={}".format(path.abspath(path.dirname(__file__) + "/tiflash-linker")), 
-				"-C", "link-arg=-fuse-ld=lld"])
+bindir = "{}bin/".format(sysroot)
+libdir = "{}lib/".format(sysroot)
+triple = "{}-unknown-linux-gnu".format(platform.machine())
+shell = os.getenv('SHELL', '/bin/sh')
+env = {
+    "OPENSSL_ROOT_DIR": sysroot,
+    "PS1": "[\\u@\\h \\W] (TiFlash) > ",
+    "CMAKE_PREFIX_PATH": sysroot,
+    "PATH": ":".join([bindir, sysroot + "go/bin/", os.getenv("PATH", "")]),
+    "CMAKE": bindir + "cmake",
+    "LD_LIBRARY_PATH": ":".join([libdir, libdir + triple + "/", os.getenv("LD_LIBRARY_PATH", "")]),
+    "LIBRARY_PATH": ":".join([libdir, libdir + triple + "/", os.getenv("LIBRARY_PATH", "")]),
+    "CPLUS_INCLUDE_PATH": ":".join([sysroot + "include/" + triple + "/c++/v1/", os.getenv("CPLUS_INCLUDE_PATH", "")]),
+    "AR": bindir + "llvm-ar",
+    "OBJCOPY": bindir + "llvm-objcopy",
+    "AS": bindir + "llvm-as",
+    "CXX": bindir + "clang++",
+    "CC": bindir + "clang",
+    "LD": bindir + "ld.lld",
+    "CXXSTDLIB": "c++",
+    "RUSTFLAGS": " ".join([
+        "-C",
+        "linker={}".format(path.abspath(path.dirname(__file__) + "/tiflash-linker")),
+        "-C", "link-arg=-fuse-ld=lld", "-C",
+        "link-arg=-Wl,{}lib/clang/13.0.0/lib/{}-unknown-linux-gnu/clang_rt.crtend.o".format(sysroot, platform.machine())])
 }
 
 if platform.processor() == 'aarch64':
-    env["RUSTFLAGS"] =  env["RUSTFLAGS"] + " -C link-arg=-Wl,-Bsymbolic"
+    env["RUSTFLAGS"] = env["RUSTFLAGS"] + " -C link-arg=-Wl,-Bsymbolic"
 
 for (i, j) in os.environ.items():
     if i not in env:
