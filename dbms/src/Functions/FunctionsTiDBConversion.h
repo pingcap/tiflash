@@ -1740,18 +1740,11 @@ public:
     template <typename FromDataType>
     static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
     {
-        using FromFieldType = typename FromDataType::FieldType;
-
         // cast(int as decimal)
-        constexpr int isUnsignedInt = (std::is_same_v<FromFieldType, UInt8>
-                                       || std::is_same_v<FromFieldType, UInt16>
-                                       || std::is_same_v<FromFieldType, UInt32>
-                                       || std::is_same_v<FromFieldType, UInt64>);
-        constexpr int isSignedInt = (std::is_same_v<FromFieldType, Int8>
-                                     || std::is_same_v<FromFieldType, Int16>
-                                     || std::is_same_v<FromFieldType, Int32>
-                                     || std::is_same_v<FromFieldType, Int64>);
-        if constexpr (isUnsignedInt || isSignedInt)
+        using FromFieldType = typename FromDataType::FieldType;
+        constexpr bool is_integer = (std::is_same_v<FromFieldType, UInt8> || std::is_same_v<FromFieldType, UInt16> || std::is_same_v<FromFieldType, UInt32> || std::is_same_v<FromFieldType, UInt64>
+                                 || std::is_same_v<FromFieldType, Int8> || std::is_same_v<FromFieldType, Int16> || std::is_same_v<FromFieldType, Int32> || std::is_same_v<FromFieldType, Int64>);
+        if constexpr (is_integer)
         {
             PrecType from_prec = IntPrec<FromFieldType>::prec;
             if (from_prec <= (to_decimal_prec - to_decimal_scale))
@@ -1778,6 +1771,43 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
+    template<typename FromDataType, typename ToDataType, bool return_nullable>
+    WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
+    {
+        using ToFieldType = typename ToDataType::FieldType;
+        PrecType prec = decimal_type->getPrec();
+        ScaleType scale = decimal_type->getScale();
+        bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
+        if (canSkip)
+        {
+            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, true>::execute(
+                    block,
+                    arguments,
+                    result,
+                    prec,
+                    scale,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+        }
+        else
+        {
+            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, false>::execute(
+                    block,
+                    arguments,
+                    result,
+                    prec,
+                    scale,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+        }
+    }
+
     /// createWrapper creates lambda functions that do the real type conversion job
     template <typename FromDataType, bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
@@ -1803,143 +1833,17 @@ private:
                     tidb_tp_,
                     context_);
             };
+
         /// cast as decimal
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
-        {
-            PrecType prec = decimal_type->getPrec();
-            ScaleType scale = decimal_type->getScale();
-            bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
-            if (canSkip)
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, true>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-            else
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, false>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-        }
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal32, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
-        {
-            PrecType prec = decimal_type->getPrec();
-            ScaleType scale = decimal_type->getScale();
-            bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
-            if (canSkip)
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, true>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-            else
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, false>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-        }
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal64, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
-        {
-            PrecType prec = decimal_type->getPrec();
-            ScaleType scale = decimal_type->getScale();
-            bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
-            if (canSkip)
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, true>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-            else
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, false>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-        }
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal128, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
-        {
-            PrecType prec = decimal_type->getPrec();
-            ScaleType scale = decimal_type->getScale();
-            bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
-            if (canSkip)
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, true>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-            else
-            {
-                return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, false>::execute(
-                        block,
-                        arguments,
-                        result,
-                        prec,
-                        scale,
-                        in_union_,
-                        tidb_tp_,
-                        context_);
-                };
-            }
-        }
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal256, return_nullable>(from_type, decimal_type);
+
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
@@ -2003,7 +1907,7 @@ private:
                     context_);
             };
 
-        // todo support convert to duration/json type
+        // todo support convert to json type
         throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
