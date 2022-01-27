@@ -52,6 +52,12 @@ public:
 
     std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
 
+    UInt64 getRightMargin() override
+    {
+        auto * entry = node_to_entry(rb_tree_last(&rb_tree->root));
+        return entry->start;
+    }
+
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_RBTREE)

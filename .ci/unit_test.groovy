@@ -5,7 +5,7 @@ catchError {
 
     def NPROC = 5
 
-    util.runUnitTests("ut-tics-v1", CURWS, NPROC)
+    util.runUnitTests("ut-tics-v2", CURWS, NPROC)
 
 }
 

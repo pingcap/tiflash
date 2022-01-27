@@ -50,8 +50,16 @@ public:
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     PageDirectory page_directory;
+
+    // TBD: BlobStore::Config should add in PageStorage config.
+    BlobStore::Config blob_config;
+
+    BlobStore blob_store;
 };
 
 } // namespace PS::V3

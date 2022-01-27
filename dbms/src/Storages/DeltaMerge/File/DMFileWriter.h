@@ -82,7 +82,7 @@ public:
         // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
         // Note that this class don't take responsible for serializing `minmaxes`,
         // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file->getPositionInFile(); }
+        size_t getWrittenBytes() const { return plain_file->getMaterializedBytes() + mark_file->getMaterializedBytes(); }
 
         // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;

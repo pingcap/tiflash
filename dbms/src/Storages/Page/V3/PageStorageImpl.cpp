@@ -1,6 +1,10 @@
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/PathPool.h>
+
+#include "Storages/Page/V3/PageDirectory.h"
 
 namespace DB
 {
@@ -12,11 +16,13 @@ namespace PS::V3
 {
 PageStorageImpl::PageStorageImpl(
     String name,
-    PSDiskDelegatorPtr delegator,
+    PSDiskDelegatorPtr delegator_,
     const Config & config_,
     const FileProviderPtr & file_provider_)
-    : DB::PageStorage(name, delegator, config_, file_provider_)
+    : DB::PageStorage(name, delegator_, config_, file_provider_)
+    , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
+    // TBD: init blob_store ptr.
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
@@ -24,7 +30,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    page_directory = PageDirectory::create(file_provider, delegator, /*write_limiter*/ nullptr);
 }
 
 void PageStorageImpl::drop()
@@ -106,7 +112,55 @@ void PageStorageImpl::traversePageEntries(const std::function<void(PageId page_i
 
 bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // 1. Do the MVCC gc, clean up expired snapshot.
+    // And get the expired entries.
+    const auto & del_entries = page_directory.gc();
+
+    // 2. Remove the expired entries in BlobStore.
+    // It won't delete the data on the disk.
+    // It will only update the SpaceMap which in memory.
+    for (const auto & del_version_entry : del_entries)
+    {
+        blob_store.remove(del_version_entry);
+    }
+
+    // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
+    // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.
+    const auto & blob_need_gc = blob_store.getGCStats();
+
+    if (blob_need_gc.empty())
+    {
+        return true;
+    }
+
+    // 4. Filter out entries in MVCC by BlobId.
+    // We also need to filter the version of the entry.
+    // So that the `gc_apply` can proceed smoothly.
+    auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_need_gc);
+
+    if (blob_gc_info.empty())
+    {
+        return true;
+    }
+
+    // 5. Do the BlobStore GC
+    // After BlobStore GC, these entries will be migrated to a new blob.
+    // Then we should notify MVCC apply the change.
+    PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size);
+    if (gc_edit.empty())
+    {
+        throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // 6. MVCC gc apply
+    // MVCC will apply the migrated entries.
+    // Also it will generate a new version for these entries.
+    // Note that if the process crash between step 5 and step 6, the stats in BlobStore will
+    // be reset to correct state during restore. If any exception thrown, then some BlobFiles
+    // will be remained as "read-only" files while entries in them are useless in actual.
+    // Those BlobFiles should be cleaned during next restore.
+    page_directory.gcApply(std::move(gc_edit), false);
+    return true;
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)

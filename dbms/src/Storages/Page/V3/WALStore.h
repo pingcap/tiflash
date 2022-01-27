@@ -1,9 +1,22 @@
 #pragma once
 
+#include <Common/Checksum.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <Storages/Page/V3/LogFile/LogWriter.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/types.h>
+
+#include <memory>
 
 namespace DB
 {
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+class WriteLimiter;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
+class PSDiskDelegator;
+using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 namespace PS::V3
 {
 enum class WALRecoveryMode : UInt8
@@ -46,8 +59,51 @@ enum class WALRecoveryMode : UInt8
     SkipAnyCorruptedRecords = 0x03,
 };
 
+class WALStore;
+using WALStorePtr = std::unique_ptr<WALStore>;
+
+class WALStoreReader;
+using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
+
 class WALStore
 {
+public:
+    using ChecksumClass = Digest::CRC64;
+
+    static WALStorePtr create(
+        std::function<void(PageEntriesEdit &&)> && restore_callback,
+        FileProviderPtr & provider,
+        PSDiskDelegatorPtr & delegator,
+        const WriteLimiterPtr & write_limiter = nullptr);
+
+    void apply(PageEntriesEdit & edit, const PageVersionType & version);
+    void apply(const PageEntriesEdit & edit);
+
+    bool compactLogs();
+
+private:
+    WALStore(
+        const PSDiskDelegatorPtr & delegator_,
+        const FileProviderPtr & provider_,
+        const WriteLimiterPtr & write_limiter_,
+        std::unique_ptr<LogWriter> && cur_log);
+
+    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
+    createLogWriter(
+        PSDiskDelegatorPtr delegator,
+        const FileProviderPtr & provider,
+        const WriteLimiterPtr & write_limiter,
+        const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+        Poco::Logger * logger,
+        bool manual_flush);
+
+    PSDiskDelegatorPtr delegator;
+    FileProviderPtr provider;
+    const WriteLimiterPtr write_limiter;
+    std::mutex log_file_mutex;
+    std::unique_ptr<LogWriter> log_file;
+
+    Poco::Logger * logger;
 };
 
 } // namespace PS::V3

@@ -55,6 +55,11 @@ protected:
         }
     }
 
+    UInt64 getRightMargin() override
+    {
+        return free_map.rbegin()->first;
+    }
+
     bool isMarkUnused(UInt64 offset, size_t length) override
     {
         auto it = MapUtils::findLessEQ(free_map, offset); // first free block <= `offset`

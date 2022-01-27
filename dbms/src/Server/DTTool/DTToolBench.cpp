@@ -30,7 +30,7 @@ static constexpr char BENCH_HELP[] =
     "Usage: bench [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --version     DMFile version. [default: 2] [available: 1, 2]\n"
+    "  --version     DTFile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
     "  --column      Column number. [default: 100]\n"
@@ -215,7 +215,7 @@ int benchEntry(const std::vector<std::string> & opts)
         auto version = vm["version"].as<size_t>();
         if (version < 1 || version > 2)
         {
-            std::cerr << "invalid dmfile version: " << version << std::endl;
+            std::cerr << "invalid dtfile version: " << version << std::endl;
             return -EINVAL;
         }
         auto algorithm_ = vm["algorithm"].as<std::string>();
