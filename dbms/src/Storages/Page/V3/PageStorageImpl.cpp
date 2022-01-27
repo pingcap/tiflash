@@ -43,11 +43,7 @@ PageId PageStorageImpl::getMaxId()
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-// FIXME: enable -Wunused-parameter
-// NOLINTBEGIN(misc-unused-parameters)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-PageId PageStorageImpl::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
+PageId PageStorageImpl::getNormalPageId(PageId /*page_id*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -62,20 +58,20 @@ std::tuple<size_t, double, unsigned> PageStorageImpl::getSnapshotsStat() const
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
+void PageStorageImpl::write(DB::WriteBatch && /*write_batch*/, const WriteLimiterPtr & /*write_limiter*/)
 {
     // Persist Page data to BlobStore
-    PageEntriesEdit edit(write_batch.getWrites().size());
+    // PageEntriesEdit edit(write_batch.getWrites().size());
 
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorageImpl::getEntry(PageId /*page_id*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorageImpl::read(PageId /*page_id*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/)
 {
     // PageEntryV3 entry = page_directory.get(page_id, snapshot);
     // DB::Page page = blob_store.read(entry, read_limiter);
@@ -83,7 +79,7 @@ DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limit
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(const std::vector<PageId> & /*page_ids*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/)
 {
     // PageIDAndEntriesV2 entries = page_directory.get(page_ids, snapshot);
     // DB::Page page = blob_store.read(entries, read_limiter);
@@ -91,22 +87,22 @@ PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLi
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorageImpl::read(const std::vector<PageId> & /*page_ids*/, const PageHandler & /*handler*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(const std::vector<PageReadFields> & /*page_fields*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> & /*acceptor*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limiter*/, const ReadLimiterPtr & /*read_limiter*/)
 {
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
@@ -159,12 +155,10 @@ bool PageStorageImpl::gc(bool not_skip, const WriteLimiterPtr & write_limiter, c
     return true;
 }
 
-void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
+void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner /*scanner*/, ExternalPagesRemover /*remover*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
-// NOLINTEND(misc-unused-parameters)
-#pragma GCC diagnostic pop
 
 } // namespace PS::V3
 } // namespace DB
