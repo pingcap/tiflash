@@ -21,12 +21,14 @@ public:
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, name))
     {
         children.push_back(input_);
     }
 
-    String getName() const override { return "PartialSorting"; }
+    static constexpr auto name = "PartialSorting";
+
+    String getName() const override { return name; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }
