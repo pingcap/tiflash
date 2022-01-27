@@ -1109,56 +1109,56 @@ try
     dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float32, Decimal32>(12.213f, DecimalField32(-1221, 2), std::make_tuple(9, 2));
+    testNotOnlyNull<Float32, Decimal32>(12.213f, DecimalField32(1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float32, Decimal32>(-12.213f, DecimalField32(-1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float32, Decimal32>(12.215f, DecimalField32(1222, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float32, Decimal32>(-12.215f, DecimalField32(-1222, 2), std::make_tuple(9, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float32, Decimal64>(12.213f, DecimalField64(-1221, 2), std::make_tuple(18, 2));
+    testNotOnlyNull<Float32, Decimal64>(12.213f, DecimalField64(1221, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float32, Decimal64>(-12.213f, DecimalField64(-1221, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float32, Decimal64>(12.215f, DecimalField64(1222, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float32, Decimal64>(-12.215f, DecimalField64(-1222, 2), std::make_tuple(18, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float32, Decimal128>(12.213f, DecimalField128(-1221, 2), std::make_tuple(38, 2));
+    testNotOnlyNull<Float32, Decimal128>(12.213f, DecimalField128(1221, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float32, Decimal128>(-12.213f, DecimalField128(-1221, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float32, Decimal128>(12.215f, DecimalField128(1222, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float32, Decimal128>(-12.215f, DecimalField128(-1222, 2), std::make_tuple(38, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float32, Decimal256>(12.213f, DecimalField256(static_cast<Int256>(-1221), 2), std::make_tuple(65, 2));
+    testNotOnlyNull<Float32, Decimal256>(12.213f, DecimalField256(static_cast<Int256>(1221), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float32, Decimal256>(-12.213f, DecimalField256(static_cast<Int256>(-1221), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float32, Decimal256>(12.215f, DecimalField256(static_cast<Int256>(1222), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float32, Decimal256>(-12.215f, DecimalField256(static_cast<Int256>(-1222), 2), std::make_tuple(65, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float64, Decimal32>(12.213, DecimalField32(-1221, 2), std::make_tuple(9, 2));
+    testNotOnlyNull<Float64, Decimal32>(12.213, DecimalField32(1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float64, Decimal32>(-12.213, DecimalField32(-1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float64, Decimal32>(12.215, DecimalField32(1222, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float64, Decimal32>(-12.215, DecimalField32(-1222, 2), std::make_tuple(9, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float64, Decimal64>(12.213, DecimalField64(-1221, 2), std::make_tuple(18, 2));
+    testNotOnlyNull<Float64, Decimal64>(12.213, DecimalField64(1221, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float64, Decimal64>(-12.213, DecimalField64(-1221, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float64, Decimal64>(12.215, DecimalField64(1222, 2), std::make_tuple(18, 2));
     testNotOnlyNull<Float64, Decimal64>(-12.215, DecimalField64(-1222, 2), std::make_tuple(18, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float64, Decimal128>(12.213, DecimalField128(-1221, 2), std::make_tuple(38, 2));
+    testNotOnlyNull<Float64, Decimal128>(12.213, DecimalField128(1221, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float64, Decimal128>(-12.213, DecimalField128(-1221, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float64, Decimal128>(12.215, DecimalField128(1222, 2), std::make_tuple(38, 2));
     testNotOnlyNull<Float64, Decimal128>(-12.215, DecimalField128(-1222, 2), std::make_tuple(38, 2));
     assert(dag_context->getWarningCount() == 4);
     dag_context->clearWarnings();
 
-    testNotOnlyNull<Float64, Decimal256>(12.213, DecimalField256(static_cast<Int256>(-1221), 2), std::make_tuple(65, 2));
+    testNotOnlyNull<Float64, Decimal256>(12.213, DecimalField256(static_cast<Int256>(1221), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float64, Decimal256>(-12.213, DecimalField256(static_cast<Int256>(-1221), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float64, Decimal256>(12.215, DecimalField256(static_cast<Int256>(1222), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float64, Decimal256>(-12.215, DecimalField256(static_cast<Int256>(-1222), 2), std::make_tuple(65, 2));
