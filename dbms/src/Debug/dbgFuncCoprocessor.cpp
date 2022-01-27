@@ -403,7 +403,7 @@ BlockInputStreamPtr dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs
         DAGProperties properties = getDAGProperties("");
         std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
         static Poco::Logger * log = &Poco::Logger::get("MockDAG");
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+        LOG_INFO(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
         tipb::SelectResponse dag_response;
         RegionInfoMap regions;
         regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
@@ -418,7 +418,7 @@ BlockInputStreamPtr dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs
         auto resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(res.data()))
         {
-            throw Exception("Incorrect response data!", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
         }
         else
         {
