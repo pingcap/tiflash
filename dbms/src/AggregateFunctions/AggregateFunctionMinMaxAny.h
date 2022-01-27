@@ -236,7 +236,7 @@ public:
 
     void setCollators(const TiDB::TiDBCollators & collators_)
     {
-        collator = collators_.size() > 0 ? collators_[0] : nullptr;
+        collator = !collators_.empty() ? collators_[0] : nullptr;
     }
 
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
@@ -730,7 +730,7 @@ private:
     DataTypePtr type;
 
 public:
-    AggregateFunctionsSingleValue(const DataTypePtr & type)
+    explicit AggregateFunctionsSingleValue(const DataTypePtr & type)
         : type(type)
     {
         if (StringRef(Data::name()) == StringRef("min")
