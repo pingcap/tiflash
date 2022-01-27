@@ -20,7 +20,7 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
 /// NaturalDag accepts a dag request json file produced from TiDB, and provide following functionalities:
 /// 1. Parse json file to load tables, regions, dag request, dag response information
-/// 2. Reconstruct regions, tables, databases in TiFlash using Mock Utils(Drop tables, databases if exists before reconstructions)
+/// 2. Build regions, tables, databases in TiFlash using Mock Utils(Drop tables, databases if exists before reconstructions)
 /// 3. Drop related tables, Databases
 class NaturalDag
 {

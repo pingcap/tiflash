@@ -216,7 +216,7 @@ private:
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 DAGSchema getSelectSchema(Context & context);
-bool dagRspEqual(Context & context, const tipb::SelectResponse & dag_response_a, const tipb::SelectResponse & dag_response_b, String & unequal_msg);
+bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
 
 DAGProperties getDAGProperties(const String & prop_string)
 {
@@ -2546,12 +2546,10 @@ Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, c
     while (true)
     {
         Block block = squashed_delete_stream.read();
+        result_data.emplace_back(std::move(block));
         if (!block)
             break;
-        result_data.emplace_back(std::move(block));
     }
-    if (result_data.size() == 0)
-        throw Exception("Result block is empty!", ErrorCodes::BAD_ARGUMENTS);
 
     if (result_data.size() > 1)
         throw Exception("Result block should be less than 128M!", ErrorCodes::BAD_ARGUMENTS);
@@ -2576,10 +2574,18 @@ bool columnEqual(
     return true;
 }
 
-bool blockEqual(const Block & block_a, const Block & block_b, String & unequal_msg)
+bool blockEqual(const Block & expected, const Block & actual, String & unequal_msg)
 {
-    size_t size_a = block_a.columns();
-    size_t size_b = block_b.columns();
+    size_t rows_a = expected.rows();
+    size_t rows_b = actual.rows();
+    if (rows_a != rows_b)
+    {
+        unequal_msg = fmt::format("Row counter are not equal: {} vs {} ", rows_a, rows_b);
+        return false;
+    }
+
+    size_t size_a = expected.columns();
+    size_t size_b = actual.columns();
     if (size_a != size_b)
     {
         unequal_msg = fmt::format("Columns size are not equal: {} vs {} ", size_a, size_b);
@@ -2588,7 +2594,7 @@ bool blockEqual(const Block & block_a, const Block & block_b, String & unequal_m
 
     for (size_t i = 0; i < size_a; i++)
     {
-        bool equal = columnEqual(block_a.getByPosition(i).column, block_b.getByPosition(i).column, unequal_msg);
+        bool equal = columnEqual(expected.getByPosition(i).column, actual.getByPosition(i).column, unequal_msg);
         if (!equal)
         {
             unequal_msg = fmt::format("{}th columns are not equal, details: {}", i, unequal_msg);
@@ -2598,11 +2604,41 @@ bool blockEqual(const Block & block_a, const Block & block_b, String & unequal_m
     return true;
 }
 
-bool dagRspEqual(Context & context, const tipb::SelectResponse & dag_response_a, const tipb::SelectResponse & dag_response_b, String & unequal_msg)
+String formatBlockData(const Block & block)
+{
+    size_t rows = block.rows();
+    size_t columns = block.columns();
+    String result;
+    for (size_t i = 0; i < rows; i++)
+    {
+        for (size_t j = 0; j < columns; j++)
+        {
+            auto column = block.getByPosition(j).column;
+            auto field = (*column)[i];
+            if (j + 1 < columns)
+            {
+                // Just use "," as separator now, maybe confusing when string column contains ","
+                result += fmt::format("{},", field.toString());
+            }
+            else
+            {
+                result += fmt::format("{}\n", field.toString());
+            }
+        }
+    }
+    return result;
+}
+
+bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg)
 {
     auto schema = getSelectSchema(context);
-    Block block_a = getMergedBigBlockFromDagRsp(context, schema, dag_response_a);
-    Block block_b = getMergedBigBlockFromDagRsp(context, schema, dag_response_b);
-    return blockEqual(block_a, block_b, unequal_msg);
+    Block block_a = getMergedBigBlockFromDagRsp(context, schema, expected);
+    Block block_b = getMergedBigBlockFromDagRsp(context, schema, actual);
+    bool equal = blockEqual(block_a, block_b, unequal_msg);
+    if (!equal)
+    {
+        unequal_msg = fmt::format("{}\nExpected Results: \n{}\nActual Results: \n{}", unequal_msg, formatBlockData(block_a), formatBlockData(block_b));
+    }
+    return equal;
 }
 } // namespace DB

@@ -133,13 +133,11 @@ void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::
     region.conf_ver = DEFAULT_REGION_CONF_VERSION;
     String region_start;
     decodeBase64(region_obj->getValue<String>(REGION_START), region_start);
-    auto region_start_key = RecordKVFormat::encodeAsTiKVKey(region_start);
-    region.start = std::move(region_start_key);
+    region.start = RecordKVFormat::encodeAsTiKVKey(region_start);
 
     String region_end;
     decodeBase64(region_obj->getValue<String>(REGION_END), region_end);
-    auto region_end_key = RecordKVFormat::encodeAsTiKVKey(region_end);
-    region.end = std::move(region_end_key);
+    region.end = RecordKVFormat::encodeAsTiKVKey(region_end);
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": RegionID: " << region.id << ", RegionStart: " << printAsBytes(region.start) << ", RegionEnd: " << printAsBytes(region.end));
 
     auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
@@ -148,7 +146,7 @@ void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::
         auto pair_obj = pair_json.extract<JSONObjectPtr>();
         String key;
         decodeBase64(pair_obj->getValue<String>(TIKV_KEY), key);
-        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key); // encode raw key
+        TiKVKey tikv_key = RecordKVFormat::encodeAsTiKVKey(key); // encode raw key
         String value;
         decodeBase64(pair_obj->getValue<String>(TIKV_VALUE), value);
         TiKVValue tikv_value(std::move(value)); // use value directly, no encoding needed
@@ -193,12 +191,10 @@ void NaturalDag::buildTables(Context & context)
             auto & pairs = region.pairs;
             for (auto & pair : pairs)
             {
-                auto & key = pair.first;
-                auto & value = pair.second;
                 UInt64 prewrite_ts = pd_client->getTS();
                 UInt64 commit_ts = pd_client->getTS();
                 raft_cmdpb::RaftCmdRequest request;
-                RegionBench::addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, false);
+                RegionBench::addRequestsToRaftCmd(request, pair.first, pair.second, prewrite_ts, commit_ts, false);
                 tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region.id, MockTiKV::instance().getRaftIndex(region.id), MockTiKV::instance().getRaftTerm(region.id), tmt);
             }
         }

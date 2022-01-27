@@ -260,7 +260,7 @@ TableID MockTiDB::newTable(
 TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
 {
     auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
-    String qualified_name = database_name + "." + table_info.name;
+    String qualified_name = database_name + "." + table->table_info.name;
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
