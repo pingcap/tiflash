@@ -266,24 +266,21 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     // allocate data_buf that can hold all pages
     size_t buf_size = 0;
     for (const auto & p : entries)
-    {
-        buf_size += p.second.size;
-    }
+        buf_size = std::max(buf_size, p.second.size);
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
 
-    char * pos = data_buf;
     for (const auto & [page_id, entry] : entries)
     {
-        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
             ChecksumClass digest;
-            digest.update(pos, entry.size);
+            digest.update(data_buf, entry.size);
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
@@ -298,18 +295,10 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
         Page page;
         page.page_id = page_id;
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
         handler(page_id, page);
-
-        pos += entry.size;
     }
-
-    if (unlikely(pos != data_buf + buf_size))
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
-                                    data_buf + buf_size,
-                                    pos),
-                        ErrorCodes::LOGICAL_ERROR);
 }
 
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
