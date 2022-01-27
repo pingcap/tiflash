@@ -144,14 +144,36 @@ ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::op
         else
             col->insert(Null());
     }
-    return {std::move(col), data_type_ptr, "datetime"};
+    return {std::move(col), data_type_ptr, "datetime_nullable"};
 }
 
 ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction)
 {
     auto data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
     auto col = data_type_ptr->createColumnConst(size, Field(dt.toPackedUInt()));
-    return {std::move(col), data_type_ptr, "datetime"};
+    return {std::move(col), data_type_ptr, "datetime_const"};
+}
+
+
+ColumnWithTypeAndName createDateColumnNullable(std::initializer_list<std::optional<MyDate>> init)
+{
+    auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDate>());
+    auto col = data_type_ptr->createColumn();
+    for (const auto date : init)
+    {
+        if (date.has_value())
+            col->insert(Field(date->toPackedUInt()));
+        else
+            col->insert(Null());
+    }
+    return {std::move(col), data_type_ptr, "date_nullable"};
+}
+
+ColumnWithTypeAndName createDateColumnConst(size_t size, const MyDate & date)
+{
+    auto data_type_ptr = std::make_shared<DataTypeMyDate>();
+    auto col = data_type_ptr->createColumnConst(size, Field(date.toPackedUInt()));
+    return {std::move(col), data_type_ptr, "date_const"};
 }
 
 } // namespace tests

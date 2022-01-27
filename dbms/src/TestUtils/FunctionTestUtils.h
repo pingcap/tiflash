@@ -7,6 +7,7 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -251,6 +252,8 @@ ColumnWithTypeAndName createConstColumn(
 
 ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::optional<MyDateTime>> init, int fraction);
 ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction);
+ColumnWithTypeAndName createDateColumnNullable(std::initializer_list<std::optional<MyDate>> init);
+ColumnWithTypeAndName createDateColumnConst(size_t size, const MyDate & date);
 
 // parse a string into decimal field.
 template <typename T>
