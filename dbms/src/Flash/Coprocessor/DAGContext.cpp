@@ -161,6 +161,7 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                     max_streams,
                     log);
             }
+            return true;
         });
         mpp_exchange_receiver_map_inited = true;
     }

@@ -192,9 +192,17 @@ else ()
     add_custom_target (clickhouse-clang ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-clang DEPENDS tiflash)
     add_custom_target (clickhouse-lld ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-lld DEPENDS tiflash)
     list(APPEND CLICKHOUSE_BUNDLE clickhouse-clang clickhouse-lld)
-
+    
+    option(TIFLASH_ENABLE_RUNTIME_RPATH "Add $ORIGIN/../lib to tiflash installation rpath" OFF)
+    if (TIFLASH_ENABLE_RUNTIME_RPATH)
+        set_target_properties(tiflash PROPERTIES
+            BUILD_RPATH_USE_ORIGIN TRUE
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "$ORIGIN/"
+        )
+    endif()
     install (TARGETS tiflash RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
-
+    
     install (FILES
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-clang
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-lld
