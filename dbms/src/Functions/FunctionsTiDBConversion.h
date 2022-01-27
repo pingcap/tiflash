@@ -27,13 +27,13 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Functions/castTypeToEither.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromVector.h>
@@ -1754,8 +1754,7 @@ public:
         }
 
         // cast(decimal as decimal)
-        return castTypeToEither<DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256>(from_type.get(), [to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) -> bool
-        {
+        return castTypeToEither<DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256>(from_type.get(), [to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) -> bool {
             return (from_type_ptr.getPrec() <= to_decimal_prec) && (from_type_ptr.getScale() <= to_decimal_scale);
         });
     }

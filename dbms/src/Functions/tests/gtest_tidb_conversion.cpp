@@ -1032,7 +1032,7 @@ TEST_F(TestTidbConversion, skipCheckOverflowIntToDeciaml)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt32>(uint32_ptr, prec_decimal32, scale));
     // uint64(max_prec: 20) -> decimal32(max_prec: 9)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal32, scale));
-    
+
     // int8(max_prec: 3) -> decimal64(max_prec: 18)
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, prec_decimal64, scale));
     // int16(max_prec: 5) -> decimal64(max_prec: 18)
