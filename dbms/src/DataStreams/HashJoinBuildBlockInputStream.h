@@ -21,7 +21,7 @@ public:
         children.push_back(input);
         join = join_;
     }
-    static constexpr name = "HashJoinBuildBlockInputStream";
+    static constexpr auto name = "HashJoinBuildBlockInputStream";
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
 

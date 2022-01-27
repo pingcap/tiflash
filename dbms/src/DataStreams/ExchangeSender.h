@@ -17,7 +17,7 @@ public:
     {
         children.push_back(input);
     }
-    static constexpr name = "ExchangeSender";
+    static constexpr auto name = "ExchangeSender";
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
     void readSuffix() override
