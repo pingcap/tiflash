@@ -12,4 +12,6 @@ musl/syscall.s
 musl/syscall_ret.c
 musl/sched_cpucount.c)
 
+set_source_files_properties(musl/longjmp.s musl/syscall.s PROPERTIES COMPILE_FLAGS -Wno-unused-command-line-argument)
+
 add_subdirectory (tests EXCLUDE_FROM_ALL)
