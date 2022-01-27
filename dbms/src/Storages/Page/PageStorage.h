@@ -114,6 +114,7 @@ public:
         }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
+    Config getSettings() const { return config; }
 
 
     using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
@@ -183,7 +184,9 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     virtual void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) = 0;
 
+#ifndef DBMS_PUBLIC_GTEST
 protected:
+#endif
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     Config config;
