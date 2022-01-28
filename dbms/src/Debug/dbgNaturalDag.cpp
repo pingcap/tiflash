@@ -154,7 +154,7 @@ void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::
     }
 }
 
-const String & NaturalDag::getDataBaseName() const
+const String & NaturalDag::getDatabaseName() const
 {
     return DEFAULT_DATABASE_NAME;
 }
@@ -166,7 +166,7 @@ void NaturalDag::buildTables(Context & context)
     ClientPtr pd_client = tmt.getPDClient();
     auto schema_syncer = tmt.getSchemaSyncer();
 
-    String db_name(getDataBaseName());
+    String db_name(getDatabaseName());
     buildDatabase(context, schema_syncer, db_name);
 
     for (auto & it : tables)
@@ -219,7 +219,7 @@ void NaturalDag::build(Context & context)
 
 void NaturalDag::clean(Context & context)
 {
-    String db_name(getDataBaseName());
+    String db_name(getDatabaseName());
     MockTiDB::instance().dropDB(context, db_name, true);
 }
 

@@ -67,7 +67,7 @@ private:
     void loadReqAndRsp(const JSONObjectPtr & obj);
     void buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const;
     void buildTables(Context & context);
-    const String & getDataBaseName() const;
+    const String & getDatabaseName() const;
 
     String json_dag_path;
     Poco::Logger * log;
