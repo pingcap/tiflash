@@ -19,6 +19,8 @@ private:
 
     TableID next_table_id = InvalidTableID;
 
+    AtomicStopwatch gc_check_stop_watch;
+
     Logger * log;
 };
 } // namespace DB
