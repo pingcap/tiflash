@@ -206,8 +206,6 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-# Due to ODR restriction and profiing bugs (https://llvm.discourse.group/t/segfault-in-libunwind-during-cpu-profiling/5806/2)
-# We keep runtime libs to be dynamically linked when LLVM toolchain is used
 if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
@@ -221,8 +219,8 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
-    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" ON)
-    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" ON)
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" OFF)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" OFF)
 
 
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
