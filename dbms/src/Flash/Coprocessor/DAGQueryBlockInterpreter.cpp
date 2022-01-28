@@ -24,6 +24,12 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Planner/PhysicalAggregation.h>
+#include <Flash/Planner/PhysicalFilter.h>
+#include <Flash/Planner/PhysicalLimit.h>
+#include <Flash/Planner/PhysicalProjection.h>
+#include <Flash/Planner/PhysicalSource.h>
+#include <Flash/Planner/PhysicalTopN.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
