@@ -82,24 +82,24 @@ else
 fi
 ccache -z
 
-rm -rf ${SRCPATH}/libs/libtiflash-proxy
-mkdir -p ${SRCPATH}/libs/libtiflash-proxy
-
-cd ${SRCPATH}/contrib/tiflash-proxy
-proxy_git_hash=$(git log -1 --format="%H")
-
-while [[ true ]]; do
-  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-    http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so
-  proxy_size=$(ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}')
-  if [[ ${proxy_size} -lt $((102400)) ]]; then
-    echo "fail to get ci build tiflash proxy, sleep 60s"
-    sleep 60
-  else
-    chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
-    break
-  fi
-done
+# rm -rf ${SRCPATH}/contrib/tiflash-proxy/target/release
+# mkdir -p ${SRCPATH}/contrib/tiflash-proxy/target/release
+#
+# cd ${SRCPATH}/contrib/tiflash-proxy
+# proxy_git_hash=$(git log -1 --format="%H")
+#
+# while [[ true ]]; do
+#   curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" \
+#     http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so
+#   proxy_size=$(ls -l "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" | awk '{print $5}')
+#   if [[ ${proxy_size} -lt $((102400)) ]]; then
+#     echo "fail to get ci build tiflash proxy, sleep 60s"
+#     sleep 60
+#   else
+#     chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
+#     break
+#   fi
+# done
 
 BUILD_DIR="/build/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR}
@@ -118,6 +118,8 @@ cmake "${SRCPATH}" \
   -DUSE_LLVM_COMPILER_RT=OFF \
   -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
+#   -DUSE_INTERNAL_TIFLASH_PROXY=FALSE \
+#   -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
   -GNinja
 
 ninja gtests_dbms gtests_libcommon gtests_libdaemon

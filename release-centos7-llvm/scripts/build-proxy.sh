@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# TODO: We should move these things into tiflash proxy's own build script rather than do them in main tiflash project.
 # TiFlash-Proxy Building script
 # Copyright PingCAP, Inc
 # THIS SCRIPT SHOULD ONLY BE INVOKED IN DOCKER
