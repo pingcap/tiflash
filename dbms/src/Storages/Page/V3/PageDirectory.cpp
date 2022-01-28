@@ -373,7 +373,7 @@ PageId PageDirectory::getMaxId() const
     PageId max_page_id = 0;
     std::shared_lock read_lock(table_rw_mutex);
 
-    for (auto & [page_id, versioned] : mvcc_table_directory)
+    for (const auto & [page_id, versioned] : mvcc_table_directory)
     {
         (void)versioned;
         max_page_id = std::max(max_page_id, page_id);
