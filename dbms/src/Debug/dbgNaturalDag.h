@@ -65,7 +65,7 @@ private:
     void loadTables(const JSONObjectPtr & obj);
     void loadRegion(const Poco::Dynamic::Var & region_json, LoadedRegionInfo & region) const;
     void loadReqAndRsp(const JSONObjectPtr & obj);
-    void buildDataBase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const;
+    void buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const;
     void buildTables(Context & context);
     const String & getDataBaseName() const;
 

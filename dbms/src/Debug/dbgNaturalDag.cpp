@@ -167,7 +167,7 @@ void NaturalDag::buildTables(Context & context)
     auto schema_syncer = tmt.getSchemaSyncer();
 
     String db_name(getDataBaseName());
-    buildDataBase(context, schema_syncer, db_name);
+    buildDatabase(context, schema_syncer, db_name);
 
     for (auto & it : tables)
     {
@@ -201,7 +201,7 @@ void NaturalDag::buildTables(Context & context)
     }
 }
 
-void NaturalDag::buildDataBase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const
+void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const
 {
     DatabaseID db_id;
     if (MockTiDB::instance().getDBIDByName(db_name, &db_id))
