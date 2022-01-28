@@ -1652,7 +1652,7 @@ public:
         const ColumnString * input_raw_col = nullptr;
         if (input_column->isColumnNullable())
         {
-            auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
+            const auto * null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
             input_raw_col = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
         }
         else
@@ -1702,7 +1702,7 @@ public:
             const ColumnString * format_raw_col = nullptr;
             if (format_column->isColumnNullable())
             {
-                auto null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
+                const auto * null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
                 format_raw_col = checkAndGetColumn<ColumnString>(null_format_column->getNestedColumnPtr().get());
             }
             else
@@ -1710,6 +1710,14 @@ public:
                 format_raw_col = checkAndGetColumn<ColumnString>(format_column.get());
             }
 
+            String str_input_const;
+            StringRef str_ref;
+            if (input_column->isColumnConst())
+            {
+                const auto & input_const = checkAndGetColumnConst<ColumnString>(input_column.get());
+                str_input_const = input_const->getValue<String>();
+                str_ref = StringRef(str_input_const);
+            }
             for (size_t i = 0; i < num_rows; ++i)
             {
                 // Set null for either null input or null format
@@ -1734,7 +1742,10 @@ public:
 
                 const auto format_ref = format_raw_col->getDataAt(i);
                 auto parser = MyDateTimeParser(format_ref.toString());
-                const auto str_ref = input_raw_col->getDataAt(i);
+                if (!input_column->isColumnConst())
+                {
+                    str_ref = input_raw_col->getDataAt(i);
+                }
                 if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
                 {
                     datetime_res[i] = *parse_res;
