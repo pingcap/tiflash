@@ -185,6 +185,10 @@ bool DeltaValueSpace::flush(DMContext & context)
         /// Update delta tree
         if (new_delta_index)
             delta_index = new_delta_index;
+
+        LOG_DEBUG(log,
+                  simpleInfo() << " Flush end. Flushed " << flush_task->getTaskNum() << " column files, " << flush_task->getFlushRows() << " rows and " << flush_task->getFlushDeletes()
+                               << " deletes.");
     }
     return true;
 }

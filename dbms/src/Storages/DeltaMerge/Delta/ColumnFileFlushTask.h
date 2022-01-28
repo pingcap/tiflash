@@ -47,12 +47,24 @@ private:
     MemTableSetPtr mem_table_set;
     size_t flush_version;
 
+    size_t flush_rows = 0;
+    size_t flush_deletes = 0;
+
 public:
     ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t flush_version_);
 
-    inline Task & addColumnFile(ColumnFilePtr column_file) { return tasks.emplace_back(column_file); }
+    inline Task & addColumnFile(ColumnFilePtr column_file)
+    {
+        flush_rows += column_file->getRows();
+        flush_deletes += column_file->getDeletes();
+        return tasks.emplace_back(column_file);
+    }
 
     const Tasks & getAllTasks() const { return tasks; }
+
+    size_t getTaskNum() const { return tasks.size(); }
+    size_t getFlushRows() const { return flush_rows; }
+    size_t getFlushDeletes() const { return flush_deletes; }
 
     // Persist data in ColumnFileInMemory
     DeltaIndex::Updates prepare(WriteBatches & wbs);

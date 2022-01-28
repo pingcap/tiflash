@@ -140,8 +140,6 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
 
     size_t cur_rows_offset = rows_offset;
     size_t cur_deletes_offset = deletes_offset;
-    size_t flush_rows = 0;
-    size_t flush_deletes = 0;
     auto flush_task = std::make_shared<ColumnFileFlushTask>(context, this->shared_from_this(), flush_version);
     for (auto & column_file : column_files)
     {
@@ -154,10 +152,8 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
         }
         cur_rows_offset += column_file->getRows();
         cur_deletes_offset += column_file->getDeletes();
-        flush_rows += column_file->getRows();
-        flush_deletes += column_file->getDeletes();
     }
-    if (unlikely(flush_rows != rows || flush_deletes != deletes))
+    if (unlikely(flush_task->getFlushRows() != rows || flush_task->getFlushDeletes() != deletes))
         throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
 
     return flush_task;
