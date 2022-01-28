@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 
 namespace DB
@@ -63,13 +65,18 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    LogWithPrefixPtr log;
 
     PageDirectory page_directory;
 
-    // TBD: BlobStore::Config should add in PageStorage config.
     BlobStore::Config blob_config;
 
     BlobStore blob_store;
+
+    std::atomic<bool> gc_is_running = false;
+
+    ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 } // namespace PS::V3
