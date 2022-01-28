@@ -107,6 +107,7 @@ curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" \
   http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
 proxy_size=$(ls -l "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
+# TODO: Should build tiflash proxy along with tiflash if downloaded one is problematic.
 if [[ ${proxy_size} -lt ${min_size} ]]; then
   echo "try to build libtiflash_proxy.so"
   export PATH=$PATH:$HOME/.cargo/bin
