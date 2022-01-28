@@ -13,7 +13,7 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
         : ChunkCodecStream(field_types)
     {
-        output = std::make_unique<WriteBufferFromOwnString>();
+        //output = std::make_unique<WriteBufferFromOwnString>();
         for (size_t i = 0; i < field_types.size(); i++)
         {
             expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
@@ -25,7 +25,8 @@ public:
         return output->releaseStr();
     }
 
-    void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
+    //void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
+    void clear() override { output = nullptr; }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
@@ -58,6 +59,8 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
+    assert(output == nullptr);
+    output = std::make_unique<WriteBufferFromOwnString>(block.bytes());
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();
