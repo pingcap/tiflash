@@ -122,10 +122,21 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     return snap;
 }
 
+RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
+{
+    RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
+    for (auto iter = packs.cbegin(); iter != packs.cend(); ++iter)
+    {
+        const auto & pack = *iter;
+        if (auto dp_delete = pack->tryToDeleteRange(); dp_delete)
+            squashed_delete_range = squashed_delete_range.merge(dp_delete->getDeleteRange());
+    }
+    return squashed_delete_range;
+}
+
 // ================================================
 // DeltaValueReader
 // ================================================
-
 
 DeltaValueReader::DeltaValueReader(const DMContext &        context,
                                    const DeltaSnapshotPtr & delta_snap_,
