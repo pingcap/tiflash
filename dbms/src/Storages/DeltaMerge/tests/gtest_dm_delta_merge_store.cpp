@@ -280,7 +280,8 @@ try
         store     = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
 
         ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
-        ASSERT_EQ(store->pkIsHandle(), (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+        ASSERT_EQ(DeltaMergeStore::pkIsHandle(store->getHandle()),
+                  (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
             << DMTestEnv::PkTypeToString(pk_type);
 
         const size_t nrows  = 20;
@@ -294,7 +295,7 @@ try
                                                          handle.type,
                                                          store->isCommonHandle(),
                                                          store->getRowKeyColumnSize());
-        block1              = store->addExtraColumnIfNeed(*context, std::move(block1));
+        block1              = DeltaMergeStore::addExtraColumnIfNeed(*context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
         ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
         for (const auto & c : block1)
@@ -311,7 +312,7 @@ try
                                                          handle.type,
                                                          store->isCommonHandle(),
                                                          store->getRowKeyColumnSize());
-        block2         = store->addExtraColumnIfNeed(*context, std::move(block2));
+        block2         = DeltaMergeStore::addExtraColumnIfNeed(*context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
         for (const auto & c : block2)
@@ -1351,7 +1352,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1UL);
+        ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
 
         size_t num_rows_read = 0;
@@ -1373,7 +1374,7 @@ try
             num_rows_read += block.rows();
         }
         in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
     }
 
     {
@@ -1387,7 +1388,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1UL);
+        ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
 
         size_t num_rows_read = 0;
@@ -1395,7 +1396,7 @@ try
         while (Block block = in->read())
             num_rows_read += block.rows();
         in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "The rows number after ingest is not match";
+        EXPECT_EQ(num_rows_read, 32) << "The rows number after ingest is not match";
     }
 }
 CATCH
