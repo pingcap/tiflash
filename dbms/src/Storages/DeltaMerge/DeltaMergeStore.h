@@ -172,9 +172,9 @@ public:
 
     enum TaskRunThread
     {
-        Thread_BG_Thread_Pool,
-        Thread_FG,
-        Thread_BG_GC,
+        BackgroundThreadPool,
+        Foreground,
+        BackgroundGCThread,
     };
 
     static std::string toString(ThreadType type)
@@ -204,21 +204,6 @@ public:
         }
     }
 
-    static std::string toString(TaskRunThread type)
-    {
-        switch (type)
-        {
-        case Thread_BG_Thread_Pool:
-            return "BackgroundThreadPool";
-        case Thread_FG:
-            return "Foreground";
-        case Thread_BG_GC:
-            return "BackgroundGCThread";
-        default:
-            return "Unknown";
-        }
-    }
-
     static std::string toString(TaskType type)
     {
         switch (type)
@@ -235,6 +220,21 @@ public:
             return "Flush";
         case PlaceIndex:
             return "PlaceIndex";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case BackgroundThreadPool:
+            return "BackgroundThreadPool";
+        case Foreground:
+            return "Foreground";
+        case BackgroundGCThread:
+            return "BackgroundGCThread";
         default:
             return "Unknown";
         }
@@ -354,7 +354,10 @@ public:
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
-    /// Apply `commands` on `table_columns`
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
+    /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
                      const OptionTableInfoConstRef table_info,
                      ColumnID &                    max_column_id_used,
@@ -378,8 +381,6 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
-    UInt64 onSyncGc(Int64 limit);
-
 public:
     /// Methods mainly used by region split.
 
@@ -393,8 +394,7 @@ public:
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
 private:
-
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
 
     static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
@@ -405,13 +405,19 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread);
+    SegmentPtr  segmentMergeDelta(DMContext &         dm_context,
+                                  const SegmentPtr &  segment,
+                                  const TaskRunThread thread,
+                                  SegmentSnapshotPtr  segment_snap = nullptr);
 
     bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 
-    bool isSegmentValid(const SegmentPtr & segment);
+    // isSegmentValid should be protected by lock on `read_write_mutex`
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    bool        doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
 
