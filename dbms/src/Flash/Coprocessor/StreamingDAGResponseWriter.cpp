@@ -108,7 +108,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             }
             for (auto & block : input_blocks)
             {
-                chunk_codec_stream->resizeAndRestart(chunk_codec_stream->getExtraInfoSize(block) + block.bytes());
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
@@ -265,7 +264,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_blocks[part_id].rows();
-            chunk_codec_stream->resizeAndRestart(chunk_codec_stream->getExtraInfoSize(dest_blocks[part_id]) + dest_blocks[part_id].bytes());
             chunk_codec_stream->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
             packet[part_id].add_chunks(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
