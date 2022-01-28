@@ -26,4 +26,11 @@ export CXXFLAGS="-w"
 export CXXSTDLIB="c++"
 export CMAKE="/opt/cmake/bin/cmake"
 
+if [ -f /.dockerenv ]; then
+    echo '#!/usr/bin/env bash' > /tmp/tiflash-link
+    echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
+    chmod +x /tmp/tiflash-link
+    export RUSTFLAGS="-C linker=/tmp/tiflash-link"
+fi
+
 make release

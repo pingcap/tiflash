@@ -56,6 +56,8 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 # compress debug symbols
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
+
+vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
 
 # unset LD_LIBRARY_PATH before test
