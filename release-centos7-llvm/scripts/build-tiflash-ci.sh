@@ -134,6 +134,7 @@ cmake "$SRCPATH" \
   -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -DCMAKE_AR="/usr/local/bin/llvm-ar" \
+  -DRUN_HAVE_STD_REGEX=0 \
   -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
   -GNinja
 
