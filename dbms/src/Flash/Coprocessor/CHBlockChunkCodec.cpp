@@ -13,7 +13,6 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
         : ChunkCodecStream(field_types)
     {
-        output = std::make_unique<WriteBufferFromOwnString>();
         for (size_t i = 0; i < field_types.size(); i++)
         {
             expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
@@ -25,36 +24,29 @@ public:
         return output->releaseStr();
     }
 
-    void resizeAndRestart(size_t size) override
-    {
-        if (nullptr == output)
-        {
-            throw Exception("the output of CHBlockChunkCodecStream should not be null when resizing");
-        }
-        output->resizeAndRestart(size);
-    }
-
-    size_t getExtraInfoSize(const Block & block) override
-    {
-        size_t size = 128;
-        size_t columns = block.columns();
-        for (size_t i = 0; i < columns; i++)
-        {
-            const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
-            size += column.name.size();
-            size += column.type->getName().size();
-            if (column.column->isColumnConst())
-            {
-                size += column.column->byteSize() * column.column->size();
-            }
-        }
-        return size;
-    }
-    void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
+    size_t getExtraInfoSize(const Block & block);
+    void clear() override { output = nullptr; }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
 };
+
+size_t CHBlockChunkCodecStream::getExtraInfoSize(const Block & block)
+{
+    size_t size = 128;
+    size_t columns = block.columns();
+    for (size_t i = 0; i < columns; i++)
+    {
+        const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
+        size += column.name.size();
+        size += column.type->getName().size();
+        if (column.column->isColumnConst())
+        {
+            size += column.column->byteSize() * column.column->size();
+        }
+    }
+    return size;
+}
 
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
@@ -83,6 +75,10 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
+
+    assert(output == nullptr);
+    output = std::make_unique<WriteBufferFromOwnString>(block.bytes() + getExtraInfoSize(block));
+
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();
