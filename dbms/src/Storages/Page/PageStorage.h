@@ -114,6 +114,7 @@ public:
         }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
+    Config getSettings() const { return config; }
 
 
     using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
@@ -172,8 +173,6 @@ public:
     virtual PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) = 0;
-
-    virtual void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
     virtual PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
@@ -252,9 +251,7 @@ public:
         return storage->getEntry(page_id, snap);
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
     PageStoragePtr storage;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;

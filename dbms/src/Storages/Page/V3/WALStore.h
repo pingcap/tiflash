@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Storages/Page/V3/LogFile/LogFilename.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/types.h>
@@ -69,27 +71,36 @@ public:
     using ChecksumClass = Digest::CRC64;
 
     static WALStorePtr create(
+        std::function<void(PageEntriesEdit &&)> && restore_callback,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
-        const WriteLimiterPtr & write_limiter);
+        const WriteLimiterPtr & write_limiter = nullptr);
 
     void apply(PageEntriesEdit & edit, const PageVersionType & version);
     void apply(const PageEntriesEdit & edit);
 
-    static WALStoreReaderPtr createReader(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator);
-
-    void gc();
+    bool compactLogs();
 
 private:
     WALStore(
-        const String & path_,
+        const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
         const WriteLimiterPtr & write_limiter_,
         std::unique_ptr<LogWriter> && cur_log);
 
-    const String path;
-    const FileProviderPtr provider;
+    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
+    createLogWriter(
+        PSDiskDelegatorPtr delegator,
+        const FileProviderPtr & provider,
+        const WriteLimiterPtr & write_limiter,
+        const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+        Poco::Logger * logger,
+        bool manual_flush);
+
+    PSDiskDelegatorPtr delegator;
+    FileProviderPtr provider;
     const WriteLimiterPtr write_limiter;
+    std::mutex log_file_mutex;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;
