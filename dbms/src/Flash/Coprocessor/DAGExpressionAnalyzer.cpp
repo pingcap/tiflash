@@ -784,7 +784,7 @@ static bool checkWindowFunctionsInvalid(const tipb::Window & window)
 {
     bool has_agg_func = false;
     bool has_window_func = false;
-    for (const tipb::Expr & expr : window.agg_func())
+    for (const tipb::Expr & expr : window.func_desc())
     {
         has_agg_func = has_agg_func || isAggFunctionExpr(expr);
         has_window_func = has_window_func || isWindowFunctionExpr(expr);
@@ -801,7 +801,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
 
-    if (window.partition_by_size() == 0 || window.agg_func_size() == 0)
+    if (window.partition_by_size() == 0 || window.func_desc_size() == 0)
     {
         //should not reach here
         throw TiFlashException("window executor without group by or agg exprs/window exprs", Errors::Coprocessor::BadRequest);
@@ -814,7 +814,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
 
     std::vector<NameAndTypePair> window_columns;
 
-    for (const tipb::Expr & expr : window.agg_func())
+    for (const tipb::Expr & expr : window.func_desc())
     {
         // TODO: extract into function
         if (isAggFunctionExpr(expr))
@@ -999,19 +999,19 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
     ExpressionActionsChain & chain,
-    const tipb::WindowSort & window_sort)
+    const tipb::Sort & window_sort)
 {
-    if (window_sort.order_by_size() == 0)
+    if (window_sort.byitems_size() == 0)
     {
         throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
     std::vector<NameAndTypePair> order_columns;
-    order_columns.reserve(window_sort.order_by_size());
+    order_columns.reserve(window_sort.byitems_size());
 
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
 
-    for (const tipb::ByItem & order_by : window_sort.order_by())
+    for (const tipb::ByItem & order_by : window_sort.byitems())
     {
         String name = getActions(order_by.expr(), step.actions);
         auto type = step.actions->getSampleBlock().getByName(name).type;
@@ -1261,10 +1261,10 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     bool need_update_source_columns = false;
     std::vector<NameAndTypePair> updated_after_window_columns;
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (Int32 i = 0; i < window.agg_func_size(); i++)
+    for (Int32 i = 0; i < window.func_desc_size(); i++)
     {
         const String & name = after_window_columns[i].name;
-        String updated_name = appendCastIfNeeded(window.agg_func(i), step.actions, name);
+        String updated_name = appendCastIfNeeded(window.func_desc(i), step.actions, name);
         if (name != updated_name)
         {
             need_update_source_columns = true;

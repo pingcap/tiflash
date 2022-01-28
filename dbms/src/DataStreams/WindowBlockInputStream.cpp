@@ -239,7 +239,7 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
 
     // Choose a row comparison function for RANGE OFFSET frame based on the
     // type of the ORDER BY column.
-    if (window_description.frame.type == WindowFrame::FrameType::Range
+    if (window_description.frame.type == WindowFrame::FrameType::Ranges
         && (window_description.frame.begin_type
                 == WindowFrame::BoundaryType::Offset
             || window_description.frame.end_type
@@ -618,7 +618,7 @@ void WindowBlockInputStream::advanceFrameStart()
         case WindowFrame::FrameType::Rows:
             advanceFrameStartRowsOffset();
             break;
-        case WindowFrame::FrameType::Range:
+        case WindowFrame::FrameType::Ranges:
             advanceFrameStartRangeOffset();
             break;
         default:
@@ -669,7 +669,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
     }
 
     // For RANGE and GROUPS frames, rows that compare equal w/ORDER BY are peers.
-    assert(window_description.frame.type == WindowFrame::FrameType::Range);
+    assert(window_description.frame.type == WindowFrame::FrameType::Ranges);
     const size_t n = order_by_indices.size();
     if (n == 0)
     {
@@ -846,7 +846,7 @@ void WindowBlockInputStream::advanceFrameEnd()
         case WindowFrame::FrameType::Rows:
             advanceFrameEndRowsOffset();
             break;
-        case WindowFrame::FrameType::Range:
+        case WindowFrame::FrameType::Ranges:
             advanceFrameEndRangeOffset();
             break;
         default:

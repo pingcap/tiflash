@@ -51,7 +51,7 @@ public:
 
     std::vector<NameAndTypePair> appendWindowOrderBy(
         ExpressionActionsChain & chain,
-        const tipb::WindowSort & window_sort);
+        const tipb::Sort & window_sort);
 
     void updateWindowSourceColumns();
 

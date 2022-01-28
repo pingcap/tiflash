@@ -32,10 +32,10 @@ namespace
 {
 const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Rank, "rank"},
-    {tipb::ExprType::Dense_rank, "dense_rank"},
-    {tipb::ExprType::Row_number, "row_number"},
-    {tipb::ExprType::Lag_in_frame, "lag_in_frame"},
-    {tipb::ExprType::Lead_in_frame, "lead_in_frame"},
+    {tipb::ExprType::DenseRank, "dense_rank"},
+    {tipb::ExprType::RowNumber, "row_number"},
+    {tipb::ExprType::Lag, "lag_in_frame"},
+    {tipb::ExprType::Lead, "lead_in_frame"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -904,10 +904,10 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
     switch (expr.tp())
     {
     case tipb::ExprType::Rank:
-    case tipb::ExprType::Dense_rank:
-    case tipb::ExprType::Row_number:
-    case tipb::ExprType::Lag_in_frame:
-    case tipb::ExprType::Lead_in_frame:
+    case tipb::ExprType::DenseRank:
+    case tipb::ExprType::RowNumber:
+    case tipb::ExprType::Lag:
+    case tipb::ExprType::Lead:
         return true;
     default:
         return false;

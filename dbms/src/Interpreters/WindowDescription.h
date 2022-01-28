@@ -31,7 +31,7 @@ struct WindowFrame
     {
         Rows,
         Groups,
-        Range
+        Ranges
     };
     enum class BoundaryType
     {
@@ -45,7 +45,7 @@ struct WindowFrame
     // for the default frame of RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW.
     bool is_default = true;
 
-    FrameType type = FrameType::Range;
+    FrameType type = FrameType::Ranges;
 
     // UNBOUNDED FOLLOWING for the frame end is forbidden by the standard, but for
     // uniformity the begin_preceding still has to be set to true for UNBOUNDED

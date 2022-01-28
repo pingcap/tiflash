@@ -65,7 +65,7 @@ std::string WindowFrame::getFrameTypeName(FrameType type) const
         return "rows";
     case FrameType::Groups:
         return "groups";
-    case FrameType::Range:
+    case FrameType::Ranges:
         return "range";
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid frame type", type);
@@ -184,7 +184,7 @@ void WindowDescription::checkValid() const
     frame.checkValid();
 
     // RANGE OFFSET requires exactly one ORDER BY column.
-    if (frame.type == WindowFrame::FrameType::Range
+    if (frame.type == WindowFrame::FrameType::Ranges
         && (frame.begin_type == WindowFrame::BoundaryType::Offset
             || frame.end_type == WindowFrame::BoundaryType::Offset)
         && order_by.size() != 1)
@@ -215,8 +215,8 @@ WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameMode type)
 {
     switch (type)
     {
-    case tipb::WindowFrameMode::Range:
-        return WindowFrame::FrameType::Range;
+    case tipb::WindowFrameMode::Ranges:
+        return WindowFrame::FrameType::Ranges;
     case tipb::WindowFrameMode::Rows:
         return WindowFrame::FrameType::Rows;
     case tipb::WindowFrameMode::Groups:

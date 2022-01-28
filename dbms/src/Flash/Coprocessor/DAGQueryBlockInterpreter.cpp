@@ -217,10 +217,10 @@ AnalysisResult analyzeExpressions(
                 name = iter->first;
                 auto & window_sort = iter->second;
                 std::vector<bool> sort_orders;
-                if (window_sort && window_sort->tp() == tipb::ExecType::TypeWindowSort)
+                if (window_sort && window_sort->tp() == tipb::ExecType::TypeSort)
                 {
-                    std::vector<NameAndTypePair> columns = analyzer.appendWindowOrderBy(chain, window_sort->window_sort());
-                    res.window_sort_description_map.insert({name, getSortDescription(columns, window_sort->window_sort().order_by())});
+                    std::vector<NameAndTypePair> columns = analyzer.appendWindowOrderBy(chain, window_sort->sort());
+                    res.window_sort_description_map.insert({name, getSortDescription(columns, window_sort->sort().byitems())});
                     continue;
                 }
             }

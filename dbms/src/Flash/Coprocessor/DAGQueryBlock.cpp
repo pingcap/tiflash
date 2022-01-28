@@ -66,7 +66,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 
 void collectOutPutFieldTypesFromWindow(std::vector<tipb::FieldType> & field_type, const tipb::Window & window)
 {
-    for (const auto & expr : window.agg_func())
+    for (const auto & expr : window.func_desc())
     {
         if (!exprHasValidFieldType(expr))
         {
@@ -130,13 +130,16 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             collectOutPutFieldTypesFromWindow(output_field_types, current->window());
             current = &current->window().child();
             break;
-        case tipb::ExecType::TypeWindowSort:
+        case tipb::ExecType::TypeSort:
+            // only isPartialSort = ture is for window function sort.
+            if (current->sort().ispartialsort())
+                break;
             GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
             window_sort_name = current->executor_id();
             assignOrThrowException(&window_sort, current, WINDOW_SORT_NAME);
             window_sorts.insert({window_sort_name, window_sort});
             window_op_list.push_back(window_sort_name);
-            current = &current->window_sort().child();
+            current = &current->sort().child();
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
@@ -249,7 +252,9 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             window_op_list.push_back(window_name);
             collectOutPutFieldTypesFromWindow(output_field_types, executors[i].window());
             break;
-        case tipb::ExecType::TypeWindowSort:
+        case tipb::ExecType::TypeSort:
+            if (!executors[i].sort().ispartialsort())
+                break;
             GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();
             assignOrThrowException(&window_sort, &executors[i], WINDOW_SORT_NAME);
             if (executors[i].has_executor_id())
