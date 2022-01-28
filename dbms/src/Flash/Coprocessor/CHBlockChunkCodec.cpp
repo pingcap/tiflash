@@ -21,6 +21,10 @@ public:
 
     String getString() override
     {
+        if (output == nullptr)
+        {
+            throw Exception("The output should not be null in getString()");
+        }
         return output->releaseStr();
     }
 
