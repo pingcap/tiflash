@@ -161,6 +161,12 @@ PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, c
 
 void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    // TODO: This could hold the read lock of `page_directory` for a long time
     const auto & page_ids = page_directory.getAllPageIds();
     for (const auto & valid_page : page_ids)
     {
