@@ -48,7 +48,7 @@ public:
     using Lock = std::unique_lock<std::mutex>;
 
 private:
-    /// column files in `stable_file_set` are all persisted in disks and can be restored after restart.
+    /// column files in `persisted_file_set` are all persisted in disks and can be restored after restart.
     /// column files in `mem_table_set` just resides in memory.
     ///
     /// Note that `persisted_file_set` and `mem_table_set` also forms a one-dimensional space

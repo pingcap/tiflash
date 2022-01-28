@@ -47,7 +47,7 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
 
 bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs)
 {
-    if (!persisted_file_set->checkAndUpdateFlushVersion(flush_version))
+    if (!persisted_file_set->checkAndIncreaseFlushVersion(flush_version))
         return false;
 
     /// Create new column file instance for ColumnFilePersistedSet

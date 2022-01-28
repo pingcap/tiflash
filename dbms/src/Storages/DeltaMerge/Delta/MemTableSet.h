@@ -14,7 +14,7 @@ using MemTableSetPtr = std::shared_ptr<MemTableSet>;
 /// MemTableSet contains column file which data just resides in memory and it cannot be restored after restart.
 /// And the column files will be flushed periodically to ColumnFilePersistedSet.
 ///
-/// This class is not thread safe, manipulate on it requires acquire extra synchronization
+/// This class is not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
 class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {

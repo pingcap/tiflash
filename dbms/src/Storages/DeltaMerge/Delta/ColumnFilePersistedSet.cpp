@@ -158,6 +158,10 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
             it_2++;
         }
     }
+    else
+    {
+        check_success = false;
+    }
 
     if (unlikely(!check_success))
     {
@@ -176,35 +180,36 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
             if (level_it == persisted_files_levels.rend())
                 break;
             it_2 = level_it->begin();
+            continue;
         }
         const auto & column_file = *it_2;
-        if (auto * cr = column_file->tryToDeleteRange(); cr)
+        if (auto * d_file = column_file->tryToDeleteRange(); d_file)
         {
-            auto new_dr = cr->getDeleteRange().shrink(target_range);
+            auto new_dr = d_file->getDeleteRange().shrink(target_range);
             if (!new_dr.none())
             {
                 // Only use the available delete_range pack.
-                cloned_tail.push_back(cr->cloneWith(new_dr));
+                cloned_tail.push_back(d_file->cloneWith(new_dr));
             }
         }
-        else if (auto * tf = column_file->tryToTinyFile(); tf)
+        else if (auto * t_file = column_file->tryToTinyFile(); t_file)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
             PageId new_data_page_id = context.storage_pool.newLogPageId();
-            wbs.log.putRefPage(new_data_page_id, tf->getDataPageId());
-            auto new_column_file = tf->cloneWith(new_data_page_id);
+            wbs.log.putRefPage(new_data_page_id, t_file->getDataPageId());
+            auto new_column_file = t_file->cloneWith(new_data_page_id);
             cloned_tail.push_back(new_column_file);
         }
-        else if (auto * f = column_file->tryToBigFile(); f)
+        else if (auto * b_file = column_file->tryToBigFile(); b_file)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
             auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-            auto file_id = f->getFile()->fileId();
+            auto file_id = b_file->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
             auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-            auto new_big_file = f->cloneWith(context, new_file, target_range);
+            auto new_big_file = b_file->cloneWith(context, new_file, target_range);
             cloned_tail.push_back(new_big_file);
         }
         else
@@ -268,7 +273,7 @@ size_t ColumnFilePersistedSet::getValidCacheRows() const
     return cache_rows;
 }
 
-bool ColumnFilePersistedSet::checkAndUpdateFlushVersion(size_t task_flush_version)
+bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_version)
 {
     if (task_flush_version != flush_version)
     {
@@ -388,6 +393,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     // Add new file to the target level
     auto target_level = compaction->compaction_src_level + 1;
     auto & target_level_files = new_persisted_files_levels.emplace_back();
+    // clone the old column files in the target level first
     if (persisted_files_levels.size() > target_level)
     {
         for (auto & column_file : persisted_files_levels[target_level])
@@ -439,7 +445,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const DMContext 
             if (auto * t = file->tryToTinyFile(); (t && t->getCache()))
             {
                 // Compact threads could update the value of ColumnTinyFile::cache,
-                // and since ColumnFile is not mult-threads safe, we should create a new column file object.
+                // and since ColumnFile is not multi-threads safe, we should create a new column file object.
                 snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
             }
             else

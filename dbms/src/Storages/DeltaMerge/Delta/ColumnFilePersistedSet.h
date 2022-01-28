@@ -30,7 +30,7 @@ namespace DM
 class ColumnFilePersistedSet;
 using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 
-/// This class is not thread safe, manipulate on it requires acquire extra synchronization
+/// This class is not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
 class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
@@ -66,7 +66,7 @@ public:
     /// Only called after reboot.
     static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
-    String simpleInfo() const { return "ColumnStableFileSet [" + DB::toString(metadata_id) + "]"; }
+    String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
     {
         String levels_summary;
@@ -111,7 +111,7 @@ public:
 
     size_t getCurrentFlushVersion() const { return flush_version; }
 
-    bool checkAndUpdateFlushVersion(size_t task_flush_version);
+    bool checkAndIncreaseFlushVersion(size_t task_flush_version);
 
     bool appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 

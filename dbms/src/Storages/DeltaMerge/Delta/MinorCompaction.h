@@ -49,7 +49,7 @@ private:
     size_t total_compact_rows = 0;
 
 public:
-    explicit MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
+    MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
 
     // return whether this task is a trivial move
     inline bool packUpTask(Task && task)
