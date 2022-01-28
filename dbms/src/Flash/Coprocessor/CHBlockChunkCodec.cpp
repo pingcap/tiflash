@@ -37,7 +37,7 @@ public:
 
 size_t CHBlockChunkCodecStream::getExtraInfoSize(const Block & block)
 {
-    size_t size = 128;
+    size_t size = 128; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
     for (size_t i = 0; i < columns; i++)
     {
