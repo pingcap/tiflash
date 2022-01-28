@@ -32,8 +32,9 @@ function bootstrap_llvm() {
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
-        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp;compiler-rt" \
         -DLLVM_TARGETS_TO_BUILD=Native \
+        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
         -DCLANG_DEFAULT_LINKER=lld \
         -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
         -DCMAKE_CXX_COMPILER=clang++ \
