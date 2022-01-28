@@ -41,8 +41,8 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DUSE_CCACHE=OFF \
       -DLINKER_NAME=lld \
       -DUSE_LIBCXX=ON \
-      -DUSE_LLVM_LIBUNWIND=ON \
-      -DUSE_LLVM_COMPILER_RT=ON \
+      -DUSE_LLVM_LIBUNWIND=OFF \
+      -DUSE_LLVM_COMPILER_RT=OFF \
       -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
       -DCMAKE_AR="/usr/local/bin/llvm-ar" \
       -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
@@ -54,12 +54,6 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 
 # compress debug symbols
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
-
-# Vendor dependencies
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
-
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 # unset LD_LIBRARY_PATH before test

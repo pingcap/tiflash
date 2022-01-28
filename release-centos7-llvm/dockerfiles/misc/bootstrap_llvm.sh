@@ -17,10 +17,8 @@ function bootstrap_llvm() {
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld" \
-        -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
         -DLLVM_TARGETS_TO_BUILD=Native \
-        -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
-        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
         ../llvm
     
     ninja
@@ -34,18 +32,10 @@ function bootstrap_llvm() {
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
-        -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp" \
         -DLLVM_TARGETS_TO_BUILD=Native \
-        -DLIBCXX_USE_COMPILER_RT=ON \
-        -DLIBCXXABI_USE_COMPILER_RT=ON \
-        -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
-        -DLIBUNWIND_USE_COMPILER_RT=ON \
-        -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
-        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
         -DCLANG_DEFAULT_LINKER=lld \
         -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
-        -DCLANG_DEFAULT_RTLIB=compiler-rt \
-        -DCLANG_DEFAULT_UNWINDLIB=libunwind \
         -DCMAKE_CXX_COMPILER=clang++ \
         -DCMAKE_C_COMPILER=clang \
         -DLLVM_ENABLE_LIBCXX=ON \

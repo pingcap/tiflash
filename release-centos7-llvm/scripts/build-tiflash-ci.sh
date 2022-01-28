@@ -129,8 +129,8 @@ cmake "$SRCPATH" \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON \
   -DLINKER_NAME=lld \
   -DUSE_LIBCXX=ON \
-  -DUSE_LLVM_LIBUNWIND=ON \
-  -DUSE_LLVM_COMPILER_RT=ON \
+  -DUSE_LLVM_LIBUNWIND=OFF \
+  -DUSE_LLVM_COMPILER_RT=OFF \
   -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -DCMAKE_AR="/usr/local/bin/llvm-ar" \
@@ -159,10 +159,6 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 # Reduce binary size by compressing.
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
-
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
 
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
