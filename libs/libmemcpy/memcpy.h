@@ -114,13 +114,17 @@ __attribute__((always_inline)) inline void memcpy_large_body(char * __restrict &
     T cell[8];
     while (size >= sizeof(cell))
     {
+#ifdef __clang__
 #pragma clang loop unroll(full)
+#endif
         for (size_t i = 0; i < 8; ++i)
         {
             cell[i] = unaligned_load(reinterpret_cast<const T *>(src) + i);
         }
         src += sizeof(cell);
+#ifdef __clang__
 #pragma clang loop unroll(full)
+#endif
         for (size_t i = 0; i < 8; ++i)
         {
             aligned_store(reinterpret_cast<T *>(dst, alignof(T)) + i, cell[i]);
