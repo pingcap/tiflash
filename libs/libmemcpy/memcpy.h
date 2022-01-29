@@ -162,7 +162,7 @@ __attribute__((target("avx2"), noinline)) static inline void memcpy_avx2_large(
     memcpy_large_body<__m256i>(dst, src, size, _mm256_store_si256, _mm256_loadu_si256);
 }
 
-static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
+__attribute__((always_inline)) static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     /// We will use pointer arithmetic, so char pointer will be used.
     /// Note that __restrict makes sense (otherwise compiler will reload data from memory
