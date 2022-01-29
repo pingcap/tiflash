@@ -101,8 +101,8 @@
 
 template <class T, class AlignedStore, class UnalignedLoad>
 __attribute__((always_inline)) inline void memcpy_large_body(
-    char * __restrict & dst,
-    const char * __restrict & src,
+    char * __restrict & __restrict dst,
+    const char * __restrict & __restrict src,
     size_t & size,
     AlignedStore aligned_store,
     UnalignedLoad unaligned_load)
