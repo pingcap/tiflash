@@ -31,6 +31,8 @@ public:
 
     const String & executorId() const { return executor_id; }
 
+    const Names & getSchema() const { return schema; }
+
     virtual void appendChild(const PhysicalPlanPtr &) = 0;
 
     virtual size_t childrenSize() const = 0;
@@ -41,7 +43,7 @@ public:
     void finalize() { finalize({}); }
 
     /// Obtain a sample block that contains the names and types of result columns.
-    virtual const Block & getSampleBlock() const;
+    virtual const Block & getSampleBlock() const = 0;
 
 protected:
     String executor_id;

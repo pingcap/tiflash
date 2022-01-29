@@ -1,5 +1,3 @@
-#pragma once
-
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>

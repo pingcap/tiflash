@@ -101,8 +101,17 @@ AnalysisResult analyzeExpressions(
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    NamesWithAliases & final_project,
+    const Block & source_sample_block)
 {
+    auto get_schema = [&analyzer]() {
+        Names schema;
+        for (const auto & column : analyzer.getCurrentInputColumns())
+            schema.push_back(column.name);
+        return schema;
+    };
+    PhysicalPlanPtr plan = std::make_shared<PhysicalSource>(query_block.source_name, get_schema(), source_sample_block);
+
     AnalysisResult res;
     ExpressionActionsChain chain;
     // selection on table scan had been executed in executeTs
@@ -114,6 +123,10 @@ AnalysisResult analyzeExpressions(
         res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
         res.before_where = chain.getLastActions();
         chain.addStep();
+
+        auto filter_plan = std::make_shared<PhysicalFilter>(query_block.selection_name, get_schema(), res.filter_column_name, res.before_where);
+        filter_plan->appendChild(plan);
+        plan = filter_plan;
     }
     // There will be either Agg...
     if (query_block.aggregation)
@@ -130,6 +143,17 @@ AnalysisResult analyzeExpressions(
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
 
+        auto agg_plan = std::make_shared<PhysicalAggregation>(
+            query_block.aggregation_name,
+            get_schema(),
+            res.before_aggregation,
+            res.aggregation_keys,
+            res.aggregation_collators,
+            res.aggregate_descriptions,
+            chain.getLastActions());
+        agg_plan->appendChild(plan);
+        plan = agg_plan;
+
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
@@ -138,12 +162,33 @@ AnalysisResult analyzeExpressions(
             res.having_column_name = analyzer.appendWhere(chain, having_conditions);
             res.before_having = chain.getLastActions();
             chain.addStep();
+
+            auto having_plan = std::make_shared<PhysicalFilter>(query_block.having_name, get_schema(), res.having_column_name, res.before_having);
+            having_plan->appendChild(plan);
+            plan = having_plan;
         }
     }
     // Or TopN, not both.
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
+
+        SortDescription order_descr = getSortDescription(res.order_columns, query_block.limit_or_topn->topn().order_by());
+        auto top_n_plan = std::make_shared<PhysicalTopN>(
+            query_block.limit_or_topn_name,
+            get_schema(),
+            order_descr,
+            chain.getLastActions(),
+            query_block.limit_or_topn->topn().limit());
+        top_n_plan->appendChild(plan);
+        plan = top_n_plan;
+    }
+
+    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeLimit)
+    {
+        auto limit_plan = std::make_shared<PhysicalLimit>(query_block.limit_or_topn_name, get_schema(), query_block.limit_or_topn->limit().limit());
+        limit_plan->appendChild(plan);
+        plan = limit_plan;
     }
 
     // Append final project results if needed.
@@ -157,6 +202,10 @@ AnalysisResult analyzeExpressions(
         : analyzer.appendFinalProjectForNonRootQueryBlock(
             chain,
             query_block.qb_column_prefix);
+
+    auto project_plan = std::make_shared<PhysicalProjection>(query_block.source_name, get_schema(), chain.getLastActions());
+    project_plan->appendChild(plan);
+    plan = project_plan;
 
     res.before_order_and_select = chain.getLastActions();
 
@@ -973,12 +1022,14 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         dagContext().table_scan_executor_id = query_block.source_name;
     }
 
+    assert(pipeline.hasMoreThanOneStream());
     auto res = analyzeExpressions(
         context,
         *analyzer,
         query_block,
         keep_session_timezone_info,
-        final_project);
+        final_project,
+        pipeline.firstStream()->getHeader());
 
     if (res.before_where)
     {

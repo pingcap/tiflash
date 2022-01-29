@@ -1,10 +1,7 @@
-#pragma once
-
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalTopN.h>
@@ -18,15 +15,16 @@ void PhysicalTopN::transform(DAGPipeline & pipeline, Context & context, size_t m
     const Settings & settings = context.getSettingsRef();
 
     pipeline.transform([&](auto & stream) {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, before_sort_actions, logger); });
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, before_sort_actions, logger);
 
-        stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, logger, limit);
-
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, logger, limit);
         /// Limits on sorting
         IProfilingBlockInputStream::LocalLimits limits;
         limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
         limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        stream->setLimits(limits);
+        sorting_stream->setLimits(limits);
+
+        stream = sorting_stream;
     });
 
     /// If there are several streams, we merge them into one

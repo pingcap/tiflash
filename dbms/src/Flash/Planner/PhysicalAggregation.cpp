@@ -3,7 +3,6 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalAggregation.h>
@@ -21,7 +20,7 @@ void PhysicalAggregation::transform(DAGPipeline & pipeline, Context & context, s
     ColumnNumbers keys;
     for (const auto & name : aggregation_keys)
         keys.push_back(header.getPositionByName(name));
-    for (const auto & descr : aggregate_descriptions)
+    for (auto & descr : aggregate_descriptions)
     {
         if (descr.arguments.empty())
         {
