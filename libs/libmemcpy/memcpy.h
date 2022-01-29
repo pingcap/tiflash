@@ -100,7 +100,12 @@
 #endif
 
 template <class T, class AlignedStore, class UnalignedLoad>
-__attribute__((always_inline)) inline void memcpy_large_body(char * __restrict & dst, const char * __restrict & src, size_t & size, AlignedStore aligned_store, UnalignedLoad unaligned_load)
+__attribute__((always_inline)) inline void memcpy_large_body(
+    char * __restrict & dst,
+    const char * __restrict & src,
+    size_t & size,
+    AlignedStore aligned_store,
+    UnalignedLoad unaligned_load)
 {
     size_t padding = (-reinterpret_cast<size_t>(dst) & (sizeof(T) - 1));
     if (padding > 0)
@@ -134,12 +139,18 @@ __attribute__((always_inline)) inline void memcpy_large_body(char * __restrict &
     }
 }
 
-__attribute__((target("avx512f"), noinline)) static inline void memcpy_avx512_large(char * __restrict & dst, const char * __restrict & src, size_t & size)
+__attribute__((target("avx512f"), noinline)) static inline void memcpy_avx512_large(
+    char * __restrict & dst,
+    const char * __restrict & src,
+    size_t & size)
 {
     memcpy_large_body<__m512i>(dst, src, size, _mm512_store_si512, _mm512_loadu_si512);
 }
 
-__attribute__((target("avx2"), noinline)) static inline void memcpy_avx2_large(char * __restrict & dst, const char * __restrict & src, size_t & size)
+__attribute__((target("avx2"), noinline)) static inline void memcpy_avx2_large(
+    char * __restrict & dst,
+    const char * __restrict & src,
+    size_t & size)
 {
     memcpy_large_body<__m256i>(dst, src, size, _mm256_store_si256, _mm256_loadu_si256);
 }
