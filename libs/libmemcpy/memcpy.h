@@ -119,21 +119,28 @@ __attribute__((always_inline)) inline void memcpy_large_body(
     T cell[8];
     while (size >= sizeof(cell))
     {
-#ifdef __clang__
-#pragma clang loop unroll(full)
-#endif
-        for (size_t i = 0; i < 8; ++i)
-        {
-            cell[i] = unaligned_load(reinterpret_cast<const T *>(src) + i);
-        }
+        cell[0] = unaligned_load(reinterpret_cast<const T *>(src) + 0);
+        cell[1] = unaligned_load(reinterpret_cast<const T *>(src) + 1);
+        cell[2] = unaligned_load(reinterpret_cast<const T *>(src) + 2);
+        cell[3] = unaligned_load(reinterpret_cast<const T *>(src) + 3);
+        cell[4] = unaligned_load(reinterpret_cast<const T *>(src) + 4);
+        cell[5] = unaligned_load(reinterpret_cast<const T *>(src) + 5);
+        cell[6] = unaligned_load(reinterpret_cast<const T *>(src) + 6);
+        cell[7] = unaligned_load(reinterpret_cast<const T *>(src) + 7);
+
         src += sizeof(cell);
-#ifdef __clang__
-#pragma clang loop unroll(full)
-#endif
-        for (size_t i = 0; i < 8; ++i)
-        {
-            aligned_store(reinterpret_cast<T *>(dst) + i, cell[i]);
-        }
+
+        auto t = __builtin_assume_aligned(dst, alignof(T));
+
+        aligned_store(reinterpret_cast<T *>(t) + 0, cell[0]);
+        aligned_store(reinterpret_cast<T *>(t) + 1, cell[1]);
+        aligned_store(reinterpret_cast<T *>(t) + 2, cell[2]);
+        aligned_store(reinterpret_cast<T *>(t) + 3, cell[3]);
+        aligned_store(reinterpret_cast<T *>(t) + 4, cell[4]);
+        aligned_store(reinterpret_cast<T *>(t) + 5, cell[5]);
+        aligned_store(reinterpret_cast<T *>(t) + 6, cell[6]);
+        aligned_store(reinterpret_cast<T *>(t) + 7, cell[7]);
+
         dst += sizeof(cell);
         size -= sizeof(cell);
     }
