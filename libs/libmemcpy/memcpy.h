@@ -223,9 +223,13 @@ tail:
                 memcpy_avx2_large(dst, src, size);
             }
 
+            // either coming back from avx512 or avx2 routine, we still need to run this to make sure that
+            // we copy all the bytes correctly before last 128-byte boundary.
             memcpy_large_body<__m128i>(dst, src, size, _mm_store_si128, _mm_loadu_si128);
+
+            // The latest remaining 0..127 bytes will be processed as usual.
+            goto tail;
         }
-        goto tail;
     }
 
     return ret;
