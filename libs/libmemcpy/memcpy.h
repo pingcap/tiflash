@@ -132,7 +132,7 @@ __attribute__((always_inline)) inline void memcpy_large_body(
 #endif
         for (size_t i = 0; i < 8; ++i)
         {
-            aligned_store(reinterpret_cast<T *>(dst, alignof(T)) + i, cell[i]);
+            aligned_store(reinterpret_cast<T *>(dst) + i, cell[i]);
         }
         dst += sizeof(cell);
         size -= sizeof(cell);
