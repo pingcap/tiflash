@@ -29,7 +29,11 @@ export CMAKE="/opt/cmake/bin/cmake"
 
 if [ -f /.dockerenv ]; then
     echo '#!/usr/bin/env bash' > /tmp/tiflash-link
-    echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
+    if [[ "$(uname -m)" == 'aarch64' ]]; then
+      echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@ -Wl,-Bsymbolic' >> /tmp/tiflash-link
+    else
+      echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
+    fi
     chmod +x /tmp/tiflash-link
     export RUSTFLAGS="-C linker=/tmp/tiflash-link"
 fi
