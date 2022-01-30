@@ -32,7 +32,7 @@ if [ -f /.dockerenv ]; then
       echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@ -Wl,-Bsymbolic' >> /tmp/tiflash-link
     else
       echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
-    endif
+    fi
     chmod +x /tmp/tiflash-link
     export RUSTFLAGS="-C linker=/tmp/tiflash-link"
 fi
