@@ -1,5 +1,5 @@
 #include <cpuid.h>
-#include <immintrin.h>
+#include <emmintrin.h>
 
 #include <cstddef>
 #include <cstdint>
