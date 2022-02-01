@@ -1,6 +1,6 @@
-#include <cstddef>
-
 #include <emmintrin.h>
+
+#include <cstddef>
 
 
 /** Custom memcpy implementation for ClickHouse.
@@ -189,23 +189,23 @@ tail:
 
             while (size >= 128)
             {
-                c0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 0);
-                c1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 1);
-                c2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 2);
-                c3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 3);
-                c4 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 4);
-                c5 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 5);
-                c6 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 6);
-                c7 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src) + 7);
+                c0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 0);
+                c1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 1);
+                c2 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 2);
+                c3 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 3);
+                c4 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 4);
+                c5 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 5);
+                c6 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 6);
+                c7 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 7);
                 src += 128;
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 0), c0);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 1), c1);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 2), c2);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 3), c3);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 4), c4);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 5), c5);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 6), c6);
-                _mm_store_si128((reinterpret_cast<__m128i*>(dst) + 7), c7);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 0), c0);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 1), c1);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 2), c2);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 3), c3);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 4), c4);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 5), c5);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 6), c6);
+                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 7), c7);
                 dst += 128;
 
                 size -= 128;
