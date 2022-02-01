@@ -1,7 +1,8 @@
-#include <emmintrin.h>
+#include <cpuid.h>
+#include <immintrin.h>
 
 #include <cstddef>
-
+#include <cstdint>
 
 /** Custom memcpy implementation for ClickHouse.
   * It has the following benefits over using glibc's implementation:
@@ -99,6 +100,11 @@
 #define compiler_builtin_memcpy __builtin_memcpy
 #endif
 
+inline static bool is_bitset(uint32_t reg, uint32_t bit)
+{
+    return (reg >> bit) & 0x1;
+}
+
 __attribute__((always_inline)) static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     /// We will use pointer arithmetic, so char pointer will be used.
@@ -182,6 +188,22 @@ tail:
                 size -= padding;
             }
 
+            // for really large memory area
+            if (size >= 2048)
+            {
+                uint32_t eax, ebx, ecx, edx;
+                __cpuid(7, eax, ebx, ecx, edx);
+                static const bool erms_flag = is_bitset(ebx, 9);
+                if (erms_flag)
+                {
+                    asm volatile("rep movsb"
+                                 : "+D"(dst), "+S"(src), "+c"(size)
+                                 :
+                                 : "memory");
+                    return ret;
+                }
+            }
+
             /// Aligned unrolled copy. We will use half of available SSE registers.
             /// It's not possible to have both src and dst aligned.
             /// So, we will use aligned stores and unaligned loads.
@@ -215,7 +237,6 @@ tail:
             goto tail;
         }
     }
-
     return ret;
 }
 
