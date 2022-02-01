@@ -193,8 +193,7 @@ tail:
             {
                 uint32_t eax, ebx, ecx, edx;
                 __cpuid(7, eax, ebx, ecx, edx);
-                static const bool erms_flag = is_bitset(ebx, 9);
-                if (erms_flag)
+                if (is_bitset(ebx, 9))
                 {
                     asm volatile("rep movsb"
                                  : "+D"(dst), "+S"(src), "+c"(size)
