@@ -29,24 +29,28 @@
 
 namespace detail
 {
-inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
+#ifdef __clang__
+#define compiler_builtin_memcpy __builtin_memcpy_inline
+#else
+#define compiler_builtin_memcpy __builtin_memcpy
+#endif
+__attribute__((always_inline)) inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
 {
     while (n > 0)
     {
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst),
-                         _mm_loadu_si128(reinterpret_cast<const __m128i *>(src)));
-
+        compiler_builtin_memcpy(dst, src, 16);
         dst += 16;
         src += 16;
         n -= 16;
     }
 }
+#undef compiler_builtin_memcpy
 } // namespace detail
 
 /** Works under assumption, that it's possible to read up to 15 excessive bytes after end of 'src' region
   *  and to write any garbage into up to 15 bytes after end of 'dst' region.
   */
-inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const void * __restrict src, size_t n)
+__attribute__((always_inline)) inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const void * __restrict src, size_t n)
 {
     ::detail::memcpySmallAllowReadWriteOverflow15Impl(reinterpret_cast<char *>(dst), reinterpret_cast<const char *>(src), n);
 }

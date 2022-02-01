@@ -93,8 +93,13 @@
   * See https://habr.com/en/company/yandex/blog/457612/
   */
 
+#ifdef __clang__
+#define compiler_builtin_memcpy __builtin_memcpy_inline
+#else
+#define compiler_builtin_memcpy __builtin_memcpy
+#endif
 
-static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
+__attribute__((always_inline)) static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     /// We will use pointer arithmetic, so char pointer will be used.
     /// Note that __restrict makes sense (otherwise compiler will reload data from memory
@@ -118,20 +123,20 @@ tail:
         if (size >= 8)
         {
             /// Chunks of 8..16 bytes.
-            __builtin_memcpy(dst + size - 8, src + size - 8, 8);
-            __builtin_memcpy(dst, src, 8);
+            compiler_builtin_memcpy(dst + size - 8, src + size - 8, 8);
+            compiler_builtin_memcpy(dst, src, 8);
         }
         else if (size >= 4)
         {
             /// Chunks of 4..7 bytes.
-            __builtin_memcpy(dst + size - 4, src + size - 4, 4);
-            __builtin_memcpy(dst, src, 4);
+            compiler_builtin_memcpy(dst + size - 4, src + size - 4, 4);
+            compiler_builtin_memcpy(dst, src, 4);
         }
         else if (size >= 2)
         {
             /// Chunks of 2..3 bytes.
-            __builtin_memcpy(dst + size - 2, src + size - 2, 2);
-            __builtin_memcpy(dst, src, 2);
+            compiler_builtin_memcpy(dst + size - 2, src + size - 2, 2);
+            compiler_builtin_memcpy(dst, src, 2);
         }
         else if (size >= 1)
         {
@@ -148,14 +153,14 @@ tail:
             /// Medium size, not enough for full loop unrolling.
 
             /// We will copy the last 16 bytes.
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + size - 16), _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + size - 16)));
+            compiler_builtin_memcpy(dst + size - 16, src + size - 16);
 
             /// Then we will copy every 16 bytes from the beginning in a loop.
             /// The last loop iteration will possibly overwrite some part of already copied last 16 bytes.
             /// This is Ok, similar to the code for small sizes above.
             while (size > 16)
             {
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), _mm_loadu_si128(reinterpret_cast<const __m128i *>(src)));
+                compiler_builtin_memcpy(dst, src);
                 dst += 16;
                 src += 16;
                 size -= 16;
@@ -171,8 +176,7 @@ tail:
             /// If not aligned - we will copy first 16 bytes with unaligned stores.
             if (padding > 0)
             {
-                __m128i head = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
-                _mm_storeu_si128(reinterpret_cast<__m128i*>(dst), head);
+                compiler_builtin_memcpy(dst, src);
                 dst += padding;
                 src += padding;
                 size -= padding;
@@ -214,3 +218,5 @@ tail:
 
     return ret;
 }
+
+#undef compiler_builtin_memcpy
