@@ -153,14 +153,14 @@ tail:
             /// Medium size, not enough for full loop unrolling.
 
             /// We will copy the last 16 bytes.
-            compiler_builtin_memcpy(dst + size - 16, src + size - 16);
+            compiler_builtin_memcpy(dst + size - 16, src + size - 16, 16);
 
             /// Then we will copy every 16 bytes from the beginning in a loop.
             /// The last loop iteration will possibly overwrite some part of already copied last 16 bytes.
             /// This is Ok, similar to the code for small sizes above.
             while (size > 16)
             {
-                compiler_builtin_memcpy(dst, src);
+                compiler_builtin_memcpy(dst, src, 16);
                 dst += 16;
                 src += 16;
                 size -= 16;
@@ -176,7 +176,7 @@ tail:
             /// If not aligned - we will copy first 16 bytes with unaligned stores.
             if (padding > 0)
             {
-                compiler_builtin_memcpy(dst, src);
+                compiler_builtin_memcpy(dst, src, 16);
                 dst += padding;
                 src += padding;
                 size -= padding;
