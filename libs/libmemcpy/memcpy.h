@@ -188,21 +188,6 @@ tail:
                 size -= padding;
             }
 
-            // for really large memory area
-            if (size >= 2048)
-            {
-                uint32_t eax, ebx, ecx, edx;
-                __cpuid(7, eax, ebx, ecx, edx);
-                if (is_bitset(ebx, 9))
-                {
-                    asm volatile("rep movsb"
-                                 : "+D"(dst), "+S"(src), "+c"(size)
-                                 :
-                                 : "memory");
-                    return ret;
-                }
-            }
-
             /// Aligned unrolled copy. We will use half of available SSE registers.
             /// It's not possible to have both src and dst aligned.
             /// So, we will use aligned stores and unaligned loads.
