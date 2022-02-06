@@ -100,11 +100,6 @@
 #define compiler_builtin_memcpy __builtin_memcpy
 #endif
 
-inline static bool is_bitset(uint32_t reg, uint32_t bit)
-{
-    return (reg >> bit) & 0x1;
-}
-
 __attribute__((always_inline)) static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     /// We will use pointer arithmetic, so char pointer will be used.
