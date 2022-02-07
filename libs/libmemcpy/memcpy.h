@@ -173,41 +173,53 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
     /// Aligned unrolled copy. We will use half of available SSE registers.
     /// It's not possible to have both src and dst aligned.
     /// So, we will use aligned stores and unaligned loads.
-    __m128i cell[8];
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+    __m128i c0, c1, c2, c3, c4, c5, c6, c7;
 
     while (size >= 128)
     {
         const auto * source = reinterpret_cast<const __m128i *>(src);
-        auto * dest = reinterpret_cast<__m128i *>(__builtin_assume_aligned(dst, alignof(__m128i)));
-
+        auto * target = reinterpret_cast<__m128i *>(dst);
         if constexpr (enable_prefetch)
         {
-            __builtin_prefetch(src + sizeof(cell));
+            __builtin_prefetch(src + 8 * 16);
         }
-
-        TIFLASH_MEMCPY_UNROLL_FULLY
-        for (size_t i = 0; i < std::size(cell); ++i)
-        {
-            cell[i] = _mm_loadu_si128(source + i);
-        }
+        c0 = _mm_loadu_si128(source + 0);
+        c1 = _mm_loadu_si128(source + 1);
+        c2 = _mm_loadu_si128(source + 2);
+        c3 = _mm_loadu_si128(source + 3);
+        c4 = _mm_loadu_si128(source + 4);
+        c5 = _mm_loadu_si128(source + 5);
+        c6 = _mm_loadu_si128(source + 6);
+        c7 = _mm_loadu_si128(source + 7);
         src += 128;
         if constexpr (non_temporal)
         {
-            TIFLASH_MEMCPY_UNROLL_FULLY
-            for (size_t i = 0; i < std::size(cell); ++i)
-            {
-                _mm_stream_si128(dest + i, cell[i]);
-            }
+            _mm_stream_si128(target + 0, c0);
+            _mm_stream_si128(target + 1, c1);
+            _mm_stream_si128(target + 2, c2);
+            _mm_stream_si128(target + 3, c3);
+            _mm_stream_si128(target + 4, c4);
+            _mm_stream_si128(target + 5, c5);
+            _mm_stream_si128(target + 6, c6);
+            _mm_stream_si128(target + 7, c7);
         }
         else
         {
-            TIFLASH_MEMCPY_UNROLL_FULLY
-            for (size_t i = 0; i < std::size(cell); ++i)
-            {
-                _mm_store_si128(dest + i, cell[i]);
-            }
+            _mm_store_si128(target + 0, c0);
+            _mm_store_si128(target + 1, c1);
+            _mm_store_si128(target + 2, c2);
+            _mm_store_si128(target + 3, c3);
+            _mm_store_si128(target + 4, c4);
+            _mm_store_si128(target + 5, c5);
+            _mm_store_si128(target + 6, c6);
+            _mm_store_si128(target + 7, c7);
         }
         dst += 128;
+
         size -= 128;
     }
 }
