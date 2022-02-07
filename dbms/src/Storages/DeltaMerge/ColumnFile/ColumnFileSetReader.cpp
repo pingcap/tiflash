@@ -181,10 +181,6 @@ void ColumnFileSetReader::getPlaceItems(BlockOrDeletes & place_items, size_t row
                 auto block = readPKVersion(block_rows_end, column_file.getRows());
                 place_items.emplace_back(std::move(block), block_rows_end + place_rows_offset);
             }
-            else
-            {
-                throw Exception("Unknown column file type", ErrorCodes::LOGICAL_ERROR);
-            }
 
             block_rows_end += column_file.getRows();
             block_rows_start = block_rows_end;
