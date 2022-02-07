@@ -29,7 +29,7 @@ bool DAGContext::allowInvalidDate() const
     return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
-std::map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
+std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
