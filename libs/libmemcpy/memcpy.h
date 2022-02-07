@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 
 /** Custom memcpy implementation for ClickHouse.
   * It has the following benefits over using glibc's implementation:
@@ -94,6 +95,174 @@
   * See https://habr.com/en/company/yandex/blog/457612/
   */
 
+#ifdef __clang__
+#define tiflash_compiler_builtin_memcpy __builtin_memcpy_inline
+#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("clang loop unroll(full)")
+#else
+#define tiflash_compiler_builtin_memcpy __builtin_memcpy
+#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("GCC unroll 65534")
+#endif
+
+namespace memory_copy
+{
+
+enum class MediumSizeStrategy
+{
+    MediumSizeSSE,
+    MediumSizeRepMovsb
+};
+
+enum class HugeSizeStrategy
+{
+    HugeSizeSSE,
+    HugeSizeRepMovsb,
+    HugeSizeSSSE3Mux,
+    HugeSizeVEX32,
+    HugeSizeEVEX32,
+    HugeSizeEVEX64
+};
+
+struct MemcpyConfig
+{
+    size_t medium_size_threshold;
+    size_t huge_size_threshold;
+    size_t page_size;
+    MediumSizeStrategy medium_size_strategy;
+    HugeSizeStrategy huge_size_strategy;
+};
+
+extern MemcpyConfig memcpy_config;
+
+namespace detail
+{
+template <bool enable_prefetch, bool non_temporal>
+ALWAYS_INLINE static inline void memcpy_sse_loop(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size)
+{
+    static constexpr const size_t vector_size = sizeof(__m128i);
+    size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
+
+    /// If not aligned - we will copy first 16 bytes with unaligned stores.
+    if (padding > 0)
+    {
+        tiflash_compiler_builtin_memcpy(dst, src, vector_size);
+        dst += padding;
+        src += padding;
+        size -= padding;
+    }
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+    __m128i cell[8];
+
+    while (size >= 128)
+    {
+        auto source = reinterpret_cast<const __m128i *>(src);
+        auto dest = reinterpret_cast<__m128i *>(__builtin_assume_aligned(dst, alignof(__m128i)));
+
+        if constexpr (enable_prefetch)
+        {
+            __builtin_prefetch(src + sizeof(cell));
+        }
+
+        TIFLASH_MEMCPY_UNROLL_FULLY
+        for (size_t i = 0; i < std::size(cell); ++i)
+        {
+            cell[i] = _mm_loadu_si128(source + i);
+        }
+        src += 128;
+        if constexpr (non_temporal)
+        {
+            TIFLASH_MEMCPY_UNROLL_FULLY
+            for (size_t i = 0; i < std::size(cell); ++i)
+            {
+                _mm_stream_si128(dest + i, cell[i]);
+            }
+        }
+        else
+        {
+            TIFLASH_MEMCPY_UNROLL_FULLY
+            for (size_t i = 0; i < std::size(cell); ++i)
+            {
+                _mm_store_si128(dest + i, cell[i]);
+            }
+        }
+        dst += 128;
+        size -= 128;
+    }
+}
+
+ALWAYS_INLINE static inline bool rep_movsb(
+    void * __restrict dst,
+    const void * __restrict src,
+    size_t size)
+{
+    asm volatile("rep movsb"
+                 : "+D"(dst), "+S"(src), "+c"(size)
+                 :
+                 : "memory");
+    return dst;
+}
+
+__attribute__((target("ssse3"))) void memcpy_ssse3_mux(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size);
+__attribute__((target("avx2"))) void memcpy_vex32(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size);
+__attribute__((target("avx512f,avx512vl"))) void memcpy_evex32(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size);
+__attribute__((target("avx512f,avx512vl"))) void memcpy_evex64(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size);
+} // namespace detail
+
+ALWAYS_INLINE static inline bool check_valid_strategy(HugeSizeStrategy strategy)
+{
+    int out[4];
+    switch (strategy)
+    {
+    case HugeSizeStrategy::HugeSizeRepMovsb:
+        // get ERMS bit from cpuid (exa=7, ebx=0)
+        __cpuid_count(0x00000007, 0, out[0], out[1], out[2], out[3]);
+        return (out[1] & (1 << 9)) != 0;
+    case HugeSizeStrategy::HugeSizeSSSE3Mux:
+        return __builtin_cpu_supports("ssse3");
+    case HugeSizeStrategy::HugeSizeEVEX32:
+        return __builtin_cpu_supports("avx512vl");
+    case HugeSizeStrategy::HugeSizeEVEX64:
+        return __builtin_cpu_supports("avx512vl");
+    case HugeSizeStrategy::HugeSizeVEX32:
+        return __builtin_cpu_supports("avx2");
+    default:
+        return true;
+    }
+}
+
+ALWAYS_INLINE static inline bool check_valid_strategy(MediumSizeStrategy strategy)
+{
+    int out[4];
+    switch (strategy)
+    {
+    case MediumSizeStrategy::MediumSizeRepMovsb:
+        // get ERMS bit from cpuid (exa=7, ebx=0)
+        __cpuid_count(0x00000007, 0, out[0], out[1], out[2], out[3]);
+        return (out[1] & (1 << 9)) != 0;
+    default:
+        return true;
+    }
+}
+
+} // namespace memory_copy
+
 ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     /// We will use pointer arithmetic, so char pointer will be used.
@@ -163,49 +332,49 @@ tail:
         }
         else
         {
-            /// Large size with fully unrolled loop.
-
-            /// Align destination to 16 bytes boundary.
-            size_t padding = (16 - (reinterpret_cast<size_t>(dst) & 15)) & 15;
-
-            /// If not aligned - we will copy first 16 bytes with unaligned stores.
-            if (padding > 0)
+            using namespace memory_copy;
+            // mark small size as likely to speed up small memcpy
+            if (__builtin_expect(size < memory_copy::memcpy_config.medium_size_threshold, true))
             {
-                tiflash_compiler_builtin_memcpy(dst, src, 16);
-                dst += padding;
-                src += padding;
-                size -= padding;
+                // small sizes
+                detail::memcpy_sse_loop<false, false>(dst, src, size);
             }
-
-            /// Aligned unrolled copy. We will use half of available SSE registers.
-            /// It's not possible to have both src and dst aligned.
-            /// So, we will use aligned stores and unaligned loads.
-            __m128i c0, c1, c2, c3, c4, c5, c6, c7;
-
-            while (size >= 128)
+            else if (size < memcpy_config.huge_size_threshold)
             {
-                c0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 0);
-                c1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 1);
-                c2 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 2);
-                c3 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 3);
-                c4 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 4);
-                c5 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 5);
-                c6 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 6);
-                c7 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src) + 7);
-                src += 128;
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 0), c0);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 1), c1);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 2), c2);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 3), c3);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 4), c4);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 5), c5);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 6), c6);
-                _mm_store_si128((reinterpret_cast<__m128i *>(dst) + 7), c7);
-                dst += 128;
-
-                size -= 128;
+                // medium sizes
+                switch (memcpy_config.medium_size_strategy)
+                {
+                case MediumSizeStrategy::MediumSizeRepMovsb:
+                    detail::rep_movsb(dst, src, size);
+                    return ret;
+                default:
+                    detail::memcpy_sse_loop<false, false>(dst, src, size);
+                }
             }
-
+            else
+            {
+                // huge sizes
+                switch (memcpy_config.huge_size_strategy)
+                {
+                case HugeSizeStrategy::HugeSizeRepMovsb:
+                    detail::rep_movsb(dst, src, size);
+                    return ret;
+                case HugeSizeStrategy::HugeSizeSSSE3Mux:
+                    detail::memcpy_ssse3_mux(dst, src, size);
+                    break;
+                case HugeSizeStrategy::HugeSizeEVEX32:
+                    detail::memcpy_evex32(dst, src, size);
+                    break;
+                case HugeSizeStrategy::HugeSizeEVEX64:
+                    detail::memcpy_evex64(dst, src, size);
+                    break;
+                case HugeSizeStrategy::HugeSizeVEX32:
+                    detail::memcpy_vex32(dst, src, size);
+                    break;
+                default:
+                    detail::memcpy_sse_loop<true, true>(dst, src, size);
+                }
+            }
             /// The latest remaining 0..127 bytes will be processed as usual.
             goto tail;
         }
