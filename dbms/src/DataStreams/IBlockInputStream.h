@@ -152,12 +152,12 @@ public:
     {
         if (collected)
         {
+            collected = false;
             for (auto & child : children)
             {
                 if (child)
                     child->resetNewThreadCountCompute();
             }
-            collected = false; // flag collected is unset when all children were reset.
         }
     }
 
