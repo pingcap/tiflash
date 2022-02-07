@@ -171,7 +171,7 @@ __attribute__((target("ssse3"))) static inline void memcpy_ssse3_mux(
 }
 
 template <typename Vector, size_t page_num, size_t vec_num, typename Load, typename Store>
-__attribute__((always_inline, target("avx512f"))) static inline void memcpy_evex_impl(
+__attribute__((always_inline, target("avx512f,avx512vl"))) static inline void memcpy_evex_impl(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & __restrict size,
@@ -318,7 +318,7 @@ __attribute__((target("avx2"))) static inline void memcpy_vex32(
     memcpy_sse_loop<false, false>(dst, src, size);
 }
 
-__attribute__((target("avx512f"))) static inline void memcpy_evex32(
+__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
@@ -354,7 +354,7 @@ __attribute__((target("avx512f"))) static inline void memcpy_evex32(
     memcpy_sse_loop<false, false>(dst, src, size);
 }
 
-__attribute__((target("avx512f"))) static inline void memcpy_evex64(
+__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
