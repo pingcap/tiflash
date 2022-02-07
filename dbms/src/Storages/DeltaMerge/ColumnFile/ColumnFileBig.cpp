@@ -56,7 +56,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-    auto dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
+    auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
 

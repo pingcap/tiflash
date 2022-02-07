@@ -51,7 +51,7 @@ private:
 public:
     MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
 
-    // return whether this task is a trivial move
+    // Add new task and return whether this task is a trivial move
     inline bool packUpTask(Task && task)
     {
         if (task.to_compact.empty())
@@ -75,8 +75,10 @@ public:
         return is_trivial_move;
     }
 
+    /// Create new column file by combining several small `ColumnFileTiny`s
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
+    /// Add new column files and remove old column files in `ColumnFilePersistedSet`
     bool commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs);
 
     String info() const;

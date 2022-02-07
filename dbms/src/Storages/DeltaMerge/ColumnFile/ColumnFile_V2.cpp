@@ -6,7 +6,7 @@ namespace DB
 {
 namespace DM
 {
-struct ColumnFile_V2
+struct ColumnFileV2
 {
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -16,7 +16,7 @@ struct ColumnFile_V2
 
     bool isDeleteRange() const { return !delete_range.none(); }
 };
-using ColumnFile_V2Ptr = std::shared_ptr<ColumnFile_V2>;
+using ColumnFile_V2Ptr = std::shared_ptr<ColumnFileV2>;
 using ColumnFiles_V2 = std::vector<ColumnFile_V2Ptr>;
 
 inline ColumnFilePersisteds transform_V2_to_V3(const ColumnFiles_V2 & column_files_v2)
@@ -40,7 +40,7 @@ inline ColumnFiles_V2 transformSaved_V3_to_V2(const ColumnFilePersisteds & colum
     ColumnFiles_V2 column_files_v2;
     for (const auto & f : column_files_v3)
     {
-        auto * f_v2 = new ColumnFile_V2();
+        auto * f_v2 = new ColumnFileV2();
 
         if (auto * f_delete = f->tryToDeleteRange(); f_delete)
         {
@@ -58,12 +58,12 @@ inline ColumnFiles_V2 transformSaved_V3_to_V2(const ColumnFilePersisteds & colum
             throw Exception("Unexpected column file type", ErrorCodes::LOGICAL_ERROR);
         }
 
-        column_files_v2.push_back(std::shared_ptr<ColumnFile_V2>(f_v2));
+        column_files_v2.push_back(std::shared_ptr<ColumnFileV2>(f_v2));
     }
     return column_files_v2;
 }
 
-inline void serializeColumnFile_V2(const ColumnFile_V2 & column_file, const BlockPtr & schema, WriteBuffer & buf)
+inline void serializeColumnFile_V2(const ColumnFileV2 & column_file, const BlockPtr & schema, WriteBuffer & buf)
 {
     writeIntBinary(column_file.rows, buf);
     writeIntBinary(column_file.bytes, buf);
@@ -118,7 +118,7 @@ void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePers
 
 inline ColumnFile_V2Ptr deserializeColumnFile_V2(ReadBuffer & buf, UInt64 version)
 {
-    auto column_file = std::make_shared<ColumnFile_V2>();
+    auto column_file = std::make_shared<ColumnFileV2>();
     readIntBinary(column_file->rows, buf);
     readIntBinary(column_file->bytes, buf);
     switch (version)

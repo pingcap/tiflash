@@ -59,7 +59,7 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
         {
             // Just keep cache for really small column file
             ColumnFile::CachePtr column_file_cache = nullptr;
-            if (m_file->getRows() < context.delta_small_pack_rows || m_file->getBytes() < context.delta_small_pack_bytes)
+            if (m_file->getRows() < context.delta_small_column_file_rows || m_file->getBytes() < context.delta_small_column_file_bytes)
             {
                 column_file_cache = !task.sorted ? m_file->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data));
             }

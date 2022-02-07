@@ -64,7 +64,7 @@ private:
 
     std::atomic<size_t> last_try_flush_rows = 0;
     std::atomic<size_t> last_try_flush_bytes = 0;
-    std::atomic<size_t> last_try_compact_packs = 0;
+    std::atomic<size_t> last_try_compact_column_files = 0;
     std::atomic<size_t> last_try_merge_delta_rows = 0;
     std::atomic<size_t> last_try_merge_delta_bytes = 0;
     std::atomic<size_t> last_try_split_rows = 0;
@@ -90,7 +90,7 @@ public:
     String simpleInfo() const { return "Delta [" + DB::toString(persisted_file_set->getId()) + "]"; }
     String info() const
     {
-        return fmt::format("{}, {}", mem_table_set->info(), persisted_file_set->info());
+        return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info());
     }
 
     bool getLock(Lock & lock) const
@@ -168,7 +168,7 @@ public:
 
     std::atomic<size_t> & getLastTryFlushRows() { return last_try_flush_rows; }
     std::atomic<size_t> & getLastTryFlushBytes() { return last_try_flush_bytes; }
-    std::atomic<size_t> & getLastTryCompactPacks() { return last_try_compact_packs; }
+    std::atomic<size_t> & getLastTryCompactColumnFiles() { return last_try_compact_column_files; }
     std::atomic<size_t> & getLastTryMergeDeltaRows() { return last_try_merge_delta_rows; }
     std::atomic<size_t> & getLastTryMergeDeltaBytes() { return last_try_merge_delta_bytes; }
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
@@ -275,7 +275,7 @@ public:
     }
 
     // Only used when `is_update` is true
-    ColumnFiles & getHeadColumnFilesForCheck() const
+    ColumnFiles & getColumnFilesInSnapshot() const
     {
         if (unlikely(!is_update))
             throw Exception("Should not call this method when is_update is true", ErrorCodes::LOGICAL_ERROR);
@@ -338,7 +338,7 @@ public:
 
     // Use for DeltaMergeBlockInputStream to read delta rows, and merge with stable rows.
     // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range);
+    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range);
 
     // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
     // If there are continuous blocks, they will be squashed into one block.

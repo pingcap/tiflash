@@ -150,30 +150,30 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     }
     else
     {
-        auto & schema_ = *schema;
+        const auto & schema_ref = *schema;
 
         PageStorage::PageReadFields fields;
         fields.first = data_page_id;
-        for (size_t i = 0; i < schema_.columns(); ++i)
+        for (size_t i = 0; i < schema_ref.columns(); ++i)
             fields.second.push_back(i);
 
         auto page_map = page_reader.read({fields});
         auto page = page_map[data_page_id];
 
-        auto columns = schema_.cloneEmptyColumns();
+        auto columns = schema_ref.cloneEmptyColumns();
 
         if (unlikely(columns.size() != page.fieldSize()))
             throw Exception("Column size and field size not the same");
 
-        for (size_t index = 0; index < schema_.columns(); ++index)
+        for (size_t index = 0; index < schema_ref.columns(); ++index)
         {
             auto data_buf = page.getFieldData(index);
-            auto & type = schema_.getByPosition(index).type;
+            const auto & type = schema_ref.getByPosition(index).type;
             auto & column = columns[index];
             deserializeColumn(*column, type, data_buf, rows);
         }
 
-        return schema_.cloneWithColumns(std::move(columns));
+        return schema_ref.cloneWithColumns(std::move(columns));
     }
 }
 

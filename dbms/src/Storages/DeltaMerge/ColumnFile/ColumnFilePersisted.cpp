@@ -15,7 +15,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
 {
     if (schema)
     {
-        writeIntBinary((UInt32)schema->columns(), buf);
+        writeIntBinary(static_cast<UInt32>(schema->columns()), buf);
         for (auto & col : *schema)
         {
             writeIntBinary(col.column_id, buf);
@@ -25,7 +25,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
     }
     else
     {
-        writeIntBinary((UInt32)0, buf);
+        writeIntBinary(static_cast<UInt32>(0), buf);
     }
 }
 
@@ -70,7 +70,7 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
     type->deserializeBinaryBulkWithMultipleStreams(column, //
                                                    [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                    rows,
-                                                   (double)(data_buf.size()) / rows,
+                                                   static_cast<double>(data_buf.size()) / rows,
                                                    true,
                                                    {});
 }

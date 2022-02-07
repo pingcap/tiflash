@@ -30,7 +30,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
             if (unlikely(!t_file))
                 throw Exception("The compact candidate is not a ColumnTinyFile", ErrorCodes::LOGICAL_ERROR);
 
-            // We ensure schema of all packs are the same
+            // We ensure schema of all column files are the same
             Block block = t_file->readBlockForMinorCompaction(reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)

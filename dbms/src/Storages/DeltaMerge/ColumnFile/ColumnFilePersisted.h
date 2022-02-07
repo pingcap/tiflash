@@ -27,10 +27,9 @@ BlockPtr deserializeSchema(ReadBuffer & buf);
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
 
-/// Serialize those packs' metadata into buf.
-/// Note that this method stop at the first unsaved pack.
+/// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
-/// Recreate pack instances from buf.
+/// Recreate column file instances from buf.
 ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
 void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);

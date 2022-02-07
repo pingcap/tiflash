@@ -275,7 +275,7 @@ public:
     DeltaMergeStore(Context & db_context, //
                     bool data_path_contains_database_name,
                     const String & db_name,
-                    const String & tbl_name,
+                    const String & table_name_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -323,7 +323,7 @@ public:
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
                               const DB::Settings & db_settings,
-                              const ColumnDefines & column_defines,
+                              const ColumnDefines & columns_to_read,
                               size_t num_streams,
                               const SegmentIdSet & read_segments = {});
 

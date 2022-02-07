@@ -9,10 +9,9 @@ namespace DM
 RowKeyRange ColumnFileSetSnapshot::getSquashDeleteRange() const
 {
     RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
-    for (auto iter = column_files.cbegin(); iter != column_files.cend(); ++iter)
+    for (const auto & column_file : column_files)
     {
-        const auto & column_file = *iter;
-        if (auto f_delete = column_file->tryToDeleteRange(); f_delete)
+        if (auto * f_delete = column_file->tryToDeleteRange(); f_delete)
             squashed_delete_range = squashed_delete_range.merge(f_delete->getDeleteRange());
     }
     return squashed_delete_range;

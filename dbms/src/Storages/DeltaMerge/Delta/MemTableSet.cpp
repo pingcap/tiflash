@@ -3,7 +3,10 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/PathPool.h>
 
 namespace ProfileEvents
 {
@@ -47,6 +50,54 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     rows += column_file->getRows();
     bytes += column_file->getBytes();
     deletes += column_file->getDeletes();
+}
+
+ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs)
+{
+    ColumnFiles cloned_column_files;
+    for (const auto & column_file : column_files)
+    {
+        if (auto * dr = column_file->tryToDeleteRange(); dr)
+        {
+            auto new_dr = dr->getDeleteRange().shrink(target_range);
+            if (!new_dr.none())
+            {
+                // Only use the available delete_range column file.
+                cloned_column_files.push_back(dr->cloneWith(new_dr));
+            }
+        }
+        else if (auto * b = column_file->tryToInMemoryFile(); b)
+        {
+            auto new_column_file = b->clone();
+
+            // No matter or what, don't append to column files which cloned from old column file again.
+            // Because they could shared the same cache. And the cache can NOT be inserted from different column files in different delta.
+            new_column_file->disableAppend();
+            cloned_column_files.push_back(new_column_file);
+        }
+        else if (auto * t = column_file->tryToTinyFile(); t)
+        {
+            // Use a newly created page_id to reference the data page_id of current column file.
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
+            auto new_column_file = t->cloneWith(new_data_page_id);
+
+            cloned_column_files.push_back(new_column_file);
+        }
+        else if (auto * f = column_file->tryToBigFile(); f)
+        {
+            auto delegator = context.path_pool.getStableDiskDelegator();
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto file_id = f->getFile()->fileId();
+            wbs.data.putRefPage(new_ref_id, file_id);
+            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+
+            auto new_column_file = f->cloneWith(context, new_file, target_range);
+            cloned_column_files.push_back(new_column_file);
+        }
+    }
+    return cloned_column_files;
 }
 
 void MemTableSet::appendColumnFile(const ColumnFilePtr & column_file)
@@ -124,7 +175,10 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     }
 
     if (unlikely(total_rows != rows || total_deletes != deletes))
-        throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
+    {
+        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].", total_rows, total_deletes, rows.load(), deletes.load());
+        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
+    }
 
     return snap;
 }
@@ -154,7 +208,10 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
         cur_deletes_offset += column_file->getDeletes();
     }
     if (unlikely(flush_task->getFlushRows() != rows || flush_task->getFlushDeletes() != deletes))
-        throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
+    {
+        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Column Files: {}", flush_task->getFlushRows(), flush_task->getFlushDeletes(), rows.load(), deletes.load(), columnFilesToString(column_files));
+        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
+    }
 
     return flush_task;
 }
@@ -165,7 +222,6 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
     if (unlikely(tasks.size() > column_files.size()))
         throw Exception("column_files num check failed", ErrorCodes::LOGICAL_ERROR);
 
-    ColumnFiles new_column_files;
     size_t flush_bytes = 0;
     auto column_file_iter = column_files.begin();
     for (const auto & task : tasks)
@@ -177,6 +233,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         flush_bytes += task.column_file->getBytes();
         column_file_iter++;
     }
+    ColumnFiles new_column_files;
     size_t new_rows = 0;
     size_t new_bytes = 0;
     size_t new_deletes = 0;
@@ -186,6 +243,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         new_rows += (*column_file_iter)->getRows();
         new_bytes += (*column_file_iter)->getBytes();
         new_deletes += (*column_file_iter)->getDeletes();
+        column_file_iter++;
     }
     column_files.swap(new_column_files);
     rows = new_rows;

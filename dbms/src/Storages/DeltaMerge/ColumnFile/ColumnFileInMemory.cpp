@@ -62,8 +62,8 @@ bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t 
 
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
-        auto & col = data.getByPosition(i).column;
-        auto & cache_col = *cache->block.getByPosition(i).column;
+        const auto & col = data.getByPosition(i).column;
+        const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
     }

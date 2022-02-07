@@ -44,11 +44,13 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, getNameImpl()))
     {
     }
 
-    String getName() const override { return "DeltaMergeSegmentThread"; }
+    String getName() const override { return getNameImpl(); }
+    // Add this function because static analysis forbids calling virtual function in constructor
+    inline String getNameImpl() const { return "DeltaMergeSegmentThread"; }
     Block getHeader() const override { return header; }
 
 protected:

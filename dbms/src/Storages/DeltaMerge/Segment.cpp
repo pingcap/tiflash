@@ -445,7 +445,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
                                                          const SegmentSnapshotPtr & segment_snap,
                                                          const RowKeyRange & data_range,
                                                          size_t expected_block_size,
-                                                         bool reorgnize_block) const
+                                                         bool reorganize_block) const
 {
     RowKeyRanges data_ranges{data_range};
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges);
@@ -462,7 +462,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
 
 
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_ranges, 0);
-    if (reorgnize_block)
+    if (reorganize_block)
     {
         data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
     }
@@ -574,7 +574,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
                                                WriteBatches & wbs) const
 {
     LOG_FMT_INFO(log,
-                 "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}, delta total size: {}",
+                 "Segment [{}] prepare merge delta start. delta column files: {}, delta total rows: {}, delta total size: {}",
                  segment_id,
                  segment_snap->delta->getColumnFileCount(),
                  segment_snap->delta->getRows(),
@@ -604,7 +604,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
 {
     LOG_FMT_INFO(log, "Before apply merge delta: {}", info());
 
-    auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getHeadColumnFilesForCheck(), wbs);
+    auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFilesInSnapshot(), wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
@@ -898,7 +898,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         return {};
     }
 
-    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
+    GenPageId log_gen_page_id = [&]() {
+        return storage_pool.newLogPageId();
+    };
 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
@@ -1065,7 +1067,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
     ColumnFiles empty_files;
-    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getHeadColumnFilesForCheck();
+    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFilesInSnapshot();
 
     auto [my_persisted_files, my_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
     auto [other_persisted_files, other_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
@@ -1209,14 +1211,12 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
-    auto [left_persisted_files, left_in_memory_files] = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getHeadColumnFilesForCheck(), wbs);
-    auto [right_persisted_files, right_in_memory_files] = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getHeadColumnFilesForCheck(), wbs);
-
+    auto [left_persisted_files, left_in_memory_files] = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFilesInSnapshot(), wbs);
+    auto [right_persisted_files, right_in_memory_files] = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFilesInSnapshot(), wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    /// Make sure saved packs are appended before unsaved packs.
     ColumnFilePersisteds merged_persisted_column_files = std::move(left_persisted_files);
     ColumnFiles merged_in_memory_files = std::move(left_in_memory_files);
 

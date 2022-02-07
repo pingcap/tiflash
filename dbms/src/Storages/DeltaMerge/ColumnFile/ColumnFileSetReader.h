@@ -59,7 +59,7 @@ private:
     size_t column_files_count;
 
     ColumnFileReaderPtr cur_column_file_reader = {};
-    size_t next_pack_index = 0;
+    size_t next_file_index = 0;
 
 public:
     ColumnFileSetInputStream(const DMContext & context_,
@@ -76,19 +76,19 @@ public:
 
     Block read() override
     {
-        while (cur_column_file_reader || next_pack_index < column_files_count)
+        while (cur_column_file_reader || next_file_index < column_files_count)
         {
             if (!cur_column_file_reader)
             {
-                if (column_files[next_pack_index]->isDeleteRange())
+                if (column_files[next_file_index]->isDeleteRange())
                 {
-                    ++next_pack_index;
+                    ++next_file_index;
                     continue;
                 }
                 else
                 {
-                    cur_column_file_reader = reader.column_file_readers[next_pack_index];
-                    ++next_pack_index;
+                    cur_column_file_reader = reader.column_file_readers[next_file_index];
+                    ++next_file_index;
                 }
             }
             Block block = cur_column_file_reader->readNextBlock();

@@ -35,9 +35,16 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
 
 RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 {
-    auto delete_range1 = mem_table_snap->getSquashDeleteRange();
-    auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
-    return delete_range1.merge(delete_range2);
+    if (mem_table_snap)
+    {
+        auto delete_range1 = mem_table_snap->getSquashDeleteRange();
+        auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
+        return delete_range1.merge(delete_range2);
+    }
+    else
+    {
+        return persisted_files_snap->getSquashDeleteRange();
+    }
 }
 
 // ================================================
@@ -58,7 +65,7 @@ DeltaValueReader::DeltaValueReader(
 
 DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
-    auto new_reader = new DeltaValueReader();
+    auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
     new_reader->_compacted_delta_index = _compacted_delta_index;
     new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);

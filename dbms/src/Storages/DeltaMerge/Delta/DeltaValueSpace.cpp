@@ -42,8 +42,8 @@ void DeltaValueSpace::abandon(DMContext & context)
 
 DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    auto persisted_file_set_ = ColumnFilePersistedSet::restore(context, segment_range, id);
-    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set_));
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
@@ -58,7 +58,7 @@ DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
                                        WriteBatches & wbs) const
 {
     auto tail_persisted_files = persisted_file_set->checkHeadAndCloneTail(context, target_range, head_column_files, wbs);
-    auto memory_files = mem_table_set->cloneColumnFiles();
+    auto memory_files = mem_table_set->cloneColumnFiles(context, target_range, wbs);
     return std::make_pair(std::move(tail_persisted_files), std::move(memory_files));
 }
 
@@ -127,7 +127,7 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
 
 bool DeltaValueSpace::flush(DMContext & context)
 {
-    LOG_DEBUG(log, info() << ", Flush start");
+    LOG_FMT_DEBUG(log, "{}, Flush start", info());
 
     /// We have two types of data needed to flush to disk:
     ///  1. The cache data in ColumnFileInMemory
@@ -141,7 +141,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            LOG_DEBUG(log, simpleInfo() << "Flush stop because abandoned");
+            LOG_FMT_DEBUG(log, "{} Flush stop because abandoned", simpleInfo());
             return false;
         }
         flush_task = mem_table_set->buildFlushTask(context, persisted_file_set->getRows(), persisted_file_set->getDeletes(), persisted_file_set->getCurrentFlushVersion());
@@ -151,7 +151,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     // No update, return successfully.
     if (!flush_task)
     {
-        LOG_DEBUG(log, simpleInfo() << " Nothing to flush");
+        LOG_FMT_DEBUG(log, "{} Nothing to flush", simpleInfo());
         return true;
     }
 
@@ -160,9 +160,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-        LOG_DEBUG(log, simpleInfo() << " Update index start");
+        LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_DEBUG(log, simpleInfo() << " Update index done");
+        LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
     }
 
     {
@@ -172,23 +172,21 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Delete written data.
             wbs.setRollback();
-            LOG_DEBUG(log, simpleInfo() << " Flush stop because abandoned");
+            LOG_FMT_DEBUG(log, "{} Flush stop because abandoned", simpleInfo());
             return false;
         }
 
         if (!flush_task->commit(persisted_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
+            LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
         }
 
         /// Update delta tree
         if (new_delta_index)
             delta_index = new_delta_index;
 
-        LOG_DEBUG(log,
-                  simpleInfo() << " Flush end. Flushed " << flush_task->getTaskNum() << " column files, " << flush_task->getFlushRows() << " rows and " << flush_task->getFlushDeletes()
-                               << " deletes.");
+        LOG_FMT_DEBUG(log, "{} Flush end. Flushed {} column files, {} rows and {} deletes.", info(), flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes());
     }
     return true;
 }
@@ -199,7 +197,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     // Other thread is doing structure update, just return.
     if (!is_updating.compare_exchange_strong(v, true))
     {
-        LOG_DEBUG(log, simpleInfo() << " Compact stop because updating");
+        LOG_FMT_DEBUG(log, "{} Compact stop because updating", simpleInfo());
         return true;
     }
     SCOPE_EXIT({
@@ -214,13 +212,13 @@ bool DeltaValueSpace::compact(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            LOG_DEBUG(log, simpleInfo() << " Compact stop because abandoned");
+            LOG_FMT_DEBUG(log, "{} Compact stop because abandoned", simpleInfo());
             return false;
         }
         compaction_task = persisted_file_set->pickUpMinorCompaction(context);
         if (!compaction_task)
         {
-            LOG_DEBUG(log, simpleInfo() << " Nothing to compact");
+            LOG_FMT_DEBUG(log, "{} Nothing to compact", simpleInfo());
             return true;
         }
         log_storage_snap = context.storage_pool.log()->getSnapshot();
@@ -238,18 +236,18 @@ bool DeltaValueSpace::compact(DMContext & context)
         if (abandoned.load(std::memory_order_relaxed))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
+            LOG_FMT_DEBUG(log, "{} Stop compact because abandoned", simpleInfo());
             return false;
         }
         if (!compaction_task->commit(persisted_file_set, wbs))
         {
-            LOG_WARNING(log, "Structure has been updated during compact");
+            LOG_FMT_WARNING(log, "Structure has been updated during compact");
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, simpleInfo() << " Compact stop because structure got updated");
+            LOG_FMT_DEBUG(log, "{} Compact stop because structure got updated", simpleInfo());
             return false;
         }
 
-        LOG_DEBUG(log, simpleInfo() << compaction_task->info());
+        LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
     }
     wbs.writeRemoves();
 

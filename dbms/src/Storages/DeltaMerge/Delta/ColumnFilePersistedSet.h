@@ -71,9 +71,13 @@ public:
     {
         String levels_summary;
         for (size_t i = 0; i < persisted_files_levels.size(); i++)
-            levels_summary += fmt::format("[{}]: {}", i, persisted_files_levels[i].size());
+        {
+            levels_summary += fmt::format("[{}: {}]", i, persisted_files_levels[i].size());
+            if (i != persisted_files_levels.size() - 1)
+                levels_summary += ",";
+        }
 
-        return fmt::format("ColumnFilePersistedSet [{}][{}]: {} column files, {} rows, {} bytes, {} deletes",
+        return fmt::format("ColumnFilePersistedSet [{}][levels summary: {}]: {} column files, {} rows, {} bytes, {} deletes.",
                            metadata_id,
                            levels_summary,
                            persisted_files_count.load(),
@@ -111,12 +115,16 @@ public:
 
     size_t getCurrentFlushVersion() const { return flush_version; }
 
+    /// Check whether the task_flush_version is valid,
+    /// and if it is valid then increase the internal flush version.
     bool checkAndIncreaseFlushVersion(size_t task_flush_version);
 
     bool appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 
+    /// Choose a level in which exists some small column files that can be compacted to a larger column file
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
 
+    /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
     ColumnFileSetSnapshotPtr createSnapshot(const DMContext & context);
