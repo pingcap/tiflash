@@ -4,6 +4,16 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
+
+if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
+    # enable RPATHs to sysroot to make it easier for LLVM development
+    set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    set(ENV{LD_LIBRARY_PATH} "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/;${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/;${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+endif()
+
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
@@ -196,7 +206,7 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
+if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -205,11 +215,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 include (cmake/test_compiler.cmake)
 
 if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set (TIFLASH_LLVM_TOOLCHAIN 1)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
-    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" ON)
-    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" ON)
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" OFF)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" OFF)
 
 
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
@@ -218,15 +229,15 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
 
-        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ c++ c++abi)
+        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ -lc++ -lc++abi)
         if (LIBCXX_PATH)
           link_directories ("${LIBCXX_PATH}/lib")
-        endif ()
+        endif()
     endif ()
 
     if (USE_LLVM_LIBUNWIND)
       set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
-      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind unwind)
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind -lunwind)
     endif ()
 
     if (USE_LLVM_COMPILER_RT)
@@ -234,11 +245,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
     endif ()
 
-    if (MAKE_STATIC_LIBRARIES)
-      link_libraries (-Wl,-Bstatic ${TIFLASH_LLVM_LINKAGE_FLAGS} -Wl,-Bdynamic)
-    else ()
-      link_libraries (${TIFLASH_LLVM_LINKAGE_FLAGS})
-    endif ()
+    link_libraries (-Wl,-Bdynamic ${TIFLASH_LLVM_LINKAGE_FLAGS})
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
@@ -321,7 +328,7 @@ include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
 include (cmake/find_prometheus.cmake)
-include (cmake/find_raftstore_proxy.cmake)
+include (cmake/find_tiflash_proxy.cmake)
 include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
@@ -381,6 +388,11 @@ option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     include(CodeCoverage)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
+endif ()
+
+option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
+if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")
 endif ()
 
 if (ARCH_AMD64)

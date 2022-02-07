@@ -2,6 +2,9 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <kvproto/mpp.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
@@ -182,7 +185,11 @@ public:
             warnings_.push_back(error);
         }
     }
-    void clearWarnings() { warnings.clear(); }
+    void clearWarnings()
+    {
+        warnings.clear();
+        warning_count = 0;
+    }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isBatchCop() const { return is_batch_cop; }

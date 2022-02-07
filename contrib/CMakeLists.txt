@@ -79,15 +79,31 @@ if (USE_INTERNAL_GRPC_LIBRARY)
 endif ()
 
 add_subdirectory (kvproto/cpp)
+if(TIFLASH_LLVM_TOOLCHAIN)
+    target_compile_options(kvproto PRIVATE
+            -Wno-deprecated-declarations
+            -Wno-non-c-typedef-for-linkage
+            -Wno-implicit-const-int-float-conversion)
+endif()
 # -----
 set (_save ${ENABLE_TESTS})
 set (ENABLE_TESTS 0)
 # disable ENABLE_TESTS for client-c
 # GTest package conflicts with TiFlash's GTest, so we have to disable test compilation in client-c.
 add_subdirectory (client-c)
+if(TIFLASH_LLVM_TOOLCHAIN)
+    target_compile_options(kv_client PRIVATE
+            -Wno-deprecated-declarations
+            -Wno-non-c-typedef-for-linkage
+            -Wno-implicit-const-int-float-conversion)
+endif()
 set (ENABLE_TESTS ${_save})
 # -------
 add_subdirectory (tipb/cpp)
+
+if (USE_INTERNAL_TIFLASH_PROXY)
+    add_subdirectory (tiflash-proxy-cmake)
+endif ()
 
 # TODO: remove tcmalloc
 if (ENABLE_TCMALLOC AND USE_INTERNAL_GPERFTOOLS_LIBRARY)
