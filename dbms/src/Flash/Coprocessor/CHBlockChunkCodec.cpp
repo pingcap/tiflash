@@ -28,14 +28,13 @@ public:
         return output->releaseStr();
     }
 
-    size_t getExtraInfoSize(const Block & block);
     void clear() override { output = nullptr; }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
 };
 
-size_t CHBlockChunkCodecStream::getExtraInfoSize(const Block & block)
+size_t getExtraInfoSize(const Block & block)
 {
     size_t size = 64; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
