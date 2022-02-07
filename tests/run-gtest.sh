@@ -57,10 +57,11 @@ if [[ ${RUN_TESTS_PARALLEL} != "true" ]]; then
 		"gtests_dbms"
 		"gtests_libcommon"
 		"gtests_libdaemon"
+		"gtests_libmemcpy"
 	)
 	for test in ${tests[@]}; do
 		run_test "$test"
 	done
 else
-	run_test_parallel "${build_dir}/gtests_dbms ${build_dir}/gtests_libcommon ${build_dir}/gtests_libdaemon"
+	run_test_parallel "${build_dir}/gtests_dbms ${build_dir}/gtests_libcommon ${build_dir}/gtests_libdaemon ${build_dir}/gtests_libmemcpy"
 fi
