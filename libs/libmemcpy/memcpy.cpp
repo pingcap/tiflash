@@ -1,9 +1,14 @@
 #include "memcpy.h"
 
 #include <immintrin.h>
+
+#ifndef TIFLASH_MEMCPY_PREFIX
+#define TIFLASH_MEMCPY_PREFIX
+#endif
+#define TIFLASH_MEMCPY TIFLASH_MACRO_CONCAT(TIFLASH_MEMCPY_PREFIX, memcpy)
 /// This is needed to generate an object file for linking.
 
-extern "C" __attribute__((visibility("default"))) void * memcpy(void * __restrict dst, const void * __restrict src, size_t size)
+extern "C" __attribute__((visibility("default"))) void * TIFLASH_MEMCPY(void * __restrict dst, const void * __restrict src, size_t size) noexcept
 {
     return inline_memcpy(dst, src, size);
 }
@@ -19,7 +24,6 @@ MemcpyConfig memcpy_config = {
 
 namespace detail
 {
-
 template <uint8_t delta>
 __attribute__((always_inline, target("ssse3"))) static inline void memcpy_ssse3_loop(
     char * __restrict & __restrict dst,
@@ -100,7 +104,7 @@ __attribute__((always_inline, target("ssse3"))) static inline void memcpy_ssse3_
     dst -= delta;
 }
 
-__attribute__((target("ssse3"))) void memcpy_ssse3_mux(
+__attribute__((target("ssse3"))) static inline void memcpy_ssse3_mux(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
@@ -232,7 +236,7 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
 {
     constexpr size_t stride_size = vec_num * sizeof(Vector);
     const auto page_size = memcpy_config.page_size;
-    Vector storage[vec_num * page_num] {};
+    Vector storage[vec_num * page_num]{};
 
     while (size >= page_num * page_size)
     {
@@ -278,7 +282,7 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
     }
 }
 
-__attribute__((target("avx2"))) void memcpy_vex32(
+__attribute__((target("avx2"))) static inline void memcpy_vex32(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
@@ -314,7 +318,7 @@ __attribute__((target("avx2"))) void memcpy_vex32(
     memcpy_sse_loop<false, false>(dst, src, size);
 }
 
-__attribute__((target("avx512f,avx512vl"))) void memcpy_evex32(
+__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
@@ -350,7 +354,7 @@ __attribute__((target("avx512f,avx512vl"))) void memcpy_evex32(
     memcpy_sse_loop<false, false>(dst, src, size);
 }
 
-__attribute__((target("avx512f,avx512vl"))) void memcpy_evex64(
+__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & size)
@@ -384,6 +388,50 @@ __attribute__((target("avx512f,avx512vl"))) void memcpy_evex64(
         }
     }
     memcpy_sse_loop<false, false>(dst, src, size);
+}
+
+bool memcpy_large(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size)
+{
+    if (size < memcpy_config.huge_size_threshold)
+    {
+        // medium sizes
+        switch (memcpy_config.medium_size_strategy)
+        {
+        case MediumSizeStrategy::MediumSizeRepMovsb:
+            detail::rep_movsb(dst, src, size);
+            return true;
+        default:
+            detail::memcpy_sse_loop<false, false>(dst, src, size);
+        }
+    }
+    else
+    {
+        // huge sizes
+        switch (memcpy_config.huge_size_strategy)
+        {
+        case HugeSizeStrategy::HugeSizeRepMovsb:
+            detail::rep_movsb(dst, src, size);
+            return true;
+        case HugeSizeStrategy::HugeSizeSSSE3Mux:
+            detail::memcpy_ssse3_mux(dst, src, size);
+            break;
+        case HugeSizeStrategy::HugeSizeEVEX32:
+            detail::memcpy_evex32(dst, src, size);
+            break;
+        case HugeSizeStrategy::HugeSizeEVEX64:
+            detail::memcpy_evex64(dst, src, size);
+            break;
+        case HugeSizeStrategy::HugeSizeVEX32:
+            detail::memcpy_vex32(dst, src, size);
+            break;
+        default:
+            detail::memcpy_sse_loop<true, true>(dst, src, size);
+        }
+    }
+    return false;
 }
 
 } // namespace detail

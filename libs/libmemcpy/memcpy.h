@@ -1,4 +1,5 @@
 #include <common/defines.h>
+#include <cpuid.h>
 #include <emmintrin.h>
 
 #include <cstddef>
@@ -135,6 +136,23 @@ extern MemcpyConfig memcpy_config;
 
 namespace detail
 {
+ALWAYS_INLINE static inline bool rep_movsb(
+    void * __restrict dst,
+    const void * __restrict src,
+    size_t size)
+{
+    asm volatile("rep movsb"
+                 : "+D"(dst), "+S"(src), "+c"(size)
+                 :
+                 : "memory");
+    return dst;
+}
+
+bool memcpy_large(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size);
+
 template <bool enable_prefetch, bool non_temporal>
 ALWAYS_INLINE static inline void memcpy_sse_loop(
     char * __restrict & __restrict dst,
@@ -160,8 +178,8 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
 
     while (size >= 128)
     {
-        auto source = reinterpret_cast<const __m128i *>(src);
-        auto dest = reinterpret_cast<__m128i *>(__builtin_assume_aligned(dst, alignof(__m128i)));
+        const auto * source = reinterpret_cast<const __m128i *>(src);
+        auto * dest = reinterpret_cast<__m128i *>(__builtin_assume_aligned(dst, alignof(__m128i)));
 
         if constexpr (enable_prefetch)
         {
@@ -195,34 +213,6 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
     }
 }
 
-ALWAYS_INLINE static inline bool rep_movsb(
-    void * __restrict dst,
-    const void * __restrict src,
-    size_t size)
-{
-    asm volatile("rep movsb"
-                 : "+D"(dst), "+S"(src), "+c"(size)
-                 :
-                 : "memory");
-    return dst;
-}
-
-__attribute__((target("ssse3"))) void memcpy_ssse3_mux(
-    char * __restrict & __restrict dst,
-    char const * __restrict & __restrict src,
-    size_t & size);
-__attribute__((target("avx2"))) void memcpy_vex32(
-    char * __restrict & __restrict dst,
-    char const * __restrict & __restrict src,
-    size_t & size);
-__attribute__((target("avx512f,avx512vl"))) void memcpy_evex32(
-    char * __restrict & __restrict dst,
-    char const * __restrict & __restrict src,
-    size_t & size);
-__attribute__((target("avx512f,avx512vl"))) void memcpy_evex64(
-    char * __restrict & __restrict dst,
-    char const * __restrict & __restrict src,
-    size_t & size);
 } // namespace detail
 
 ALWAYS_INLINE static inline bool check_valid_strategy(HugeSizeStrategy strategy)
@@ -263,8 +253,10 @@ ALWAYS_INLINE static inline bool check_valid_strategy(MediumSizeStrategy strateg
 
 } // namespace memory_copy
 
-ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
+
+ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size) noexcept
 {
+    using namespace memory_copy;
     /// We will use pointer arithmetic, so char pointer will be used.
     /// Note that __restrict makes sense (otherwise compiler will reload data from memory
     /// instead of using the value of registers due to possible aliasing).
@@ -275,14 +267,13 @@ ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst_, const v
     /// If you use memcpy with small but non-constant sizes, you can call inline_memcpy directly
     /// for inlining and removing this single instruction.
     void * ret = dst;
-
 tail:
     /// Small sizes and tails after the loop for large sizes.
     /// The order of branches is important but in fact the optimal order depends on the distribution of sizes in your application.
     /// This order of branches is from the disassembly of glibc's code.
     /// We copy chunks of possibly uneven size with two overlapping movs.
     /// Example: to copy 5 bytes [0, 1, 2, 3, 4] we will copy tail [1, 2, 3, 4] first and then head [0, 1, 2, 3].
-    if (size <= 16)
+    if (likely(size <= 16))
     {
         if (size >= 8)
         {
@@ -311,7 +302,6 @@ tail:
     }
     else
     {
-        /// Medium and large sizes.
         if (size <= 128)
         {
             /// Medium size, not enough for full loop unrolling.
@@ -332,52 +322,18 @@ tail:
         }
         else
         {
-            using namespace memory_copy;
-            // mark small size as likely to speed up small memcpy
-            if (__builtin_expect(size < memory_copy::memcpy_config.medium_size_threshold, true))
+            if (size < memcpy_config.medium_size_threshold)
             {
-                // small sizes
                 detail::memcpy_sse_loop<false, false>(dst, src, size);
             }
-            else if (size < memcpy_config.huge_size_threshold)
+            else if (detail::memcpy_large(dst, src, size))
             {
-                // medium sizes
-                switch (memcpy_config.medium_size_strategy)
-                {
-                case MediumSizeStrategy::MediumSizeRepMovsb:
-                    detail::rep_movsb(dst, src, size);
-                    return ret;
-                default:
-                    detail::memcpy_sse_loop<false, false>(dst, src, size);
-                }
+                return ret;
             }
-            else
-            {
-                // huge sizes
-                switch (memcpy_config.huge_size_strategy)
-                {
-                case HugeSizeStrategy::HugeSizeRepMovsb:
-                    detail::rep_movsb(dst, src, size);
-                    return ret;
-                case HugeSizeStrategy::HugeSizeSSSE3Mux:
-                    detail::memcpy_ssse3_mux(dst, src, size);
-                    break;
-                case HugeSizeStrategy::HugeSizeEVEX32:
-                    detail::memcpy_evex32(dst, src, size);
-                    break;
-                case HugeSizeStrategy::HugeSizeEVEX64:
-                    detail::memcpy_evex64(dst, src, size);
-                    break;
-                case HugeSizeStrategy::HugeSizeVEX32:
-                    detail::memcpy_vex32(dst, src, size);
-                    break;
-                default:
-                    detail::memcpy_sse_loop<true, true>(dst, src, size);
-                }
-            }
-            /// The latest remaining 0..127 bytes will be processed as usual.
+
             goto tail;
         }
     }
+
     return ret;
 }
