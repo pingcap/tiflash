@@ -1,9 +1,6 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/executor.pb.h>
-#pragma GCC diagnostic pop
 
 #include <Interpreters/ExpressionActions.h>
 #include <common/types.h>
