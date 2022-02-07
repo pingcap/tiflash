@@ -4,7 +4,6 @@ target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/in
 
 if (ENABLE_TESTS)
     add_executable(gtests_libmemcpy test/gtest_memcpy.cpp)
-    target_compile_options(gtests_libmemcpy PRIVATE -O3)
     target_include_directories(gtests_libmemcpy PRIVATE ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
     add_test(gtests_libmemcpy memcpy_test)
     target_link_libraries(gtests_libmemcpy PRIVATE gtest_main)
@@ -12,7 +11,6 @@ endif()
 
 if (ENABLE_MEMCPY_BENCHMARK)
     add_executable(benchmark_memcpy bench/benchmark_memcpy.cpp)
-    target_compile_options(benchmark_memcpy PRIVATE -O3 -DNDEBUG)
     target_include_directories(benchmark_memcpy PRIVATE ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
     target_link_libraries(benchmark_memcpy PRIVATE benchmark::benchmark)
 endif()

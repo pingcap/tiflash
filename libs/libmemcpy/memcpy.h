@@ -98,7 +98,7 @@
 
 #ifdef __clang__
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy_inline
-#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("unroll 65534")
+#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("clang loop unroll(full)")
 #else
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy
 #define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("GCC unroll 65534")
@@ -164,13 +164,11 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
     size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
 
     /// If not aligned - we will copy first 16 bytes with unaligned stores.
-    if (padding > 0)
-    {
-        tiflash_compiler_builtin_memcpy(dst, src, vector_size);
-        dst += padding;
-        src += padding;
-        size -= padding;
-    }
+    tiflash_compiler_builtin_memcpy(dst, src, vector_size);
+    dst += padding;
+    src += padding;
+    size -= padding;
+
 
     /// Aligned unrolled copy. We will use half of available SSE registers.
     /// It's not possible to have both src and dst aligned.
