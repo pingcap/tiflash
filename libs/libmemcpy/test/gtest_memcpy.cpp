@@ -78,14 +78,14 @@ TEST(MemcpyTest, SmallSized)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
         {
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -115,7 +115,7 @@ TEST_P(MemcpyMediumTest, Aligned)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -144,7 +144,7 @@ TEST_P(MemcpyMediumTest, UnAligned)
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -171,7 +171,7 @@ TEST_P(MemcpyHugeTest, Aligned)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -198,7 +198,7 @@ TEST_P(MemcpyHugeTest, UnAligned)
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            inline_memcpy(dst.data, src.data, i);
+            memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
