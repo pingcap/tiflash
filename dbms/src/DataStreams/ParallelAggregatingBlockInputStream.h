@@ -36,11 +36,11 @@ public:
 
     Block getHeader() const override;
 
-    virtual void computeNewThreadCountOfThisLevel(int & ret) override
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
-        /// note: the thread count of [parallel_merge_data->thread_pool] and [] cant be estimated, since they are undefined unless some conditions are met at runtime.
+        /// Note: the thread count of [parallel_merge_data->thread_pool] and [] can't be estimated, since they are undefined unless some conditions are met at runtime.
         /// We can see them as "extra soft threads", and the thread count of them is bounded. Since they will not exceed other threads created by that query.
-        ret += processor.getMaxThreads();
+        cnt += processor.getMaxThreads();
     }
 
 protected:

@@ -70,7 +70,6 @@ private:
     // Each fixed thread interacts with outside via a Queue.
     std::vector<std::unique_ptr<Queue>> fixed_queues;
     boost::lockfree::queue<Queue *> idle_fixed_queues;
-    std::atomic_int task_cnt = 0;
 
     std::mutex dynamic_mutex;
     DynamicNode dynamic_idle_head;

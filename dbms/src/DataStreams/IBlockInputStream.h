@@ -79,12 +79,18 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
-    virtual int outputNewThreadCount()
+    /** Estimate count of threads to be created through the InputStream.
+     *  Note: Since some new threads in some InputStream(e.g. ParallelAggregatingBlockInputStream) won't be clear until runtime.
+     *  The result may not be 100% identical to the actual number of threads.
+     *  However, most of new threads in certainty are considered
+     *  and that's enough to be used to estimate the expected threads load of the system.
+     */
+    virtual int estimateNewThreadCount()
     {
-        int ret = 0;
+        int cnt = 0;
         resetNewThreadCountCompute();
-        computeNewThreadCount(ret);
-        return ret;
+        collectNewThreadCount(cnt);
+        return cnt;
     }
 
     virtual ~IBlockInputStream() = default;
@@ -126,39 +132,39 @@ public:
                 return;
     }
 
-    virtual void computeNewThreadCount(int & ret)
+    virtual void collectNewThreadCount(int & cnt)
     {
-        if (!visisted)
+        if (!collected)
         {
-            visisted = true;
-            computeNewThreadCountOfThisLevel(ret);
+            collected = true;
+            collectNewThreadCountOfThisLevel(cnt);
             for (auto & child : children)
             {
                 if (child)
-                    child->computeNewThreadCount(ret);
+                    child->collectNewThreadCount(cnt);
             }
         }
     }
 
-    virtual void computeNewThreadCountOfThisLevel(int &) {}
+    virtual void collectNewThreadCountOfThisLevel(int &) {}
 
     virtual void resetNewThreadCountCompute()
     {
-        if (visisted)
+        if (collected)
         {
             for (auto & child : children)
             {
                 if (child)
                     child->resetNewThreadCountCompute();
             }
-            visisted = false;
+            collected = false; // flag collected is unset when all children were reset.
         }
     }
 
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
-    bool visisted = false;
+    bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
 
 private:
     TableLockHolders table_locks;

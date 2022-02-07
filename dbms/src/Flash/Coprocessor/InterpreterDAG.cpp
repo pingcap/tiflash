@@ -68,16 +68,16 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     }
 }
 
-int InterpreterDAG::computeNewThreadCount()
+int InterpreterDAG::computeNewThreadCountOfExchangeReceiver()
 {
-    int ret = 0;
+    int cnt = 0;
     for (auto &itr: mpp_exchange_receiver_maps) {
         if (itr.second)
         {
-            ret += itr.second->computeNewThreadCount();
+            cnt += itr.second->computeNewThreadCount();
         }
     }
-    return ret;
+    return cnt;
 }
 
 BlockIO InterpreterDAG::execute()
@@ -87,7 +87,7 @@ BlockIO InterpreterDAG::execute()
         /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
         initMPPExchangeReceiver(*dag.getRootQueryBlock());
-        dagContext().setNewThreadCountOfExchangeReceiver(computeNewThreadCount());
+        dagContext().setNewThreadCountOfExchangeReceiver(computeNewThreadCountOfExchangeReceiver());
     }
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so

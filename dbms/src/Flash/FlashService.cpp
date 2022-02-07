@@ -123,7 +123,6 @@ grpc::Status FlashService::Coprocessor(
     ::mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_INFO(log, "woodywoody! dispatch mpp task: "<<request->meta().DebugString());
     LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))

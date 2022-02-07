@@ -67,13 +67,13 @@ public:
             throw Exception(exception_msg);
     }
 
-    virtual void computeNewThreadCount(int & ret) override
+    virtual void collectNewThreadCount(int & cnt) override
     {
-        if (!visisted)
+        if (!collected)
         {
-            visisted = true;
-            ret++;
-            in->computeNewThreadCount(ret);
+            collected = true;
+            cnt++;
+            in->collectNewThreadCount(cnt);
         }
     }
 
