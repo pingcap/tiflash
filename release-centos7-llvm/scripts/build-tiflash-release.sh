@@ -24,14 +24,10 @@ SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
-
-rm -rf ${SRCPATH}/libs/libtiflash-proxy
-mkdir -p ${SRCPATH}/libs/libtiflash-proxy
-ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
-
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
+# TODO: Won't need `USE_INTERNAL_TIFLASH_PROXY` and `PREBUILT_LIBS_ROOT` once tiflash proxy can be built along with tiflash.
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
@@ -47,6 +43,8 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DRUN_HAVE_STD_REGEX=0 \
       -DCMAKE_AR="/usr/local/bin/llvm-ar" \
       -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
+      -DUSE_INTERNAL_TIFLASH_PROXY=FALSE \
+      -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
       -GNinja
 
 ninja tiflash
@@ -55,10 +53,11 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 
 # compress debug symbols
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
+
+cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 # unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH

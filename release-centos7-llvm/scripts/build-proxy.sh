@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# TODO: We should move these things into tiflash proxy's own build script rather than do them in main tiflash project.
 # TiFlash-Proxy Building script
 # Copyright PingCAP, Inc
 # THIS SCRIPT SHOULD ONLY BE INVOKED IN DOCKER
@@ -28,7 +29,11 @@ export CMAKE="/opt/cmake/bin/cmake"
 
 if [ -f /.dockerenv ]; then
     echo '#!/usr/bin/env bash' > /tmp/tiflash-link
-    echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
+    if [[ "$(uname -m)" == 'aarch64' ]]; then
+      echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@ -Wl,-Bsymbolic' >> /tmp/tiflash-link
+    else
+      echo '/usr/local/bin/clang -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@' >> /tmp/tiflash-link
+    fi
     chmod +x /tmp/tiflash-link
     export RUSTFLAGS="-C linker=/tmp/tiflash-link"
 fi
