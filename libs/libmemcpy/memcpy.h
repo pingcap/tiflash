@@ -228,9 +228,9 @@ ALWAYS_INLINE static inline bool check_valid_strategy(HugeSizeStrategy strategy)
     case HugeSizeStrategy::HugeSizeSSSE3Mux:
         return __builtin_cpu_supports("ssse3");
     case HugeSizeStrategy::HugeSizeEVEX32:
-        return __builtin_cpu_supports("avx512vl");
+        return __builtin_cpu_supports("avx512f");
     case HugeSizeStrategy::HugeSizeEVEX64:
-        return __builtin_cpu_supports("avx512vl");
+        return __builtin_cpu_supports("avx512f");
     case HugeSizeStrategy::HugeSizeVEX32:
         return __builtin_cpu_supports("avx2");
     default:
