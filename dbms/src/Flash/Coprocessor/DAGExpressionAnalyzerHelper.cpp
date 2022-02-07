@@ -366,7 +366,6 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
     if (expr.children_size() != 1)
         throw TiFlashException("Invalid arguments of ROUND function", Errors::Coprocessor::BadRequest);
 
-
     auto input_arg_name = analyzer->getActions(expr.children(0), actions);
 
     auto const_zero = constructInt64LiteralTiExpr(0);
