@@ -216,25 +216,24 @@ void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
   *************************/
 
 PageDirectory::PageDirectory()
-    : sequence(0)
+    : PageDirectory(0, nullptr)
+{
+}
+
+PageDirectory::PageDirectory(UInt64 init_seq, WALStorePtr && wal_)
+    : sequence(init_seq)
+    , wal(std::move(wal_))
     , log(getLogWithPrefix(nullptr, "PageDirectory"))
 {
 }
 
-PageDirectory PageDirectory::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const WriteLimiterPtr & write_limiter)
+PageDirectory PageDirectory::create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal)
 {
-    // TODO: Speedup restoring
-    CollapsingPageDirectory in_mem_directory;
-    auto callback = [&in_mem_directory](PageEntriesEdit && edit) {
-        in_mem_directory.apply(std::move(edit));
-    };
-
-    PageDirectory dir;
     // Reset the `sequence` to the maximum of persisted.
-    // PageId max_page_id = in_mem_directory.max_applied_page_id; // TODO: return it to outer function
-    dir.sequence = in_mem_directory.max_applied_ver.sequence;
-    dir.wal = WALStore::create(callback, provider, delegator, write_limiter);
-    for (const auto & [page_id, versioned_entry] : in_mem_directory.table_directory)
+    PageDirectory dir(
+        /*init_seq=*/collapsing_directory.max_applied_ver.sequence,
+        std::move(wal));
+    for (const auto & [page_id, versioned_entry] : collapsing_directory.table_directory)
     {
         const auto & version = versioned_entry.first;
         const auto & entry = versioned_entry.second;
@@ -374,7 +373,7 @@ PageId PageDirectory::getMaxId() const
     PageId max_page_id = 0;
     std::shared_lock read_lock(table_rw_mutex);
 
-    for (auto & [page_id, versioned] : mvcc_table_directory)
+    for (const auto & [page_id, versioned] : mvcc_table_directory)
     {
         (void)versioned;
         max_page_id = std::max(max_page_id, page_id);
@@ -457,8 +456,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             // If we already hold the lock from `r.ori_page_id`, Then we should not request it again.
             // This can happen when r.ori_page_id have other operating in current writebatch
             if (auto entry = (updating_locks.find(r.ori_page_id) != updating_locks.end()
-                                  ? iter->second->getEntryNotSafe(last_sequence)
-                                  : iter->second->getEntry(last_sequence));
+                                  ? iter->second->getEntryNotSafe(last_sequence + 1)
+                                  : iter->second->getEntry(last_sequence + 1));
                 entry)
             {
                 // copy the entry to be ref

@@ -101,6 +101,10 @@ set (ENABLE_TESTS ${_save})
 # -------
 add_subdirectory (tipb/cpp)
 
+if (USE_INTERNAL_TIFLASH_PROXY)
+    add_subdirectory (tiflash-proxy-cmake)
+endif ()
+
 # TODO: remove tcmalloc
 if (ENABLE_TCMALLOC AND USE_INTERNAL_GPERFTOOLS_LIBRARY)
     add_subdirectory (libtcmalloc)
