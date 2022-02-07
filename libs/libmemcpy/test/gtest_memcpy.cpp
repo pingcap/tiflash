@@ -165,8 +165,7 @@ TEST_P(MemcpyHugeTest, Aligned)
                  0xc0000 + 128,
                  0xc0000 + 16,
                  0xc0000 * 17,
-                 0xc0000 * 13,
-                 0xc0000 * 64})
+                 0xc0000 * 13})
         {
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
@@ -192,8 +191,7 @@ TEST_P(MemcpyHugeTest, UnAligned)
                  0xc0000 + 128,
                  0xc0000 + 16,
                  0xc0000 * 17,
-                 0xc0000 * 13,
-                 0xc0000 * 64})
+                 0xc0000 * 13})
         {
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
