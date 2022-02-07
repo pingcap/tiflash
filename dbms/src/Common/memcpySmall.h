@@ -26,7 +26,7 @@
 
 namespace detail
 {
-__attribute__((always_inline)) inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
+ALWAYS_INLINE inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
 {
     while (n > 0)
     {
