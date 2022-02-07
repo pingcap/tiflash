@@ -427,8 +427,11 @@ bool memcpy_large(
         case HugeSizeStrategy::HugeSizeVEX32:
             detail::memcpy_vex32(dst, src, size);
             break;
-        default:
+        case HugeSizeStrategy::HugeSizeSSENT:
             detail::memcpy_sse_loop<true, true>(dst, src, size);
+            break;
+        default:
+            detail::memcpy_sse_loop<false, false>(dst, src, size);
         }
     }
     return false;

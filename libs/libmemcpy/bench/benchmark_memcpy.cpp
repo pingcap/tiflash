@@ -192,6 +192,7 @@ BENCHMARK_CAPTURE(memcpy_bench, legacy_1_to_0xc0000, ::legacy_memcpy, 1, 0xc0000
 
 BENCHMARK_CAPTURE(memcpy_bench, system_0xc0000_to_0x1200000, ::memcpy, 0xc0000, 0x1200000, 64);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_sse, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSE);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_ssent, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSENT);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_ssse3, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSSE3Mux);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_rep_movsb, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeRepMovsb);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_vex32, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeVEX32);
@@ -201,12 +202,14 @@ BENCHMARK_CAPTURE(memcpy_bench, legacy_0xc0000_to_0x1200000, ::legacy_memcpy, 0x
 
 BENCHMARK_CAPTURE(memcpy_bench, system_random, ::memcpy, 0xc0000, 0x1200000, 64);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_sse, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSE);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_ssent, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSENT);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_ssse3, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSSE3Mux);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_rep_movsb, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeRepMovsb);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_vex32, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeVEX32);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_evex32, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeEVEX32);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_sse_evex64, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeEVEX32);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_rep_movsb_sse, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeRepMovsb, HugeSizeStrategy::HugeSizeSSE);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_rep_movsb_ssent, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeRepMovsb, HugeSizeStrategy::HugeSizeSSENT);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_rep_movsb_ssse3, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeRepMovsb, HugeSizeStrategy::HugeSizeSSSE3Mux);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_rep_movsb_rep_movsb, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeRepMovsb, HugeSizeStrategy::HugeSizeRepMovsb);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_random_rep_movsb_vex32, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeRepMovsb, HugeSizeStrategy::HugeSizeVEX32);

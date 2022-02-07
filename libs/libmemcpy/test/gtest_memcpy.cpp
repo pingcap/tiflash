@@ -214,6 +214,7 @@ INSTANTIATE_TEST_CASE_P(
     MemcpyHugeTest,
     ::testing::Values(
         HugeSizeStrategy::HugeSizeSSE,
+        HugeSizeStrategy::HugeSizeSSENT,
         HugeSizeStrategy::HugeSizeSSSE3Mux,
         HugeSizeStrategy::HugeSizeRepMovsb,
         HugeSizeStrategy::HugeSizeVEX32,

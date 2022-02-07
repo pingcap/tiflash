@@ -116,6 +116,7 @@ enum class MediumSizeStrategy
 enum class HugeSizeStrategy
 {
     HugeSizeSSE,
+    HugeSizeSSENT,
     HugeSizeRepMovsb,
     HugeSizeSSSE3Mux,
     HugeSizeVEX32,
