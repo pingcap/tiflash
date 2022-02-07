@@ -1,9 +1,8 @@
 #pragma once
 
-#include <tipb/executor.pb.h>
-
 #include <Interpreters/ExpressionActions.h>
 #include <common/types.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
