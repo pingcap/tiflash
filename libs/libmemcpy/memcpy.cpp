@@ -105,10 +105,11 @@ __attribute__((target("ssse3"))) void memcpy_ssse3_mux(
     char const * __restrict & __restrict src,
     size_t & size)
 {
+    auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m128i) - 1);
     tiflash_compiler_builtin_memcpy(dst, src, 16);
-    dst += 16;
-    src += 16;
-    size -= 16;
+    dst += dst_padding;
+    src += dst_padding;
+    size -= dst_padding;
 
     auto delta = reinterpret_cast<uintptr_t>(src) & 15;
 
@@ -231,7 +232,7 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
 {
     constexpr size_t stride_size = vec_num * sizeof(Vector);
     const auto page_size = memcpy_config.page_size;
-    Vector storage[vec_num * page_num];
+    Vector storage[vec_num * page_num] {};
 
     while (size >= page_num * page_size)
     {
@@ -254,7 +255,7 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
                 for (size_t v = 0; v < vec_num; ++v)
                 {
                     const auto * address = reinterpret_cast<const Vector *>(source + page_size * p + sizeof(Vector) * v);
-                    storage[p * page_num + v] = load(address);
+                    storage[p * vec_num + v] = load(address);
                 };
             };
 
@@ -265,7 +266,7 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
                 for (size_t v = 0; v < vec_num; ++v)
                 {
                     auto * address = reinterpret_cast<Vector *>(target + page_size * p + sizeof(Vector) * v);
-                    store(address, storage[p * page_num + v]);
+                    store(address, storage[p * vec_num + v]);
                 }
             }
             dst += stride_size;
@@ -354,9 +355,9 @@ __attribute__((target("avx512f,avx512vl"))) void memcpy_evex64(
     char const * __restrict & __restrict src,
     size_t & size)
 {
-    auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m256i) - 1);
-    auto diff = (reinterpret_cast<uintptr_t>(dst) ^ reinterpret_cast<uintptr_t>(src)) & (sizeof(__m256i) - 1);
-    tiflash_compiler_builtin_memcpy(dst, src, sizeof(__m256i));
+    auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m512i) - 1);
+    auto diff = (reinterpret_cast<uintptr_t>(dst) ^ reinterpret_cast<uintptr_t>(src)) & (sizeof(__m512i) - 1);
+    tiflash_compiler_builtin_memcpy(dst, src, sizeof(__m512i));
     dst += dst_padding;
     src += dst_padding;
     size -= dst_padding;

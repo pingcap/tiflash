@@ -97,7 +97,7 @@
 
 #ifdef __clang__
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy_inline
-#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("clang loop unroll(full)")
+#define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("unroll 65534")
 #else
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy
 #define TIFLASH_MEMCPY_UNROLL_FULLY _Pragma("GCC unroll 65534")

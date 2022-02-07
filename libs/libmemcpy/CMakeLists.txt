@@ -1,2 +1,10 @@
 add_library (memcpy STATIC memcpy.cpp)
 target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
+
+if (ENABLE_TESTS)
+    add_executable(memcpy_test test/gtest_memcpy.cpp)
+    target_compile_options(memcpy_test PRIVATE -O3)
+    target_include_directories(memcpy_test PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
+    add_test(memcpy_test memcpy_test)
+    target_link_libraries(memcpy_test PRIVATE gtest_main)
+endif()
