@@ -154,7 +154,6 @@ bool memcpy_large(
     char const * __restrict & __restrict src,
     size_t & size);
 
-template <bool enable_prefetch, bool non_temporal>
 ALWAYS_INLINE static inline void memcpy_sse_loop(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
@@ -183,10 +182,6 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
     {
         const auto * source = reinterpret_cast<const __m128i *>(src);
         auto * target = reinterpret_cast<__m128i *>(dst);
-        if constexpr (enable_prefetch)
-        {
-            __builtin_prefetch(src + 8 * 16);
-        }
         c0 = _mm_loadu_si128(source + 0);
         c1 = _mm_loadu_si128(source + 1);
         c2 = _mm_loadu_si128(source + 2);
@@ -196,28 +191,66 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
         c6 = _mm_loadu_si128(source + 6);
         c7 = _mm_loadu_si128(source + 7);
         src += 128;
-        if constexpr (non_temporal)
-        {
-            _mm_stream_si128(target + 0, c0);
-            _mm_stream_si128(target + 1, c1);
-            _mm_stream_si128(target + 2, c2);
-            _mm_stream_si128(target + 3, c3);
-            _mm_stream_si128(target + 4, c4);
-            _mm_stream_si128(target + 5, c5);
-            _mm_stream_si128(target + 6, c6);
-            _mm_stream_si128(target + 7, c7);
-        }
-        else
-        {
-            _mm_store_si128(target + 0, c0);
-            _mm_store_si128(target + 1, c1);
-            _mm_store_si128(target + 2, c2);
-            _mm_store_si128(target + 3, c3);
-            _mm_store_si128(target + 4, c4);
-            _mm_store_si128(target + 5, c5);
-            _mm_store_si128(target + 6, c6);
-            _mm_store_si128(target + 7, c7);
-        }
+        _mm_store_si128(target + 0, c0);
+        _mm_store_si128(target + 1, c1);
+        _mm_store_si128(target + 2, c2);
+        _mm_store_si128(target + 3, c3);
+        _mm_store_si128(target + 4, c4);
+        _mm_store_si128(target + 5, c5);
+        _mm_store_si128(target + 6, c6);
+        _mm_store_si128(target + 7, c7);
+        dst += 128;
+
+        size -= 128;
+    }
+}
+
+ALWAYS_INLINE static inline void memcpy_ssent_loop(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size)
+{
+    static constexpr const size_t vector_size = sizeof(__m128i);
+    size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
+
+    /// If not aligned - we will copy first 16 bytes with unaligned stores.
+    tiflash_compiler_builtin_memcpy(dst, src, vector_size);
+    dst += padding;
+    src += padding;
+    size -= padding;
+
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+    __m128i c0, c1, c2, c3, c4, c5, c6, c7;
+
+    while (size >= 128)
+    {
+        const auto * source = reinterpret_cast<const __m128i *>(src);
+        auto * target = reinterpret_cast<__m128i *>(dst);
+        __builtin_prefetch(source + 8);
+        c0 = _mm_loadu_si128(source + 0);
+        c1 = _mm_loadu_si128(source + 1);
+        c2 = _mm_loadu_si128(source + 2);
+        c3 = _mm_loadu_si128(source + 3);
+        c4 = _mm_loadu_si128(source + 4);
+        c5 = _mm_loadu_si128(source + 5);
+        c6 = _mm_loadu_si128(source + 6);
+        c7 = _mm_loadu_si128(source + 7);
+        src += 128;
+        _mm_stream_si128(target + 0, c0);
+        _mm_stream_si128(target + 1, c1);
+        _mm_stream_si128(target + 2, c2);
+        _mm_stream_si128(target + 3, c3);
+        _mm_stream_si128(target + 4, c4);
+        _mm_stream_si128(target + 5, c5);
+        _mm_stream_si128(target + 6, c6);
+        _mm_stream_si128(target + 7, c7);
         dst += 128;
 
         size -= 128;
@@ -335,7 +368,7 @@ tail:
         {
             if (size < memcpy_config.medium_size_threshold)
             {
-                detail::memcpy_sse_loop<false, false>(dst, src, size);
+                detail::memcpy_sse_loop(dst, src, size);
             }
             else if (detail::memcpy_large(dst, src, size))
             {

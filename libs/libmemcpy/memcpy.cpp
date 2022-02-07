@@ -315,7 +315,7 @@ __attribute__((target("avx2"))) static inline void memcpy_vex32(
             memcpy_vex_impl<__m256i, 2, 4>(dst, src, size, _mm256_loadu_si256, _mm256_stream_si256);
         }
     }
-    memcpy_sse_loop<false, false>(dst, src, size);
+    memcpy_sse_loop(dst, src, size);
 }
 
 __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
@@ -351,7 +351,7 @@ __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
             memcpy_evex_impl<__m256i, 2, 4>(dst, src, size, _mm256_loadu_si256, _mm256_stream_si256);
         }
     }
-    memcpy_sse_loop<false, false>(dst, src, size);
+    memcpy_sse_loop(dst, src, size);
 }
 
 __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
@@ -387,7 +387,7 @@ __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
             memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
         }
     }
-    memcpy_sse_loop<false, false>(dst, src, size);
+    memcpy_sse_loop(dst, src, size);
 }
 
 bool memcpy_large(
@@ -404,7 +404,7 @@ bool memcpy_large(
             detail::rep_movsb(dst, src, size);
             return true;
         default:
-            detail::memcpy_sse_loop<false, false>(dst, src, size);
+            detail::memcpy_sse_loop(dst, src, size);
         }
     }
     else
@@ -428,10 +428,10 @@ bool memcpy_large(
             detail::memcpy_vex32(dst, src, size);
             break;
         case HugeSizeStrategy::HugeSizeSSENT:
-            detail::memcpy_sse_loop<true, true>(dst, src, size);
+            detail::memcpy_ssent_loop(dst, src, size);
             break;
         default:
-            detail::memcpy_sse_loop<false, false>(dst, src, size);
+            detail::memcpy_sse_loop(dst, src, size);
         }
     }
     return false;
