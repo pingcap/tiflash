@@ -694,16 +694,19 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
 
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
+        assert(i < source_columns.size());
         update_cast_column(aggregation.agg_func(i), source_columns[i]);
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        update_cast_column(aggregation.group_by(i), source_columns[i + aggregation.agg_func_size()]);
+        size_t group_by_index = i + aggregation.agg_func_size();
+        assert(group_by_index < source_columns.size());
+        update_cast_column(aggregation.group_by(i), source_columns[group_by_index]);
     }
 
     if (need_update_source_columns)
     {
-        source_columns = std::move(updated_aggregated_columns);
+        std::swap(source_columns, updated_aggregated_columns);
     }
 }
 

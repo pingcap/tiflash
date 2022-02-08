@@ -99,7 +99,7 @@ AnalysisResult analyzeExpressions(
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    // selection on table scan had been executed in executeTs
+    // selection on table scan had been executed in handleTableScan
     if (query_block.selection && query_block.source->tp() != tipb::ExecType::TypeTableScan)
     {
         std::vector<const tipb::Expr *> where_conditions;
@@ -209,8 +209,7 @@ ExpressionActionsPtr generateProjectExpressionActions(
     return project;
 }
 
-// the flow is the same as executeFetchcolumns
-void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline)
 {
     if (!ts.has_table_id())
     {
@@ -457,7 +456,7 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
     }
 }
 
-void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
@@ -878,7 +877,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     }
 }
 
-void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 {
     auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
     if (unlikely(it == dagContext().getMPPExchangeReceiverMap().end()))
@@ -901,7 +900,7 @@ void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
+void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
     std::vector<NameAndTypePair> input_columns;
     pipeline.streams = input_streams_vec[0];
@@ -917,16 +916,14 @@ void DAGQueryBlockInterpreter::executeProjection(DAGPipeline & pipeline, const t
     for (const auto & expr : projection.exprs())
     {
         auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
+        last_step.required_output.emplace_back(expr_name);
         const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
         String alias = unique_name_generator.toUniqueName(col.name);
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
-        last_step.required_output.emplace_back(alias);
     }
-    assert(!project_cols.empty());
-    last_step.actions->add(ExpressionAction::project(project_cols));
-    chain.finalize();
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
+    executeProjectAction(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -945,7 +942,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueryForSet right_query;
-        executeJoin(query_block.source->join(), pipeline, right_query);
+        handleJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
 
         SubqueriesForSets subquries;
@@ -954,17 +951,17 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        executeExchangeReceiver(pipeline);
+        handleExchangeReceiver(pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
-        executeProjection(pipeline, query_block.source->projection());
+        handleProjection(pipeline, query_block.source->projection());
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
     {
-        executeTS(query_block.source->tbl_scan(), pipeline);
+        handleTableScan(query_block.source->tbl_scan(), pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }
 
@@ -1030,7 +1027,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        executeExchangeSender(pipeline);
+        handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
 }
@@ -1058,7 +1055,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 {
     /// only run in MPP
     assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
