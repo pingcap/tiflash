@@ -47,6 +47,7 @@ private:
 
     size_t total_compact_files = 0;
     size_t total_compact_rows = 0;
+    size_t result_compact_files = 0;
 
 public:
     MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);

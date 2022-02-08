@@ -16,9 +16,10 @@ namespace DM
 inline ColumnFilePersisteds flattenColumnFileLevels(const ColumnFilePersistedSet::ColumnFilePersistedLevels & file_levels)
 {
     ColumnFilePersisteds column_files;
-    for (const auto & level : file_levels)
+    // Last level first
+    for (auto level_it = file_levels.rbegin(); level_it != file_levels.rend(); ++level_it)
     {
-        for (const auto & file : level)
+        for (const auto & file : *level_it)
         {
             column_files.emplace_back(file);
         }
@@ -377,6 +378,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
+    LOG_FMT_DEBUG(log, "Before commit compaction, level summary: {}", info());
     ColumnFilePersistedLevels new_persisted_files_levels;
     // Copy column files in level range [0, compaction->compaction_src_level)
     for (size_t i = 0; i < compaction->compaction_src_level; i++)
@@ -385,8 +387,30 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         for (const auto & f : persisted_files_levels[i])
             new_level.push_back(f);
     }
-    // Create a new empty level for `compaction_src_level` because all the column files is compacted to next level
-    new_persisted_files_levels.emplace_back();
+    // Copy the files in source level that is not in the compaction task.
+    // Actually, just level 0 may contain file that is not in the compaction task, because flush and compaction can happen concurrently.
+    // For other levels, we always compact all the files in the level.
+    // And because compaction is a single threaded process, so there will be no new files compacted to the source level at the same time.
+    const auto & old_src_level_files = persisted_files_levels[compaction->compaction_src_level];
+    auto old_src_level_files_iter = old_src_level_files.begin();
+    for (auto & task : compaction->tasks)
+    {
+        for (auto & file : task.to_compact)
+        {
+            if (unlikely(old_src_level_files_iter == old_src_level_files.end()
+                         || (file->getId() != (*old_src_level_files_iter)->getId())
+                         || (file->getRows() != (*old_src_level_files_iter)->getRows())))
+            {
+                throw Exception("Compaction algorithm broken", ErrorCodes::LOGICAL_ERROR);
+            }
+            old_src_level_files_iter++;
+        }
+    }
+    auto & src_level_files = new_persisted_files_levels.emplace_back();
+    while (old_src_level_files_iter != old_src_level_files.end())
+    {
+        src_level_files.emplace_back(*old_src_level_files_iter);
+    }
     // Add new file to the target level
     auto target_level = compaction->compaction_src_level + 1;
     auto & target_level_files = new_persisted_files_levels.emplace_back();
@@ -404,7 +428,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         else
             target_level_files.push_back(task.result);
     }
-    // Copy column files in level range [compaction->compaction_src_level + 1, +inf) if exists
+    // Copy column files in level range [target_level + 1, +inf) if exists
     for (size_t i = target_level + 1; i < persisted_files_levels.size(); i++)
     {
         auto & new_level = new_persisted_files_levels.emplace_back();
@@ -421,6 +445,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
+    LOG_FMT_DEBUG(log, "After commit compaction, level summary: {}", info());
 
     return true;
 }

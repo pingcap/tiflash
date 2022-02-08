@@ -48,6 +48,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
 
         total_compact_files += task.to_compact.size();
         total_compact_rows += compact_rows;
+        result_compact_files += 1;
     }
 }
 
@@ -58,7 +59,7 @@ bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, Wri
 
 String MinorCompaction::info() const
 {
-    return fmt::format("Compacted {} column files into {} column files, total {} rows.", total_compact_files, tasks.size(), total_compact_rows);
+    return fmt::format("Compacted {} column files into {} column files, total {} rows.", total_compact_files, result_compact_files, total_compact_rows);
 }
 } // namespace DM
 } // namespace DB
