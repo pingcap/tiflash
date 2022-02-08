@@ -215,8 +215,8 @@ struct CmpOp
 template <typename A, typename B>
 struct ReversedCmpOp
 {
-    using SymmetricOp = CmpOp<A, B>;
-    static Int8 apply(A a, B b) { return -SymmetricOp::apply(b, a); }
+    using SymmetricOp = CmpOp<B, A>;
+    static Int8 apply(A a, B b) { return SymmetricOp::apply(b, a); }
 };
 
 

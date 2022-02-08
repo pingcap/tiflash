@@ -84,7 +84,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
 {
     auto & factory = FunctionFactory::instance();
 
@@ -96,7 +96,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns);
+    auto func = bp->build(columns, collator);
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());
@@ -131,27 +131,6 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
     for (size_t i = 0; i < size; i++)
         col->insert(Null());
     return {std::move(col), data_type, name};
-}
-
-ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
-{
-    auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(fraction));
-    auto col = data_type_ptr->createColumn();
-    for (const auto dt : init)
-    {
-        if (dt.has_value())
-            col->insert(Field(dt->toPackedUInt()));
-        else
-            col->insert(Null());
-    }
-    return {std::move(col), data_type_ptr, "datetime"};
-}
-
-ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction)
-{
-    auto data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
-    auto col = data_type_ptr->createColumnConst(size, Field(dt.toPackedUInt()));
-    return {std::move(col), data_type_ptr, "datetime"};
 }
 
 } // namespace tests

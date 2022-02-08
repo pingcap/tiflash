@@ -1,7 +1,14 @@
 #pragma once
 
 #include <Flash/CoprocessorHandler.h>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <grpcpp/impl/codegen/sync_stream.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 namespace DB
 {

@@ -1,14 +1,3 @@
-add_subdirectory (kvproto/cpp)
-# -----
-set (_save ${ENABLE_TESTS})
-set (ENABLE_TESTS 0)
-# disable ENABLE_TESTS for client-c
-# GTest package conflicts with CH's GTest, so we have to disable test compilation in ch.
-add_subdirectory (client-c)
-set (ENABLE_TESTS ${_save})
-# -------
-add_subdirectory (tipb/cpp)
-
 if (NOT MSVC)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-old-style-cast")
 endif ()
@@ -26,9 +15,7 @@ if (USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_RE2_LIBRARY)
-    set(RE2_BUILD_TESTING 0 CACHE INTERNAL "")
-    add_subdirectory (re2)
-    add_subdirectory (re2_st)
+    add_subdirectory (re2-cmake)
 endif ()
 
 if (USE_INTERNAL_DOUBLE_CONVERSION_LIBRARY)
@@ -80,6 +67,42 @@ endif ()
 
 if (USE_INTERNAL_CCTZ_LIBRARY)
     add_subdirectory (cctz-cmake)
+endif ()
+
+if (USE_INTERNAL_PROTOBUF_LIBRARY)
+    add_subdirectory(protobuf-cmake)
+endif ()
+
+if (USE_INTERNAL_GRPC_LIBRARY)
+    add_subdirectory(abseil-cpp-cmake)
+    add_subdirectory(grpc-cmake)
+endif ()
+
+add_subdirectory (kvproto/cpp)
+if(TIFLASH_LLVM_TOOLCHAIN)
+    target_compile_options(kvproto PRIVATE
+            -Wno-deprecated-declarations
+            -Wno-non-c-typedef-for-linkage
+            -Wno-implicit-const-int-float-conversion)
+endif()
+# -----
+set (_save ${ENABLE_TESTS})
+set (ENABLE_TESTS 0)
+# disable ENABLE_TESTS for client-c
+# GTest package conflicts with TiFlash's GTest, so we have to disable test compilation in client-c.
+add_subdirectory (client-c)
+if(TIFLASH_LLVM_TOOLCHAIN)
+    target_compile_options(kv_client PRIVATE
+            -Wno-deprecated-declarations
+            -Wno-non-c-typedef-for-linkage
+            -Wno-implicit-const-int-float-conversion)
+endif()
+set (ENABLE_TESTS ${_save})
+# -------
+add_subdirectory (tipb/cpp)
+
+if (USE_INTERNAL_TIFLASH_PROXY)
+    add_subdirectory (tiflash-proxy-cmake)
 endif ()
 
 # TODO: remove tcmalloc

@@ -77,7 +77,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > (dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
+    if (static_cast<Int64>(rows_in_blocks) > (dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
     {
         batchWrite<false>();
     }
@@ -106,7 +106,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 }
                 return;
             }
-            for (auto & block : input_blocks)
+            for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
@@ -125,10 +125,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 }
                 return;
             }
-            for (auto & block : input_blocks)
+            for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto dag_chunk = response.add_chunks();
+                auto * dag_chunk = response.add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
@@ -148,14 +148,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         }
 
         Int64 current_records_num = 0;
-        for (auto & block : input_blocks)
+        for (const auto & block : input_blocks)
         {
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows;)
             {
                 if (current_records_num >= records_per_chunk)
                 {
-                    auto dag_chunk = response.add_chunks();
+                    auto * dag_chunk = response.add_chunks();
                     dag_chunk->set_rows_data(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                     current_records_num = 0;
@@ -169,7 +169,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
 
         if (current_records_num > 0)
         {
-            auto dag_chunk = response.add_chunks();
+            auto * dag_chunk = response.add_chunks();
             dag_chunk->set_rows_data(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
