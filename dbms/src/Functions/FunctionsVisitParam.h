@@ -171,10 +171,10 @@ struct ExtractParamImpl
     using ResultType = typename ParamExtractor::ResultType;
 
     /// It is assumed that `res` is the correct size and initialized with zeros.
-    static void vectorConstant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)
+    static void vectorConstant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const std::string & match_type, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)
     {
-        if (escape_char != '\\' || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != '\\' || !match_type.empty() || collator != nullptr)
+            throw Exception("ExtractParamImpl don't support customized escape char/match_type/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         /// We are looking for a parameter simply as a substring of the form "name"
         needle = "\"" + needle + "\":";
 
@@ -210,10 +210,10 @@ struct ExtractParamImpl
         memset(&res[i], 0, (res.size() - i) * sizeof(res[0]));
     }
 
-    static void constantConstant(const std::string & data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, ResultType & res)
+    static void constantConstant(const std::string & data, std::string needle, const UInt8 escape_char, const std::string & match_type, const TiDB::TiDBCollatorPtr & collator, ResultType & res)
     {
-        if (escape_char != '\\' || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != '\\' || !match_type.empty() || collator != nullptr)
+            throw Exception("ExtractParamImpl don't support customized escape char/match_type/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         needle = "\"" + needle + "\":";
         size_t pos = data.find(needle);
         if (pos == std::string::npos)
