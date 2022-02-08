@@ -692,12 +692,12 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
         }
     };
 
-    for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
+    for (Int32 i = 0; i < aggregation.agg_func_size(); ++i)
     {
-        assert(i < source_columns.size());
+        assert(static_cast<size_t>(i) < source_columns.size());
         update_cast_column(aggregation.agg_func(i), source_columns[i]);
     }
-    for (Int32 i = 0; i < aggregation.group_by_size(); i++)
+    for (Int32 i = 0; i < aggregation.group_by_size(); ++i)
     {
         size_t group_by_index = i + aggregation.agg_func_size();
         assert(group_by_index < source_columns.size());
