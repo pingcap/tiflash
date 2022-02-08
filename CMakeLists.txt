@@ -301,7 +301,6 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
