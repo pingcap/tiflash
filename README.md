@@ -3,7 +3,7 @@
 
 [TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable). It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB. 
 
-TiFlash stores data in columnar format and synchronizes data updates in real-time from [TiKV](https://github.com/tikv/tikv) by Raft logs with sub-second latency. Reads from data replicas in TiFlash are guaranteed transactional consistent with Snapshot Isolation level. TiFlash utilizes the MPP (Massively Parallel Processing) computing architecture to accelerate the analytical workloads.
+TiFlash stores data in columnar format and synchronizes data updates in real-time from [TiKV](https://github.com/tikv/tikv) by Raft logs with sub-second latency. Reads from data replicas in TiFlash are guaranteed transactional consistent with Snapshot Isolation level. TiFlash utilizes the Massively Parallel Processing (MPP) computing architecture to accelerate the analytical workloads.
 
 The TiFlash repository is based on the early version of [ClickHouse](https://github.com/ClickHouse/ClickHouse/tree/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f). Many thanks to the excellent work of ClickHouse team.
 
