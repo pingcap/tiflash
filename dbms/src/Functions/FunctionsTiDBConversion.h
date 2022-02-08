@@ -811,13 +811,13 @@ struct TiDBConvertToFloat
 
 /// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
-template <typename FromDataType, typename ToFieldType, bool return_nullable, bool canSkipCheckOverflow>
+template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T int_value, PrecType prec [[ maybe_unused ]], ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, PrecType prec [[maybe_unused]], ScaleType scale, const Context & context)
     {
         // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
@@ -826,7 +826,7 @@ struct TiDBConvertToDecimal
 
         UType scale_mul = getScaleMultiplier<U>(scale);
         Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
-        if constexpr (!canSkipCheckOverflow)
+        if constexpr (!can_skip_check_overflow)
         {
             Int256 scaled_max_value = DecimalMaxValue::get(prec);
 
@@ -1768,14 +1768,14 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
-    template<typename FromDataType, typename ToDataType, bool return_nullable>
+    template <typename FromDataType, typename ToDataType, bool return_nullable>
     WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
     {
         using ToFieldType = typename ToDataType::FieldType;
         PrecType prec = decimal_type->getPrec();
         ScaleType scale = decimal_type->getScale();
-        bool canSkip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
-        if (canSkip)
+        bool can_skip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, prec, scale);
+        if (can_skip)
         {
             return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, true>::execute(
