@@ -14,6 +14,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
@@ -212,21 +213,23 @@ dt_page_gc_low_write_prob = 0.2
     auto verify_persister_reload_config = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        EXPECT_NE(persister.page_storage->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_NE(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        auto cfg = persister.page_storage->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         persister.gc();
 
-        EXPECT_NE(persister.page_storage->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_EQ(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        cfg = persister.page_storage->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -281,21 +284,23 @@ dt_page_gc_low_write_prob = 0.2
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        EXPECT_NE(storage_pool->data()->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(storage_pool->data()->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(storage_pool->data()->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(storage_pool->data()->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(storage_pool->data()->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_NE(storage_pool->data()->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        auto cfg = storage_pool->data()->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         storage_pool->gc(settings, DM::StoragePool::Seconds(0));
 
-        EXPECT_EQ(storage_pool->data()->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_EQ(storage_pool->data()->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_EQ(storage_pool->data()->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_DOUBLE_EQ(storage_pool->data()->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(storage_pool->data()->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_EQ(storage_pool->data()->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        cfg = storage_pool->data()->getSettings();
+        EXPECT_EQ(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_DOUBLE_EQ(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
