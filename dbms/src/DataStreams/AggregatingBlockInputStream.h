@@ -28,7 +28,7 @@ public:
         const FileProviderPtr & file_provider_,
         bool final_,
         const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, getName()))
+        : log(getMPPTaskLog(log_, name))
         , params(params_)
         , aggregator(params, log)
         , file_provider{file_provider_}
@@ -37,7 +37,9 @@ public:
         children.push_back(input);
     }
 
-    String getName() const override { return "Aggregating"; }
+    static constexpr auto name = "Aggregating";
+
+    String getName() const override { return name; }
 
     Block getHeader() const override;
 
