@@ -528,6 +528,44 @@ namespace memory_copy {
                 memcpy_sse_loop(dst, src, size);
         }
 
+        ALWAYS_INLINE static inline bool memcpy_small(char *__restrict dst, const char *__restrict src, size_t size) {
+            if (size <= 16) {
+                if (size >= 8) {
+                    /// Chunks of 8..16 bytes.
+                    tiflash_compiler_builtin_memcpy(dst + size - 8, src + size - 8, 8);
+                    tiflash_compiler_builtin_memcpy(dst, src, 8);
+                } else if (size >= 4) {
+                    /// Chunks of 4..7 bytes.
+                    tiflash_compiler_builtin_memcpy(dst + size - 4, src + size - 4, 4);
+                    tiflash_compiler_builtin_memcpy(dst, src, 4);
+                } else if (size >= 2) {
+                    /// Chunks of 2..3 bytes.
+                    tiflash_compiler_builtin_memcpy(dst + size - 2, src + size - 2, 2);
+                    tiflash_compiler_builtin_memcpy(dst, src, 2);
+                } else if (size >= 1) {
+                    /// A single byte.
+                    *dst = *src;
+                }
+                return true;
+            }
+
+            if (size <= 128) {
+                tiflash_compiler_builtin_memcpy(dst + size - 16, src + size - 16, 16);
+                /// Then we will copy every 16 bytes from the beginning in a loop.
+                /// The last loop iteration will possibly overwrite some part of already copied last 16 bytes.
+                /// This is Ok, similar to the code for small sizes above.
+                while (size > 16) {
+                    tiflash_compiler_builtin_memcpy(dst, src, 16);
+                    dst += 16;
+                    src += 16;
+                    size -= 16;
+                }
+                return true;
+            }
+
+            return false;
+        }
+
         __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
                 char *__restrict &__restrict dst,
                 char const *__restrict &__restrict src,
@@ -555,16 +593,17 @@ namespace memory_copy {
                 memcpy_sse_loop(dst, src, size);
         }
 
-        ALWAYS_INLINE static inline bool memcpy_large(
-                char *__restrict &__restrict dst,
-                char const *__restrict &__restrict src,
-                size_t &size) {
+        ALWAYS_INLINE static inline void *memcpy_large(
+                char *__restrict dst,
+                char const *__restrict src,
+                size_t size) {
+            auto ret = dst;
             if (size < memcpy_config.huge_size_threshold) {
                 // medium sizes
                 switch (memcpy_config.medium_size_strategy) {
                     case MediumSizeStrategy::MediumSizeRepMovsb:
                         detail::rep_movsb(dst, src, size);
-                        return true;
+                        return ret;
                     default:
                         detail::memcpy_sse_loop(dst, src, size);
                 }
@@ -573,7 +612,7 @@ namespace memory_copy {
                 switch (memcpy_config.huge_size_strategy) {
                     case HugeSizeStrategy::HugeSizeRepMovsb:
                         detail::rep_movsb(dst, src, size);
-                        return true;
+                        return ret;
                     case HugeSizeStrategy::HugeSizeSSSE3Mux:
                         detail::memcpy_ssse3_mux(dst, src, size);
                         break;
@@ -593,7 +632,8 @@ namespace memory_copy {
                         detail::memcpy_sse_loop(dst, src, size);
                 }
             }
-            return false;
+            detail::memcpy_small(dst, src, size);
+            return ret;
         }
 
     } // namespace detail
@@ -635,6 +675,7 @@ namespace memory_copy {
 
 ALWAYS_INLINE static inline void *
 inline_memcpy(void *__restrict dst_, const void *__restrict src_, size_t size) noexcept {
+
     using namespace memory_copy;
     /// We will use pointer arithmetic, so char pointer will be used.
     /// Note that __restrict makes sense (otherwise compiler will reload data from memory
@@ -646,55 +687,21 @@ inline_memcpy(void *__restrict dst_, const void *__restrict src_, size_t size) n
     /// If you use memcpy with small but non-constant sizes, you can call inline_memcpy directly
     /// for inlining and removing this single instruction.
     void *ret = dst;
-    tail:
+
     /// Small sizes and tails after the loop for large sizes.
     /// The order of branches is important but in fact the optimal order depends on the distribution of sizes in your application.
     /// This order of branches is from the disassembly of glibc's code.
     /// We copy chunks of possibly uneven size with two overlapping movs.
     /// Example: to copy 5 bytes [0, 1, 2, 3, 4] we will copy tail [1, 2, 3, 4] first and then head [0, 1, 2, 3].
-    if (likely(size <= 16)) {
-        if (size >= 8) {
-            /// Chunks of 8..16 bytes.
-            tiflash_compiler_builtin_memcpy(dst + size - 8, src + size - 8, 8);
-            tiflash_compiler_builtin_memcpy(dst, src, 8);
-        } else if (size >= 4) {
-            /// Chunks of 4..7 bytes.
-            tiflash_compiler_builtin_memcpy(dst + size - 4, src + size - 4, 4);
-            tiflash_compiler_builtin_memcpy(dst, src, 4);
-        } else if (size >= 2) {
-            /// Chunks of 2..3 bytes.
-            tiflash_compiler_builtin_memcpy(dst + size - 2, src + size - 2, 2);
-            tiflash_compiler_builtin_memcpy(dst, src, 2);
-        } else if (size >= 1) {
-            /// A single byte.
-            *dst = *src;
-        }
-        /// No bytes remaining.
-    } else {
-        if (size <= 128) {
-            /// Medium size, not enough for full loop unrolling.
-
-            /// We will copy the last 16 bytes.
-            tiflash_compiler_builtin_memcpy(dst + size - 16, src + size - 16, 16);
-
-            /// Then we will copy every 16 bytes from the beginning in a loop.
-            /// The last loop iteration will possibly overwrite some part of already copied last 16 bytes.
-            /// This is Ok, similar to the code for small sizes above.
-            while (size > 16) {
-                tiflash_compiler_builtin_memcpy(dst, src, 16);
-                dst += 16;
-                src += 16;
-                size -= 16;
-            }
-        } else {
-            if (size < memcpy_config.medium_size_threshold) {
-                detail::memcpy_sse_loop(dst, src, size);
-            } else if (detail::memcpy_large(dst, src, size)) {
-                return ret;
-            }
-            goto tail;
-        }
+    if (detail::memcpy_small(dst, src, size)) {
+        return ret;
     }
 
+    if (size < memcpy_config.medium_size_threshold) {
+        detail::memcpy_sse_loop(dst, src, size);
+        detail::memcpy_small(dst, src, size);
+    } else {
+        return detail::memcpy_large(dst, src, size);
+    }
     return ret;
 }
