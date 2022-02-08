@@ -13,9 +13,9 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
         : ChunkCodecStream(field_types)
     {
-        for (size_t i = 0; i < field_types.size(); i++)
+        for (const auto & field_type : field_types)
         {
-            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
         }
     }
 
@@ -38,7 +38,7 @@ size_t getExtraInfoSize(const Block & block)
 {
     size_t size = 64; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
-    for (size_t i = 0; i < columns; i++)
+    for (size_t i = 0; i < columns; ++i)
     {
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
         size += column.name.size();
