@@ -72,18 +72,18 @@ void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String pa
     if (options.running_ps_version == 2)
     {
         ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider);
-        ps->restore();
     }
     else if (options.running_ps_version == 3)
     {
         ps = std::make_shared<DB::PS::V3::PageStorageImpl>("stress_test", delegator, config, file_provider);
-        // FIXME : we need restore V3
     }
     else
     {
         throw DB::Exception(fmt::format("Invalid PageStorage version {}",
                                         options.running_ps_version));
     }
+
+    ps->restore();
 
     {
         size_t num_of_pages = 0;

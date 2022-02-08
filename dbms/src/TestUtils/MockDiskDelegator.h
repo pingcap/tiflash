@@ -16,7 +16,7 @@ namespace tests
 class MockDiskDelegatorSingle final : public PSDiskDelegator
 {
 public:
-    MockDiskDelegatorSingle(String path_)
+    explicit MockDiskDelegatorSingle(String path_)
         : path(std::move(path_))
     {}
 
@@ -65,7 +65,7 @@ private:
 class MockDiskDelegatorMulti final : public PSDiskDelegator
 {
 public:
-    MockDiskDelegatorMulti(Strings paths_)
+    explicit MockDiskDelegatorMulti(Strings paths_)
         : paths(std::move(paths_))
     {
         if (paths.empty())
@@ -96,7 +96,7 @@ public:
 
     String choosePath(const PageFileIdAndLevel & /*id_lvl*/)
     {
-        const auto chosen = paths[choose_idx];
+        auto chosen = paths[choose_idx];
         choose_idx = (choose_idx + 1) % paths.size();
         return chosen;
     }
