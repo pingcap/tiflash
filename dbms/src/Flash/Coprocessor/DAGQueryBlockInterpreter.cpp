@@ -688,7 +688,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         /// it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
-    executeProjectAction(pipeline, project_cols);
+    executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
@@ -923,7 +923,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
         project_cols.emplace_back(col.name, alias);
     }
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
-    executeProjectAction(pipeline, project_cols);
+    executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -1013,7 +1013,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute final project action
-    executeProjectAction(pipeline, final_project);
+    executeProject(pipeline, final_project);
 
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
@@ -1032,7 +1032,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeProjectAction(DAGPipeline & pipeline, NamesWithAliases & project_cols)
+void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
 {
     if (project_cols.empty())
         return;

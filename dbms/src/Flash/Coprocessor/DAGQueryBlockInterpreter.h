@@ -73,7 +73,7 @@ private:
         Names & key_names,
         TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions);
-    void executeProjectAction(DAGPipeline & pipeline, NamesWithAliases & project_cols);
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void handleExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
