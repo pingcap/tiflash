@@ -584,8 +584,10 @@ __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
         memcpy_sse_loop(dst, src, size);
 }
 
-ALWAYS_INLINE static inline bool memcpy_small(char * __restrict dst, const char * __restrict src, size_t size)
+ALWAYS_INLINE static inline bool memcpy_small(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
+    char * __restrict dst = reinterpret_cast<char * __restrict>(dst_);
+    const char * __restrict src = reinterpret_cast<const char * __restrict>(src_);
     if (size <= 16)
     {
         if (size >= 8)
@@ -670,11 +672,13 @@ __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
         memcpy_sse_loop(dst, src, size);
 }
 
-ALWAYS_INLINE static inline void * memcpy_large(
-    char * __restrict dst,
-    char const * __restrict src,
+__attribute__((noinline)) static inline void * memcpy_large(
+    void * __restrict dst_,
+    void const * __restrict src_,
     size_t size)
 {
+    char * __restrict dst = reinterpret_cast<char * __restrict>(dst_);
+    const char * __restrict src = reinterpret_cast<const char * __restrict>(src_);
     auto ret = dst;
     if (size < memcpy_config.huge_size_threshold)
     {
@@ -719,6 +723,63 @@ ALWAYS_INLINE static inline void * memcpy_large(
     return ret;
 }
 
+ALWAYS_INLINE static inline void * memcpy_sse_loop_end(
+    void * __restrict dst_,
+    void const * __restrict src_,
+    size_t size)
+{
+    char * __restrict dst = reinterpret_cast<char * __restrict>(dst_);
+    const char * __restrict src = reinterpret_cast<const char * __restrict>(src_);
+    static constexpr const size_t vector_size = sizeof(__m128i);
+    size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
+
+    /// If not aligned - we will copy first 16 bytes with unaligned stores.
+    tiflash_compiler_builtin_memcpy(dst, src, vector_size);
+    dst += padding;
+    src += padding;
+    size -= padding;
+
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+
+    /// Aligned unrolled copy. We will use half of available SSE registers.
+    /// It's not possible to have both src and dst aligned.
+    /// So, we will use aligned stores and unaligned loads.
+    __m128i c0, c1, c2, c3, c4, c5, c6, c7;
+
+    while (size >= 128)
+    {
+        const auto * source = reinterpret_cast<const __m128i *>(src);
+        auto * target = reinterpret_cast<__m128i *>(dst);
+        c0 = _mm_loadu_si128(source + 0);
+        c1 = _mm_loadu_si128(source + 1);
+        c2 = _mm_loadu_si128(source + 2);
+        c3 = _mm_loadu_si128(source + 3);
+        c4 = _mm_loadu_si128(source + 4);
+        c5 = _mm_loadu_si128(source + 5);
+        c6 = _mm_loadu_si128(source + 6);
+        c7 = _mm_loadu_si128(source + 7);
+        src += 128;
+        _mm_store_si128(target + 0, c0);
+        _mm_store_si128(target + 1, c1);
+        _mm_store_si128(target + 2, c2);
+        _mm_store_si128(target + 3, c3);
+        _mm_store_si128(target + 4, c4);
+        _mm_store_si128(target + 5, c5);
+        _mm_store_si128(target + 6, c6);
+        _mm_store_si128(target + 7, c7);
+        dst += 128;
+
+        size -= 128;
+    }
+
+    detail::memcpy_small(dst, src, size);
+
+    return dst_;
+}
+
 } // namespace detail
 
 ALWAYS_INLINE static inline bool check_valid_strategy(HugeSizeStrategy strategy)
@@ -761,38 +822,35 @@ ALWAYS_INLINE static inline bool check_valid_strategy(MediumSizeStrategy strateg
 
 
 ALWAYS_INLINE static inline void *
-inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size) noexcept
+inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     using namespace memory_copy;
     /// We will use pointer arithmetic, so char pointer will be used.
     /// Note that __restrict makes sense (otherwise compiler will reload data from memory
     /// instead of using the value of registers due to possible aliasing).
-    char * __restrict dst = reinterpret_cast<char * __restrict>(dst_);
-    const char * __restrict src = reinterpret_cast<const char * __restrict>(src_);
+
 
     /// Standard memcpy returns the original value of dst. It is rarely used but we have to do it.
     /// If you use memcpy with small but non-constant sizes, you can call inline_memcpy directly
     /// for inlining and removing this single instruction.
-    void * ret = dst;
 
     /// Small sizes and tails after the loop for large sizes.
     /// The order of branches is important but in fact the optimal order depends on the distribution of sizes in your application.
     /// This order of branches is from the disassembly of glibc's code.
     /// We copy chunks of possibly uneven size with two overlapping movs.
     /// Example: to copy 5 bytes [0, 1, 2, 3, 4] we will copy tail [1, 2, 3, 4] first and then head [0, 1, 2, 3].
-    if (detail::memcpy_small(dst, src, size))
+    if (likely(detail::memcpy_small(dst_, src_, size)))
     {
-        return ret;
+        return dst_;
     }
 
     if (size < memcpy_config.medium_size_threshold)
     {
-        detail::memcpy_sse_loop(dst, src, size);
-        detail::memcpy_small(dst, src, size);
+        __attribute__((musttail)) return detail::memcpy_sse_loop_end(dst_, src_, size);
     }
     else
     {
-        return detail::memcpy_large(dst, src, size);
+        __attribute__((musttail)) return detail::memcpy_large(dst_, src_, size);
     }
-    return ret;
+    return dst_;
 }

@@ -2,6 +2,7 @@
 
 #include <random>
 
+#define TIFLASH_MEMCPY_PREFIX tiflash_
 #include "../memcpy.cpp"
 using namespace memory_copy;
 
@@ -78,14 +79,14 @@ TEST(MemcpyTest, SmallSized)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
         {
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -115,7 +116,7 @@ TEST_P(MemcpyMediumTest, Aligned)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -144,7 +145,7 @@ TEST_P(MemcpyMediumTest, UnAligned)
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -170,7 +171,7 @@ TEST_P(MemcpyHugeTest, Aligned)
             Memory src(i, 512), dst(i, 512);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
@@ -196,7 +197,7 @@ TEST_P(MemcpyHugeTest, UnAligned)
             Memory src(i, 512), dst(i, 512, 37);
             auto seed = get_seed();
             random_fill(src, seed);
-            memcpy(dst.data, src.data, i);
+            tiflash_memcpy(dst.data, src.data, i);
             EXPECT_EQ(src, dst);
         }
     }
