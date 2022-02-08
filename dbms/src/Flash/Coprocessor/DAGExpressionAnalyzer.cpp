@@ -858,10 +858,12 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
                 if (removeNullable(types[i])->isString())
                     arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
                 else
-                    arg_collators.push_back(nullptr);
+                    arg_collators.push_back({});
                 window_function_description.argument_names[i] = arg_name;
                 step.required_output.push_back(arg_name);
             }
+            if (0 == child_size)
+                arg_collators.push_back({});
             String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
             window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
@@ -875,9 +877,9 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
         }
     }
 
-    if (window.has_window_frame())
+    if (window.has_frame())
     {
-        window_description.setWindowFrame(window.window_frame());
+        window_description.setWindowFrame(window.frame());
     }
     window_description.before_window = chain.getLastActions();
     chain.finalize();

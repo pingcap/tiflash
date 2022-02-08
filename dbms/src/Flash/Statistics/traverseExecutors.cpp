@@ -18,6 +18,10 @@ Children getChildren(const tipb::Executor & executor)
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         return Children{&executor.aggregation().child()};
+    case tipb::ExecType::TypeWindow:
+        return Children{&executor.window().child()};
+    case tipb::ExecType::TypeSort:
+        return Children{&executor.sort().child()};
     case tipb::ExecType::TypeTopN:
         return Children{&executor.topn().child()};
     case tipb::ExecType::TypeLimit:

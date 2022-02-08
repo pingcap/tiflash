@@ -132,7 +132,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             break;
         case tipb::ExecType::TypeSort:
             // only isPartialSort = ture is for window function sort.
-            if (current->sort().ispartialsort())
+            if (!current->sort().ispartialsort())
                 break;
             GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
             window_sort_name = current->executor_id();

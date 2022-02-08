@@ -195,31 +195,25 @@ void WindowDescription::checkValid() const
     }
 }
 
-WindowFrame::BoundaryType getBoundaryTypeFromTipb(tipb::BoundaryType type)
+WindowFrame::BoundaryType getBoundaryTypeFromTipb(tipb::WindowFrameBound bound)
 {
-    switch (type)
-    {
-    case tipb::BoundaryType::Current:
+    if (bound.type() == tipb::WindowBoundType::CurrentRow)
         return WindowFrame::BoundaryType::Current;
-    case tipb::BoundaryType::Offset:
-        return WindowFrame::BoundaryType::Offset;
-    case tipb::BoundaryType::Unbounded:
+    else if (bound.unbounded())
         return WindowFrame::BoundaryType::Unbounded;
-    }
-    throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                    "Unknowed boundary type {}",
-                    type);
+    else
+        return WindowFrame::BoundaryType::Offset;
 }
 
-WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameMode type)
+WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameType type)
 {
     switch (type)
     {
-    case tipb::WindowFrameMode::Ranges:
+    case tipb::WindowFrameType::Ranges:
         return WindowFrame::FrameType::Ranges;
-    case tipb::WindowFrameMode::Rows:
+    case tipb::WindowFrameType::Rows:
         return WindowFrame::FrameType::Rows;
-    case tipb::WindowFrameMode::Groups:
+    case tipb::WindowFrameType::Groups:
         return WindowFrame::FrameType::Groups;
     }
     throw Exception(ErrorCodes::BAD_ARGUMENTS,
@@ -229,13 +223,13 @@ WindowFrame::FrameType getFrameTypeFromTipb(tipb::WindowFrameMode type)
 
 void WindowDescription::setWindowFrame(tipb::WindowFrame frame_)
 {
-    frame.type = getFrameTypeFromTipb(frame_.window_frame_mode());
-    frame.begin_offset = frame_.begin_offset();
-    frame.begin_type = getBoundaryTypeFromTipb(frame_.begin_type());
-    frame.begin_preceding = frame_.begin_preceding();
-    frame.end_offset = frame_.end_offset();
-    frame.end_type = getBoundaryTypeFromTipb(frame_.end_type());
-    frame.end_preceding = frame_.end_preceding();
+    frame.type = getFrameTypeFromTipb(frame_.type());
+    frame.begin_offset = frame_.start().offset();
+    frame.begin_type = getBoundaryTypeFromTipb(frame_.start());
+    frame.begin_preceding = (frame_.start().type() == tipb::WindowBoundType::Preceding);
+    frame.end_offset = frame_.end().offset();
+    frame.end_type = getBoundaryTypeFromTipb(frame_.end());
+    frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
     frame.is_default = false;
 }
 } // namespace DB

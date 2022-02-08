@@ -18,6 +18,32 @@ struct AggImpl
 };
 using AggStatistics = ExecutorStatistics<AggImpl>;
 
+struct WindowImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "Window";
+
+    static bool isMatch(const tipb::Executor * executor)
+    {
+        return executor->has_window();
+    }
+};
+using WindowStatistics = ExecutorStatistics<WindowImpl>;
+
+struct SortImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "Sort";
+
+    static bool isMatch(const tipb::Executor * executor)
+    {
+        return executor->has_sort();
+    }
+};
+using SortStatistics = ExecutorStatistics<SortImpl>;
+
 struct FilterImpl
 {
     static constexpr bool has_extra_info = false;

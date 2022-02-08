@@ -575,9 +575,7 @@ void WindowBlockInputStream::advanceFrameStartRangeOffset()
         // while [frames_start] < [current_row] with offset.
         const auto * compared_column
             = inputAt(frame_start)[order_by_indices[0]].get();
-        if (compare_values_with_offset(compared_column, frame_start.row, reference_column, current_row.row, window_description.frame.begin_offset, preceding)
-                * direction
-            >= 0)
+        if (compare_values_with_offset(compared_column, frame_start.row, reference_column, current_row.row, window_description.frame.begin_offset, preceding) * direction >= 0)
         {
             frame_started = true;
             return;

@@ -41,6 +41,8 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
         const auto & executor_id = executor.executor_id();
         if (!append<
                 AggStatistics,
+                WindowStatistics,
+                SortStatistics,
                 ExchangeReceiverStatistics,
                 ExchangeSenderStatistics,
                 FilterStatistics,

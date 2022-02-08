@@ -228,7 +228,7 @@ AnalysisResult analyzeExpressions(
             // should not reach here
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
-        analyzer.updateWindowSourceColumns();
+        //analyzer.updateWindowSourceColumns();
     }
 
     // Append final project results if needed.
