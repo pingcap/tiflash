@@ -169,6 +169,10 @@ template <typename ParamExtractor>
 struct ExtractParamImpl
 {
     using ResultType = typename ParamExtractor::ResultType;
+    /// need customized escape char when do the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type when do the string search, used in regexp
+    static const bool support_match_type = false;
 
     /// It is assumed that `res` is the correct size and initialized with zeros.
     static void vectorConstant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const std::string & match_type, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)

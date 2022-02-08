@@ -43,9 +43,11 @@ extern const int ILLEGAL_COLUMN;
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
-template <typename Impl, typename Name, bool customize_escape_char = false>
+template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
 {
+    static_assert(!(Impl::need_customized_escape_char && Impl::support_match_type));
+
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context &)
@@ -79,20 +81,23 @@ public:
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if constexpr (customize_escape_char)
+        if constexpr (Impl::need_customized_escape_char || Impl::support_match_type)
         {
             if (!arguments[2]->isInteger())
                 throw Exception(
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-        else
+        else if constexpr (Impl::support_match_type)
         {
             if (arguments.size() > 2 && !arguments[2]->isString())
                 throw Exception(
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
+        size_t max_arguments_number = Impl::need_customized_escape_char || Impl::support_match_type ? 3 : 2;
+        if (arguments.size() > max_arguments_number)
+            throw Exception("Too many arguments, only " + std::to_string(max_arguments_number) + " argument is supported for function " + getName());
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
@@ -109,7 +114,7 @@ public:
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
         String match_type = "";
-        if constexpr (customize_escape_char)
+        if constexpr (Impl::need_customized_escape_char)
         {
             const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
@@ -135,7 +140,7 @@ public:
                 throw Exception("3rd arguments of function " + getName() + " must be constants and between 0 and 255.");
             }
         }
-        else
+        else if constexpr (Impl::support_match_type)
         {
             if (arguments.size() > 2)
             {

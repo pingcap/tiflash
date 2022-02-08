@@ -152,6 +152,10 @@ template <typename Impl>
 struct PositionImpl
 {
     using ResultType = UInt64;
+    /// need customized escape char when do the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type when do the string search, used in regexp
+    static const bool support_match_type = false;
 
     /// Find one substring in many strings.
     static void vectorConstant(const ColumnString::Chars_t & data,
@@ -459,6 +463,10 @@ template <bool like, bool revert = false, bool for_tidb = false>
 struct MatchImpl
 {
     using ResultType = UInt8;
+    /// need customized escape char when do the string search
+    static const bool need_customized_escape_char = like && for_tidb;
+    /// support match type when do the string search, used in regexp
+    static const bool support_match_type = !like && for_tidb;
 
     static void vectorConstant(
         const ColumnString::Chars_t & data,
@@ -738,6 +746,11 @@ struct MatchImpl
 
 struct ExtractImpl
 {
+    /// need customized escape char when do the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type when do the string search, used in regexp
+    static const bool support_match_type = false;
+
     static void vector(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
                        const std::string & pattern,
@@ -792,6 +805,10 @@ struct ReplaceRegexpImpl
 {
     static constexpr bool support_non_const_needle = false;
     static constexpr bool support_non_const_replacement = false;
+    /// need customized escape char when do the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type when do the string search, used in regexp
+    static const bool support_match_type = true;
 
     /// Sequence of instructions, describing how to get resulting string.
     /// Each element is either:
@@ -1052,6 +1069,10 @@ struct ReplaceStringImpl
 {
     static constexpr bool support_non_const_needle = true;
     static constexpr bool support_non_const_replacement = true;
+    /// need customized escape char during the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type during the string search, used in regexp
+    static const bool support_match_type = false;
 
     static void vector(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
@@ -2045,7 +2066,7 @@ struct NameMatch
     static constexpr auto name = "match";
 };
 
-struct NameTiDBMatch
+struct NameTiDBRegexp
 {
     static constexpr auto name = "regexp";
 };
@@ -2090,9 +2111,9 @@ using FunctionPositionCaseInsensitiveUTF8
     = FunctionsStringSearch<PositionImpl<PositionCaseInsensitiveUTF8>, NamePositionCaseInsensitiveUTF8>;
 
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
-using FunctionTiDBMatch = FunctionsStringSearch<MatchImpl<false, false, true>, NameTiDBMatch>;
+using FunctionTiDBRegexp = FunctionsStringSearch<MatchImpl<false, false, true>, NameTiDBRegexp>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
-using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args, true>;
+using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
@@ -2112,7 +2133,7 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionPositionCaseInsensitive>();
     factory.registerFunction<FunctionPositionCaseInsensitiveUTF8>();
     factory.registerFunction<FunctionMatch>();
-    factory.registerFunction<FunctionTiDBMatch>();
+    factory.registerFunction<FunctionTiDBRegexp>();
     factory.registerFunction<FunctionLike>();
     factory.registerFunction<FunctionLike3Args>();
     factory.registerFunction<FunctionNotLike>();
