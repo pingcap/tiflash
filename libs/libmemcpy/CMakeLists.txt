@@ -5,7 +5,7 @@ target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/in
 if (ENABLE_TESTS)
     add_executable(gtests_libmemcpy test/gtest_memcpy.cpp)
     target_include_directories(gtests_libmemcpy PRIVATE ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
-    add_test(gtests_libmemcpy memcpy_test)
+    add_test(gtests_libmemcpy gtests_libmemcpy)
     target_link_libraries(gtests_libmemcpy PRIVATE gtest_main)
 endif()
 

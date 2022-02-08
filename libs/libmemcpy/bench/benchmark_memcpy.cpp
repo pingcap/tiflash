@@ -182,13 +182,14 @@ tail:
     return ret;
 }
 
+BENCHMARK_CAPTURE(memcpy_bench, system_1_to_128, ::memcpy, 1, 128, 256);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_1_to_128, ::tiflash_memcpy, 1, 128, 256);
+BENCHMARK_CAPTURE(memcpy_bench, legacy_1_to_128, ::legacy_memcpy, 1, 128, 256);
 
-
-
-BENCHMARK_CAPTURE(memcpy_bench, system_1_to_0xc0000, ::memcpy, 1, 0xc0000, 256);
-BENCHMARK_CAPTURE(memcpy_bench, tiflash_1_to_0xc0000_sse, ::tiflash_memcpy, 1, 0xc0000, 256, MediumSizeStrategy::MediumSizeSSE);
-BENCHMARK_CAPTURE(memcpy_bench, tiflash_1_to_0xc0000_rep_movsb, ::tiflash_memcpy, 1, 0xc0000, 256, MediumSizeStrategy::MediumSizeRepMovsb);
-BENCHMARK_CAPTURE(memcpy_bench, legacy_1_to_0xc0000, ::legacy_memcpy, 1, 0xc0000, 256);
+BENCHMARK_CAPTURE(memcpy_bench, system_128_to_0xc0000, ::memcpy, 128, 0xc0000, 256);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_128_to_0xc0000_sse, ::tiflash_memcpy, 128, 0xc0000, 256, MediumSizeStrategy::MediumSizeSSE);
+BENCHMARK_CAPTURE(memcpy_bench, tiflash_128_to_0xc0000_rep_movsb, ::tiflash_memcpy, 128, 0xc0000, 256, MediumSizeStrategy::MediumSizeRepMovsb);
+BENCHMARK_CAPTURE(memcpy_bench, legacy_128_to_0xc0000, ::legacy_memcpy, 128, 0xc0000, 256);
 
 BENCHMARK_CAPTURE(memcpy_bench, system_0xc0000_to_0x1200000, ::memcpy, 0xc0000, 0x1200000, 64);
 BENCHMARK_CAPTURE(memcpy_bench, tiflash_0xc0000_to_0x1200000_sse, ::tiflash_memcpy, 0xc0000, 0x1200000, 64, MediumSizeStrategy::MediumSizeSSE, HugeSizeStrategy::HugeSizeSSE);

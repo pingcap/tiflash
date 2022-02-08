@@ -497,7 +497,8 @@ namespace memory_copy {
                     memcpy_vex_impl<__m256i, 2, 4>(dst, src, size, _mm256_loadu_si256, _mm256_stream_si256);
                 }
             }
-            memcpy_sse_loop(dst, src, size);
+            if (size > 128)
+                memcpy_sse_loop(dst, src, size);
         }
 
         __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
@@ -523,7 +524,8 @@ namespace memory_copy {
                     memcpy_evex_impl<__m256i, 2, 4>(dst, src, size, _mm256_loadu_si256, _mm256_stream_si256);
                 }
             }
-            memcpy_sse_loop(dst, src, size);
+            if (size > 128)
+                memcpy_sse_loop(dst, src, size);
         }
 
         __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
@@ -549,7 +551,8 @@ namespace memory_copy {
                     memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
                 }
             }
-            memcpy_sse_loop(dst, src, size);
+            if (size > 128)
+                memcpy_sse_loop(dst, src, size);
         }
 
         ALWAYS_INLINE static inline bool memcpy_large(
