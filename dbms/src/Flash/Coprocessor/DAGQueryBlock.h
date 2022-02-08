@@ -52,14 +52,12 @@ public:
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;
-    String qb_join_subquery_alias;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
 
     // only meaningful for root query block.
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
-    void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
     bool isRootQueryBlock() const { return id == 1; };
 };
 

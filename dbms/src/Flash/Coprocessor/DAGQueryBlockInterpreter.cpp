@@ -655,7 +655,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-    dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
@@ -700,6 +699,7 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_root_executor->executor_id();
     join_execute_info.join_ptr = join_ptr;
+    assert(join_execute_info.join_ptr);
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
@@ -838,9 +838,8 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::v
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
-    auto & profile_streams_info = dagContext().getProfileStreamsMap()[key];
-    profile_streams_info.qb_id = query_block.id;
-    pipeline.transform([&profile_streams_info](auto & stream) { profile_streams_info.input_streams.push_back(stream); });
+    auto & profile_streams = dagContext().getProfileStreamsMap()[key];
+    pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
@@ -941,14 +940,14 @@ void DAGQueryBlockInterpreter::executeSourceProjection(DAGPipeline & pipeline, c
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
-    SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
+        SubqueryForSet right_query;
         executeJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
 
         SubqueriesForSets subquries;
-        subquries[query_block.qb_join_subquery_alias] = right_query;
+        subquries[query_block.source_name] = right_query;
         subqueries_for_sets.emplace_back(subquries);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)

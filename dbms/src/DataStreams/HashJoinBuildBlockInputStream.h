@@ -16,12 +16,13 @@ public:
         size_t stream_index_,
         const LogWithPrefixPtr & log_)
         : stream_index(stream_index_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, name))
     {
         children.push_back(input);
         join = join_;
     }
-    String getName() const override { return "HashJoinBuildBlockInputStream"; }
+    static constexpr auto name = "HashJoinBuildBlockInputStream";
+    String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
 
 protected:
