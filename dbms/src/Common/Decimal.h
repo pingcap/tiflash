@@ -27,42 +27,51 @@ struct IntPrec
 template <>
 struct IntPrec<int8_t>
 {
-    static constexpr PrecType prec = 3;
+    // prec consider the negative sign, real_prec doesn't.
+    static constexpr PrecType prec = 4;
+    static constexpr PrecType real_prec = 3;
 };
 template <>
 struct IntPrec<uint8_t>
 {
     static constexpr PrecType prec = 3;
+    static constexpr PrecType real_prec = 3;
 };
 template <>
 struct IntPrec<int16_t>
 {
-    static constexpr PrecType prec = 5;
+    static constexpr PrecType prec = 6;
+    static constexpr PrecType real_prec = 5;
 };
 template <>
 struct IntPrec<uint16_t>
 {
     static constexpr PrecType prec = 5;
+    static constexpr PrecType real_prec = 5;
 };
 template <>
 struct IntPrec<int32_t>
 {
-    static constexpr PrecType prec = 10;
+    static constexpr PrecType prec = 11;
+    static constexpr PrecType real_prec = 10;
 };
 template <>
 struct IntPrec<uint32_t>
 {
     static constexpr PrecType prec = 10;
+    static constexpr PrecType real_prec = 10;
 };
 template <>
 struct IntPrec<int64_t>
 {
     static constexpr PrecType prec = 20;
+    static constexpr PrecType real_prec = 19;
 };
 template <>
 struct IntPrec<uint64_t>
 {
     static constexpr PrecType prec = 20;
+    static constexpr PrecType real_prec = 20;
 };
 
 //  1) If the declared type of both operands of a dyadic arithmetic operator is exact numeric, then the declared

@@ -1744,7 +1744,7 @@ public:
         using FromFieldType = typename FromDataType::FieldType;
         if constexpr (std::is_integral_v<FromFieldType>)
         {
-            PrecType from_prec = IntPrec<FromFieldType>::prec;
+            PrecType from_prec = IntPrec<FromFieldType>::real_prec;
             if ((from_prec + to_decimal_scale) <= to_decimal_prec)
             {
                 return true;
