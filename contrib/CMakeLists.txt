@@ -156,7 +156,7 @@ if (NOT ARCH_ARM)
     add_subdirectory (libcpuid)
 endif ()
 
-add_subdirectory (prometheus-cpp)
+add_subdirectory (prometheus-cpp-cmake)
 add_subdirectory (fmtlib-cmake)
 
 # Add a target that pop include directory to the linked object
