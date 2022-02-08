@@ -1,6 +1,6 @@
 option(ENABLE_MEMCPY_BENCHMARK "Enable Memcpy Benchmark" OFF)
 add_library (memcpy STATIC memcpy.cpp)
-target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
+target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include ${TiFlash_SOURCE_DIR}/libs/libmemcpy)
 
 if (ENABLE_TESTS)
     add_executable(gtests_libmemcpy test/gtest_memcpy.cpp)

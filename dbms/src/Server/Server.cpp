@@ -134,6 +134,10 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+#if USE_INTERNAL_MEMCPY
+#include <memcpy.h>
+#endif
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -859,6 +863,79 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#endif
+
+#if USE_INTERNAL_MEMCPY
+    {
+        using namespace memory_copy;
+        std::vector<char> src(memcpy_config.medium_size_threshold * 2 + 1);
+        std::vector<char> dst(memcpy_config.medium_size_threshold * 2 + 1);
+        MediumSizeStrategy strategy = MediumSizeStrategy::MediumSizeSSE;
+        double best_time_avg{std::numeric_limits<size_t>::max()};
+        for (auto i : {MediumSizeStrategy::MediumSizeSSE, MediumSizeStrategy::MediumSizeRepMovsb})
+        {
+            if (!check_valid_strategy(i))
+                continue;
+            double current_time_sum = 0;
+            for (size_t j = 0; j < 32; ++j)
+            {
+                __builtin___clear_cache(src.data(), src.data() + src.size());
+                __builtin___clear_cache(dst.data(), dst.data() + dst.size());
+                memcpy_config.medium_size_strategy = i;
+                auto begin = std::chrono::high_resolution_clock::now();
+                ::memcpy(dst.data(), src.data(), src.size());
+                auto end = std::chrono::high_resolution_clock::now();
+                current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
+            }
+            auto current_time_avg = current_time_sum / 32.0;
+            if (current_time_avg < best_time_avg)
+            {
+                strategy = i;
+                best_time_avg = current_time_avg;
+            }
+        }
+        memcpy_config.medium_size_strategy = strategy;
+        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), best_time_avg / 1024.0 / 1024.0 / 1024.0);
+    }
+
+    {
+        using namespace memory_copy;
+        std::vector<char> src(memcpy_config.huge_size_threshold * 2 + 1);
+        std::vector<char> dst(memcpy_config.huge_size_threshold * 2 + 1);
+        HugeSizeStrategy strategy = HugeSizeStrategy::HugeSizeSSE;
+        double best_time_avg{std::numeric_limits<size_t>::max()};
+        for (auto i : {
+                 HugeSizeStrategy::HugeSizeSSE,
+                 HugeSizeStrategy::HugeSizeSSENT,
+                 HugeSizeStrategy::HugeSizeSSSE3Mux,
+                 HugeSizeStrategy::HugeSizeRepMovsb,
+                 HugeSizeStrategy::HugeSizeVEX32,
+                 HugeSizeStrategy::HugeSizeEVEX32,
+                 HugeSizeStrategy::HugeSizeEVEX64})
+        {
+            if (!check_valid_strategy(i))
+                continue;
+            double current_time_sum = 0;
+            for (size_t j = 0; j < 32; ++j)
+            {
+                __builtin___clear_cache(src.data(), src.data() + src.size());
+                __builtin___clear_cache(dst.data(), dst.data() + dst.size());
+                memcpy_config.huge_size_strategy = i;
+                auto begin = std::chrono::high_resolution_clock::now();
+                ::memcpy(dst.data(), src.data(), src.size());
+                auto end = std::chrono::high_resolution_clock::now();
+                current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
+            }
+            auto current_time_avg = current_time_sum / 32.0;
+            if (current_time_avg < best_time_avg)
+            {
+                strategy = i;
+                best_time_avg = current_time_avg;
+            }
+        }
+        memcpy_config.huge_size_strategy = strategy;
+        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), best_time_avg / 1024.0 / 1024.0 / 1024.0);
+    }
 #endif
 
     registerFunctions();
