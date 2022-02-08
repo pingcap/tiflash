@@ -137,10 +137,21 @@ extern MemcpyConfig memcpy_config;
 
 namespace detail
 {
+/*!
+ * REP MOVSB is a primitive instruction on x86_64 to do memory copy operation.
+ * It is guaranteed to maintain a good performance on CPUs with ERMS support.
+ * However, ERMS requires a 30~40 cycle time period to startup and for super
+ * large sizes, non-temporal copying can be sometimes faster than REP MOVSB.
+ *
+ * @param dst memory copy destination
+ * @param src memory copy source
+ * @param size memory copy length
+ * @return pointer to destination
+ */
 ALWAYS_INLINE static inline bool rep_movsb(
     void * __restrict dst,
     const void * __restrict src,
-    size_t size)
+    size_t size) noexcept
 {
     asm volatile("rep movsb"
                  : "+D"(dst), "+S"(src), "+c"(size)
@@ -149,28 +160,30 @@ ALWAYS_INLINE static inline bool rep_movsb(
     return dst;
 }
 
+/*!
+ * This function uses SSE instruction to do memcpy copy. 128 bytes are copied per
+ * iteration. Notice that this function is used an internal implementation, where it
+ * accepts references and mutate the state of memory copy. It is assumed that there are
+ * at least 16 bytes remained. After the copy, there will be at most 127 bytes remained.
+ *
+ * @param dst current destination
+ * @param src current source
+ * @param size bytes remained
+ */
 ALWAYS_INLINE static inline void memcpy_sse_loop(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
-    size_t & size)
+    size_t & size) noexcept
 {
     static constexpr const size_t vector_size = sizeof(__m128i);
     size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
 
-    /// If not aligned - we will copy first 16 bytes with unaligned stores.
+    // we will copy first 16 bytes with unaligned stores.
     tiflash_compiler_builtin_memcpy(dst, src, vector_size);
     dst += padding;
     src += padding;
     size -= padding;
 
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
     __m128i c0, c1, c2, c3, c4, c5, c6, c7;
 
     while (size >= 128)
@@ -200,30 +213,33 @@ ALWAYS_INLINE static inline void memcpy_sse_loop(
     }
 }
 
+/*!
+ * This function uses SSE instruction with non-temporal hint to do memcpy copy. 128 bytes
+ * are copied per iteration. Notice that this function is used an internal implementation,
+ * where it accepts references and mutate the state of memory copy. It is assumed that
+ * there are at least 16 bytes remained. After the copy, there will be at most 127 bytes remained.
+ *
+ * @param dst current destination
+ * @param src current source
+ * @param size bytes remained
+ */
 ALWAYS_INLINE static inline void memcpy_ssent_loop(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
-    size_t & size)
+    size_t & size) noexcept
 {
     static constexpr const size_t vector_size = sizeof(__m128i);
     size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
 
-    /// If not aligned - we will copy first 16 bytes with unaligned stores.
+    // If not aligned - we will copy first 16 bytes with unaligned stores.
     tiflash_compiler_builtin_memcpy(dst, src, vector_size);
     dst += padding;
     src += padding;
     size -= padding;
 
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
     __m128i c0, c1, c2, c3, c4, c5, c6, c7;
 
+    // do prefetch for load operations (since temporal hints are applied to store operations)
     while (size >= 128)
     {
         const auto * source = reinterpret_cast<const __m128i *>(src);
@@ -252,11 +268,35 @@ ALWAYS_INLINE static inline void memcpy_ssent_loop(
     }
 }
 
+/*!
+ * This function combines SSE and SSSE3 instructions to do memcpy copy. 128 bytes
+ * are copied per iteration. Notice that this function is used an internal implementation,
+ * where it accepts references and mutate the state of memory copy. It is assumed that
+ * there are at least 16 bytes remained. After the copy, there will be at most 127 bytes remained.
+ *
+ * PALIGNR operation combines two 16-byte register into a larger 32-byte register, shifts the larger
+ * register by delta and keeps it lower half as a result.
+ *
+ * \code{.cpp}
+ *  a             = [ a0 | a1 | a2 | ... | a14 | a15 ]
+ *  b             = [ b0 | b1 | b2 | ... | b14 | b15 ]
+ *  palignr b a 3 = [ a1 | a2 | a3 | ... | a15 | b0  ]
+ * \endcode
+ *
+ * It is easy to align up destination address to 16-byte boundary. However, it may not be possible to keep
+ * both destination and source aligned. In this function, we assume destination is already aligned and we use
+ * PALIGNR instruction to manipulate data and make sure we can also do aligned operations for source address.
+ *
+ * @tparam delta shift amount
+ * @param dst current destination
+ * @param src current source
+ * @param size bytes remained
+ */
 template <uint8_t delta>
 __attribute__((always_inline, target("ssse3"))) static inline void memcpy_ssse3_loop(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
-    size_t & size)
+    size_t & size) noexcept
 {
     src -= delta;
     size += delta;
@@ -332,10 +372,20 @@ __attribute__((always_inline, target("ssse3"))) static inline void memcpy_ssse3_
     dst -= delta;
 }
 
+/*!
+ * This function dispatches operation to memcpy_ssse3_loop based source's distance towards aligned boundary.
+ * Notice that this function is used an internal implementation, where it accepts references and mutate the
+ * state of memory copy.It is assumed that there are at least 16 bytes remained. After the copy, there will
+ * be at most 127 bytes remained.
+ *
+ * @param dst current destination
+ * @param src current source
+ * @param size bytes remained
+ */
 __attribute__((target("ssse3"))) static inline void memcpy_ssse3_mux(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
-    size_t & size)
+    size_t & size) noexcept
 {
     auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m128i) - 1);
     tiflash_compiler_builtin_memcpy(dst, src, 16);
@@ -398,13 +448,22 @@ __attribute__((target("ssse3"))) static inline void memcpy_ssse3_mux(
     }
 }
 
+/*!
+ * This function uses EVEX encoded vector instructions to do memory copy. It uses two level of loops, each outer
+ * iteration copies (page_num * page_size) bytes, while each iteration do parallel copy on each page stepped by
+ * (vec_num * sizeof(Vector)). At the beginning each inner iteration, an prefetch request will be issued.
+ *
+ * Notice that this function is used an internal implementation, where it accepts references and mutate the
+ * state of memory copy. The function is designed to copying super large memory blocks. After the copy, there
+ * will be at most (page_num * page_size) bytes remained.
+ */
 template <typename Vector, size_t page_num, size_t vec_num, typename Load, typename Store>
 __attribute__((always_inline, target("avx512f,avx512vl"))) static inline void memcpy_evex_impl(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & __restrict size,
     Load load,
-    Store store)
+    Store store) noexcept
 {
     constexpr size_t stride_size = vec_num * sizeof(Vector);
     const auto page_size = memcpy_config.page_size;
@@ -454,13 +513,22 @@ __attribute__((always_inline, target("avx512f,avx512vl"))) static inline void me
     }
 }
 
+/*!
+ * This function uses VEX encoded vector instructions to do memory copy. It uses two level of loops, each outer
+ * iteration copies (page_num * page_size) bytes, while each iteration do parallel copy on each page stepped by
+ * (vec_num * sizeof(Vector)). At the beginning each inner iteration, an prefetch request will be issued.
+ *
+ * Notice that this function is used an internal implementation, where it accepts references and mutate the
+ * state of memory copy. The function is designed to copying super large memory blocks. After the copy, there
+ * will be at most (page_num * page_size) bytes remained.
+ */
 template <typename Vector, size_t page_num, size_t vec_num, typename Load, typename Store>
 __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_impl(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
     size_t & __restrict size,
     Load load,
-    Store store)
+    Store store) noexcept
 {
     constexpr size_t stride_size = vec_num * sizeof(Vector);
     const auto page_size = memcpy_config.page_size;
@@ -510,6 +578,10 @@ __attribute__((always_inline, target("avx2"))) static inline void memcpy_vex_imp
     }
 }
 
+/*!
+ * This function instantiates VEX encoded YMM memory copy by checking if size >= 16 * memcpy_config.huge_size_threshold.
+ * On larger case, it paralyzes the copy in four pages; otherwise, two pages are used in parallel.
+ */
 __attribute__((target("avx2"))) static inline void memcpy_vex32(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
@@ -547,6 +619,10 @@ __attribute__((target("avx2"))) static inline void memcpy_vex32(
         memcpy_sse_loop(dst, src, size);
 }
 
+/*!
+ * This function instantiates EVEX encoded YMM memory copy by checking if size >= 16 * memcpy_config.huge_size_threshold.
+ * On larger case, it paralyzes the copy in four pages; otherwise, two pages are used in parallel.
+ */
 __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
     char * __restrict & __restrict dst,
     char const * __restrict & __restrict src,
@@ -583,6 +659,54 @@ __attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex32(
     if (size > 128)
         memcpy_sse_loop(dst, src, size);
 }
+
+/*!
+ * This function instantiates EVEX encoded ZMM memory copy by checking if size >= 16 * memcpy_config.huge_size_threshold.
+ * On larger case, it paralyzes the copy in four pages; otherwise, two pages are used in parallel.
+ */
+
+__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
+    char * __restrict & __restrict dst,
+    char const * __restrict & __restrict src,
+    size_t & size)
+{
+    auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m512i) - 1);
+    auto diff = (reinterpret_cast<uintptr_t>(dst) ^ reinterpret_cast<uintptr_t>(src)) & (sizeof(__m512i) - 1);
+    tiflash_compiler_builtin_memcpy(dst, src, sizeof(__m512i));
+    dst += dst_padding;
+    src += dst_padding;
+    size -= dst_padding;
+    if (size >= 16 * memcpy_config.huge_size_threshold)
+    {
+        if (diff == 0)
+        {
+            memcpy_evex_impl<__m512i, 4, 4>(dst, src, size, _mm512_load_si512, _mm512_stream_si512);
+        }
+        else
+        {
+            memcpy_evex_impl<__m512i, 4, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
+        }
+    }
+    else
+    {
+        if (diff == 0)
+        {
+            memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_load_si512, _mm512_stream_si512);
+        }
+        else
+        {
+            memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
+        }
+    }
+    if (size > 128)
+        memcpy_sse_loop(dst, src, size);
+}
+
+/*!
+ * This function is used to copy memory with length less or equal to 128 bytes.
+ *
+ * @return: It returns true if size is in range, Otherwise, it returns false indicating no operation is performed.
+ */
 
 ALWAYS_INLINE static inline bool memcpy_small(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
@@ -635,43 +759,10 @@ ALWAYS_INLINE static inline bool memcpy_small(void * __restrict dst_, const void
     return false;
 }
 
-__attribute__((target("avx512f,avx512vl"))) static inline void memcpy_evex64(
-    char * __restrict & __restrict dst,
-    char const * __restrict & __restrict src,
-    size_t & size)
-{
-    auto dst_padding = (-reinterpret_cast<uintptr_t>(dst)) & (sizeof(__m512i) - 1);
-    auto diff = (reinterpret_cast<uintptr_t>(dst) ^ reinterpret_cast<uintptr_t>(src)) & (sizeof(__m512i) - 1);
-    tiflash_compiler_builtin_memcpy(dst, src, sizeof(__m512i));
-    dst += dst_padding;
-    src += dst_padding;
-    size -= dst_padding;
-    if (size >= 16 * memcpy_config.huge_size_threshold)
-    {
-        if (diff == 0)
-        {
-            memcpy_evex_impl<__m512i, 4, 4>(dst, src, size, _mm512_load_si512, _mm512_stream_si512);
-        }
-        else
-        {
-            memcpy_evex_impl<__m512i, 4, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
-        }
-    }
-    else
-    {
-        if (diff == 0)
-        {
-            memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_load_si512, _mm512_stream_si512);
-        }
-        else
-        {
-            memcpy_evex_impl<__m512i, 2, 4>(dst, src, size, _mm512_loadu_si512, _mm512_stream_si512);
-        }
-    }
-    if (size > 128)
-        memcpy_sse_loop(dst, src, size);
-}
 
+/*!
+ * This function is used to copy memory with length larger than medium threshold.
+ */
 __attribute__((noinline)) static inline void * memcpy_large(
     void * __restrict dst_,
     void const * __restrict src_,
@@ -723,6 +814,10 @@ __attribute__((noinline)) static inline void * memcpy_large(
     return ret;
 }
 
+/*!
+ * This function is used to copy memory with length larger than 128 bytes and smaller than medium threshold.
+ * We keep this function manually unfolded to guarantee the codegen quality.
+ */
 ALWAYS_INLINE static inline void * memcpy_sse_loop_end(
     void * __restrict dst_,
     void const * __restrict src_,
@@ -733,20 +828,10 @@ ALWAYS_INLINE static inline void * memcpy_sse_loop_end(
     static constexpr const size_t vector_size = sizeof(__m128i);
     size_t padding = (-reinterpret_cast<uintptr_t>(dst)) & (vector_size - 1);
 
-    /// If not aligned - we will copy first 16 bytes with unaligned stores.
     tiflash_compiler_builtin_memcpy(dst, src, vector_size);
     dst += padding;
     src += padding;
     size -= padding;
-
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
-
-    /// Aligned unrolled copy. We will use half of available SSE registers.
-    /// It's not possible to have both src and dst aligned.
-    /// So, we will use aligned stores and unaligned loads.
     __m128i c0, c1, c2, c3, c4, c5, c6, c7;
 
     while (size >= 128)
@@ -825,20 +910,6 @@ ALWAYS_INLINE static inline void *
 inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     using namespace memory_copy;
-    /// We will use pointer arithmetic, so char pointer will be used.
-    /// Note that __restrict makes sense (otherwise compiler will reload data from memory
-    /// instead of using the value of registers due to possible aliasing).
-
-
-    /// Standard memcpy returns the original value of dst. It is rarely used but we have to do it.
-    /// If you use memcpy with small but non-constant sizes, you can call inline_memcpy directly
-    /// for inlining and removing this single instruction.
-
-    /// Small sizes and tails after the loop for large sizes.
-    /// The order of branches is important but in fact the optimal order depends on the distribution of sizes in your application.
-    /// This order of branches is from the disassembly of glibc's code.
-    /// We copy chunks of possibly uneven size with two overlapping movs.
-    /// Example: to copy 5 bytes [0, 1, 2, 3, 4] we will copy tail [1, 2, 3, 4] first and then head [0, 1, 2, 3].
     if (likely(detail::memcpy_small(dst_, src_, size)))
     {
         return dst_;
