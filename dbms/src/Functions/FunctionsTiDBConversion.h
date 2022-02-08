@@ -1742,12 +1742,10 @@ public:
     {
         // cast(int as decimal)
         using FromFieldType = typename FromDataType::FieldType;
-        constexpr bool is_integer = (std::is_same_v<FromFieldType, UInt8> || std::is_same_v<FromFieldType, UInt16> || std::is_same_v<FromFieldType, UInt32> || std::is_same_v<FromFieldType, UInt64>
-                                 || std::is_same_v<FromFieldType, Int8> || std::is_same_v<FromFieldType, Int16> || std::is_same_v<FromFieldType, Int32> || std::is_same_v<FromFieldType, Int64>);
-        if constexpr (is_integer)
+        if constexpr (std::is_integral_v<FromFieldType>)
         {
             PrecType from_prec = IntPrec<FromFieldType>::prec;
-            if (from_prec <= (to_decimal_prec - to_decimal_scale))
+            if ((from_prec + to_decimal_scale) <= to_decimal_prec)
             {
                 return true;
             }
