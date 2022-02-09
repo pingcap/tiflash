@@ -1,8 +1,14 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTunnel.h>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <tipb/select.pb.h>
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <boost/noncopyable.hpp>
 
 namespace DB

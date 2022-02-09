@@ -10,13 +10,16 @@ add_library (daemon ${SPLIT_SHARED}
 
 if (USE_UNWIND)
     target_compile_definitions (daemon PRIVATE USE_UNWIND=1)
+    if (USE_LLVM_LIBUNWIND)
+        target_compile_definitions (daemon PRIVATE USE_LLVM_LIBUNWIND=1)
+    endif()
     target_include_directories (daemon BEFORE PRIVATE ${UNWIND_INCLUDE_DIR})
     target_include_directories (daemon BEFORE PRIVATE ${UNWIND_INCREMENTAL_DIR})
     target_link_libraries (daemon ${UNWIND_LIBRARY})
 endif ()
 
 target_include_directories (daemon PUBLIC include)
-target_include_directories (daemon PRIVATE ${ClickHouse_SOURCE_DIR}/libs/libpocoext/include)
+target_include_directories (daemon PRIVATE ${TiFlash_SOURCE_DIR}/libs/libpocoext/include)
 
 target_link_libraries (daemon clickhouse_common_io clickhouse_common_config ${EXECINFO_LIBRARY})
 if (ENABLE_TESTS)

@@ -88,11 +88,16 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(process_keys.total());
     }
-    LOG_INFO(log,
-             "Pre-handle snapshot " << child->getRegion()->toString(true) << " to " << ingest_files.size() << " DTFiles, cost "
-                                    << watch.elapsedMilliseconds() << "ms [rows=" << commit_rows
-                                    << "] [write_cf_keys=" << process_keys.write_cf << "] [default_cf_keys=" << process_keys.default_cf
-                                    << "] [lock_cf_keys=" << process_keys.lock_cf << "]");
+    LOG_FMT_INFO(
+        log,
+        "Pre-handle snapshot {} to {} DTFiles, cost {}ms [rows={}] [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+        child->getRegion()->toString(true),
+        ingest_files.size(),
+        watch.elapsedMilliseconds(),
+        commit_rows,
+        process_keys.write_cf,
+        process_keys.default_cf,
+        process_keys.lock_cf);
 }
 
 bool SSTFilesToDTFilesOutputStream::newDTFileStream()
@@ -120,9 +125,12 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
     }
 
     auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), storage->createChecksumConfig(flags.isSingleFile()));
-    LOG_INFO(log,
-             "Create file for snapshot data " << child->getRegion()->toString(true) << " [file=" << dt_file->path()
-                                              << "] [single_file_mode=" << flags.isSingleFile() << "]");
+    LOG_FMT_INFO(
+        log,
+        "Create file for snapshot data {} [file={}] [single_file_mode={}]",
+        child->getRegion()->toString(true),
+        dt_file->path(),
+        flags.isSingleFile());
     dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
@@ -161,7 +169,7 @@ void SSTFilesToDTFilesOutputStream::write()
             if (unlikely(block.rows() > 1 && !isAlreadySorted(block, sort)))
             {
                 const String error_msg
-                    = "The block decoded from SSTFile is not sorted by primary key and version " + child->getRegion()->toString(true);
+                    = fmt::format("The block decoded from SSTFile is not sorted by primary key and version {}", child->getRegion()->toString(true));
                 LOG_ERROR(log, error_msg);
                 FieldVisitorToString visitor;
                 const size_t nrows = block.rows();
@@ -169,9 +177,13 @@ void SSTFilesToDTFilesOutputStream::write()
                 {
                     const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
                     const auto & ver_col = block.getByName(MutableSupport::version_column_name);
-                    LOG_ERROR(log,
-                              "[Row=" << i << "/" << nrows << "] [pk=" << applyVisitor(visitor, (*pk_col.column)[i])
-                                      << "] [ver=" << applyVisitor(visitor, (*ver_col.column)[i]) << "]");
+                    LOG_FMT_ERROR(
+                        log,
+                        "[Row={}/{}] [pk={}] [ver={}]",
+                        i,
+                        nrows,
+                        applyVisitor(visitor, (*pk_col.column)[i]),
+                        applyVisitor(visitor, (*ver_col.column)[i]));
                 }
                 throw Exception(error_msg);
             }
@@ -212,7 +224,7 @@ void SSTFilesToDTFilesOutputStream::cancel()
         }
         catch (...)
         {
-            tryLogCurrentException(log, "ignore exception while canceling SST files to DeltaTree files stream [file=" + file->path() + "]");
+            tryLogCurrentException(log, fmt::format("ignore exception while canceling SST files to DeltaTree files stream [file={}]", file->path()));
         }
     }
 }

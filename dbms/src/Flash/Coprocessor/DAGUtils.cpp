@@ -1,8 +1,10 @@
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
@@ -11,7 +13,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -740,7 +741,7 @@ const String & getFunctionName(const tipb::Expr & expr)
 
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -817,35 +818,29 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     if (functionIsInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        ss << exprToString(expr.children(0), input_col) << " " << func_name << " (";
-        bool first = true;
-        for (int i = 1; i < expr.children_size(); i++)
-        {
-            String s = exprToString(expr.children(i), input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
+        fmt_buf.joinStr(
+            expr.children().begin() + 1,
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
     else
     {
-        ss << func_name << "(";
-        bool first = true;
-        for (const tipb::Expr & child : expr.children())
-        {
-            String s = exprToString(child, input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{}(", func_name);
+        fmt_buf.joinStr(
+            expr.children().begin(),
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
-    return ss.str();
+    return fmt_buf.toString();
 }
 
 const String & getTypeName(const tipb::Expr & expr)
@@ -1227,6 +1222,29 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
         }
     }
     return dag_req;
+}
+
+tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
+{
+    const tipb::DAGRequest & dag_request = *dag_context.dag_request;
+    const tipb::EncodeType encode_type = dag_request.encode_type();
+    if (dag_context.isMPPTask() && !dag_context.isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        return tipb::EncodeType::TypeCHBlock;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
+        return encode_type;
+    }
+    if (isUnsupportedEncodeType(dag_context.result_field_types, encode_type))
+        return tipb::EncodeType::TypeDefault;
+    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
+        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        return tipb::EncodeType::TypeDefault;
+    return encode_type;
 }
 
 } // namespace DB

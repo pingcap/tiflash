@@ -11,8 +11,17 @@
 #include <sys/types.h>
 
 #if USE_UNWIND
+#ifndef USE_LLVM_LIBUNWIND
 #define UNW_LOCAL_ONLY
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextern-c-compat"
+#endif
 #include <libunwind.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #ifdef __APPLE__
@@ -69,6 +78,9 @@
 #include <sstream>
 #include <typeinfo>
 
+#ifdef TIFLASH_LLVM_COVERAGE
+extern "C" int __llvm_profile_write_file(void);
+#endif
 
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
@@ -78,7 +90,6 @@ using Poco::Logger;
 using Poco::Message;
 using Poco::Path;
 using Poco::Util::AbstractConfiguration;
-
 
 constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
 
@@ -145,7 +156,14 @@ static void call_default_signal_handler(int sig)
 
 
 using ThreadNumber = decltype(Poco::ThreadNumber::get());
-static const size_t buf_size = sizeof(int) + sizeof(siginfo_t) + sizeof(ucontext_t) + sizeof(ThreadNumber);
+static const size_t buf_size
+    = sizeof(int)
+    + sizeof(siginfo_t)
+    + sizeof(ucontext_t)
+#if USE_UNWIND
+    + sizeof(unw_context_t)
+#endif
+    + sizeof(ThreadNumber);
 
 using signal_function = void(int, siginfo_t *, void *);
 
@@ -182,16 +200,28 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptor out(signal_pipe.write_fd, buf_size, buf);
 
+#if USE_UNWIND
+    // different arch, different unwinder will have different definition for unwind
+    // context; therefore, we catpure unw_context_t instead of ucontext_t
+    unw_context_t unw_context;
+    unw_getcontext(&unw_context);
+#endif
+
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(*reinterpret_cast<const ucontext_t *>(context), out);
+#if USE_UNWIND
+    DB::writePODBinary(unw_context, out);
+#endif
     DB::writeBinary(Poco::ThreadNumber::get(), out);
 
     out.next();
 
     /// The time that is usually enough for separate thread to print info into log.
     ::sleep(10);
-
+#ifdef TIFLASH_LLVM_COVERAGE
+    __llvm_profile_write_file();
+#endif
     call_default_signal_handler(sig);
 }
 
@@ -199,28 +229,22 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
 static bool already_printed_stack_trace = false;
 
 #if USE_UNWIND
-size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & context)
+size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, unw_context_t & unw_context)
 {
     if (already_printed_stack_trace)
         return 0;
 
     unw_cursor_t cursor;
 
-#ifdef __aarch64__
-    // translate context for aarch64
-    unw_context_t unw_context;
-    unw_context.uc_flags = context.uc_flags;
-    unw_context.uc_link = context.uc_link;
-    unw_context.uc_stack = context.uc_stack;
-    unw_context.uc_sigmask = context.uc_sigmask;
-    std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
-    unw_context_t * context_ptr = &unw_context;
-#else
-    ucontext_t * context_ptr = &context;
-#endif
-
-    if (unw_init_local2(&cursor, context_ptr, UNW_INIT_SIGNAL_FRAME) < 0)
+#ifdef USE_LLVM_LIBUNWIND
+    // LLVM does not require UNW_INIT_SIGNAL_FRAME (assuming that signal frame CFIs are set correctly)
+    // see https://lists.llvm.org/pipermail/llvm-dev/2021-December/154419.html
+    if (unw_init_local(&cursor, &unw_context) < 0)
         return 0;
+#else
+    if (unw_init_local2(&cursor, &unw_context, UNW_INIT_SIGNAL_FRAME) < 0)
+        return 0;
+#endif
 
     size_t i = 0;
     for (; i < max_frames; ++i)
@@ -301,13 +325,22 @@ public:
             {
                 siginfo_t info;
                 ucontext_t context;
+#if USE_UNWIND
+                unw_context_t unw_context;
+#endif
                 ThreadNumber thread_num;
 
                 DB::readPODBinary(info, in);
                 DB::readPODBinary(context, in);
+#if USE_UNWIND
+                DB::readPODBinary(unw_context, in);
+#endif
                 DB::readBinary(thread_num, in);
-
+#if USE_UNWIND
+                onFault(sig, info, context, unw_context, thread_num);
+#else
                 onFault(sig, info, context, thread_num);
+#endif
             }
         }
     }
@@ -321,8 +354,11 @@ private:
     {
         LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
     }
-
+#if USE_UNWIND
+    void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
+#else
     void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
+#endif
     {
         LOG_ERROR(log, "########################################");
         LOG_ERROR(log, "(from thread " << thread_num << ") "
@@ -492,7 +528,7 @@ private:
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, context);
+        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
 
         if (frames_size)
         {

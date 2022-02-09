@@ -7,11 +7,14 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/config_common.h>
 #include <cpptoml.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
+#include <limits.h>
 
+#include <csignal>
 class DaemonConfig_test : public ::testing::Test
 {
 public:
@@ -69,6 +72,46 @@ static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractCon
         verifyChannelConfig(*formatting_channel->getChannel(), config);
     }
 }
+
+namespace TiFlashUnwindTest
+{
+NO_INLINE int function_1()
+{
+    std::raise(SIGBUS);
+    return 0;
+}
+NO_INLINE int function_2()
+{
+    int res = function_1();
+    TIFLASH_NO_OPTIMIZE(res);
+    return res;
+}
+NO_INLINE int function_3()
+{
+    int res = function_2();
+    TIFLASH_NO_OPTIMIZE(res);
+    return res;
+}
+
+} // namespace TiFlashUnwindTest
+
+void removeFile(String path)
+{
+    Poco::File file(path);
+    if (file.exists())
+        file.remove(true);
+}
+
+struct TestDaemon : public BaseDaemon
+{
+    std::string config_path{};
+    NO_INLINE int main(const std::vector<std::string> &) override
+    {
+        removeFile(config_path);
+        TiFlashUnwindTest::function_3();
+        return 0;
+    }
+};
 
 TEST_F(DaemonConfig_test, ReloadLoggerConfig)
 try
@@ -156,3 +199,95 @@ size = "1"
     clearFiles("./tmp/log");
 }
 CATCH
+
+extern "C" char ** environ;
+
+#if USE_UNWIND
+TEST(BaseDaemon, StackUnwind)
+{
+    auto conf = R"(
+[application]
+runAsDaemon = false
+[profiles]
+[profiles.default]
+max_rows_in_set = 455
+dt_page_gc_low_write_prob = 0.2
+[logger]
+console = 1
+level = "debug"
+)";
+    if (std::getenv("TIFLASH_DAEMON_TEST_UNWIND_CHILD"))
+    {
+        auto & listeners = ::testing::UnitTest::GetInstance()->listeners();
+        delete listeners.Release(listeners.default_result_printer());
+        TestDaemon app;
+        auto config_name = fmt::format("/tmp/{}-{}.toml", reinterpret_cast<uintptr_t>(&app), ::time(nullptr));
+        {
+            auto config = std::ofstream(config_name);
+            config << conf << std::endl;
+        }
+        char arg0[] = "";
+        char arg1[] = "--config-file";
+        char * argv[] = {arg0, arg1, config_name.data(), nullptr};
+        app.config_path = config_name;
+        app.run(3, argv);
+        return;
+    }
+    char abs_path[PATH_MAX]{};
+    ::readlink("/proc/self/exe", abs_path, sizeof(abs_path));
+    auto stdout_name = fmt::format("/tmp/{}-{}.stdout", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
+    auto stderr_name = fmt::format("/tmp/{}-{}.stderr", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
+    auto stdout_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+    auto stderr_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+    char arg[] = "--gtest_filter=BaseDaemon.StackUnwind";
+    char * const argv[] = {abs_path, arg, nullptr};
+    std::vector<char *> envs;
+    std::string profile = "LLVM_PROFILE_FILE=default.profraw";
+    std::string child_flag = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
+    for (auto * i = environ; *i != nullptr; i++)
+    {
+        if (strstr(*i, "LLVM_PROFILE_FILE") != nullptr)
+        {
+            std::string file_path = *i;
+            auto last = file_path.rfind('/');
+            auto realpath = file_path.substr(0, last);
+            profile = fmt::format("{}/daemon-child.profraw", realpath);
+            std::cout << "LLVM profile: " << profile << std::endl;
+        }
+        else
+        {
+            envs.push_back(*i);
+        }
+    }
+    envs.push_back(child_flag.data());
+    envs.push_back(profile.data());
+    envs.push_back(nullptr);
+    auto pid = ::fork();
+    if (pid == 0)
+    {
+        ::dup2(stdout_fd, STDOUT_FILENO);
+        ::dup2(stderr_fd, STDERR_FILENO);
+        ::execve(abs_path, argv, envs.data());
+    }
+    else
+    {
+        ::wait(nullptr);
+        ::close(stdout_fd);
+        ::close(stderr_fd);
+        std::ifstream fin(stdout_name);
+        std::stringstream stream{};
+        stream << fin.rdbuf();
+        auto data = stream.str();
+        removeFile(stdout_name);
+        removeFile(stderr_name);
+        auto sigbus = data.find("Bus error");
+        ASSERT_NE(sigbus, std::string::npos);
+        auto function_1 = data.find("TiFlashUnwindTest::function_1()", sigbus + 1);
+        ASSERT_NE(function_1, std::string::npos);
+        auto function_2 = data.find("TiFlashUnwindTest::function_2()", function_1 + 1);
+        ASSERT_NE(function_2, std::string::npos);
+        auto function_3 = data.find("TiFlashUnwindTest::function_3()", function_2 + 1);
+        ASSERT_NE(function_3, std::string::npos);
+    }
+}
+#endif
