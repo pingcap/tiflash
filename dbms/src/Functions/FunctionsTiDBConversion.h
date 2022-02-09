@@ -920,7 +920,7 @@ struct TiDBConvertToDecimal
     static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
         const T & v,
         ScaleType v_scale,
-        PrecType prec,
+        PrecType prec [[maybe_unused]],
         ScaleType scale,
         const Context & context)
     {
@@ -950,14 +950,17 @@ struct TiDBConvertToDecimal
             }
         }
 
-        auto max_value = DecimalMaxValue::get(prec);
-        if (value > max_value || value < -max_value)
+        if constexpr (!can_skip_check_overflow)
         {
-            context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
-            else
-                return static_cast<UType>(-max_value);
+            auto max_value = DecimalMaxValue::get(prec);
+            if (value > max_value || value < -max_value)
+            {
+                context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
+                if (value > 0)
+                    return static_cast<UType>(max_value);
+                else
+                    return static_cast<UType>(-max_value);
+            }
         }
         return static_cast<UType>(value);
     }
@@ -1770,7 +1773,14 @@ public:
 
         // cast(decimal as decimal)
         return castTypeToEither<DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256>(from_type.get(), [to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) -> bool {
-            return (from_type_ptr.getPrec() <= to_decimal_prec) && (from_type_ptr.getScale() <= to_decimal_scale);
+            Int64 scale_diff = static_cast<Int64>(to_decimal_scale) - static_cast<Int64>(from_type_ptr.getScale());
+            if (scale_diff < 0)
+            {
+                // Why plus 1: if to_scale < from_scale, we need to div and round up if necessary.
+                // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
+                scale_diff += 1;
+            }
+            return (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
         });
     }
 

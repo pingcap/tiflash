@@ -1522,9 +1522,24 @@ TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDeciaml)
     DataTypePtr decimal32_ptr_8_3 = createDecimal(8, 3);
     DataTypePtr decimal32_ptr_8_2 = createDecimal(8, 2);
 
-    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 8, 3));
-    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_3, 8, 2));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 8, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_3, 8, 2));
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 7, 5));
+
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 9, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_8_2, 9, 1));
+
+    DataTypePtr decimal32_ptr_6_4 = createDecimal(6, 4);
+    // decimal(6, 4) -> decimal(5, 3)
+    // because select cast(99.9999 as decimal(5, 3)); -> 100.000
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 5, 3));
+    // decimal(6, 4) -> decimal(7, 5)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 7, 5));
+
+    // decimal(6, 4) -> decimal(6, 5)
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 6, 5));
+    // decimal(6, 4) -> decimal(8, 5)
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 8, 5));
 }
 
 } // namespace
