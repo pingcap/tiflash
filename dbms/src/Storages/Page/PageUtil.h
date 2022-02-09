@@ -126,7 +126,7 @@ template <typename T>
 void syncFile(T & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno(fmt::format("Cannot fsync file: {]. ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno(fmt::format("Cannot fsync file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
 }
 
 template <typename T>
