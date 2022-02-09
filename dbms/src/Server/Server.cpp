@@ -491,7 +491,10 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
 {
     // Spawn a new CallData instance to serve new clients.
-    new CallData(service_, cq);
+    for(int i = 0; i < 10; i++)
+    {
+        new CallData(service_, cq);
+    }
     void * tag; // uniquely identifies a request.
     bool ok;
     while (true)
