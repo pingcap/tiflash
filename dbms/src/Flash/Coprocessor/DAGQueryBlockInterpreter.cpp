@@ -137,7 +137,7 @@ AnalysisResult analyzeExpressions(
         // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
         //  aggregation if the stage is partial
         bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower then normal group by, use normal group by by default
+            /// collation sensitive group by is slower than normal group by, use normal group by by default
             context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
@@ -1039,7 +1039,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
-        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
 
     if (res.before_having)

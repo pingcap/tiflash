@@ -312,12 +312,12 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
         tipb::ExchangeReceiver tipb_exchange_receiver;
-        for (auto task_id : root_task_ids)
+        for (const auto root_task_id : root_task_ids)
         {
             mpp::TaskMeta tm;
             tm.set_start_ts(properties.start_ts);
             tm.set_address(LOCAL_HOST);
-            tm.set_task_id(task_id);
+            tm.set_task_id(root_task_id);
             tm.set_partition_id(-1);
             auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
             tm.AppendToString(tm_string);
@@ -1264,7 +1264,7 @@ struct Aggregation : public Executor
 
             if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
             {
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
@@ -1272,7 +1272,7 @@ struct Aggregation : public Executor
             {
                 if (agg_func->children_size() != 1)
                     throw Exception("udaf " + func->name + " only accept 1 argument");
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
                 ft->set_decimal(agg_func->children(0).field_type().decimal());
                 ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
@@ -1280,13 +1280,13 @@ struct Aggregation : public Executor
             }
             else if (agg_sig == tipb::ExprType::ApproxCountDistinct)
             {
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
                 ft->set_flag(1);
             }
             else if (agg_sig == tipb::ExprType::GroupConcat)
             {
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
             }
             if (is_final_mode)
