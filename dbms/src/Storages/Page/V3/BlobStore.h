@@ -60,9 +60,9 @@ public:
 
         struct BlobStat
         {
-            SpaceMapPtr smap;
+            const SpaceMapPtr smap;
+            const BlobFileId id;
             BlobStatType type;
-            BlobFileId id;
 
             /**
             * If no any data inside. It shoule be same as space map `biggest_cap`
@@ -74,6 +74,12 @@ public:
             double sm_valid_rate = 1.0;
 
             std::mutex sm_lock;
+
+            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
+                : smap(std::move(smap_))
+                , id(id_)
+                , type(BlobStatType::NORMAL)
+            {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
