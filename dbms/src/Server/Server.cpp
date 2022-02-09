@@ -895,7 +895,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
         memcpy_config.medium_size_strategy = strategy;
-        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), current_time_sum / 1024.0 / 1024.0 / 1024.0);
+        double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
+        double time = best_time_avg / 1e9;
+        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), size / time);
     }
 
     {
@@ -934,7 +936,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
         memcpy_config.huge_size_strategy = strategy;
-        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), current_time_sum / 1024.0 / 1024.0 / 1024.0);
+        double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
+        double time = best_time_avg / 1e9;
+        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), size / time);
     }
 #endif
 
