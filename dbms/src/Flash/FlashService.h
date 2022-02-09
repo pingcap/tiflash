@@ -15,7 +15,10 @@ namespace DB
 {
 class IServer;
 
-class FlashService final : public tikvpb::Tikv::Service
+class CallData;
+
+
+class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<tikvpb::Tikv::Service>
     , public std::enable_shared_from_this<FlashService>
     , private boost::noncopyable
 {
@@ -44,9 +47,11 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
-                                          const ::mpp::EstablishMPPConnectionRequest * request,
-                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
+//    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
+//                                          const ::mpp::EstablishMPPConnectionRequest * request,
+//                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
+
+    void EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata);
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
@@ -63,6 +68,63 @@ private:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+};
+
+class CallData
+{
+public:
+    // Take in the "service" instance (in this case representing an asynchronous
+    // server) and the completion queue "cq" used for asynchronous communication
+    // with the gRPC runtime.
+    CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
+        : service_(service)
+        , cq_(cq)
+        , responder_(&ctx_)
+        , status_(CREATE)
+    {
+        // Invoke the serving logic right away.
+        Proceed();
+    }
+
+    bool Write(const mpp::MPPDataPacket &packet);
+
+    void WriteDone(const ::grpc::Status& status);
+
+    void Proceed();
+
+    std::mutex mu;
+    std::condition_variable cv;
+private:
+    void notifyReady();
+
+    // The means of communication with the gRPC runtime for an asynchronous
+    // server.
+    FlashService * service_;
+    // The producer-consumer queue where for asynchronous server notifications.
+    grpc::ServerCompletionQueue * cq_;
+    // Context for the rpc, allowing to tweak aspects of it such as the use
+    // of compression, authentication, as well as to send metadata back to the
+    // client.
+    grpc::ServerContext ctx_;
+
+    // What we get from the client.
+    ::mpp::EstablishMPPConnectionRequest request_;
+    // What we send back to the client.
+    ::mpp::DispatchTaskResponse reply_;
+
+    // The means to get back to the client.
+    ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
+    bool ready;
+
+    // Let's implement a tiny state machine with the following states.
+    enum CallStatus
+    {
+        CREATE,
+        PROCESS,
+        JOIN,
+        FINISH
+    };
+    std::atomic<CallStatus> status_; // The current serving state.
 };
 
 } // namespace DB

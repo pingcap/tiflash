@@ -3,6 +3,7 @@
 #include <Common/LogWithPrefix.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Flash/FlashService.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -89,6 +90,8 @@ public:
 
     void consumerFinish(const String & err_msg);
 
+    std::atomic<bool> no_waiter{false};
+
 private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
@@ -103,9 +106,10 @@ private:
 
     bool finished; // if the tunnel has finished its connection.
 
-    bool is_local; // if this tunnel used for local environment
+    bool is_local; // if the tunnel is used for local environment
 
     Writer * writer;
+    CallData *call_data;
 
     std::chrono::seconds timeout;
 
@@ -149,10 +153,10 @@ private:
     const LogWithPrefixPtr log;
 };
 
-class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>
+class MPPTunnel : public MPPTunnelBase<CallData>
 {
 public:
-    using Base = MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
+    using Base = MPPTunnelBase<CallData>;
     using Base::Base;
 };
 

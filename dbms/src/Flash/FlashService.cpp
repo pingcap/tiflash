@@ -169,18 +169,18 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
-                                                    const ::mpp::EstablishMPPConnectionRequest * request,
-                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata)
 {
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    //    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+        calldata->WriteDone(grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
+        return;
+        //        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -194,7 +194,8 @@ grpc::Status FlashService::Coprocessor(
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return status;
+        calldata->WriteDone(status);
+        return;
     }
 
     auto & tmt_context = context->getTMTContext();
@@ -211,26 +212,94 @@ grpc::Status FlashService::Coprocessor(
         if (tunnel == nullptr)
         {
             LOG_ERROR(log, err_msg);
-            if (writer->Write(getPacketWithError(err_msg)))
+
+            if (calldata->Write(getPacketWithError(err_msg)))
             {
-                return grpc::Status::OK;
+                calldata->WriteDone(grpc::Status::OK);
+                return;
+                //                return grpc::Status::OK;
             }
             else
             {
                 LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
-                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                calldata->WriteDone(grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason."));
+                return;
             }
         }
     }
-    Stopwatch stopwatch;
-    tunnel->connect(writer);
+    //    Stopwatch stopwatch;
+    tunnel->no_waiter = true;
+    tunnel->connect(calldata);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
-    tunnel->waitForFinish();
-    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+    //    tunnel->waitForFinish();
+    //    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     // TODO: Check if there are errors in task.
-
-    return grpc::Status::OK;
+    //    return;
+    //        grpc::Status::OK;
 }
+
+//::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
+//                                                    const ::mpp::EstablishMPPConnectionRequest * request,
+//                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+//{
+//    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+//    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+//    // We need to find it out and bind the grpc stream with it.
+//    LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
+//
+//    if (!security_config.checkGrpcContext(grpc_context))
+//    {
+//        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+//    }
+//    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+//    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+//    Stopwatch watch;
+//    SCOPE_EXIT({
+//        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+//        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+//        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+//    });
+//
+//    auto [context, status] = createDBContext(grpc_context);
+//    if (!status.ok())
+//    {
+//        return status;
+//    }
+//
+//    auto & tmt_context = context->getTMTContext();
+//    auto task_manager = tmt_context.getMPPTaskManager();
+//    std::chrono::seconds timeout(10);
+//    std::string err_msg;
+//    MPPTunnelPtr tunnel = nullptr;
+//    {
+//        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+//        if (sender_task != nullptr)
+//        {
+//            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
+//        }
+//        if (tunnel == nullptr)
+//        {
+//            LOG_ERROR(log, err_msg);
+//            if (writer->Write(getPacketWithError(err_msg)))
+//            {
+//                return grpc::Status::OK;
+//            }
+//            else
+//            {
+//                LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
+//                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+//            }
+//        }
+//    }
+//    Stopwatch stopwatch;
+//    tunnel->connect(writer);
+//    LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
+//    tunnel->waitForFinish();
+//    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+//    // TODO: Check if there are errors in task.
+//
+//    return grpc::Status::OK;
+//}
 
 ::grpc::Status FlashService::CancelMPPTask(
     ::grpc::ServerContext * grpc_context,
@@ -398,6 +467,86 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     {
         LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+    }
+}
+
+bool CallData::Write(const mpp::MPPDataPacket & packet)
+{
+    // The actual processing.
+    //        std::string prefix("Hello ");
+    //        reply_.set_message(prefix + request_.name());
+    try
+    {
+        {
+            std::unique_lock lk(mu);
+            cv.wait(lk, [&] { return ready; });
+            ready = false;
+        }
+        responder_.Write(packet, this);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+void CallData::WriteDone(const ::grpc::Status & status)
+{
+    // And we are done! Let the gRPC runtime know we've finished, using the
+    // memory address of this instance as the uniquely identifying tag for
+    // the event.
+    {
+        std::unique_lock lk(mu);
+        cv.wait(lk, [&] { return ready; });
+        ready = false;
+    }
+    status_ = FINISH;
+    responder_.Finish(status, this);
+}
+
+void CallData::notifyReady()
+{
+    std::unique_lock lk(mu);
+    ready = true;
+    cv.notify_one();
+}
+
+void CallData::Proceed()
+{
+    if (status_ == CREATE)
+    {
+        // Make this instance progress to the PROCESS state.
+        status_ = PROCESS;
+
+        // As part of the initial CREATE state, we *request* that the system
+        // start processing SayHello requests. In this request, "this" acts are
+        // the tag uniquely identifying the request (so that different CallData
+        // instances can serve different requests concurrently), in this case
+        // the memory address of this CallData instance.
+        service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, cq_, this);
+    }
+    else if (status_ == PROCESS)
+    {
+        // Spawn a new CallData instance to serve new clients while we process
+        // the one for this CallData. The instance will deallocate itself as
+        // part of its FINISH state.
+        new CallData(service_, cq_);
+
+        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
+        status_ = JOIN;
+        notifyReady();
+    }
+    else if (status_ == JOIN)
+    {
+        notifyReady();
+        //notify producer that it's ready
+    }
+    else
+    {
+        GPR_ASSERT(status_ == FINISH);
+        // Once in the FINISH state, deallocate ourselves (CallData).
+        delete this;
     }
 }
 

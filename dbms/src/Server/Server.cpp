@@ -65,6 +65,7 @@
 #include <memory>
 
 #include "ClusterManagerService.h"
+#include "Common/ThreadManager.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
@@ -487,6 +488,27 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
+void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
+{
+    // Spawn a new CallData instance to serve new clients.
+    new CallData(service_, cq);
+    void * tag; // uniquely identifies a request.
+    bool ok;
+    while (true)
+    {
+        // Block waiting to read the next event from the completion queue. The
+        // event is uniquely identified by its tag, which in this case is the
+        // memory address of a CallData instance.
+        // The return value of Next should always be checked. This return value
+        // tells us whether there is any kind of event or cq_ is shutting down.
+        if (!cq->Next(&tag, &ok))
+            break;
+//        GPR_ASSERT(ok);
+        LOG_ERROR(grpc_log, "not ok when cq->Next(&tag, &ok)");
+        static_cast<CallData *>(tag)->Proceed();
+    }
+}
+
 class Server::FlashGrpcServerHolder
 {
 public:
@@ -527,9 +549,18 @@ public:
         // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
-        flash_grpc_server = builder.BuildAndStart();
+        auto thread_manager = DB::newThreadManager();
+        for (int i = 0; i < 40; i++)
+        {
+            cqs_.emplace_back(builder.AddCompletionQueue());
+        }
+        flash_grpc_server
+            = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
+
+        for (int i = 0; i < (int)(cqs_.size()); i++)
+            thread_manager->scheduleThenDetach(false, "async_poller", [this] { HandleRpcs(flash_service.get(), cqs_[i].get()); });
     }
 
     ~FlashGrpcServerHolder()
@@ -554,6 +585,7 @@ private:
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
+    std::vector<std::unique_ptr<grpc_impl::ServerCompletionQueue>> cqs_;
 };
 
 class Server::TcpHttpServersHolder

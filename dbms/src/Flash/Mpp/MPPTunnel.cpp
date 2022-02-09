@@ -148,6 +148,10 @@ void MPPTunnelBase<Writer>::sendLoop()
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg);
+    if (no_waiter) {
+        std::cerr<<"async mpptunnel end"<<std::endl;
+        writer->WriteDone(grpc::Status::OK);
+    }
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -263,6 +267,6 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
-template class MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
+template class MPPTunnelBase<CallData>;
 
 } // namespace DB
