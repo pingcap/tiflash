@@ -44,7 +44,7 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
     EXPECT_EQ(stats.roll_id, 1);
     auto next_file_id = stats.chooseNewStat();
     EXPECT_EQ(next_file_id, 1);
-    EXPECT_NO_THROW(stats.createStatAndCheckRollID(next_file_id, stats.lock()));
+    EXPECT_NO_THROW(stats.createStat(next_file_id, stats.lock()));
 }
 
 TEST_F(BlobStoreStatsTest, Restore)
@@ -111,25 +111,19 @@ try
 
     // This will throw exception since we try to create
     // a new file bigger than restored `roll_id`
-    EXPECT_ANY_THROW({
-        stats.createStatAndCheckRollID(14, stats.lock());
-    });
+    EXPECT_ANY_THROW({ stats.createStat(14, stats.lock()); });
 
     for (BlobFileId i = 1; i <= 20; ++i)
     {
         if (i == file_id1 || i == file_id2)
         {
-            EXPECT_ANY_THROW({
-                stats.createStatAndCheckRollID(i, stats.lock());
-            });
+            EXPECT_ANY_THROW({ stats.createStat(i, stats.lock()); });
         }
         else
         {
             auto new_file_id = stats.chooseNewStat();
             EXPECT_EQ(new_file_id, i);
-            EXPECT_NO_THROW({
-                stats.createStatAndCheckRollID(new_file_id, stats.lock());
-            });
+            EXPECT_NO_THROW({ stats.createStat(new_file_id, stats.lock()); });
         }
     }
 }
@@ -139,12 +133,12 @@ TEST_F(BlobStoreStatsTest, testStats)
 {
     BlobStats stats(logger, config);
 
-    auto stat = stats.createStatAndCheckRollID(0, stats.lock());
+    auto stat = stats.createStat(0, stats.lock());
 
     ASSERT_TRUE(stat);
     ASSERT_TRUE(stat->smap);
-    stats.createStatAndCheckRollID(1, stats.lock());
-    stats.createStatAndCheckRollID(2, stats.lock());
+    stats.createStat(1, stats.lock());
+    stats.createStat(2, stats.lock());
 
     ASSERT_EQ(stats.stats_map.size(), 3);
     ASSERT_EQ(stats.roll_id, 3);
@@ -179,7 +173,7 @@ TEST_F(BlobStoreStatsTest, testStat)
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
-    stats.createStatAndCheckRollID(0, stats.lock());
+    stats.createStat(0, stats.lock());
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
@@ -243,7 +237,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
 
     BlobStats stats(logger, config);
 
-    stat = stats.createStatAndCheckRollID(1, stats.lock());
+    stat = stats.createStat(1, stats.lock());
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
     ASSERT_EQ(offset, 0);
 
@@ -262,7 +256,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     ASSERT_FALSE(stat);
 
     // A new stat can use
-    stat = stats.createStatAndCheckRollID(blob_file_id, stats.lock());
+    stat = stats.createStat(blob_file_id, stats.lock());
     offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, 0);
 

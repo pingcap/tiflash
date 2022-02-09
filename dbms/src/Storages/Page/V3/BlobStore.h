@@ -122,9 +122,9 @@ public:
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr createStatAndCheckRollID(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 

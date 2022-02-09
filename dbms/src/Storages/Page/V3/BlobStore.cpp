@@ -214,7 +214,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
         {
-            stat = blob_stats.createStatAndCheckRollID(blob_file_id, lock_stats);
+            stat = blob_stats.createStat(blob_file_id, lock_stats);
         }
 
         // We need to assume that this insert will reduce max_cap.
@@ -718,7 +718,7 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
     return std::lock_guard(lock_stats);
 }
 
-BlobStatPtr BlobStore::BlobStats::createStatAndCheckRollID(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
@@ -729,7 +729,7 @@ BlobStatPtr BlobStore::BlobStats::createStatAndCheckRollID(BlobFileId blob_file_
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto stat = createStat(blob_file_id, guard);
+    auto stat = createStatNotCheckingRoll(blob_file_id, guard);
 
     // Roll to the next new blob id
     if (blob_file_id == roll_id)
@@ -740,7 +740,7 @@ BlobStatPtr BlobStore::BlobStats::createStatAndCheckRollID(BlobFileId blob_file_
     return stat;
 }
 
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
 {
     for (auto & stat : stats_map)
     {
@@ -855,7 +855,7 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
     if (restore_if_not_exist)
     {
         // Restore a stat without checking the roll_id
-        return createStat(file_id, guard);
+        return createStatNotCheckingRoll(file_id, guard);
     }
 
     throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
