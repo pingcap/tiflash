@@ -149,7 +149,7 @@ void MPPTunnelBase<Writer>::sendLoop()
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg);
     if (no_waiter) {
-        std::cerr<<"async mpptunnel end"<<std::endl;
+//        std::cerr<<"async mpptunnel end"<<std::endl;
         writer->WriteDone(grpc::Status::OK);
     }
 }
