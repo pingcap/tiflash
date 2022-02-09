@@ -119,21 +119,21 @@ inline void touchFile(const std::string & path)
     if (fd > 0)
         ::close(fd);
     else
-        throw Exception(fmt::format("Touch file failed: ", path));
+        throw Exception(fmt::format("Touch file failed: {}. ", path));
 }
 
 template <typename T>
 void syncFile(T & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno(fmt::format("Cannot fsync file: ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno(fmt::format("Cannot fsync file: {]. ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
 }
 
 template <typename T>
 void ftruncateFile(T & file, off_t length)
 {
     if (-1 == file->ftruncate(length))
-        DB::throwFromErrno(fmt::format("Cannot truncate file: ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
+        DB::throwFromErrno(fmt::format("Cannot truncate file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
 }
 
 
@@ -199,6 +199,7 @@ void writeFile(
             bytes_written += res;
     }
     ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
+    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, bytes_written);
 }
 
 template <typename T>
@@ -246,7 +247,7 @@ void readFile(T & file,
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes : {} , expected bytes : {}", file->getFileName(), bytes_read, expected_bytes),
+        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {} , expected bytes: {}", file->getFileName(), bytes_read, expected_bytes),
                                    Errors::PageStorage::FileSizeNotMatch);
 }
 
