@@ -103,7 +103,7 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
 
-    bool getDBIDByName(const String & database_name, DatabaseID * db_id);
+    std::pair<bool, DatabaseID> getDBIDByName(const String & database_name);
 
     SchemaDiff getSchemaDiff(Int64 version);
 

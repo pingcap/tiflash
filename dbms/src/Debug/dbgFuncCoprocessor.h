@@ -16,7 +16,7 @@ class Context;
 //   ./storages-client.sh "DBGInvoke dag(query[, region_id])"
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args);
 
-BlockInputStreamPtr dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args);
+void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Mock a DAG request using given query that will be compiled (with the metadata from MockTiDB) to DAG request, with the given region ID and (optional) start ts.
 // Usage:

@@ -18,6 +18,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/sortBlock.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -377,7 +378,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
     }
 }
 
-BlockInputStreamPtr dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args)
+void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
         throw Exception("Args not matched, should be: json_dag_path", ErrorCodes::BAD_ARGUMENTS);
@@ -431,8 +432,10 @@ BlockInputStreamPtr dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs
     // It is all right to throw exception above, dag.clean is only to make it better
     dag.clean(context);
     if (unequal_flag)
+    {
+        output("Invalid");
         throw Exception(fmt::format("{}th request results are not equal, msg: {}", req_idx, unequal_msg), ErrorCodes::LOGICAL_ERROR);
-    return nullptr;
+    }
 }
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
@@ -1088,9 +1091,8 @@ struct TableScan : public Executor
     {}
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
-        std::cout << used_columns.size() << std::endl;
-        //output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-        //                    output_schema.end());
+        output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+                            output_schema.end());
     }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override
     {
@@ -2546,9 +2548,19 @@ Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, c
     while (true)
     {
         Block block = squashed_delete_stream.read();
-        result_data.emplace_back(std::move(block));
         if (!block)
+        {
+            if (result_data.empty())
+            {
+                // Ensure that result_data won't be empty in any situation
+                result_data.emplace_back(std::move(block));
+            }
             break;
+        }
+        else
+        {
+            result_data.emplace_back(std::move(block));
+        }
     }
 
     if (result_data.size() > 1)
@@ -2629,11 +2641,27 @@ String formatBlockData(const Block & block)
     return result;
 }
 
+SortDescription generateSDFromSchema(const DAGSchema & schema)
+{
+    SortDescription sort_desc;
+    sort_desc.reserve(schema.size());
+    for (size_t i = 0; i < schema.size(); i++)
+    {
+        String col_name = schema[i].first;
+        ColumnInfo info = schema[i].second;
+        sort_desc.emplace_back(col_name, -1, -1, nullptr);
+    }
+    return sort_desc;
+}
+
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg)
 {
     auto schema = getSelectSchema(context);
+    SortDescription sort_desc = generateSDFromSchema(schema);
     Block block_a = getMergedBigBlockFromDagRsp(context, schema, expected);
+    sortBlock(block_a, sort_desc);
     Block block_b = getMergedBigBlockFromDagRsp(context, schema, actual);
+    sortBlock(block_b, sort_desc);
     bool equal = blockEqual(block_a, block_b, unequal_msg);
     if (!equal)
     {

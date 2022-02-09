@@ -203,8 +203,8 @@ void NaturalDag::buildTables(Context & context)
 
 void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const
 {
-    DatabaseID db_id;
-    if (MockTiDB::instance().getDBIDByName(db_name, &db_id))
+    auto result = MockTiDB::instance().getDBIDByName(db_name);
+    if (result.first)
     {
         MockTiDB::instance().dropDB(context, db_name, true);
     }

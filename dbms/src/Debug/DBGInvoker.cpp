@@ -97,13 +97,13 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("mock_dag", dbgFuncMockTiDBQuery);
     regSchemafulFunc("tidb_query", dbgFuncTiDBQuery);
     regSchemafulFunc("tidb_mock_query", dbgFuncMockTiDBQuery);
-    regSchemafulFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
 
     regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
+    regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

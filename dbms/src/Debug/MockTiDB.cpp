@@ -556,17 +556,16 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
     return db_ptr;
 }
 
-bool MockTiDB::getDBIDByName(const String & database_name, DatabaseID * db_id)
+std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name)
 {
     for (auto it = databases.begin(); it != databases.end(); it++)
     {
         if (it->first == database_name)
         {
-            *db_id = it->second;
-            return true;
+            return std::make_pair(true, it->second);
         }
     }
-    return false;
+    return std::make_pair(false, -1);
 }
 
 SchemaDiff MockTiDB::getSchemaDiff(Int64 version_)
