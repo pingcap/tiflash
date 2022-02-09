@@ -36,7 +36,7 @@ ALWAYS_INLINE inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restr
         n -= 16;
     }
 }
-} // namespace detail
+} // namespace memory_copy::detail
 
 /** Works under assumption, that it's possible to read up to 15 excessive bytes after end of 'src' region
   *  and to write any garbage into up to 15 bytes after end of 'dst' region.
