@@ -505,9 +505,11 @@ void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
         if (!cq->Next(&tag, &ok))
+        {
+            LOG_ERROR(grpc_log, "not ok when cq->Next(&tag, &ok)");
             break;
-//        GPR_ASSERT(ok);
-        LOG_ERROR(grpc_log, "not ok when cq->Next(&tag, &ok)");
+            //        GPR_ASSERT(ok);
+        }
         static_cast<CallData *>(tag)->Proceed();
     }
 }
