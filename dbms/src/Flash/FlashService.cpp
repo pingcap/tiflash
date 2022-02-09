@@ -528,14 +528,15 @@ void CallData::Proceed()
     }
     else if (status_ == PROCESS)
     {
+        status_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
         new CallData(service_, cq_);
 
-        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
-        status_ = JOIN;
         notifyReady();
+        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
+
     }
     else if (status_ == JOIN)
     {
