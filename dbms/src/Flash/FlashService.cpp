@@ -46,7 +46,7 @@ FlashService::FlashService(IServer & server_)
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
     batch_cop_pool->schedule([&] {while(true) {
             LOG_ERROR(log, "max active establish thds: "<<max_active_establish_thds );
-            usleep(1000000);} })
+            usleep(1000000);} });
 }
 
 grpc::Status FlashService::Coprocessor(
