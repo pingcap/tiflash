@@ -1178,10 +1178,8 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         {
             /// we assume there is no null value in the `match-helper` column after adder<>().
-            const auto & old_match_nullmap = old_match_nullable->getNullMapData();
-            for (const auto & is_null : old_match_nullmap)
-                if (is_null)
-                    throw Exception("Before merge other conditions, there shouldn't be null.", ErrorCodes::LOGICAL_ERROR);
+            if (!mem_utils::memoryIsZero(old_match_nullable->getNullMapData().data(), old_match_nullable->getNullMapData().size()))
+                throw Exception("T here shouldn't be null before merging other conditions.", ErrorCodes::LOGICAL_ERROR);
         }
 
         const auto rows = offsets_to_replicate->size();
