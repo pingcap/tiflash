@@ -53,8 +53,6 @@ public:
         ExpressionActionsChain & chain,
         const tipb::Sort & window_sort);
 
-    void updateWindowSourceColumns();
-
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
@@ -68,6 +66,10 @@ public:
     WindowDescription appendWindow(
         ExpressionActionsChain & chain,
         const tipb::Window & window);
+
+    SortDescription getWindowSortDescription(
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems,
+        ExpressionActionsChain::Step & step);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -210,7 +212,7 @@ private:
     std::vector<std::vector<NameAndTypePair>> windows_columns;
     std::vector<std::vector<tipb::Expr>> windows_functions;
 
-    NamesAndTypes window_output_columns;
+    NamesAndTypes final_window_add_columns;
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;

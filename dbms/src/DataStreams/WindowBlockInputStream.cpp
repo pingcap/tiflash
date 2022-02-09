@@ -175,12 +175,20 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     : window_description(window_description_)
 {
     children.push_back(input);
-    auto input_columns = input->getHeader().getColumns();
+    input_header = input->getHeader();
+    for (auto & add_column : window_description_.add_columns)
+    {
+        std::cout << "add column: " << add_column.name << std::endl;
+        input_header.insert({add_column.type, add_column.name});
+    }
+
+    auto input_columns = input_header.getColumns();
     for (auto & column : input_columns)
     {
+        std::cout << "all column: " << column << std::endl;
         column = std::move(column)->convertToFullColumnIfConst();
     }
-    input_header.setColumns(std::move(input_columns));
+    //input_header.setColumns(std::move(input_columns));
 
     if (window_description.window_functions_descriptions.size() * window_description.aggregate_descriptions.size() != 0)
     {
@@ -403,9 +411,10 @@ void WindowBlockInputStream::advancePartitionEnd()
             const auto * compared_column
                 = inputAt(partition_end)[partition_by_indices[i]].get();
 
-            //            fmt::print(stderr, "reference '{}', compared '{}'\n",
-            //                (*reference_column)[prev_frame_start.row],
-            //                (*compared_column)[partition_end.row]);
+            std::cout << fmt::format("reference '{}', compared '{}'\n",
+                                     (*reference_column)[prev_frame_start.row].toString(),
+                                     (*compared_column)[partition_end.row].toString())
+                      << std::endl;
             if (compared_column->compareAt(partition_end.row,
                                            prev_frame_start.row,
                                            *reference_column,
@@ -1042,10 +1051,6 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
         auto & window_block = window_blocks.back();
 
         window_block.rows = current_block.rows();
-        auto columns = current_block.getColumns();
-        for (auto & column : columns)
-            column = std::move(column)->convertToFullColumnIfConst();
-        window_block.input_columns = std::move(columns);
 
         // Initialize output columns and add new columns to output block.
         for (auto & ws : workspaces)
@@ -1062,6 +1067,12 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
                 current_block.insert({ws.window_function->getReturnType(), ws.column_name});
             }
         }
+
+        auto columns = current_block.getColumns();
+        //        for (auto & column : columns)
+        //            column = std::move(column)->convertToFullColumnIfConst();
+        window_block.input_columns = std::move(columns);
+
         assertSameColumns(input_header.getColumns(), window_block.input_columns);
     }
 

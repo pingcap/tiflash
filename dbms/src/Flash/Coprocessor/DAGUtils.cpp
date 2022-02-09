@@ -707,7 +707,7 @@ bool isScalarFunctionExpr(const tipb::Expr & expr)
 
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr) || isWindowFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -903,11 +903,17 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
 {
     switch (expr.tp())
     {
+    case tipb::ExprType::RowNumber:
     case tipb::ExprType::Rank:
     case tipb::ExprType::DenseRank:
-    case tipb::ExprType::RowNumber:
-    case tipb::ExprType::Lag:
     case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+        //    case tipb::ExprType::CumeDist:
+        //    case tipb::ExprType::PercentRank:
+        //    case tipb::ExprType::Ntile:
+        //    case tipb::ExprType::FirstValue:
+        //    case tipb::ExprType::LastValue:
+        //    case tipb::ExprType::NthValue:
         return true;
     default:
         return false;

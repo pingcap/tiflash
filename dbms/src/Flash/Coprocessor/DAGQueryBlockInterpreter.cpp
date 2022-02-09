@@ -1153,7 +1153,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.having_name);
     }
 
-    if (res.before_order_and_select)
+    if (res.before_order_and_select && res.window_op_list.empty())
     {
         executeExpression(pipeline, res.before_order_and_select);
     }

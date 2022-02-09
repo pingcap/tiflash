@@ -793,6 +793,19 @@ static bool checkWindowFunctionsInvalid(const tipb::Window & window)
     return has_agg_func && has_window_func;
 }
 
+SortDescription DAGExpressionAnalyzer::getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems, ExpressionActionsChain::Step & step)
+{
+    std::vector<NameAndTypePair> byItem_columns;
+    byItem_columns.reserve(byItems.size());
+    for (auto byItem : byItems)
+    {
+        String name = getActions(byItem.expr(), step.actions);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        byItem_columns.emplace_back(name, type);
+    }
+    return getSortDescription(byItem_columns, byItems);
+}
+
 WindowDescription DAGExpressionAnalyzer::appendWindow(
     ExpressionActionsChain & chain,
     const tipb::Window & window)
@@ -882,11 +895,14 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
         window_description.setWindowFrame(window.frame());
     }
     window_description.before_window = chain.getLastActions();
+    window_description.partition_by = getWindowSortDescription(window.partition_by(), step);
+    window_description.order_by = getWindowSortDescription(window.order_by(), step);
     chain.finalize();
     chain.clear();
 
     appendWindowSelect(chain, window, window_columns);
     window_description.before_window_select = chain.getLastActions();
+    window_description.add_columns = window_columns;
     chain.finalize();
     chain.clear();
 
@@ -1022,16 +1038,6 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
     }
     return order_columns;
 }
-
-void DAGExpressionAnalyzer::updateWindowSourceColumns()
-{
-    source_columns.clear();
-    for (auto & col : window_output_columns)
-    {
-        source_columns.emplace_back(col.name, col.type);
-    }
-}
-
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
@@ -1285,7 +1291,7 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     {
         for (auto & col : updated_after_window_columns)
         {
-            window_output_columns.emplace_back(col.name, col.type);
+            final_window_add_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
         }
     }
@@ -1293,7 +1299,7 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     {
         for (auto & col : after_window_columns)
         {
-            window_output_columns.emplace_back(col.name, col.type);
+            final_window_add_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
         }
     }
