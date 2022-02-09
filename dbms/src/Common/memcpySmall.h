@@ -24,7 +24,7 @@
   * Use with caution.
   */
 
-namespace detail
+namespace memory_copy::detail
 {
 ALWAYS_INLINE inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
 {
@@ -43,5 +43,5 @@ ALWAYS_INLINE inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restr
   */
 __attribute__((always_inline)) inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const void * __restrict src, size_t n)
 {
-    ::detail::memcpySmallAllowReadWriteOverflow15Impl(reinterpret_cast<char *>(dst), reinterpret_cast<const char *>(src), n);
+    memory_copy::detail::memcpySmallAllowReadWriteOverflow15Impl(reinterpret_cast<char *>(dst), reinterpret_cast<const char *>(src), n);
 }
