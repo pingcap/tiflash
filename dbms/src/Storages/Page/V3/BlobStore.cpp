@@ -44,18 +44,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
 
 void BlobStore::restore(const CollapsingPageDirectory & entries)
 {
-    for (const auto & [page_id, versioned_entry] : entries.table_directory)
-    {
-        const auto & [ver, entry] = versioned_entry;
-        (void)ver;
-        auto stat = blob_stats.blobIdToStat(entry.file_id, /*create_if_not_exist=*/true);
-        stat->restoreSpaceMap(entry.offset, entry.size);
-    }
-
-    for (const auto & stat : blob_stats.getStats())
-    {
-        stat->recalculateSpaceMap();
-    }
+    blob_stats.restore(entries);
 }
 
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -221,7 +210,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
         {
-            stat = blob_stats.createStat(blob_file_id, lock_stats);
+            stat = blob_stats.createStatAndCheckRollID(blob_file_id, lock_stats);
         }
 
         // We need to assume that this insert will reduce max_cap.
@@ -686,13 +675,31 @@ BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
 {
 }
 
+void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
+{
+    for (const auto & [page_id, versioned_entry] : entries.table_directory)
+    {
+        const auto & [ver, entry] = versioned_entry;
+        (void)ver;
+        auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
+        stat->restoreSpaceMap(entry.offset, entry.size);
+    }
+
+    BlobFileId max_restored_file_id = 0;
+    for (const auto & stat : stats_map)
+    {
+        stat->recalculateSpaceMap();
+        max_restored_file_id = std::max(stat->id, max_restored_file_id);
+    }
+    roll_id = max_restored_file_id + 1;
+}
+
 std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
 {
     return std::lock_guard(lock_stats);
 }
 
-
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+BlobStatPtr BlobStore::BlobStats::createStatAndCheckRollID(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
@@ -703,6 +710,19 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
                         ErrorCodes::LOGICAL_ERROR);
     }
 
+    auto stat = createStat(blob_file_id, guard);
+
+    // Roll to the next new blob id
+    if (blob_file_id == roll_id)
+    {
+        roll_id++;
+    }
+
+    return stat;
+}
+
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+{
     for (auto & stat : stats_map)
     {
         if (stat->id == blob_file_id)
@@ -721,12 +741,6 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     stat->type = BlobStatType::NORMAL;
 
     stats_map.emplace_back(stat);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
 
     return stat;
 }
@@ -851,7 +865,7 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     if (!smap->markFree(offset, buf_size))
     {
         smap->logStats();
-        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, BlobFileId={}] is invalid.",
+        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, blob_id={}] is invalid.",
                                     offset,
                                     buf_size,
                                     id),
@@ -883,7 +897,7 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     sm_valid_rate = valid_size * 1.0 / total_size;
 }
 
-BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool create_if_not_exist)
+BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist)
 {
     auto guard = lock();
     for (auto & stat : stats_map)
@@ -894,12 +908,13 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool create_i
         }
     }
 
-    if (create_if_not_exist)
+    if (restore_if_not_exist)
     {
+        // Restore a stat without checking the roll_id
         return createStat(file_id, guard);
     }
 
-    throw Exception(fmt::format("Can't find BlobStat with [BlobFileId={}]",
+    throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
                                 file_id),
                     ErrorCodes::LOGICAL_ERROR);
 }

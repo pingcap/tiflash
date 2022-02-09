@@ -112,9 +112,13 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
+        void restore(const CollapsingPageDirectory & entries);
+
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+
+        BlobStatPtr createStatAndCheckRollID(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
@@ -138,7 +142,7 @@ public:
 
         BlobFileId chooseNewStat();
 
-        BlobStatPtr blobIdToStat(BlobFileId file_id, bool create_if_not_exist = false);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
         {
