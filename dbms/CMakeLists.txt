@@ -28,10 +28,6 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
-find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
-if (TARGET CURL::libcurl)
-    set(CURL_LIBRARIES CURL::libcurl)
-endif()
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
@@ -189,7 +185,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
