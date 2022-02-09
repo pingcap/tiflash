@@ -550,9 +550,9 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         segment_index_info.resize(segment_size);
     }
     size_t rows_per_seg = rows / segment_index_info.size();
-    for (size_t i = 0; i < segment_index_info.size(); i++)
+    for (auto & segment_index : segment_index_info)
     {
-        segment_index_info[i].reserve(rows_per_seg);
+        segment_index.reserve(rows_per_seg);
     }
     for (size_t i = 0; i < rows; i++)
     {
@@ -581,11 +581,11 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         {
             /// null value
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
-            for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+            for (auto index : segment_index_info[segment_index])
             {
                 /// for right/full out join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
+                insertRowToList(rows_not_inserted_to_map, elem, stored_block, index);
             }
         }
         else
@@ -719,7 +719,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
 
-    auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
+    const auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
     for (size_t i = 0, size = nested_column->size(); i < size; ++i)
         mutable_null_map[i] |= (!nested_column->getInt(i));
 
@@ -1042,11 +1042,11 @@ void NO_INLINE joinBlockImplTypeCase(
                 hash_value = map.hash(key);
                 segment_index = hash_value % map.getSegmentSize();
             }
-            auto & internalMap = map.getSegmentTable(segment_index);
+            auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
+            auto it = map.getSegmentSize() > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
 
-            if (it != internalMap.end())
+            if (it != internal_map.end())
             {
                 it->getMapped().setUsed();
                 Adder<KIND, STRICTNESS, Map>::addFound(
@@ -1122,8 +1122,8 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
         orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
     if (orig_filter_column->isColumnNullable())
     {
-        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
-        auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+        const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
         for (size_t i = 0; i < nullable_column->size(); i++)
         {
             if (filter_column[i] == 0)
@@ -1310,7 +1310,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     if (isLeftJoin(kind))
     {
         /// for left join, convert right column to null if not joined
-        for (unsigned long right_table_column : right_table_columns)
+        for (size_t right_table_column : right_table_columns)
         {
             auto & column = block.getByPosition(right_table_column);
             auto full_column = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
