@@ -44,6 +44,9 @@ FlashService::FlashService(IServer & server_)
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    batch_cop_pool->schedule([&] {while(true) {
+            LOG_ERROR(log, "max active establish thds: "<<max_active_establish_thds );
+            usleep(1000000);} })
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -507,13 +510,14 @@ void CallData::WriteDone(const ::grpc::Status & status)
 
 void CallData::notifyReady()
 {
-//    std::unique_lock lk(mu);
+    //    std::unique_lock lk(mu);
     ready = true;
     cv.notify_one();
 }
 
 void CallData::Proceed()
 {
+    service_->max_active_establish_thds++;
     if (status_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -536,7 +540,6 @@ void CallData::Proceed()
 
         notifyReady();
         service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
-
     }
     else if (status_ == JOIN)
     {
@@ -549,6 +552,7 @@ void CallData::Proceed()
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;
     }
+    service_->max_active_establish_thds--;
 }
 
 } // namespace DB
