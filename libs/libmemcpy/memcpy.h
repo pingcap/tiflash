@@ -777,10 +777,10 @@ __attribute__((noinline)) static inline void * memcpy_large(
         switch (memcpy_config.medium_size_strategy)
         {
         case MediumSizeStrategy::MediumSizeRepMovsb:
-            detail::rep_movsb(dst, src, size);
+            ::memory_copy::detail::rep_movsb(dst, src, size);
             return ret;
         default:
-            detail::memcpy_sse_loop(dst, src, size);
+            ::memory_copy::detail::memcpy_sse_loop(dst, src, size);
         }
     }
     else
@@ -789,28 +789,28 @@ __attribute__((noinline)) static inline void * memcpy_large(
         switch (memcpy_config.huge_size_strategy)
         {
         case HugeSizeStrategy::HugeSizeRepMovsb:
-            detail::rep_movsb(dst, src, size);
+            ::memory_copy::detail::rep_movsb(dst, src, size);
             return ret;
         case HugeSizeStrategy::HugeSizeSSSE3Mux:
-            detail::memcpy_ssse3_mux(dst, src, size);
+            ::memory_copy::detail::memcpy_ssse3_mux(dst, src, size);
             break;
         case HugeSizeStrategy::HugeSizeEVEX32:
-            detail::memcpy_evex32(dst, src, size);
+            ::memory_copy::detail::memcpy_evex32(dst, src, size);
             break;
         case HugeSizeStrategy::HugeSizeEVEX64:
-            detail::memcpy_evex64(dst, src, size);
+            ::memory_copy::detail::memcpy_evex64(dst, src, size);
             break;
         case HugeSizeStrategy::HugeSizeVEX32:
-            detail::memcpy_vex32(dst, src, size);
+            ::memory_copy::detail::memcpy_vex32(dst, src, size);
             break;
         case HugeSizeStrategy::HugeSizeSSENT:
-            detail::memcpy_ssent_loop(dst, src, size);
+            ::memory_copy::detail::memcpy_ssent_loop(dst, src, size);
             break;
         default:
-            detail::memcpy_sse_loop(dst, src, size);
+            ::memory_copy::detail::memcpy_sse_loop(dst, src, size);
         }
     }
-    detail::memcpy_small(dst, src, size);
+    ::memory_copy::detail::memcpy_small(dst, src, size);
     return ret;
 }
 
@@ -860,7 +860,7 @@ ALWAYS_INLINE static inline void * memcpy_sse_loop_end(
         size -= 128;
     }
 
-    detail::memcpy_small(dst, src, size);
+    ::memory_copy::detail::memcpy_small(dst, src, size);
 
     return dst_;
 }
@@ -910,18 +910,18 @@ ALWAYS_INLINE static inline void *
 inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     using namespace memory_copy;
-    if (likely(detail::memcpy_small(dst_, src_, size)))
+    if (likely(::memory_copy::detail::memcpy_small(dst_, src_, size)))
     {
         return dst_;
     }
 
     if (size < memcpy_config.medium_size_threshold)
     {
-        __attribute__((musttail)) return detail::memcpy_sse_loop_end(dst_, src_, size);
+        __attribute__((musttail)) return ::memory_copy::detail::memcpy_sse_loop_end(dst_, src_, size);
     }
     else
     {
-        __attribute__((musttail)) return detail::memcpy_large(dst_, src_, size);
+        __attribute__((musttail)) return ::memory_copy::detail::memcpy_large(dst_, src_, size);
     }
     return dst_;
 }
