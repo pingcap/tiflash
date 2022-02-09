@@ -146,8 +146,6 @@ void writeFile(
     const WriteLimiterPtr & write_limiter = nullptr,
     [[maybe_unused]] bool enable_failpoint = false)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
-
     if (write_limiter)
         write_limiter->request(to_write);
 
