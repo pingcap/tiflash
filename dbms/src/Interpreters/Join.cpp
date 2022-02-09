@@ -62,7 +62,8 @@ static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
 
-const std::string Join::name_match_helper = "__match-helper";
+const std::string Join::match_helper_name = "__match-helper";
+const DataTypePtr Join::match_helper_type = std::make_shared<DataTypeUInt8>();
 
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const LogWithPrefixPtr & log_)
@@ -426,7 +427,7 @@ void Join::setSampleBlock(const Block & block)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 
     if (isLeftSemiFamily(kind))
-        sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), Join::name_match_helper));
+        sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, Join::match_helper_name));
 }
 
 
@@ -1170,7 +1171,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
     if (isLeftSemiFamily(kind))
     {
-        const auto helper_pos = block.getPositionByName(name_match_helper);
+        const auto helper_pos = block.getPositionByName(Join::match_helper_name);
 
         const auto * old_match_nullable = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
         const auto & old_match_vec = static_cast<const ColumnVector<Int8> *>(old_match_nullable->getNestedColumnPtr().get())->getData();
@@ -1837,7 +1838,7 @@ void Join::joinBlock(Block & block) const
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
     {
-        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(name_match_helper).column.get());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(match_helper_name).column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
         auto col_non_matched = ColumnInt8::create(vec_matched.size());
@@ -1846,7 +1847,7 @@ void Join::joinBlock(Block & block) const
         for (size_t i = 0; i < vec_matched.size(); ++i)
             vec_non_matched[i] = !vec_matched[i];
 
-        block.getByName(name_match_helper).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
+        block.getByName(Join::match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 }
 

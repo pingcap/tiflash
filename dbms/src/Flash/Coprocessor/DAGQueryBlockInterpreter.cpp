@@ -577,8 +577,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     if (is_left_semi_family)
     {
-        columns_added_by_join.emplace_back(Join::name_match_helper, makeNullable(std::make_shared<DataTypeInt8>()));
-        join_output_columns.emplace_back(Join::name_match_helper, makeNullable(std::make_shared<DataTypeInt8>()));
+        columns_added_by_join.emplace_back(Join::match_helper_name, Join::match_helper_type);
+        join_output_columns.emplace_back(Join::match_helper_name, Join::match_helper_type);
     }
 
     DataTypes join_key_types;
