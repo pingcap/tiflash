@@ -560,7 +560,7 @@ public:
         Debug::setServiceAddr(raft_config.flash_server_addr);
 
         for (int i = 0; i < (int)(cqs_.size()); i++)
-            thread_manager->scheduleThenDetach(false, "async_poller", [this] { HandleRpcs(flash_service.get(), cqs_[i].get()); });
+            thread_manager->scheduleThenDetach(false, "async_poller", [this, i] { HandleRpcs(flash_service.get(), cqs_[i].get()); });
     }
 
     ~FlashGrpcServerHolder()
