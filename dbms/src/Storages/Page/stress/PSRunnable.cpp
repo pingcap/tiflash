@@ -293,7 +293,8 @@ DB::PageId PSWindowWriter::genRandomPageId()
     std::lock_guard<std::mutex> page_id_lock(page_id_mutex);
     if (pageid_boundary < (window_size / 2))
     {
-        return static_cast<DB::PageId>(pageid_boundary++);
+        writing_page[index] = pageid_boundary++;
+        return static_cast<DB::PageId>(writing_page[index]);
     }
 
     // Generate a random number in the window

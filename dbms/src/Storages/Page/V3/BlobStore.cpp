@@ -37,7 +37,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     , config(config_)
     , log(&Poco::Logger::get("BlobStore"))
     , blob_stats(log, config_)
-    , cached_file(config.cached_fd_size)
+    , cached_files(config.cached_fd_size)
 {
 }
 
@@ -253,6 +253,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
         getBlobFile(blob_id)->remove();
+        cached_files.remove(blob_id);
     }
 }
 
@@ -656,9 +657,9 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_file.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                          return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
-                      })
+    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
+                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
+                       })
         .first;
 }
 
@@ -719,7 +720,7 @@ void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_
     stats_map.remove(stat);
 }
 
-void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
+void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
 {
     BlobStatPtr stat = nullptr;
 
