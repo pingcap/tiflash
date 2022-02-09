@@ -1,6 +1,7 @@
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
+#include <Poco/File.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -8,7 +9,6 @@
 
 #include <ext/scope_guard.h>
 #include <mutex>
-
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
@@ -475,7 +475,14 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         auto lock = stat->lock();
         auto right_margin = stat->smap->getRightMargin();
 
+        if (right_margin == 0)
+        {
+            LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid) = ].", stat->id, stat->sm_total_size);
+            continue;
+        }
+
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
+
         if (stat->sm_valid_rate > 1.0)
         {
             LOG_FMT_ERROR(
@@ -493,7 +500,6 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
         {
             LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
-            stat->sm_total_size = stat->sm_valid_size;
             blob_need_gc.emplace_back(stat->id);
 
             // Change current stat to read only
@@ -507,6 +513,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         if (right_margin != stat->sm_total_size)
         {
             auto blobfile = getBlobFile(stat->id);
+            LOG_FMT_TRACE(log, "Current [blob_id={}] do truncate, [origin size={}, truncated size={}].", stat->id, stat->sm_total_size, right_margin);
             blobfile->truncate(right_margin);
             stat->sm_total_size = right_margin;
         }
@@ -658,7 +665,7 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
     return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
+                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider, false);
                        })
         .first;
 }
