@@ -1,0 +1,8 @@
+set(CURL_DISABLE_TESTS OFF)
+set(CURL_USE_LIBSSH2 OFF)
+set(BUILD_CURL_EXE OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(CURL_DISABLE_LDAP ON)
+set(CURL_ENABLE_EXPORT_TARGET OFF)
+
+add_subdirectory("${TiFlash_SOURCE_DIR}/contrib/curl" "${TiFlash_BINARY_DIR}/contrib/curl")

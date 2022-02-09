@@ -104,6 +104,8 @@ if (USE_INTERNAL_PROTOBUF_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_GRPC_LIBRARY)
+    # Variable RANDOM_FILE will be defined and cached by curl, and break c-ares build if CMake runs the second time.
+    unset(RANDOM_FILE CACHE)
     add_subdirectory(abseil-cpp-cmake)
     add_subdirectory(grpc-cmake)
 endif ()
@@ -154,6 +156,10 @@ endif()
 
 if (NOT ARCH_ARM)
     add_subdirectory (libcpuid)
+endif ()
+
+if (USE_INTERNAL_CURL_LIBRARY)
+    add_subdirectory (curl-cmake)
 endif ()
 
 add_subdirectory (prometheus-cpp-cmake)

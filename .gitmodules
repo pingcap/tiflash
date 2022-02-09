@@ -79,3 +79,6 @@
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
+[submodule "contrib/curl"]
+	path = contrib/curl
+	url = https://github.com/curl/curl
