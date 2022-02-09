@@ -1,4 +1,11 @@
 # TiFlash
+![tiflash-architecture](tiflash-architecture.png)
+
+[TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable). It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB. 
+
+TiFlash stores data in columnar format and synchronizes data updates in real-time from [TiKV](https://github.com/tikv/tikv) by Raft logs with sub-second latency. Reads from data replicas in TiFlash are guaranteed transactional consistent with Snapshot Isolation level. TiFlash utilizes the Massively Parallel Processing (MPP) computing architecture to accelerate the analytical workloads.
+
+The TiFlash repository is based on the early version of [ClickHouse](https://github.com/ClickHouse/ClickHouse/tree/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f). We appreciate the excellent work of ClickHouse team.
 
 ## Building TiFlash
 
@@ -20,7 +27,7 @@
 $ git clone --recursive https://github.com/pingcap/tics.git
 ```
 
-### Build Options
+### Build Options [Optional]
 
 TiFlash has several build options to tweak the build for different purposes.
 **Basically all these options have proper default values so you shouldn't experience troubles if you skip all this paragraph.**
@@ -42,7 +49,7 @@ TiFlash has several build options to tweak the build for different purposes.
 
 These options apply to all the following platforms, take them as needed, and at your own risk.
 
-### TiFlash on MacOS
+### Build TiFlash on MacOS
 
 ```
 # WORKSPACE/tics
@@ -55,7 +62,7 @@ $ popd
 ```
 Now you will get TiFlash binary under `WORKSPACE/tics/build/dbms/src/Server/tiflash`.
 
-### TiFlash on Linux
+### Build TiFlash on Linux
 
 TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`) (for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)).
 
