@@ -2648,7 +2648,6 @@ SortDescription generateSDFromSchema(const DAGSchema & schema)
     for (size_t i = 0; i < schema.size(); i++)
     {
         String col_name = schema[i].first;
-        ColumnInfo info = schema[i].second;
         sort_desc.emplace_back(col_name, -1, -1, nullptr);
     }
     return sort_desc;
