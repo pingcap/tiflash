@@ -435,10 +435,12 @@ namespace
 {
 void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index)
 {
-    elem->next = list->next;
-    list->next = elem;
-    elem->block = stored_block;
-    elem->row_num = index;
+    if (likely(list)) {
+        elem->next = list->next;
+        list->next = elem;
+        elem->block = stored_block;
+        elem->row_num = index;
+    }
 }
 
 /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
