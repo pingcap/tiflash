@@ -126,6 +126,20 @@ public:
         return std::make_pair(token->value, true);
     }
 
+    void remove(const Key & key)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        cells.erase(key);
+        for (auto it = queue.begin(); it != queue.end(); it++)
+        {
+            if (*it == key)
+            {
+                queue.erase(it);
+                return;
+            }
+        }
+    }
+
     void getStats(size_t & out_hits, size_t & out_misses) const
     {
         std::lock_guard<std::mutex> lock(mutex);

@@ -105,7 +105,8 @@ int openFile(const std::string & path)
                 return 0;
             }
         }
-        DB::throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        DB::throwFromErrno(fmt::format("Cannot open file {}. ", path),
+                           errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 
     return fd;
@@ -118,21 +119,21 @@ inline void touchFile(const std::string & path)
     if (fd > 0)
         ::close(fd);
     else
-        throw Exception("Touch file failed: " + path);
+        throw Exception(fmt::format("Touch file failed: ", path));
 }
 
 template <typename T>
 void syncFile(T & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno(fmt::format("Cannot fsync file: ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
 }
 
 template <typename T>
 void ftruncateFile(T & file, off_t length)
 {
     if (-1 == file->ftruncate(length))
-        DB::throwFromErrno("Cannot truncate file: " + file->getFileName(), ErrorCodes::CANNOT_FTRUNCATE);
+        DB::throwFromErrno(fmt::format("Cannot truncate file: ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
 }
 
 
@@ -235,7 +236,7 @@ void readFile(T & file,
         if (-1 == res && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            DB::throwFromErrno("Cannot read from file " + file->getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+            DB::throwFromErrno(fmt::format("Cannot read from file {}.", file->getFileName()), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
         }
 
         if (res > 0)
@@ -245,7 +246,8 @@ void readFile(T & file,
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
+        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes : {} , expected bytes : {}", file->getFileName(), bytes_read, expected_bytes),
+                                   Errors::PageStorage::FileSizeNotMatch);
 }
 
 /// Write and advance sizeof(T) bytes.

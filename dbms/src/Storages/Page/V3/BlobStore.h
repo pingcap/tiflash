@@ -216,7 +216,7 @@ private:
 
     BlobStats blob_stats;
 
-    DB::LRUCache<BlobFileId, BlobFile> cached_file;
+    DB::LRUCache<BlobFileId, BlobFile> cached_files;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 
