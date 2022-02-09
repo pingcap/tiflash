@@ -13,13 +13,7 @@ tiflash-env/loader: tiflash-env
 tiflash-env/tiflash-linker: tiflash-env
 	cp tiflash-linker tiflash-env
 
-tiflash-env/README.md: tiflash-env
-	cp README.md tiflash-env
-
-tiflash-env/LICENSE: tiflash-env
-	cp LICENSE tiflash-env
-
-tiflash-env-$(ARCH).tar.xz: tiflash-env/prepare-sysroot.sh tiflash-env/loader tiflash-env/tiflash-linker tiflash-env/README.md tiflash-env/LICENSE
+tiflash-env-$(ARCH).tar.xz: tiflash-env/prepare-sysroot.sh tiflash-env/loader tiflash-env/tiflash-linker
 	docker run --rm -v $(MOUNT):/tiflash-env hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
 	tar -cvaf tiflash-env-$(ARCH).tar.xz tiflash-env
 
