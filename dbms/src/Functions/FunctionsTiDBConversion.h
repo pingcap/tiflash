@@ -1760,19 +1760,71 @@ public:
     template <typename FromDataType>
     static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
     {
-        // cast(int as decimal)
-        using FromFieldType = typename FromDataType::FieldType;
-        if constexpr (std::is_integral_v<FromFieldType>)
+        bool can_skip = false;
+        // cast(int/enum as decimal)
+        if (castTypeToEither<
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeEnum8,
+            DataTypeEnum16>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto &, bool) -> bool {
+                    using FromFieldType = typename FromDataType::FieldType;
+                    if constexpr (std::is_integral_v<FromFieldType>)
+                    {
+                        PrecType from_prec = IntPrec<FromFieldType>::real_prec;
+                        can_skip = (from_prec + to_decimal_scale) <= to_decimal_prec;
+                    }
+                    else
+                    {
+                        can_skip = false;
+                    }
+                    return true;
+            }))
         {
-            PrecType from_prec = IntPrec<FromFieldType>::real_prec;
-            if ((from_prec + to_decimal_scale) <= to_decimal_prec)
+            return can_skip;
+        }
+
+        // cast(date as decimal)
+        if (checkDataType<DataTypeMyDate>(from_type.get()))
+        {
+            return (8 + to_decimal_scale <= to_decimal_prec);
+        }
+
+        auto canSkipCheckOverflowDecimalToDecimal = [](PrecType from_prec, ScaleType from_scale, PrecType to_prec, ScaleType to_scale) {
+            Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
+            if (scale_diff < 0)
             {
-                return true;
+                // Why plus 1: if to_scale < from_scale, we need to div and round up if necessary.
+                // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
+                scale_diff += 1;
+            }
+            return (from_prec + scale_diff) <= to_prec;
+        };
+
+        // cast(datetime as decimal)
+        if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
+        {
+            if (datetime_type->getFraction() > 0)
+            {
+                return canSkipCheckOverflowDecimalToDecimal(20, 6, to_decimal_prec, to_decimal_scale);
+            }
+            else
+            {
+                return (14 + to_decimal_scale <= to_decimal_prec);
             }
         }
 
         // cast(decimal as decimal)
-        return castTypeToEither<DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256>(from_type.get(), [to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) -> bool {
+        if (castTypeToEither<
+                DataTypeDecimal32,
+                DataTypeDecimal64,
+                DataTypeDecimal128,
+                DataTypeDecimal256>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) {
             Int64 scale_diff = static_cast<Int64>(to_decimal_scale) - static_cast<Int64>(from_type_ptr.getScale());
             if (scale_diff < 0)
             {
@@ -1780,8 +1832,15 @@ public:
                 // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
                 scale_diff += 1;
             }
-            return (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
-        });
+            can_skip = (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
+            return true;
+        }))
+        {
+            return can_skip;
+        }
+
+        // cast(float/string as decimal); cast duration to decimal not pushed down for now.
+        return false;
     }
 
 private:

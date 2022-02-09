@@ -1531,7 +1531,7 @@ TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDeciaml)
 
     DataTypePtr decimal32_ptr_6_4 = createDecimal(6, 4);
     // decimal(6, 4) -> decimal(5, 3)
-    // because select cast(99.9999 as decimal(5, 3)); -> 100.000
+    // because select cast(99.9999 as decimal(5, 3)); -> 100.000 is greater than 99.999.
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 5, 3));
     // decimal(6, 4) -> decimal(7, 5)
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 7, 5));
@@ -1540,6 +1540,79 @@ TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDeciaml)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 6, 5));
     // decimal(6, 4) -> decimal(8, 5)
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal32>(decimal32_ptr_6_4, 8, 5));
+}
+
+TEST_F(TestTidbConversion, skipCheckOverflowEnumToDecimal)
+{
+    DataTypeEnum8::Values enum8_values;
+    enum8_values.push_back({"a", 10});
+    enum8_values.push_back({"b", 20});
+    DataTypePtr enum8_ptr = std::make_shared<DataTypeEnum8>(enum8_values);
+
+    DataTypeEnum16::Values enum16_values;
+    enum16_values.push_back({"a1", 1000});
+    enum16_values.push_back({"b1", 2000});
+    DataTypePtr enum16_ptr = std::make_shared<DataTypeEnum16>(enum16_values);
+
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum8>(enum8_ptr, 3, 0));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum8>(enum8_ptr, 4, 1));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum8>(enum8_ptr, 2, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum8>(enum8_ptr, 4, 2));
+
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum16>(enum16_ptr, 5, 0));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum16>(enum16_ptr, 6, 1));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum16>(enum16_ptr, 4, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeEnum16>(enum16_ptr, 6, 2));
+}
+
+TEST_F(TestTidbConversion, skipCheckOverflowMyDateTimeToDeciaml)
+{
+    DataTypePtr datetime_ptr_no_fsp = std::make_shared<DataTypeMyDateTime>();
+    DataTypePtr datetime_ptr_fsp_5 = std::make_shared<DataTypeMyDateTime>(5);
+
+    // rule for no fsp: 14 + to_scale <= to_prec.
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 5, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 18, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 17, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 18, 4));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 14, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 14, 1));
+
+    // rule for fsp: 20 + scale_diff <= to_prec.
+    // 20 + (3-6+1) = 18
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 18, 3));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 17, 3));
+}
+
+TEST_F(TestTidbConversion, skipCheckOverflowMyDateToDeciaml)
+{
+    DataTypePtr date_ptr = std::make_shared<DataTypeMyDate>();
+
+    // rule: 8 + to_scale <= to_prec.
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDate>(date_ptr, 11, 3));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDate>(date_ptr, 11, 4));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDate>(date_ptr, 10, 3));
+}
+
+TEST_F(TestTidbConversion, skipCheckOverflowOtherToDecimal)
+{
+    // float and string not support skip overflow check.
+    DataTypePtr string_ptr = std::make_shared<DataTypeString>();
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeString>(string_ptr, 1, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeString>(string_ptr, 60, 1));
+
+    DataTypePtr float32_ptr = std::make_shared<DataTypeFloat32>();
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeFloat32>(float32_ptr, 1, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeFloat32>(float32_ptr, 60, 1));
+
+    DataTypePtr float64_ptr = std::make_shared<DataTypeFloat64>();
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeFloat64>(float64_ptr, 1, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeFloat64>(float64_ptr, 60, 1));
+
+    // cast duration to decimal is not supported to push down to tiflash for now.
+    DataTypePtr duration_ptr = std::make_shared<DataTypeMyDuration>();
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDuration>(duration_ptr, 1, 0));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDuration>(duration_ptr, 60, 1));
 }
 
 } // namespace
