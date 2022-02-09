@@ -38,6 +38,8 @@ void PageStorageImpl::restore()
     auto wal = WALStore::create(callback, file_provider, delegator, /*write_limiter*/ nullptr);
     // PageId max_page_id = collapsing_directory.max_applied_page_id; // TODO: return it to outer function
 
+    // TODO: Now `PageDirectory::create` and `BlobStore::restore` iterate all entries in `collapsing_directory`,
+    // find a better way may reduce the cost of iterating.
     page_directory = PageDirectory::create(collapsing_directory, std::move(wal));
 
     // restore BlobStore
