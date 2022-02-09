@@ -45,7 +45,7 @@ FlashService::FlashService(IServer & server_)
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
     batch_cop_pool->schedule([&] {while(true) {
-            LOG_ERROR(log, "max active establish thds: "<<max_active_establish_thds );
+            LOG_ERROR(log, "max active establish thds: "<< max_active_establish_thds);
             usleep(1000000);} });
 }
 
@@ -517,7 +517,8 @@ void CallData::notifyReady()
 
 void CallData::Proceed()
 {
-    service_->max_active_establish_thds++;
+    service_->current_active_establish_thds++;
+    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
     if (status_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -552,7 +553,8 @@ void CallData::Proceed()
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;
     }
-    service_->max_active_establish_thds--;
+    service_->current_active_establish_thds--;
+    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
 }
 
 } // namespace DB

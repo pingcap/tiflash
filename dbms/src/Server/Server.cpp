@@ -491,10 +491,8 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
 {
     // Spawn a new CallData instance to serve new clients.
-    for(int i = 0; i < 10; i++)
-    {
+    for (int i = 0; i < 10; i++)
         new CallData(service_, cq);
-    }
     void * tag; // uniquely identifies a request.
     bool ok;
     while (true)
@@ -504,12 +502,12 @@ void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
         // memory address of a CallData instance.
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
-        if (!cq->Next(&tag, &ok))
-        {
+        if (!cq->Next(&tag, &ok)) {
             LOG_ERROR(grpc_log, "not ok when cq->Next(&tag, &ok)");
             break;
-            //        GPR_ASSERT(ok);
         }
+        //        GPR_ASSERT(ok);
+
         static_cast<CallData *>(tag)->Proceed();
     }
 }
