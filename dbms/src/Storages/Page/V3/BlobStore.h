@@ -105,7 +105,7 @@ public:
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
-        void eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        void eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         /**
          * Choose a available `BlobStat` from `BlobStats`.
@@ -216,7 +216,7 @@ private:
 
     BlobStats blob_stats;
 
-    DB::LRUCache<BlobFileId, BlobFile> cached_file;
+    DB::LRUCache<BlobFileId, BlobFile> cached_files;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 
