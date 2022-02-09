@@ -694,12 +694,23 @@ void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
     }
 
     BlobFileId max_restored_file_id = 0;
+    std::set<BlobFileId> existing_file_ids;
     for (const auto & stat : stats_map)
     {
         stat->recalculateSpaceMap();
         max_restored_file_id = std::max(stat->id, max_restored_file_id);
+        existing_file_ids.insert(stat->id);
     }
+    // restore `roll_id`
     roll_id = max_restored_file_id + 1;
+    // restore `old_ids`
+    for (BlobFileId old_id = 1; old_id < roll_id; ++old_id)
+    {
+        if (existing_file_ids.count(old_id) == 0)
+        {
+            old_ids.emplace_back(old_id);
+        }
+    }
 }
 
 std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const

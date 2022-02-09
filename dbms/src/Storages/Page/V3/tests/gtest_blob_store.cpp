@@ -42,6 +42,9 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
     ASSERT_TRUE(stats_copy.empty());
 
     EXPECT_EQ(stats.roll_id, 1);
+    auto next_file_id = stats.chooseNewStat();
+    EXPECT_EQ(next_file_id, 1);
+    EXPECT_NO_THROW(stats.createStatAndCheckRollID(next_file_id, stats.lock()));
 }
 
 TEST_F(BlobStoreStatsTest, Restore)
@@ -112,7 +115,7 @@ try
         stats.createStatAndCheckRollID(14, stats.lock());
     });
 
-    for (BlobFileId i = 10; i <= 20; ++i)
+    for (BlobFileId i = 1; i <= 20; ++i)
     {
         if (i == file_id1 || i == file_id2)
         {
@@ -122,8 +125,10 @@ try
         }
         else
         {
+            auto new_file_id = stats.chooseNewStat();
+            EXPECT_EQ(new_file_id, i);
             EXPECT_NO_THROW({
-                stats.createStatAndCheckRollID(i, stats.lock());
+                stats.createStatAndCheckRollID(new_file_id, stats.lock());
             });
         }
     }
