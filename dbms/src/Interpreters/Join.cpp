@@ -355,7 +355,7 @@ size_t Join::getTotalByteCount() const
         res += getTotalByteCountImpl(maps_all, type);
         res += getTotalByteCountImpl(maps_any_full, type);
         res += getTotalByteCountImpl(maps_all_full, type);
-        for (auto & pool : pools)
+        for (const auto & pool : pools)
         {
             /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
             res += pool->size();
@@ -507,7 +507,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
             if (rows_not_inserted_to_map)
             {
                 /// for right/full out join, need to record the rows not inserted to map
-                auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                auto *elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
             }
             continue;
@@ -584,7 +584,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
             {
                 /// for right/full out join, need to record the rows not inserted to map
-                auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                auto *elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
             }
         }
@@ -1136,8 +1136,8 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
     }
     else
     {
-        auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
-        auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
+        const auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        const auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
         for (size_t i = 0; i < other_filter_column->size(); i++)
             filter_column[i] = filter_column[i] && other_filter_column_data[i];
     }
@@ -1161,7 +1161,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
-    filter.assign(block.rows(), (UInt8)1);
+    filter.assign(block.rows(), static_cast<UInt8>(1));
     if (!other_filter_column.empty())
     {
         mergeNullAndFilterResult(block, filter, other_filter_column, false);
@@ -1200,7 +1200,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
                 orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
             if (orig_filter_column->isColumnNullable())
             {
-                auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+                const auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
                 eq_in_vec = &static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
                 eq_in_nullmap = &nullable_column->getNullMapData();
             }
@@ -1310,9 +1310,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     if (isLeftJoin(kind))
     {
         /// for left join, convert right column to null if not joined
-        for (size_t i = 0; i < right_table_columns.size(); i++)
+        for (unsigned long right_table_column : right_table_columns)
         {
-            auto & column = block.getByPosition(right_table_columns[i]);
+            auto & column = block.getByPosition(right_table_column);
             auto full_column = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
             if (!full_column->isColumnNullable())
             {
@@ -1711,9 +1711,8 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         {
             dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
         }
-        for (size_t i = 0; i < result_blocks.size(); i++)
+        for (auto & current_block : result_blocks)
         {
-            auto & current_block = result_blocks[i];
             if (current_block.rows() > 0)
             {
                 for (size_t column = 0; column < current_block.columns(); column++)
