@@ -720,7 +720,7 @@ void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_
     stats_map.remove(stat);
 }
 
-void BlobStore::BlobStats::eraseStat(const BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
+void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
 {
     BlobStatPtr stat = nullptr;
 
