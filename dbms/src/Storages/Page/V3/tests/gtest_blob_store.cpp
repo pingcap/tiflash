@@ -295,6 +295,64 @@ protected:
     String path{};
 };
 
+TEST_F(BlobStoreTest, Restore)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    auto blob_store = BlobStore(file_provider, path, config);
+
+    BlobFileId file_id1 = 10;
+    BlobFileId file_id2 = 12;
+
+    CollapsingPageDirectory dir;
+    {
+        PageEntriesEdit edit;
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 1,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 128,
+                .tag = 0,
+                .offset = 1024,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 2,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 3,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id2,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        dir.apply(std::move(edit));
+    }
+    blob_store.restore(dir);
+
+    auto blob_need_gc = blob_store.getGCStats();
+    ASSERT_EQ(blob_need_gc.size(), 1);
+    EXPECT_EQ(blob_need_gc[0], 12);
+}
+CATCH
+
 TEST_F(BlobStoreTest, testWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
