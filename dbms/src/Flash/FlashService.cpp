@@ -479,7 +479,7 @@ bool CallData::Write(const mpp::MPPDataPacket & packet)
     {
         {
             std::unique_lock lk(mu);
-            cv.wait(lk, [&] { return ready; });
+            cv.wait(lk, [&] { return ready.load(); });
             ready = false;
         }
         responder_.Write(packet, this);
@@ -498,7 +498,7 @@ void CallData::WriteDone(const ::grpc::Status & status)
     // the event.
     {
         std::unique_lock lk(mu);
-        cv.wait(lk, [&] { return ready; });
+        cv.wait(lk, [&] { return ready.load(); });
         ready = false;
     }
     status_ = FINISH;
@@ -507,7 +507,7 @@ void CallData::WriteDone(const ::grpc::Status & status)
 
 void CallData::notifyReady()
 {
-    std::unique_lock lk(mu);
+//    std::unique_lock lk(mu);
     ready = true;
     cv.notify_one();
 }

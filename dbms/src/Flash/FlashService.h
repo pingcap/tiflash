@@ -47,9 +47,9 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-//    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
-//                                          const ::mpp::EstablishMPPConnectionRequest * request,
-//                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
+    //    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
+    //                                          const ::mpp::EstablishMPPConnectionRequest * request,
+    //                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
     void EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata);
 
@@ -86,14 +86,15 @@ public:
         Proceed();
     }
 
-    bool Write(const mpp::MPPDataPacket &packet);
+    bool Write(const mpp::MPPDataPacket & packet);
 
-    void WriteDone(const ::grpc::Status& status);
+    void WriteDone(const ::grpc::Status & status);
 
     void Proceed();
 
     std::mutex mu;
     std::condition_variable cv;
+
 private:
     void notifyReady();
 
@@ -114,7 +115,7 @@ private:
 
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
-    bool ready;
+    std::atomic<bool> ready{false};
 
     // Let's implement a tiny state machine with the following states.
     enum CallStatus
