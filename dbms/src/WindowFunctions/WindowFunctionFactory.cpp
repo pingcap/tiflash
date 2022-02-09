@@ -37,7 +37,7 @@ WindowFunctionPtr WindowFunctionFactory::get(
     const String & name,
     const DataTypes & argument_types,
     int recursion_level,
-    bool empty_input_as_null) const
+    [[maybe_unused]] bool empty_input_as_null) const
 {
     auto res = getImpl(name, argument_types, recursion_level);
     if (!res)
