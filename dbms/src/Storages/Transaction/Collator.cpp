@@ -89,7 +89,7 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = escape;
+                        c = static_cast<std::make_unsigned_t<typeof(c)>>(escape);
                 }
             }
             else if (c == '_')
@@ -403,7 +403,7 @@ public:
                 }
                 else
                 {
-                    return signum((int)(s1_first & 0xFFFF) - (int)(s2_first & 0xFFFF));
+                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
                 }
             }
         }
