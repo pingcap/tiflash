@@ -1,5 +1,5 @@
 # The following options are set to suit the main project's requirement.
-set(CURL_DISABLE_TESTS OFF)
+set(CURL_DISABLE_TESTS ON)
 set(CURL_USE_LIBSSH2 OFF)
 set(BUILD_CURL_EXE OFF)
 set(BUILD_SHARED_LIBS OFF)
