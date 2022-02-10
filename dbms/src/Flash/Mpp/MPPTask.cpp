@@ -72,7 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    newThreadManager()->scheduleThenDetach(true, "MPPTask", [this] { this->shared_from_this()->runImpl(); });
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
