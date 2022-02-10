@@ -2,8 +2,6 @@ if(NOT CURL_FOUND)
   find_package(CURL REQUIRED)
 endif()
 
-message(STATUS "Hack prom push: ${CURL_LIBRARIES} : ${CURL_INCLUDE_DIRS}")
-
 add_library(push
   ${PROMETHEUS_SRC_DIR}/push/src/gateway.cc
 )

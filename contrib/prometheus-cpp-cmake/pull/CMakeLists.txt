@@ -9,7 +9,6 @@ if(ENABLE_COMPRESSION)
   if (NOT ZLIB_FOUND)
     find_package(ZLIB REQUIRED)
   endif()
-  message(STATUS "Hack prom pull: ${ZLIB_LIBRARIES}")
 endif()
 
 add_library(pull
