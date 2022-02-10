@@ -19,6 +19,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+class CollapsingPageDirectory;
 using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
 
 class BlobStore : public Allocator<false>
@@ -59,9 +60,9 @@ public:
 
         struct BlobStat
         {
-            SpaceMapPtr smap;
+            const SpaceMapPtr smap;
+            const BlobFileId id;
             BlobStatType type;
-            BlobFileId id;
 
             /**
             * If no any data inside. It shoule be same as space map `biggest_cap`
@@ -73,6 +74,12 @@ public:
             double sm_valid_rate = 1.0;
 
             std::mutex sm_lock;
+
+            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
+                : smap(std::move(smap_))
+                , id(id_)
+                , type(BlobStatType::NORMAL)
+            {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
@@ -92,6 +99,18 @@ public:
             BlobFileOffset getPosFromStat(size_t buf_size);
 
             void removePosFromStat(BlobFileOffset offset, size_t buf_size);
+
+            /**
+             * This method is only used when blobstore restore
+             * Restore space map won't change the `sm_total_size`/`sm_valid_size`/`sm_valid_rate`
+             */
+            void restoreSpaceMap(BlobFileOffset offset, size_t buf_size);
+
+            /**
+             * After we restore the space map.
+             * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
+             */
+            void recalculateSpaceMap();
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
@@ -99,7 +118,11 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
+        void restore(const CollapsingPageDirectory & entries);
+
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
+
+        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
@@ -125,7 +148,7 @@ public:
 
         BlobFileId chooseNewStat();
 
-        BlobStatPtr fileIdToStat(BlobFileId file_id);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
         {
@@ -147,7 +170,7 @@ public:
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
-    void restore();
+    void restore(const CollapsingPageDirectory & entries);
 
     std::vector<BlobFileId> getGCStats();
 
