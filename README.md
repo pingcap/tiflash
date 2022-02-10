@@ -100,14 +100,14 @@ cd /path/to/tiflash-env
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
   # install other dependencies
-  apt-get install cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
+  apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
   ```
 
 - Archlinux users:
 
   ```bash
   # install compilers and dependencies
-  sudo pacman -S clang libc++ libc++abi compiler-rt openmp cmake ninja curl openssl zlib
+  sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
   
   # install rust
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
