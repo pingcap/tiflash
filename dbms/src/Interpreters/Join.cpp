@@ -63,7 +63,7 @@ static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
 }
 
 const std::string Join::match_helper_name = "__left-semi-join-match-helper";
-const DataTypePtr Join::match_helper_type = std::make_shared<DataTypeUInt8>();
+const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const LogWithPrefixPtr & log_)
@@ -435,12 +435,10 @@ namespace
 {
 void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index)
 {
-    if (likely(list)) {
-        elem->next = list->next;
-        list->next = elem;
-        elem->block = stored_block;
-        elem->row_num = index;
-    }
+    elem->next = list->next;
+    list->next = elem;
+    elem->block = stored_block;
+    elem->row_num = index;
 }
 
 /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
