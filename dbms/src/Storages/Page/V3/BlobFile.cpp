@@ -12,16 +12,16 @@ extern const char exception_before_page_file_write_sync[];
 namespace PS::V3
 {
 BlobFile::BlobFile(String path_,
-                   FileProviderPtr file_provider_,
-                   bool truncate_if_exists)
+                   FileProviderPtr file_provider_)
     : file_provider{file_provider_}
     , path(path_)
 {
+    // TODO: support encryption file
     wrfile = file_provider->newWriteReadableFile(
         getPath(),
         getEncryptionPath(),
-        truncate_if_exists,
-        /*create_new_encryption_info_*/ truncate_if_exists);
+        false,
+        /*create_new_encryption_info_*/ false);
 }
 
 void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter)

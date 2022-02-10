@@ -55,6 +55,28 @@ protected:
         }
     }
 
+    std::pair<UInt64, UInt64> getSizes() const override
+    {
+        if (free_map.empty())
+        {
+            auto range = end - start;
+            return std::make_pair(range, range);
+        }
+
+        const auto & last_free_block = free_map.rbegin();
+        UInt64 total_size = last_free_block->first - start;
+        UInt64 last_free_block_size = last_free_block->second;
+
+        UInt64 valid_size = 0;
+        for (const auto & free_block : free_map)
+        {
+            valid_size += free_block.second;
+        }
+        valid_size = total_size - (valid_size - last_free_block_size);
+
+        return std::make_pair(total_size, valid_size);
+    }
+
     UInt64 getRightMargin() override
     {
         return free_map.rbegin()->first;
@@ -132,6 +154,13 @@ protected:
         // The biggest free block capacity and its start offset
         UInt64 scan_biggest_cap = 0;
         UInt64 scan_biggest_offset = 0;
+
+        if (free_map.empty())
+        {
+            LOG_ERROR(log, "Current space map is full");
+            hint_biggest_cap = 0;
+            return std::make_pair(offset, hint_biggest_cap);
+        }
 
         auto it = free_map.begin();
         for (; it != free_map.end(); it++)
