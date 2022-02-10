@@ -40,9 +40,9 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     return smap;
 }
 
-bool SpaceMap::checkSpace(UInt64 block, size_t size)
+bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 {
-    return (block < start) || (block > end) || (block + size - 1 > end);
+    return (offset < start) || (offset > end) || (offset + size - 1 > end);
 }
 
 void SpaceMap::logStats()
