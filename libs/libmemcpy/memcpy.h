@@ -124,7 +124,7 @@ enum class HugeSizeStrategy
     HugeSizeEVEX64
 };
 
-const char * toString(MediumSizeStrategy strategy)
+static inline const char * toString(MediumSizeStrategy strategy)
 {
     switch (strategy)
     {
@@ -135,7 +135,7 @@ const char * toString(MediumSizeStrategy strategy)
     }
 }
 
-const char * toString(HugeSizeStrategy strategy)
+static inline const char * toString(HugeSizeStrategy strategy)
 {
     switch (strategy)
     {
