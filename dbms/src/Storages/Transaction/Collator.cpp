@@ -89,7 +89,7 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = static_cast<decltype(c)>(escape); // to keep consistency, we cast escape to decltype(c) directly
+                        c = static_cast<decltype(c)>(escape); // NOLINT(bugprone-signed-char-misuse)
                 }
             }
             else if (c == '_')
