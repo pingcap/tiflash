@@ -392,8 +392,8 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     int req_idx = 0;
     for (auto & it : dag.getReqAndRspVec())
     {
-        auto && req = get<1>(it);
-        auto && res = get<2>(it);
+        auto && req = it.first;
+        auto && res = it.second;
         kvrpcpb::Context req_context = req.context();
         RegionID region_id = req_context.region_id();
         tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());

@@ -9,8 +9,6 @@
 #include <Interpreters/Context.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
-#include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
@@ -40,12 +38,16 @@ static const String RESPONSE = "response";
 static const String DEFAULT_DATABASE_NAME = "test";
 static const uint64_t DEFAULT_REGION_VERSION = 0;
 static const uint64_t DEFAULT_REGION_CONF_VERSION = 0;
+/// Since request types are very limited and only useful for natural dag building, so just hard code these type here
+static const uint16_t COP_REQUEST_TYPE = 545;
+//static const uint16_t BATCH_COP_REQUEST_TYPE = 547;
+//static const uint16_t MPP_REQUEST_TYPE = 548;
 
 
 void decodeBase64(const String & str, String & out)
 {
-    Poco::MemoryInputStream inputStream(str.data(), str.size());
-    Poco::Base64Decoder decoder(inputStream);
+    Poco::MemoryInputStream input_stream(str.data(), str.size());
+    Poco::Base64Decoder decoder(input_stream);
     Poco::StreamCopier::copyToString(decoder, out);
 }
 
@@ -54,7 +56,7 @@ String printAsBytes(const String & str)
     std::stringstream ss;
     for (auto c : str)
     {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c);
     }
     return ss.str();
 }
@@ -70,7 +72,7 @@ void NaturalDag::init()
     Poco::Dynamic::Var result = parser.parse(json_str);
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed parsing json file: " << json_dag_path);
 
-    auto obj = result.extract<JSONObjectPtr>();
+    const auto& obj = result.extract<JSONObjectPtr>();
     loadTables(obj);
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading table data!");
     loadReqAndRsp(obj);
@@ -80,10 +82,12 @@ void NaturalDag::init()
 void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
 {
     auto req_data_json = obj->getArray(REQ_RSP_DATA);
-    for (auto & req_data_json_obj : *req_data_json)
+    for (const auto & req_data_json_obj : *req_data_json)
     {
         auto req_data_obj = req_data_json_obj.extract<JSONObjectPtr>();
         auto req_type = req_data_obj->getValue<uint16_t>(REQ_TYPE);
+        if (req_type != COP_REQUEST_TYPE)
+            throw Exception(fmt::format("Currently only support cop_request({}), while receive type({})!", COP_REQUEST_TYPE, req_type), ErrorCodes::BAD_ARGUMENTS);
         String request;
         decodeBase64(req_data_obj->getValue<String>(REQUEST), request);
         coprocessor::Request cop_request;
@@ -95,15 +99,15 @@ void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
         coprocessor::Response cop_response;
         if (!cop_response.ParseFromString(response))
             throw Exception("Incorrect response data!", ErrorCodes::BAD_ARGUMENTS);
-        req_rsp.emplace_back(std::make_tuple(req_type, std::move(cop_request), std::move(cop_response)));
+        req_rsp.emplace_back(std::make_pair(std::move(cop_request), std::move(cop_response)));
     }
 }
 void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
 {
     auto toi_json = obj->getArray(TABLE_IDS);
-    for (auto it = toi_json->begin(); it != toi_json->end(); ++it)
+    for (const auto & it : *toi_json)
     {
-        table_ids.push_back(it->extract<TableID>());
+        table_ids.push_back(it.extract<TableID>());
     }
 
     auto td_json = obj->getObject(TABLE_DATA);
@@ -115,7 +119,7 @@ void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
         auto meta_json = tbl_json->getObject(TABLE_META);
         table.meta = TiDB::TableInfo(meta_json);
         auto regions_json = tbl_json->getArray(TABLE_REGIONS);
-        for (auto & region_json : *regions_json)
+        for (const auto & region_json : *regions_json)
         {
             auto region = loadRegion(region_json);
             table.regions.push_back(std::move(region));
@@ -141,7 +145,7 @@ NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & r
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": RegionID: " << region.id << ", RegionStart: " << printAsBytes(region.start) << ", RegionEnd: " << printAsBytes(region.end));
 
     auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
-    for (auto & pair_json : *pairs_json)
+    for (const auto & pair_json : *pairs_json)
     {
         auto pair_obj = pair_json.extract<JSONObjectPtr>();
         String key;

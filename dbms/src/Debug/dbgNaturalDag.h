@@ -25,8 +25,9 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class NaturalDag
 {
 public:
-    // Tuple represents: (RequestType, Request, Response)
-    using ReqRspVec = std::vector<std::tuple<uint16_t, coprocessor::Request, coprocessor::Response>>;
+    using ReqRspVec = std::vector<std::pair<coprocessor::Request, coprocessor::Response>>;
+    using BatchReqRspVec = std::vector<std::pair<coprocessor::BatchRequest, coprocessor::BatchResponse>>;
+    using MPPReqRspVec = std::vector<std::pair<mpp::DispatchTaskRequest, mpp::DispatchTaskResponse>>;
     NaturalDag(const String & json_dag_path_, Poco::Logger * log_)
         : json_dag_path(json_dag_path_)
         , log(log_) //To keep the same as MockTests
@@ -37,6 +38,14 @@ public:
     const ReqRspVec & getReqAndRspVec() const
     {
         return req_rsp;
+    }
+    const BatchReqRspVec & getBatchReqAndRspVec() const
+    {
+        return batch_req_rsp;
+    }
+    const MPPReqRspVec & getMPPReqAndRspVec() const
+    {
+        return mpp_req_rsp;
     }
     void clean(Context & context);
 
@@ -74,5 +83,7 @@ private:
     LoadedTableMap tables;
     TableIDVec table_ids;
     ReqRspVec req_rsp;
+    BatchReqRspVec batch_req_rsp;
+    MPPReqRspVec mpp_req_rsp;
 };
 } // namespace DB
