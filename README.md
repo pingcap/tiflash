@@ -64,9 +64,11 @@ Now you will get TiFlash binary under `WORKSPACE/tics/build/dbms/src/Server/tifl
 
 ### Build TiFlash on Linux
 
-TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`) (for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)).
+TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`). Or you can also use system-wise toolchain if you can install `clang/compiler-rt/libc++/libc++abi` (with development headers, version 13+) in your environment. 
 
-#### Create TiFlash Env
+#### Option 1: TiFlash Env
+
+> for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)
 
 The development environment can be easily created with following commands (`docker` and `tar xz` are needed):
 
@@ -76,12 +78,46 @@ make tiflash-env-$(uname -m).tar.xz
 ```
 Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place.
 
-#### Compile TiFlash
+To enter the env (before compiling TiFlash):
 
-You can simply enter the env to compile and run tiflash:
 ```
 cd /path/to/tiflash-env
 ./loader
+```
+
+#### Option 2: System-wise Toolchain 
+
+- Debian/Ubuntu users:
+
+  ```bash
+  # add LLVM repo key
+  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add - 
+
+  # install LLVM packages
+  apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev 
+  
+  # install rust
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+  # install other dependencies
+  apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
+  ```
+
+- Archlinux users:
+
+  ```bash
+  # install compilers and dependencies
+  sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
+  
+  # install rust
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ``` 
+
+#### Compile TiFlash
+
+You can now build tiflash using the following commands:
+
+```
 cd /your/build/dir
 cmake /path/to/tiflash/src/dir -GNinja
 ninja
