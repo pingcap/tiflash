@@ -494,6 +494,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 right_margin,
                 stat->id);
             assert(false);
+            continue;
         }
 
         // Check if GC is required
