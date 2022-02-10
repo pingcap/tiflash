@@ -27,7 +27,6 @@ INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
-# TODO: Won't need `USE_INTERNAL_TIFLASH_PROXY` and `PREBUILT_LIBS_ROOT` once tiflash proxy can be built along with tiflash.
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
@@ -43,8 +42,6 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DRUN_HAVE_STD_REGEX=0 \
       -DCMAKE_AR="/usr/local/bin/llvm-ar" \
       -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
-      -DUSE_INTERNAL_TIFLASH_PROXY=FALSE \
-      -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
       -GNinja
 
 ninja tiflash
