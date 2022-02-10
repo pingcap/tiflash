@@ -112,17 +112,19 @@ BUILD_TIFLASH_PROXY=false
 
 if [[ ${proxy_size} -lt ${min_size} ]]; then
   BUILD_TIFLASH_PROXY=true
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy"
   echo "need to build libtiflash_proxy.so"
   export PATH=$PATH:$HOME/.cargo/bin
   rm -f target/release/libtiflash_proxy.so
 else
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=""
   chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
 fi
 
 BUILD_DIR="$SRCPATH/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake "$SRCPATH" \
+cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
   -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
   -DENABLE_TESTS=${ENABLE_TESTS} \
   -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
@@ -138,7 +140,6 @@ cmake "$SRCPATH" \
   -DRUN_HAVE_STD_REGEX=0 \
   -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
   -DUSE_INTERNAL_TIFLASH_PROXY=${BUILD_TIFLASH_PROXY} \
-  -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
   -GNinja
 
 ninja tiflash
