@@ -47,24 +47,6 @@ if (USE_INTERNAL_ZLIB_LIBRARY)
     set (CMAKE_POLICY_DEFAULT_CMP0077 NEW)
     add_subdirectory (${INTERNAL_ZLIB_NAME})
     unset (CMAKE_POLICY_DEFAULT_CMP0077)
-    # todo: make pull to Dead2/zlib-ng and remove:
-    # We should use same defines when including zlib.h as used when zlib compiled
-    target_compile_definitions (zlib PUBLIC ZLIB_COMPAT WITH_GZFILEOP)
-    target_compile_definitions (zlibstatic PUBLIC ZLIB_COMPAT WITH_GZFILEOP)
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
-       target_compile_definitions (zlib PUBLIC X86_64)
-       target_compile_definitions (zlibstatic PUBLIC X86_64)
-    endif ()
-
-    set_target_properties (example PROPERTIES EXCLUDE_FROM_ALL 1)
-    if (TARGET example64)
-        set_target_properties (example64 PROPERTIES EXCLUDE_FROM_ALL 1)
-    endif ()
-
-    set_target_properties (minigzip PROPERTIES EXCLUDE_FROM_ALL 1)
-    if (TARGET minigzip64)
-        set_target_properties (minigzip64 PROPERTIES EXCLUDE_FROM_ALL 1)
-    endif ()
 endif ()
 
 if (USE_INTERNAL_CCTZ_LIBRARY)
