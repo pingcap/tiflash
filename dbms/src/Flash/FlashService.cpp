@@ -216,7 +216,7 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
         {
             LOG_ERROR(log, err_msg);
 
-            calldata->Write(getPacketWithError(err_msg));
+            calldata->WriteErr(getPacketWithError(err_msg));
             return;
         }
     }
