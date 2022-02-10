@@ -56,9 +56,13 @@ PageId PageStorageImpl::getMaxId()
     return page_directory.getMaxId();
 }
 
-PageId PageStorageImpl::getNormalPageId(PageId /*page_id*/, SnapshotPtr /*snapshot*/)
+PageId PageStorageImpl::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+    return page_directory.getNormalPageId(page_id, snapshot);
 }
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()

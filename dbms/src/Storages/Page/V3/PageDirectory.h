@@ -4,6 +4,7 @@
 #include <Common/LogWithPrefix.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -16,6 +17,10 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
+
+#include "Common/FmtUtils.h"
+#include "Poco/Logger.h"
+#include "common/logger_useful.h"
 
 namespace CurrentMetrics
 {
@@ -185,6 +190,111 @@ public:
     CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
 };
 
+struct ExternalPageHolder
+{
+    const PageId ori_page_id;
+    const UInt64 created_sequence;
+    UInt64 deleted_sequence;
+
+    explicit ExternalPageHolder(PageId o_page_id, UInt64 created_sequence_)
+        : ori_page_id(o_page_id)
+        , created_sequence(created_sequence_)
+        , deleted_sequence(0)
+    {}
+
+    // Is visible by the `read_seq`
+    inline bool isVisible(UInt64 read_seq) const
+    {
+        return !(read_seq < created_sequence || (deleted_sequence != 0 && deleted_sequence <= read_seq));
+    }
+
+    // Is safe to be remove from table
+    inline bool isOutdated(UInt64 safe_seq) const
+    {
+        return deleted_sequence != 0 && deleted_sequence <= safe_seq;
+    }
+
+    inline String toDebugString() const
+    {
+        return fmt::format("{{n_page_id:{}, created:{}, deleted:{}}}", ori_page_id, created_sequence, deleted_sequence);
+    }
+};
+
+class ExternalMap
+{
+public:
+    ExternalMap() = default;
+
+    size_t numPages() const
+    {
+        // FmtBuffer fb;
+        // fb.joinStr(external_table_directory.begin(), external_table_directory.end(), [](const ExternalPagesHolderMap::value_type & iter, FmtBuffer & buf){
+        //     buf.fmtAppend("{{id:{}, holder:{}}}", iter.first, iter.second.toDebugString());
+        // }, ",");
+        // LOG_FMT_TRACE(&Poco::Logger::get("ExternalMap"), "{} [size={}]", fb.toString(), external_table_directory.size());
+        return external_table_directory.size();
+    }
+
+    PageId getNormalPageId(PageId page_id, UInt64 sequence) const
+    {
+        auto iter = external_table_directory.find(page_id);
+        if (iter == external_table_directory.end())
+        {
+            throw Exception(fmt::format("Invalid external page id [page_id={}]", page_id));
+        }
+        if (!iter->second.isVisible(sequence))
+        {
+            throw Exception(fmt::format("Accessing the normal page id of a deleted page [page_id={}] [holder={}]", page_id, iter->second.toDebugString()));
+        }
+        return iter->second.ori_page_id;
+    }
+
+    bool createExternal(PageId page_id, UInt64 sequence);
+
+    bool tryCreateRef(PageId page_id, PageId ori_page_id, UInt64 sequence);
+
+    bool tryCreateDel(PageId page_id, UInt64 sequence);
+
+    std::set<PageId> getPendingRemoveIDs();
+
+    void cleanUpHolders(UInt64 lowest_seq);
+
+    PageId getMaxId() const
+    {
+        PageId max_page_id = 0;
+        for (const auto iter : external_table_directory)
+        {
+            max_page_id = std::max(max_page_id, std::max(iter.first, iter.second.ori_page_id));
+        }
+        return max_page_id;
+    }
+
+    // No copying
+    ExternalMap(const ExternalMap &) = delete;
+    ExternalMap & operator=(const ExternalMap &) = delete;
+    // Only moving
+    ExternalMap(ExternalMap && rhs) noexcept
+    {
+        *this = std::move(rhs);
+    }
+    ExternalMap & operator=(ExternalMap && rhs) noexcept
+    {
+        if (this != &rhs)
+        {
+            external_table_directory = std::move(rhs.external_table_directory);
+            external_ref_counter = std::move(rhs.external_ref_counter);
+        }
+        return *this;
+    }
+
+private:
+    using ExternalPagesHolderMap = std::unordered_map<PageId, ExternalPageHolder>;
+    using ExternalPagesRefCounter = std::unordered_map<PageId, Int64>;
+
+    ExternalPagesHolderMap external_table_directory;
+    ExternalPagesRefCounter external_ref_counter;
+};
+
 // `PageDiectory` store multi-versions entries for the same
 // page id. User can acquire a snapshot from it and get a
 // consist result by the snapshot.
@@ -210,6 +320,9 @@ public:
     PageIDAndEntriesV3 get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
 
+    PageId getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const;
+    PageId getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
+
     PageId getMaxId() const;
 
     std::set<PageId> getAllPageIds();
@@ -226,7 +339,7 @@ public:
     size_t numPages() const
     {
         std::shared_lock read_lock(table_rw_mutex);
-        return mvcc_table_directory.size();
+        return entries_table_directory.size() + external_table_directory.numPages();
     }
 
     // No copying
@@ -244,7 +357,8 @@ public:
             // Note: Not making it thread safe for moving, don't
             // care about `table_rw_mutex` and `snapshots_mutex`
             sequence.store(rhs.sequence.load());
-            mvcc_table_directory = std::move(rhs.mvcc_table_directory);
+            entries_table_directory = std::move(rhs.entries_table_directory);
+            external_table_directory = std::move(rhs.external_table_directory);
             snapshots = std::move(rhs.snapshots);
             wal = std::move(rhs.wal);
             log = std::move(rhs.log);
@@ -255,8 +369,9 @@ public:
 private:
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
-    using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;
-    MVCCMapType mvcc_table_directory;
+    using EntriesMap = std::unordered_map<PageId, VersionedPageEntriesPtr>;
+    EntriesMap entries_table_directory;
+    ExternalMap external_table_directory;
 
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;

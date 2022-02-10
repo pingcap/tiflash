@@ -211,6 +211,126 @@ void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
     log_writer->addRecord(payload, serialized.size());
 }
 
+/************************
+  * ExternalMap methods *
+  ***********************/
+
+bool ExternalMap::createExternal(PageId page_id, UInt64 sequence)
+{
+    auto [iter, new_inserted] = external_table_directory.insert(std::make_pair(page_id, ExternalPageHolder(page_id, sequence)));
+    if (unlikely(!new_inserted))
+    {
+        LOG_FMT_ERROR(
+            &Poco::Logger::get("ExternalMap"),
+            "Create external page fail, already exists"
+            " [page_id={}] [seq={}] [exist={}]",
+            page_id,
+            sequence,
+            iter->second.toDebugString());
+        return false;
+    }
+
+    if (auto ref_iter = external_ref_counter.find(page_id); unlikely(ref_iter != external_ref_counter.end() && ref_iter->second != 0))
+    {
+        external_table_directory.erase(iter); // rollback
+        LOG_FMT_ERROR(
+            &Poco::Logger::get("ExternalMap"),
+            "Create external page ref count fail, there exists ref to old external page!"
+            " [page_id={}] [seq={}] [old_ref_count={}]",
+            page_id,
+            sequence,
+            ref_iter->second);
+        return false;
+    }
+
+    external_ref_counter[page_id] = 1;
+    return true;
+}
+
+bool ExternalMap::tryCreateRef(PageId page_id, PageId ori_page_id, UInt64 sequence)
+{
+    ExternalPagesHolderMap::const_iterator iter;
+    do
+    {
+        // Resolve ref chain. 13 -> 11, 11 -> 10 ==> create 13 -> 10
+        iter = external_table_directory.find(ori_page_id);
+        if (unlikely(iter == external_table_directory.end()))
+        {
+            // the ori_page_id is not an external page
+            return false;
+        }
+        ori_page_id = iter->second.ori_page_id;
+    } while (iter->first != iter->second.ori_page_id);
+
+    auto [ref_id_iter, new_inserted] = external_table_directory.insert(std::pair(page_id, ExternalPageHolder(ori_page_id, sequence)));
+    if (new_inserted)
+    {
+        external_ref_counter[ori_page_id] += 1;
+        return true;
+    }
+
+    // else we have already created the ref pair of `page_id`, should be sth wrong
+    LOG_FMT_ERROR(
+        &Poco::Logger::get("ExternalMap"),
+        "Create ref pair fail, already exists"
+        " [page_id={}] [ori_page_id={}] [seq={}]"
+        " [exist={}]",
+        page_id,
+        ori_page_id,
+        sequence,
+        ref_id_iter->second.toDebugString());
+    return false;
+}
+
+bool ExternalMap::tryCreateDel(PageId page_id, UInt64 sequence)
+{
+    if (auto iter = external_table_directory.find(page_id);
+        iter != external_table_directory.end() && iter->second.deleted_sequence == 0)
+    {
+        assert(iter->second.created_sequence <= sequence);
+        iter->second.deleted_sequence = sequence;
+        assert(external_ref_counter.find(iter->second.ori_page_id) != external_ref_counter.end());
+        assert(external_ref_counter[iter->second.ori_page_id] > 0);
+        external_ref_counter[iter->second.ori_page_id] -= 1;
+        return true;
+    }
+    return false;
+}
+
+std::set<PageId> ExternalMap::getPendingRemoveIDs()
+{
+    std::set<PageId> pending_remove_external_pages;
+    for (auto iter = external_ref_counter.begin(); iter != external_ref_counter.end(); /*empty*/)
+    {
+        if (iter->second == 0)
+        {
+            pending_remove_external_pages.insert(iter->first);
+            iter = external_ref_counter.erase(iter);
+            continue;
+        }
+        if (iter->second < 0)
+        {
+            throw Exception(fmt::format("The ref count is underflow, must be sth wrong! [ori_page_id={}]", iter->first));
+        }
+        ++iter;
+    }
+    return pending_remove_external_pages;
+}
+
+void ExternalMap::cleanUpHolders(UInt64 lowest_seq)
+{
+    for (auto iter = external_table_directory.begin(); iter != external_table_directory.end(); /*empty*/)
+    {
+        if (iter->second.isOutdated(lowest_seq))
+        {
+            iter = external_table_directory.erase(iter);
+        }
+        else
+        {
+            ++iter;
+        }
+    }
+}
 /**************************
   * PageDirectory methods *
   *************************/
@@ -237,7 +357,7 @@ PageDirectory PageDirectory::create(const CollapsingPageDirectory & collapsing_d
     {
         const auto & version = versioned_entry.first;
         const auto & entry = versioned_entry.second;
-        auto [iter, created] = dir.mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
+        auto [iter, created] = dir.entries_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
             iter->second = std::make_shared<VersionedPageEntries>();
         iter->second->createNewVersion(version.sequence, version.epoch, entry);
@@ -312,11 +432,11 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const DB::PageStorageSnapsho
 
 PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
 {
-    MVCCMapType::const_iterator iter;
+    EntriesMap::const_iterator iter;
     {
         std::shared_lock read_lock(table_rw_mutex);
-        iter = mvcc_table_directory.find(page_id);
-        if (iter == mvcc_table_directory.end())
+        iter = entries_table_directory.find(page_id);
+        if (iter == entries_table_directory.end())
             throw Exception(fmt::format("Entry [id={}] not exist!", page_id), ErrorCodes::PS_ENTRY_NOT_EXISTS);
     }
 
@@ -335,14 +455,14 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const DB::PageSt
 
 PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
 {
-    std::vector<MVCCMapType::const_iterator> iters;
+    std::vector<EntriesMap::const_iterator> iters;
     iters.reserve(page_ids.size());
     {
         std::shared_lock read_lock(table_rw_mutex);
         for (size_t idx = 0; idx < page_ids.size(); ++idx)
         {
-            if (auto iter = mvcc_table_directory.find(page_ids[idx]);
-                iter != mvcc_table_directory.end())
+            if (auto iter = entries_table_directory.find(page_ids[idx]);
+                iter != entries_table_directory.end())
             {
                 iters.emplace_back(iter);
             }
@@ -368,25 +488,36 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     return id_entries;
 }
 
+PageId PageDirectory::getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+{
+    return getNormalPageId(page_id, toConcreteSnapshot(snap));
+}
+
+PageId PageDirectory::getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+{
+    std::shared_lock read_lock(table_rw_mutex);
+    return external_table_directory.getNormalPageId(page_id, snap->sequence);
+}
+
+// TODO: remove this function
 PageId PageDirectory::getMaxId() const
 {
     PageId max_page_id = 0;
     std::shared_lock read_lock(table_rw_mutex);
-
-    for (const auto & [page_id, versioned] : mvcc_table_directory)
+    for (const auto & [page_id, versioned] : entries_table_directory)
     {
         (void)versioned;
         max_page_id = std::max(max_page_id, page_id);
     }
-    return max_page_id;
+    return std::max(max_page_id, external_table_directory.getMaxId());
 }
 
 std::set<PageId> PageDirectory::getAllPageIds()
 {
+    // Only contains page with entries
     std::set<PageId> page_ids;
     std::shared_lock read_lock(table_rw_mutex);
-
-    for (auto & [page_id, versioned] : mvcc_table_directory)
+    for (const auto & [page_id, versioned] : entries_table_directory)
     {
         (void)versioned;
         page_ids.insert(page_id);
@@ -408,7 +539,13 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     updating_pages.reserve(edit.size());
     for (const auto & r : edit.getRecords())
     {
-        auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
+        if (r.type == WriteBatch::WriteType::PUT_EXTERNAL)
+        {
+            updating_pages.emplace_back(nullptr);
+            continue;
+        }
+
+        auto [iter, created] = entries_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
         {
             iter->second = std::make_shared<VersionedPageEntries>();
@@ -426,6 +563,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
         updating_pages.emplace_back(iter->second);
     }
+    assert(updating_pages.size() == edit.size());
 
     // stage 3, there are no rollback since we already persist `edit` to WAL, just ignore error if any
     const auto & records = edit.getRecords();
@@ -435,9 +573,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         switch (r.type)
         {
         case WriteBatch::WriteType::PUT_EXTERNAL:
-        {
-            throw Exception("Not implemented");
-        }
+            external_table_directory.createExternal(r.page_id, last_sequence + 1);
+            break;
         case WriteBatch::WriteType::PUT:
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
@@ -450,24 +587,28 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             // Also we can't throw an exception if we can't find the origin page_id,
             // because WAL have already applied the change and there is no
             // mechanism to roll back changes in the WAL.
-            auto iter = mvcc_table_directory.find(r.ori_page_id);
-            if (iter == mvcc_table_directory.end())
-            {
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
-                break;
-            }
+            bool create_ref_entry_done = [&r, &updating_locks, &updating_pages, idx, last_sequence, this]() -> bool {
+                auto iter = entries_table_directory.find(r.ori_page_id);
+                if (iter == entries_table_directory.end())
+                    return false;
 
-            // If we already hold the lock from `r.ori_page_id`, Then we should not request it again.
-            // This can happen when r.ori_page_id have other operating in current writebatch
-            if (auto entry = (updating_locks.find(r.ori_page_id) != updating_locks.end()
-                                  ? iter->second->getEntryNotSafe(last_sequence + 1)
-                                  : iter->second->getEntry(last_sequence + 1));
-                entry)
-            {
-                // copy the entry to be ref
-                updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
-            }
-            else
+                // If we already hold the lock from `r.ori_page_id`, Then we should not request it again.
+                // This can happen when r.ori_page_id have other operating in current writebatch
+                if (auto entry = (updating_locks.find(r.ori_page_id) != updating_locks.end()
+                                      ? iter->second->getEntryNotSafe(last_sequence + 1)
+                                      : iter->second->getEntry(last_sequence + 1));
+                    entry)
+                {
+                    // copy the entry to be ref
+                    updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
+                    return true;
+                }
+                return false;
+            }();
+            if (create_ref_entry_done)
+                break;
+            // Try to apply ref on external pages
+            if (!external_table_directory.tryCreateRef(r.page_id, r.ori_page_id, last_sequence + 1))
             {
                 LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
             }
@@ -475,15 +616,21 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         }
         case WriteBatch::WriteType::DEL:
         {
-            updating_pages[idx]->createDelete(last_sequence + 1);
+            if (!external_table_directory.tryCreateDel(r.page_id, last_sequence + 1))
+            {
+                updating_pages[idx]->createDelete(last_sequence + 1);
+            }
             break;
         }
         }
 
-        auto locks_it = updating_locks.find(r.page_id);
-        locks_it->second.second -= 1;
-        if (locks_it->second.second == 0)
-            updating_locks.erase(r.page_id);
+        if (r.type != WriteBatch::WriteType::PUT_EXTERNAL)
+        {
+            auto locks_it = updating_locks.find(r.page_id);
+            locks_it->second.second -= 1;
+            if (locks_it->second.second == 0)
+                updating_locks.erase(r.page_id);
+        }
     }
 
     if (!updating_locks.empty())
@@ -496,14 +643,15 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids)
+std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool /*need_scan_page_ids*/)
 {
+    std::set<PageId> pending_remove_external_pages;
     {
         std::shared_lock read_lock(table_rw_mutex);
         for (auto & record : migrated_edit.getMutRecords())
         {
-            auto iter = mvcc_table_directory.find(record.page_id);
-            if (unlikely(iter == mvcc_table_directory.end()))
+            auto iter = entries_table_directory.find(record.page_id);
+            if (unlikely(iter == entries_table_directory.end()))
             {
                 throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
             }
@@ -512,21 +660,17 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
             record.version.epoch += 1;
 
             // Append the gc version to version list
-            auto & versioned_entries = iter->second;
+            const auto & versioned_entries = iter->second;
             auto page_lock = versioned_entries->acquireLock();
             versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
         }
+        pending_remove_external_pages = external_table_directory.getPendingRemoveIDs();
     } // Then we should release the read lock on `table_rw_mutex`
 
     // Apply migrate edit into WAL with the increased epoch version
     wal->apply(migrated_edit);
 
-    if (!need_scan_page_ids)
-    {
-        return {};
-    }
-
-    return getAllPageIds();
+    return pending_remove_external_pages;
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -542,7 +686,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
         {
             PageIdAndVersionedEntries versioned_pageid_entries;
 
-            for (const auto & [page_id, version_entries] : mvcc_table_directory)
+            for (const auto & [page_id, version_entries] : entries_table_directory)
             {
                 VersionedEntries versioned_entries;
                 PageSize page_size;
@@ -592,7 +736,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
     std::vector<PageEntriesV3> all_del_entries;
     {
         std::unique_lock write_lock(table_rw_mutex);
-        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
+        for (auto iter = entries_table_directory.begin(); iter != entries_table_directory.end(); /*empty*/)
         {
             const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
             if (!del_entries.empty())
@@ -602,13 +746,14 @@ std::vector<PageEntriesV3> PageDirectory::gc()
 
             if (all_deleted)
             {
-                iter = mvcc_table_directory.erase(iter);
+                iter = entries_table_directory.erase(iter);
             }
             else
             {
                 iter++;
             }
         }
+        external_table_directory.cleanUpHolders(lowest_seq);
     }
 
     return all_del_entries;

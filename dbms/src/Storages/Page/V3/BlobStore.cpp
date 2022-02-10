@@ -5,6 +5,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -82,16 +83,13 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 break;
             }
             case WriteBatch::WriteType::PUT_EXTERNAL:
-            { // Only putExternal won't have data.
-                PageEntryV3 entry;
-                entry.tag = write.tag;
-
-                edit.put(write.page_id, entry);
+            {
+                edit.putExternal(write.page_id);
                 break;
             }
-            default:
+            case WriteBatch::WriteType::PUT:
+            case WriteBatch::WriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
-                                ErrorCodes::LOGICAL_ERROR);
             }
         }
         return edit;
@@ -158,7 +156,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.ref(write.page_id, write.ori_page_id);
             break;
         }
-        default:
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatch::WriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
     }

@@ -19,10 +19,278 @@
 
 #include <memory>
 
+#include "gtest/gtest.h"
+
 namespace DB
 {
 namespace PS::V3::tests
 {
+TEST(ExternalPageHolderTest, Visible)
+{
+    ExternalPageHolder h(10, 3);
+    EXPECT_EQ(h.deleted_sequence, 0);
+    EXPECT_FALSE(h.isVisible(1));
+    EXPECT_FALSE(h.isVisible(2));
+    EXPECT_TRUE(h.isVisible(3));
+    EXPECT_TRUE(h.isVisible(4));
+    EXPECT_TRUE(h.isVisible(5));
+    EXPECT_TRUE(h.isVisible(6));
+    EXPECT_TRUE(h.isVisible(0xFFFFFFFF));
+
+    h.deleted_sequence = 5;
+    EXPECT_FALSE(h.isVisible(1));
+    EXPECT_FALSE(h.isVisible(2));
+    EXPECT_TRUE(h.isVisible(3));
+    EXPECT_TRUE(h.isVisible(4));
+    EXPECT_FALSE(h.isVisible(5));
+    EXPECT_FALSE(h.isVisible(6));
+    EXPECT_FALSE(h.isVisible(0xFFFFFFFF));
+}
+
+TEST(ExternalMapTest, CreateDelete)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 50));
+
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 49));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 50));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 0xFFFFFFFF));
+
+    EXPECT_TRUE(m.tryCreateDel(page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 50));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 52));
+
+    EXPECT_FALSE(m.tryCreateDel(page_id + 1, 51));
+
+    auto ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    EXPECT_EQ(page_id, *ids.begin());
+
+    // again, should remove nothing
+    ids = m.getPendingRemoveIDs();
+    ASSERT_TRUE(ids.empty());
+
+    EXPECT_EQ(m.numPages(), 1);
+    m.cleanUpHolders(49);
+    EXPECT_EQ(m.numPages(), 1);
+
+    m.cleanUpHolders(50);
+    EXPECT_EQ(m.numPages(), 1);
+
+    m.cleanUpHolders(51);
+    EXPECT_EQ(m.numPages(), 0);
+}
+
+TEST(ExternalMapTest, CreateDelete2)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    PageId page_id2 = 11;
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 50));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id2, 50));
+
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 49));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 50));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 0xFFFFFFFF));
+
+    EXPECT_TRUE(m.createExternal(page_id2, 51));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id2, 50));
+    EXPECT_EQ(page_id2, m.getNormalPageId(page_id2, 51));
+    EXPECT_EQ(page_id2, m.getNormalPageId(page_id2, 0xFFFFFFFF));
+
+    EXPECT_TRUE(m.tryCreateDel(page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(page_id, 50));
+    EXPECT_ANY_THROW(m.getNormalPageId(page_id, 52));
+
+    EXPECT_FALSE(m.tryCreateDel(page_id + 2, 51));
+
+    auto ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    EXPECT_EQ(page_id, *ids.begin());
+
+    // again
+    ids = m.getPendingRemoveIDs();
+    ASSERT_TRUE(ids.empty());
+
+    EXPECT_EQ(m.numPages(), 2);
+    m.cleanUpHolders(49);
+    EXPECT_EQ(m.numPages(), 2);
+
+    m.cleanUpHolders(50);
+    EXPECT_EQ(m.numPages(), 2);
+
+    m.cleanUpHolders(51);
+    EXPECT_EQ(m.numPages(), 1);
+}
+
+TEST(ExternalMapTest, CreateRefDelete)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    PageId ref_id1 = 11;
+    PageId ref_id2 = 12;
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+    // can not create ref on non-exist external page
+    EXPECT_FALSE(m.tryCreateRef(ref_id1, 999, 51));
+
+    EXPECT_TRUE(m.tryCreateRef(ref_id1, page_id, 51));
+    EXPECT_TRUE(m.tryCreateRef(ref_id2, page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 51));
+
+    EXPECT_TRUE(m.tryCreateDel(page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 51));
+
+    auto ids = m.getPendingRemoveIDs();
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 3);
+    m.cleanUpHolders(51);
+    EXPECT_EQ(m.numPages(), 2);
+
+    EXPECT_TRUE(m.tryCreateDel(ref_id1, 52));
+    EXPECT_FALSE(m.tryCreateDel(ref_id1, 52)); // delete ref again, should be ok
+    ids = m.getPendingRemoveIDs();
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 2);
+    m.cleanUpHolders(52);
+    EXPECT_EQ(m.numPages(), 1);
+
+    EXPECT_TRUE(m.tryCreateDel(ref_id2, 53));
+    EXPECT_FALSE(m.tryCreateDel(ref_id2, 54)); // delete ref again, should be ok
+    ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    ASSERT_EQ(page_id, *ids.begin());
+    ids = m.getPendingRemoveIDs(); // clean again, should be empty
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 1);
+    m.cleanUpHolders(53);
+    EXPECT_EQ(m.numPages(), 0);
+}
+
+TEST(ExternalMapTest, CreateAgainAfterRef)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    PageId ref_id1 = 11;
+    PageId ref_id2 = 12;
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+
+    EXPECT_TRUE(m.tryCreateRef(ref_id1, page_id, 51));
+    EXPECT_TRUE(m.tryCreateRef(ref_id2, page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 51));
+
+    EXPECT_FALSE(m.createExternal(page_id, 51));
+
+    EXPECT_TRUE(m.tryCreateDel(page_id, 52));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 52));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 52));
+
+    EXPECT_FALSE(m.createExternal(page_id, 52)); // should be fail
+
+    auto ids = m.getPendingRemoveIDs();
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 3);
+    m.cleanUpHolders(52);
+    EXPECT_EQ(m.numPages(), 2);
+
+    EXPECT_FALSE(m.createExternal(page_id, 52)); // should be fail tought we cleanup
+
+    EXPECT_TRUE(m.tryCreateDel(ref_id1, 53));
+    EXPECT_FALSE(m.tryCreateDel(ref_id1, 53)); // delete ref again(same seq), should be ok
+    ids = m.getPendingRemoveIDs();
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 2);
+    m.cleanUpHolders(53);
+    EXPECT_EQ(m.numPages(), 1);
+
+    EXPECT_TRUE(m.tryCreateDel(ref_id2, 54));
+    EXPECT_FALSE(m.tryCreateDel(ref_id2, 55)); // delete ref again(incr seq), should be ok
+    ids = m.getPendingRemoveIDs(); // clean the page_id since its ref-count is down to 0
+    ASSERT_EQ(1, ids.size());
+    ASSERT_EQ(page_id, *ids.begin());
+    ids = m.getPendingRemoveIDs(); // clean again, should be empty
+    EXPECT_TRUE(ids.empty());
+    EXPECT_EQ(m.numPages(), 1);
+    m.cleanUpHolders(54);
+    EXPECT_EQ(m.numPages(), 0);
+
+    EXPECT_TRUE(m.createExternal(page_id, 55)); // this is ok after all old external and old ref cleaned.
+    EXPECT_TRUE(m.tryCreateDel(page_id, 55));
+    ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    ASSERT_EQ(page_id, *ids.begin());
+    m.cleanUpHolders(55);
+    EXPECT_EQ(m.numPages(), 0);
+}
+
+TEST(ExternalMapTest, CreateRefOnRef)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    PageId ref_id1 = 11;
+    PageId ref_id2 = 12;
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+    EXPECT_TRUE(m.tryCreateRef(ref_id1, page_id, 51));
+    EXPECT_TRUE(m.tryCreateRef(ref_id2, page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 51));
+
+    // 13 -> 11, 11 -> 10 ==> 13 -> 10
+    PageId ref_on_ref_id3 = 13;
+    EXPECT_TRUE(m.tryCreateRef(ref_on_ref_id3, ref_id1, 52));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_on_ref_id3, 52));
+
+    // remove to check the ref count
+    EXPECT_TRUE(m.tryCreateDel(page_id, 54));
+    EXPECT_TRUE(m.tryCreateDel(ref_id1, 54));
+    EXPECT_TRUE(m.tryCreateDel(ref_id2, 54));
+
+    auto ids = m.getPendingRemoveIDs();
+    ASSERT_TRUE(ids.empty());
+    m.cleanUpHolders(54);
+    EXPECT_EQ(m.numPages(), 1);
+
+    EXPECT_TRUE(m.tryCreateDel(ref_on_ref_id3, 55));
+    ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    EXPECT_EQ(page_id, *ids.begin());
+    m.cleanUpHolders(55);
+    EXPECT_EQ(m.numPages(), 0);
+}
+
+TEST(ExternalMapTest, CreateInvaildRef)
+{
+    ExternalMap m;
+    PageId page_id = 10;
+    PageId ref_id1 = 11;
+    PageId ref_id2 = 12;
+    EXPECT_TRUE(m.createExternal(page_id, 50));
+    EXPECT_TRUE(m.tryCreateRef(ref_id1, page_id, 51));
+    EXPECT_TRUE(m.tryCreateRef(ref_id2, page_id, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id1, 51));
+    EXPECT_EQ(page_id, m.getNormalPageId(ref_id2, 51));
+
+    EXPECT_FALSE(m.tryCreateRef(ref_id1, page_id, 53));
+
+    // remove to check the ref count
+    EXPECT_TRUE(m.tryCreateDel(page_id, 54));
+    EXPECT_TRUE(m.tryCreateDel(ref_id1, 54));
+    EXPECT_TRUE(m.tryCreateDel(ref_id2, 54));
+
+    auto ids = m.getPendingRemoveIDs();
+    ASSERT_EQ(1, ids.size());
+    ASSERT_EQ(page_id, *ids.begin());
+
+    EXPECT_EQ(m.numPages(), 3);
+    m.cleanUpHolders(54);
+    EXPECT_EQ(m.numPages(), 0);
+}
+
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -424,12 +692,12 @@ try
 CATCH
 
 TEST_F(PageDirectoryTest, TestRefWontDeadLock)
+try
 {
     PageEntriesEdit edit;
     {
         // 1. batch.putExternal(0, 0);
-        PageEntryV3 entry1;
-        edit.put(0, entry1);
+        edit.putExternal(0);
 
         // 2. batch.putRefPage(1, 0);
         edit.ref(1, 0);
@@ -448,6 +716,57 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
 
     dir.apply(std::move(edit2));
 }
+CATCH
+
+TEST_F(PageDirectoryTest, NormalPageId)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.put(9, PageEntryV3{});
+        edit.putExternal(10);
+        dir.apply(std::move(edit));
+    }
+    auto s0 = dir.createSnapshot();
+    // calling getNormalPageId on non-external-page is not acceptable
+    EXPECT_ANY_THROW(dir.getNormalPageId(9, s0));
+    EXPECT_EQ(10, dir.getNormalPageId(10, s0));
+    EXPECT_ANY_THROW(dir.getNormalPageId(11, s0));
+    EXPECT_ANY_THROW(dir.getNormalPageId(12, s0));
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.ref(12, 10);
+        edit.del(10);
+        dir.apply(std::move(edit));
+    }
+    auto s1 = dir.createSnapshot();
+    EXPECT_ANY_THROW(dir.getNormalPageId(10, s1));
+    EXPECT_EQ(10, dir.getNormalPageId(11, s1));
+    EXPECT_EQ(10, dir.getNormalPageId(12, s1));
+
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir.apply(std::move(edit));
+    }
+    auto s2 = dir.createSnapshot();
+    EXPECT_ANY_THROW(dir.getNormalPageId(10, s2));
+    EXPECT_ANY_THROW(dir.getNormalPageId(11, s2));
+    EXPECT_EQ(10, dir.getNormalPageId(12, s2));
+
+    {
+        PageEntriesEdit edit;
+        edit.del(12);
+        dir.apply(std::move(edit));
+    }
+    auto s3 = dir.createSnapshot();
+    EXPECT_ANY_THROW(dir.getNormalPageId(10, s3));
+    EXPECT_ANY_THROW(dir.getNormalPageId(11, s3));
+    EXPECT_ANY_THROW(dir.getNormalPageId(12, s3));
+}
+CATCH
 
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \

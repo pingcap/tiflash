@@ -66,6 +66,14 @@ public:
         records.emplace_back(record);
     }
 
+    void putExternal(PageId page_id)
+    {
+        EditRecord record{};
+        record.type = WriteBatch::WriteType::PUT_EXTERNAL;
+        record.page_id = page_id;
+        records.emplace_back(record);
+    }
+
     void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};

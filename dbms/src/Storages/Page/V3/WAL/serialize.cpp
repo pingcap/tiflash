@@ -1,5 +1,6 @@
 #include <IO/ReadHelpers.h>
 #include <Storages/Page/V3/WAL/serialize.h>
+#include <Storages/Page/WriteBatch.h>
 
 namespace DB::PS::V3::ser
 {
@@ -79,6 +80,32 @@ void deserializePutFrom([[maybe_unused]] const WriteBatch::WriteType record_type
     edit.appendRecord(rec);
 }
 
+void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+{
+    assert(record.type == WriteBatch::WriteType::PUT_EXTERNAL);
+
+    writeIntBinary(record.type, buf);
+
+    writeIntBinary(record.page_id, buf);
+    serializeVersionTo(record.version, buf);
+}
+
+void deserializePutExternalFrom([[maybe_unused]] const WriteBatch::WriteType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+{
+    assert(record_type == WriteBatch::WriteType::PUT_EXTERNAL);
+
+    PageId page_id;
+    readIntBinary(page_id, buf);
+    PageVersionType version;
+    deserializeVersionFrom(buf, version);
+
+    PageEntriesEdit::EditRecord rec;
+    rec.type = WriteBatch::WriteType::PUT_EXTERNAL;
+    rec.page_id = page_id;
+    rec.version = version;
+    edit.appendRecord(rec);
+}
+
 void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
     assert(record.type == WriteBatch::WriteType::DEL);
@@ -125,6 +152,11 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
             deserializeDelFrom(record_type, buf, edit);
             break;
         }
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+        {
+            deserializePutExternalFrom(record_type, buf, edit);
+            break;
+        }
         default:
             throw Exception(fmt::format("Unkonwn record type: {}", record_type));
         }
@@ -147,6 +179,9 @@ String serializeTo(const PageEntriesEdit & edit)
             break;
         case DB::WriteBatch::WriteType::DEL:
             serializeDelTo(record, buf);
+            break;
+        case DB::WriteBatch::WriteType::PUT_EXTERNAL:
+            serializePutExternalTo(record, buf);
             break;
         default:
             throw Exception(fmt::format("Unknown record type: {}", record.type), ErrorCodes::LOGICAL_ERROR);

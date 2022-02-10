@@ -346,6 +346,76 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, WriteReadGcExternalPage)
+try
+{
+    WriteBatch batch;
+    {
+        batch.putExternal(0, 0);
+        batch.putRefPage(1, 0);
+        batch.putExternal(1024, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    size_t times_remover_called = 0;
+
+    ExternalPageCallbacks callbacks;
+    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & /*normal_page_ids*/) -> void {
+        times_remover_called += 1;
+        // FIXME: the number of normal_page_id
+        // ASSERT_EQ(normal_page_ids.size(), 2UL);
+        // EXPECT_GT(normal_page_ids.count(0), 0UL);
+        // EXPECT_GT(normal_page_ids.count(1024), 0UL);
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    {
+        SCOPED_TRACE("fist gc");
+        page_storage->gc();
+        EXPECT_EQ(times_remover_called, 1);
+    }
+
+    auto snapshot = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
+        batch.delPage(1); // free ref 1 -> 0
+        batch.delPage(1024); // free normal page 1024
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        SCOPED_TRACE("gc with snapshot");
+        page_storage->gc();
+        // EXPECT_EQ(times_remover_called, 2);
+    }
+
+    {
+        DB::Page page0 = page_storage->read(0);
+        ASSERT_EQ(page0.data.size(), 0UL);
+        ASSERT_EQ(page0.page_id, 0UL);
+
+        DB::Page page2 = page_storage->read(2);
+        ASSERT_EQ(page2.data.size(), 0UL);
+        ASSERT_EQ(page2.page_id, 2UL);
+    }
+
+    snapshot.reset();
+    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & /*normal_page_ids*/) -> void {
+        times_remover_called += 1;
+        // FIXME: the number of normal_page_id
+        // ASSERT_EQ(normal_page_ids.size(), 1);
+        // EXPECT_GT(normal_page_ids.count(0), 0);
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    {
+        SCOPED_TRACE("gc with snapshot released");
+        page_storage->gc();
+        EXPECT_EQ(times_remover_called, 3);
+    }
+}
+CATCH
+
 // TBD : enable after wal apply and restore
 TEST_F(PageStorageTest, DISABLED_IgnoreIncompleteWriteBatch1)
 try
