@@ -185,7 +185,6 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     auto input_columns = input_header.getColumns();
     for (auto & column : input_columns)
     {
-        std::cout << "all column: " << column << std::endl;
         column = std::move(column)->convertToFullColumnIfConst();
     }
     //input_header.setColumns(std::move(input_columns));
@@ -410,11 +409,6 @@ void WindowBlockInputStream::advancePartitionEnd()
                 = inputAt(prev_frame_start)[partition_by_indices[i]].get();
             const auto * compared_column
                 = inputAt(partition_end)[partition_by_indices[i]].get();
-
-            std::cout << fmt::format("reference '{}', compared '{}'\n",
-                                     (*reference_column)[prev_frame_start.row].toString(),
-                                     (*compared_column)[partition_end.row].toString())
-                      << std::endl;
             if (compared_column->compareAt(partition_end.row,
                                            prev_frame_start.row,
                                            *reference_column,
