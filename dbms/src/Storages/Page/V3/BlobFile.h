@@ -15,8 +15,7 @@ class BlobFile
 {
 public:
     BlobFile(String path_,
-             FileProviderPtr file_provider_,
-             bool truncate_if_exists = false);
+             FileProviderPtr file_provider_);
 
     ~BlobFile();
 

@@ -475,9 +475,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         auto lock = stat->lock();
         auto right_margin = stat->smap->getRightMargin();
 
+        // Avoid divide by zero
         if (right_margin == 0)
         {
-            LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid) = ].", stat->id, stat->sm_total_size);
+            LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
             continue;
         }
 
@@ -513,7 +514,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         if (right_margin != stat->sm_total_size)
         {
             auto blobfile = getBlobFile(stat->id);
-            LOG_FMT_TRACE(log, "Current [blob_id={}] do truncate, [origin size={}, truncated size={}].", stat->id, stat->sm_total_size, right_margin);
+            LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
             blobfile->truncate(right_margin);
             stat->sm_total_size = right_margin;
         }
@@ -665,7 +666,7 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
     return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider, false);
+                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
                        })
         .first;
 }
