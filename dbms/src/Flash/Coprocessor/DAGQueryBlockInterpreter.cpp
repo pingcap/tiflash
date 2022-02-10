@@ -575,10 +575,19 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
+    String match_helper_name;
     if (is_left_semi_family)
     {
-        columns_added_by_join.emplace_back(Join::match_helper_name, Join::match_helper_type);
-        join_output_columns.emplace_back(Join::match_helper_name, Join::match_helper_type);
+        const auto & left_block = input_streams_vec[0][0]->getHeader();
+        const auto & right_block = input_streams_vec[1][0]->getHeader();
+
+        match_helper_name = Join::match_helper_prefix;
+        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i) {
+            match_helper_name = Join::match_helper_prefix + std::to_string(i);
+        }
+
+        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
+        join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
     }
 
     DataTypes join_key_types;
@@ -657,7 +666,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
         other_condition_expr,
-        max_block_size_for_cross_join);
+        max_block_size_for_cross_join,
+        match_helper_name);
 
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
