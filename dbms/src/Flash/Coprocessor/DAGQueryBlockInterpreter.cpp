@@ -582,7 +582,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         const auto & right_block = input_streams_vec[1][0]->getHeader();
 
         match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i) {
+        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i)
+        {
             match_helper_name = Join::match_helper_prefix + std::to_string(i);
         }
 
