@@ -326,6 +326,36 @@ TEST_P(SpaceMapTest, TestSearch)
     ASSERT_TRUE(smap->check(genChecker(ranges4, 2), 2));
 }
 
+
+TEST_P(SpaceMapTest, TestGetSizes)
+{
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(50, 10));
+        ASSERT_TRUE(smap->markUsed(80, 10));
+
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 90);
+        ASSERT_EQ(valid_data_size, 20);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 100);
+        ASSERT_EQ(valid_data_size, 100);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 0);
+        ASSERT_EQ(valid_data_size, 0);
+    }
+}
+
 INSTANTIATE_TEST_CASE_P(
     Type,
     SpaceMapTest,
