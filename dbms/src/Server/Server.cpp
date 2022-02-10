@@ -865,109 +865,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
-#if USE_INTERNAL_MEMCPY
-    {
-        using namespace memory_copy;
-        auto medium_size = memcpy_config.medium_size_threshold * 2 + 1;
-        MediumSizeStrategy strategy = MediumSizeStrategy::MediumSizeSSE;
-        double best_time_avg{std::numeric_limits<size_t>::max()};
-        for (auto i : {MediumSizeStrategy::MediumSizeSSE, MediumSizeStrategy::MediumSizeRepMovsb})
-        {
-            std::vector<char> src(medium_size);
-            std::vector<char> dst(medium_size);
-            if (!check_valid_strategy(i))
-                continue;
-            double current_time_sum = 0;
-            for (size_t j = 0; j < 32; ++j)
-            {
-                std::random_device dev;
-                std::default_random_engine eng(dev());
-                std::uniform_int_distribution<char> dist;
-                for (auto & e : src)
-                {
-                    e = dist(eng);
-                }
-                memcpy_config.medium_size_strategy = i;
-                auto begin = std::chrono::high_resolution_clock::now();
-                __asm__ volatile("" ::
-                                     : "memory");
-                TIFLASH_NO_OPTIMIZE(::memcpy(dst.data(), src.data(), src.size()));
-                __asm__ volatile("" ::
-                                     : "memory");
-                auto end = std::chrono::high_resolution_clock::now();
-                current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
-            }
-            auto current_time_avg = current_time_sum / 32.0;
-            double size = static_cast<double>(medium_size) / 1024.0 / 1024.0 / 1024.0;
-            double time = current_time_avg / 1e9;
-            LOG_FMT_INFO(log, "Tested memcpy medium size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
-            if (current_time_avg < best_time_avg)
-            {
-                strategy = i;
-                best_time_avg = current_time_avg;
-            }
-        }
-        memcpy_config.medium_size_strategy = strategy;
-        double size = static_cast<double>(medium_size) / 1024.0 / 1024.0 / 1024.0;
-        double time = best_time_avg / 1e9;
-        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
-    }
-
-    {
-        using namespace memory_copy;
-        auto huge_size = memcpy_config.huge_size_threshold * 17 + 1;
-        HugeSizeStrategy strategy = HugeSizeStrategy::HugeSizeSSE;
-        double best_time_avg{std::numeric_limits<size_t>::max()};
-        for (auto i : {
-                 HugeSizeStrategy::HugeSizeSSE,
-                 HugeSizeStrategy::HugeSizeSSENT,
-                 HugeSizeStrategy::HugeSizeSSSE3Mux,
-                 HugeSizeStrategy::HugeSizeRepMovsb,
-                 HugeSizeStrategy::HugeSizeVEX32,
-                 HugeSizeStrategy::HugeSizeEVEX32,
-                 HugeSizeStrategy::HugeSizeEVEX64})
-        {
-            std::vector<char> src(huge_size);
-            std::vector<char> dst(huge_size);
-            if (!check_valid_strategy(i))
-                continue;
-            double current_time_sum = 0;
-            for (size_t j = 0; j < 32; ++j)
-            {
-                std::random_device dev;
-                std::default_random_engine eng(dev());
-                std::uniform_int_distribution<char> dist;
-                for (auto & e : src)
-                {
-                    e = dist(eng);
-                }
-                memcpy_config.huge_size_strategy = i;
-                auto begin = std::chrono::high_resolution_clock::now();
-                __asm__ volatile("" ::
-                                     : "memory");
-                TIFLASH_NO_OPTIMIZE(::memcpy(dst.data(), src.data(), src.size()));
-                __asm__ volatile("" ::
-                                     : "memory");
-                auto end = std::chrono::high_resolution_clock::now();
-                current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
-            }
-            auto current_time_avg = current_time_sum / 32.0;
-            double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
-            double time = current_time_avg / 1e9;
-            LOG_FMT_INFO(log, "Tested memcpy huge size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
-            if (current_time_avg < best_time_avg)
-            {
-                strategy = i;
-                best_time_avg = current_time_avg;
-            }
-        }
-        memcpy_config.huge_size_strategy = strategy;
-        double size = static_cast<double>(huge_size) / 1024.0 / 1024.0 / 1024.0;
-        double time = best_time_avg / 1e9;
-        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
-    }
-#endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerTableFunctions();
@@ -1084,6 +981,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
 
     /// ===== Paths related configuration initialized end ===== ///
+
+#if USE_INTERNAL_MEMCPY
+    auto medium_strategy = memory_copy::parseMediumSizeStrategy(config().getString("memcpy_medium_strategy", "sse"));
+    auto huge_strategy = memory_copy::parseHugeSizeStrategy(config().getString("memcpy_huge_strategy", "sse"));
+    LOG_FMT_INFO(log, "Setting memcpy medium size strategy: {}", memory_copy::toString(medium_strategy));
+    LOG_FMT_INFO(log, "Setting memcpy huge size strategy: {}", memory_copy::toString(huge_strategy));
+    memory_copy::memcpy_config.medium_size_strategy = medium_strategy;
+    memory_copy::memcpy_config.huge_size_strategy = huge_strategy;
+#endif
 
     security_config = TiFlashSecurityConfig(config(), log);
     Redact::setRedactLog(security_config.redact_info_log);

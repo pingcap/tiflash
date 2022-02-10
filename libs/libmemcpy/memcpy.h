@@ -156,6 +156,52 @@ static inline const char * toString(HugeSizeStrategy strategy)
     }
 }
 
+static inline MediumSizeStrategy parseMediumSizeStrategy(std::string_view name)
+{
+    if (name == "sse")
+    {
+        return MediumSizeStrategy::MediumSizeSSE;
+    }
+    if (name == "rep_movsb")
+    {
+        return MediumSizeStrategy::MediumSizeRepMovsb;
+    }
+    return MediumSizeStrategy::MediumSizeSSE;
+}
+
+static inline HugeSizeStrategy parseHugeSizeStrategy(std::string_view name)
+{
+    if (name == "sse")
+    {
+        return HugeSizeStrategy::HugeSizeSSE;
+    }
+    if (name == "ssent")
+    {
+        return HugeSizeStrategy::HugeSizeSSENT;
+    }
+    if (name == "ssse3")
+    {
+        return HugeSizeStrategy::HugeSizeSSSE3Mux;
+    }
+    if (name == "rep_movsb")
+    {
+        return HugeSizeStrategy::HugeSizeRepMovsb;
+    }
+    if (name == "vex32")
+    {
+        return HugeSizeStrategy::HugeSizeVEX32;
+    }
+    if (name == "evex32")
+    {
+        return HugeSizeStrategy::HugeSizeEVEX32;
+    }
+    if (name == "evex64")
+    {
+        return HugeSizeStrategy::HugeSizeEVEX64;
+    }
+    return HugeSizeStrategy::HugeSizeSSE;
+}
+
 struct MemcpyConfig
 {
     size_t medium_size_threshold;
