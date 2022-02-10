@@ -43,8 +43,7 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DRUN_HAVE_STD_REGEX=0 \
       -DCMAKE_AR="/usr/local/bin/llvm-ar" \
       -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
-      -DUSE_INTERNAL_TIFLASH_PROXY=FALSE \
-      -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
+      -DUSE_INTERNAL_TIFLASH_PROXY=TRUE \
       -GNinja
 
 ninja tiflash
