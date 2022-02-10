@@ -167,8 +167,8 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     size_t total_deletes = 0;
     for (const auto & file : column_files)
     {
-        // ColumnFileInMemory object may still be appendable after creating this snapshot, and it will change some of its internal state.
-        // So it's safe to create a new object and just share the cache object with the original ColumnFileInMemory object instance.
+        // ColumnFile is not a thread-safe object, but only ColumnFileInMemory may be appendable after its creation.
+        // So we only clone the instance of ColumnFileInMemory here.
         if (auto * m = file->tryToInMemoryFile(); m)
         {
             // Compact threads could update the value of ColumnTinyFile::cache,
