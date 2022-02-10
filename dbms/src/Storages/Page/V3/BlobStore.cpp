@@ -3,6 +3,7 @@
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/logger_useful.h>
 
@@ -31,6 +32,10 @@ using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
 
+/**********************
+  * BlobStore methods *
+  *********************/
+
 BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobStore::Config config_)
     : file_provider(file_provider_)
     , path(path_)
@@ -39,6 +44,11 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {
+}
+
+void BlobStore::restore(const CollapsingPageDirectory & entries)
+{
+    blob_stats.restore(entries);
 }
 
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -230,7 +240,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
         stat->smap->logStats();
-        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}, old_max_caps={}, max_caps={}, BlobFileId={}]",
+        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}] [old_max_caps={}] [max_caps={}] [blob_id={}]",
                                     size,
                                     old_max_cap,
                                     stat->sm_max_caps,
@@ -243,7 +253,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    const auto & stat = blob_stats.fileIdToStat(blob_id);
+    const auto & stat = blob_stats.blobIdToStat(blob_id);
     auto lock = stat->lock();
     stat->removePosFromStat(offset, size);
 
@@ -663,10 +673,44 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
         .first;
 }
 
+/**********************
+  * BlobStats methods *
+  *********************/
+
 BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
     : log(log_)
     , config(config_)
 {
+}
+
+void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
+{
+    for (const auto & [page_id, versioned_entry] : entries.table_directory)
+    {
+        const auto & [ver, entry] = versioned_entry;
+        (void)ver;
+        auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
+        stat->restoreSpaceMap(entry.offset, entry.size);
+    }
+
+    BlobFileId max_restored_file_id = 0;
+    std::set<BlobFileId> existing_file_ids;
+    for (const auto & stat : stats_map)
+    {
+        stat->recalculateSpaceMap();
+        max_restored_file_id = std::max(stat->id, max_restored_file_id);
+        existing_file_ids.insert(stat->id);
+    }
+    // restore `roll_id`
+    roll_id = max_restored_file_id + 1;
+    // restore `old_ids`
+    for (BlobFileId old_id = 1; old_id < roll_id; ++old_id)
+    {
+        if (existing_file_ids.count(old_id) == 0)
+        {
+            old_ids.emplace_back(old_id);
+        }
+    }
 }
 
 std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
@@ -674,8 +718,7 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
     return std::lock_guard(lock_stats);
 }
 
-
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
@@ -686,6 +729,19 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
                         ErrorCodes::LOGICAL_ERROR);
     }
 
+    auto stat = createStatNotCheckingRoll(blob_file_id, guard);
+
+    // Roll to the next new blob id
+    if (blob_file_id == roll_id)
+    {
+        roll_id++;
+    }
+
+    return stat;
+}
+
+BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+{
     for (auto & stat : stats_map)
     {
         if (stat->id == blob_file_id)
@@ -697,19 +753,11 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     }
 
     LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
-    BlobStatPtr stat = std::make_shared<BlobStat>();
-    stat->id = blob_file_id;
-    stat->smap = SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size);
+    BlobStatPtr stat = std::make_shared<BlobStat>(
+        blob_file_id,
+        SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size));
     stat->sm_max_caps = config.file_limit_size;
-    stat->type = BlobStatType::NORMAL;
-
     stats_map.emplace_back(stat);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
 
     return stat;
 }
@@ -793,6 +841,32 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
+BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist)
+{
+    auto guard = lock();
+    for (auto & stat : stats_map)
+    {
+        if (stat->id == file_id)
+        {
+            return stat;
+        }
+    }
+
+    if (restore_if_not_exist)
+    {
+        // Restore a stat without checking the roll_id
+        return createStatNotCheckingRoll(file_id, guard);
+    }
+
+    throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
+                                file_id),
+                    ErrorCodes::LOGICAL_ERROR);
+}
+
+/*********************
+  * BlobStat methods *
+  ********************/
+
 BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)
 {
     BlobFileOffset offset = 0;
@@ -834,7 +908,7 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     if (!smap->markFree(offset, buf_size))
     {
         smap->logStats();
-        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, BlobFileId={}] is invalid.",
+        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, blob_id={}] is invalid.",
                                     offset,
                                     buf_size,
                                     id),
@@ -845,20 +919,25 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
 }
 
-BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
+void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
 {
-    auto guard = lock();
-    for (auto & stat : stats_map)
+    if (!smap->markUsed(offset, buf_size))
     {
-        if (stat->id == file_id)
-        {
-            return stat;
-        }
+        smap->logStats();
+        throw Exception(fmt::format("Restore postion from BlobStat failed, [offset={}] [buf_size={}] [blob_id={}] is used or subspan is used",
+                                    offset,
+                                    buf_size,
+                                    id),
+                        ErrorCodes::LOGICAL_ERROR);
     }
+}
 
-    throw Exception(fmt::format("Can't find BlobStat with [BlobFileId={}]",
-                                file_id),
-                    ErrorCodes::LOGICAL_ERROR);
+void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
+{
+    const auto & [total_size, valid_size] = smap->getSizes();
+    sm_total_size = total_size;
+    sm_valid_size = valid_size;
+    sm_valid_rate = valid_size * 1.0 / total_size;
 }
 
 } // namespace PS::V3
