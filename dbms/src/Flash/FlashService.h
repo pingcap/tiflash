@@ -82,7 +82,7 @@ public:
         : service_(service)
         , cq_(cq)
         , responder_(&ctx_)
-        , status_(CREATE)
+        , state_(CREATE)
     {
         // Invoke the serving logic right away.
         Proceed();
@@ -92,13 +92,16 @@ public:
 
     void WriteDone(const ::grpc::Status & status);
 
+    void WriteErr(const mpp::MPPDataPacket & packet);
+
     void Proceed();
+
+    void notifyReady();
 
     std::mutex mu;
     std::condition_variable cv;
 
 private:
-    void notifyReady();
 
     // The means of communication with the gRPC runtime for an asynchronous
     // server.
@@ -109,6 +112,8 @@ private:
     // of compression, authentication, as well as to send metadata back to the
     // client.
     grpc::ServerContext ctx_;
+
+    grpc::Status status4err;
 
     // What we get from the client.
     ::mpp::EstablishMPPConnectionRequest request_;
@@ -125,9 +130,10 @@ private:
         CREATE,
         PROCESS,
         JOIN,
+        ERR_HANDLE,
         FINISH
     };
-    std::atomic<CallStatus> status_; // The current serving state.
+    std::atomic<CallStatus> state_; // The current serving state.
 };
 
 } // namespace DB

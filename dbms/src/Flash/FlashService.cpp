@@ -216,18 +216,8 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
         {
             LOG_ERROR(log, err_msg);
 
-            if (calldata->Write(getPacketWithError(err_msg)))
-            {
-                calldata->WriteDone(grpc::Status::OK);
-                return;
-                //                return grpc::Status::OK;
-            }
-            else
-            {
-                LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
-                calldata->WriteDone(grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason."));
-                return;
-            }
+            calldata->Write(getPacketWithError(err_msg));
+            return;
         }
     }
     //    Stopwatch stopwatch;
@@ -494,6 +484,20 @@ bool CallData::Write(const mpp::MPPDataPacket & packet)
     }
 }
 
+void CallData::WriteErr(const mpp::MPPDataPacket & packet)
+{
+    state_ = ERR_HANDLE;
+    bool ret = Write(packet);
+    if (ret)
+    {
+        status4err = (grpc::Status::OK);
+    }
+    else
+    {
+        status4err = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+    }
+}
+
 void CallData::WriteDone(const ::grpc::Status & status)
 {
     // And we are done! Let the gRPC runtime know we've finished, using the
@@ -504,7 +508,7 @@ void CallData::WriteDone(const ::grpc::Status & status)
         cv.wait(lk, [&] { return ready.load(); });
         ready = false;
     }
-    status_ = FINISH;
+    state_ = FINISH;
     responder_.Finish(status, this);
 }
 
@@ -519,10 +523,10 @@ void CallData::Proceed()
 {
     service_->current_active_establish_thds++;
     service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-    if (status_ == CREATE)
+    if (state_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
-        status_ = PROCESS;
+        state_ = PROCESS;
 
         // As part of the initial CREATE state, we *request* that the system
         // start processing SayHello requests. In this request, "this" acts are
@@ -531,9 +535,9 @@ void CallData::Proceed()
         // the memory address of this CallData instance.
         service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, cq_, this);
     }
-    else if (status_ == PROCESS)
+    else if (state_ == PROCESS)
     {
-        status_ = JOIN;
+        state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
@@ -542,14 +546,20 @@ void CallData::Proceed()
         notifyReady();
         service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
     }
-    else if (status_ == JOIN)
+    else if (state_ == JOIN)
     {
         notifyReady();
         //notify producer that it's ready
     }
+    else if (state_ == ERR_HANDLE)
+    {
+        state_ = FINISH;
+        notifyReady();
+        WriteDone(status4err);
+    }
     else
     {
-        GPR_ASSERT(status_ == FINISH);
+        GPR_ASSERT(state_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;
     }
