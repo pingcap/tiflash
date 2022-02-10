@@ -102,10 +102,13 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
-
+            if (!is_local)
+                writer->TryWrite(&lk);
             if (close_after_write)
             {
                 send_queue.finish();
+                if (!is_local)
+                    writer->TryWrite(&lk);
                 LOG_TRACE(log, "finish write.");
             }
             return;
@@ -148,9 +151,59 @@ void MPPTunnelBase<Writer>::sendLoop()
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg);
-    if (no_waiter) {
-//        std::cerr<<"async mpptunnel end"<<std::endl;
+    if (no_waiter)
+    {
+        //        std::cerr<<"async mpptunnel end"<<std::endl;
         writer->WriteDone(grpc::Status::OK);
+    }
+}
+
+template <typename Writer>
+void MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
+{
+    assert(!is_local);
+    String err_msg;
+    try
+    {
+        /// TODO(fzh) reuse it later
+        MPPDataPacketPtr res;
+        if (send_queue.pop(res))
+        {
+            if (writer->Write(*res, false))
+            {
+                return;
+            }
+            else
+            {
+                err_msg = "grpc writes failed.";
+                //                loopEnd = true;
+            }
+        }
+        else
+        {
+            //            loopEnd = true;
+            //            TODO
+        }
+    }
+    catch (Exception & e)
+    {
+        err_msg = e.message();
+    }
+    catch (std::exception & e)
+    {
+        err_msg = e.what();
+    }
+    catch (...)
+    {
+        err_msg = "fatal error in sendLoop()";
+    }
+    if (!err_msg.empty())
+        LOG_ERROR(log, err_msg);
+    consumerFinish(err_msg, p_lk == nullptr);
+    if (no_waiter)
+    {
+        //        std::cerr<<"async mpptunnel end"<<std::endl;
+        writer->WriteDone(grpc::Status::OK, false);
     }
 }
 
@@ -167,6 +220,8 @@ void MPPTunnelBase<Writer>::writeDone()
         waitUntilConnectedOrFinished(lk);
 
         send_queue.finish();
+        if (!is_local)
+            writer->TryWrite(&lk);
     }
     waitForConsumerFinish(/*allow_throw=*/true);
 }
@@ -196,11 +251,12 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         else
         {
             writer = writer_;
+            writer->attachQueue(&send_queue);
             // communicate send_thread through `consumer_state`
             // NOTE: if the thread creation failed, `connected` will still be `false`.
-            newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
-                sendLoop();
-            });
+            //            newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
+            //                sendLoop();
+            //            });
         }
         connected = true;
         cv_for_connected_or_finished.notify_all();
@@ -254,16 +310,23 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
+void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
     send_queue.finish();
-
-    std::unique_lock lk(mu);
-    finished = true;
-    // must call setError in the critical area to keep consistent with `finished` from outside.
-    consumer_state.setError(err_msg);
-    cv_for_connected_or_finished.notify_all();
+    if (need_lock)
+    {
+        std::unique_lock lk(mu);
+        finished = true;
+        // must call setError in the critical area to keep consistent with `finished` from outside.
+        consumer_state.setError(err_msg);
+        cv_for_connected_or_finished.notify_all();
+    } else {
+        finished = true;
+        // must call setError in the critical area to keep consistent with `finished` from outside.
+        consumer_state.setError(err_msg);
+        cv_for_connected_or_finished.notify_all();
+    }
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

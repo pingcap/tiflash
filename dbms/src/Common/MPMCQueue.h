@@ -131,6 +131,12 @@ public:
         }
     }
 
+    bool isFinished()
+    {
+        std::unique_lock lock(mu);
+        return status == Status::FINISHED;
+    }
+
     MPMCQueueStatus getStatus() const
     {
         std::unique_lock lock(mu);

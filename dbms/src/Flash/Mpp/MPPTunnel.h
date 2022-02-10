@@ -20,6 +20,9 @@
 
 namespace DB
 {
+
+class CallData;
+
 /**
  * MPPTunnelBase represents the sender of an exchange connection.
  *
@@ -88,9 +91,11 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    void consumerFinish(const String & err_msg);
+    void consumerFinish(const String & err_msg, bool need_lock = true);
 
     std::atomic<bool> no_waiter{false};
+
+    void sendOp(std::unique_lock<std::mutex> *p_lk = nullptr);
 
 private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);

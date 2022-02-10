@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -9,6 +10,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
+
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -57,6 +59,7 @@ public:
 
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
+
 private:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
@@ -72,25 +75,21 @@ private:
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
 
+class MPPTunnel;
+
 class CallData
 {
 public:
     // Take in the "service" instance (in this case representing an asynchronous
     // server) and the completion queue "cq" used for asynchronous communication
     // with the gRPC runtime.
-    CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
-        : service_(service)
-        , cq_(cq)
-        , responder_(&ctx_)
-        , state_(CREATE)
-    {
-        // Invoke the serving logic right away.
-        Proceed();
-    }
+    CallData(FlashService * service, grpc::ServerCompletionQueue * cq);
 
-    bool Write(const mpp::MPPDataPacket & packet);
+    bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
 
-    void WriteDone(const ::grpc::Status & status);
+    bool TryWrite(std::unique_lock<std::mutex> *p_lk = nullptr);
+
+    void WriteDone(const ::grpc::Status & status, bool need_wait = true);
 
     void WriteErr(const mpp::MPPDataPacket & packet);
 
@@ -101,11 +100,15 @@ public:
     std::mutex mu;
     std::condition_variable cv;
 
-private:
+    void attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue);
 
+    void attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel);
+
+private:
     // The means of communication with the gRPC runtime for an asynchronous
     // server.
     FlashService * service_;
+
     // The producer-consumer queue where for asynchronous server notifications.
     grpc::ServerCompletionQueue * cq_;
     // Context for the rpc, allowing to tweak aspects of it such as the use
@@ -134,6 +137,10 @@ private:
         FINISH
     };
     std::atomic<CallStatus> state_; // The current serving state.
+
+    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue_ = nullptr;
+
+    std::shared_ptr<DB::MPPTunnel> mpptunnel_ = nullptr;
 };
 
 } // namespace DB

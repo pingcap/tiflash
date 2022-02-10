@@ -44,9 +44,12 @@ FlashService::FlashService(IServer & server_)
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
-    batch_cop_pool->schedule([&] {while(true) {
-            LOG_ERROR(log, "max active establish thds: "<< max_active_establish_thds);
-            usleep(1000000);} });
+    batch_cop_pool->schedule(
+        [&] {
+            while(true) {
+                LOG_ERROR(log, "max active establish thds: "<< max_active_establish_thds);
+                usleep(1000000);
+            } });
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -223,6 +226,7 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     //    Stopwatch stopwatch;
     tunnel->no_waiter = true;
     tunnel->connect(calldata);
+    calldata->attachTunnel(tunnel);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
     //    tunnel->waitForFinish();
     //    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
@@ -463,13 +467,49 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     }
 }
 
-bool CallData::Write(const mpp::MPPDataPacket & packet)
+CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
+    : service_(service)
+    , cq_(cq)
+    , responder_(&ctx_)
+    , state_(CREATE)
+    , send_queue_(nullptr)
+{
+    // Invoke the serving logic right away.
+    Proceed();
+}
+
+bool CallData::TryWrite(std::unique_lock<std::mutex> *p_lk)
+{
+    // The actual processing.
+    //    try
+    //    {
+    {
+        std::unique_lock lk(mu);
+        if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
+            ready = false;
+        else
+            return false;
+        //            cv.wait(lk, [&] { return ready.load(); });
+    }
+    mpptunnel_->sendOp(p_lk);
+    return true;
+    //        responder_.Write(packet, this);
+    //        return 1;
+    //    }
+    //    catch (...)
+    //    {
+    //        return -1;
+    //    }
+}
+
+bool CallData::Write(const mpp::MPPDataPacket & packet, bool need_wait)
 {
     // The actual processing.
     //        std::string prefix("Hello ");
     //        reply_.set_message(prefix + request_.name());
     try
     {
+        if (need_wait)
         {
             std::unique_lock lk(mu);
             cv.wait(lk, [&] { return ready.load(); });
@@ -490,7 +530,7 @@ void CallData::WriteErr(const mpp::MPPDataPacket & packet)
     bool ret = Write(packet);
     if (ret)
     {
-        status4err = (grpc::Status::OK);
+        status4err = grpc::Status::OK;
     }
     else
     {
@@ -498,11 +538,12 @@ void CallData::WriteErr(const mpp::MPPDataPacket & packet)
     }
 }
 
-void CallData::WriteDone(const ::grpc::Status & status)
+void CallData::WriteDone(const ::grpc::Status & status, bool need_wait)
 {
     // And we are done! Let the gRPC runtime know we've finished, using the
     // memory address of this instance as the uniquely identifying tag for
     // the event.
+    if (need_wait)
     {
         std::unique_lock lk(mu);
         cv.wait(lk, [&] { return ready.load(); });
@@ -548,7 +589,24 @@ void CallData::Proceed()
     }
     else if (state_ == JOIN)
     {
-        notifyReady();
+        {
+            //TODO check mem order
+            std::unique_lock lk(mu);
+            if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
+            {
+                //                ready = false;
+                //                ready = true;
+                lk.unlock();
+                mpptunnel_->sendOp();
+                //                mpptunnel_->
+                //                send_queue->pop();
+            }
+            else
+            {
+                notifyReady();
+            }
+        }
+
         //notify producer that it's ready
     }
     else if (state_ == ERR_HANDLE)
@@ -565,6 +623,16 @@ void CallData::Proceed()
     }
     service_->current_active_establish_thds--;
     service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+}
+
+void CallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue)
+{
+    this->send_queue_ = send_queue;
+}
+
+void CallData::attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel)
+{
+    this->mpptunnel_ = mpptunnel;
 }
 
 } // namespace DB
