@@ -63,7 +63,7 @@ private:
     using JSONObjectPtr = Poco::JSON::Object::Ptr;
 
     void loadTables(const JSONObjectPtr & obj);
-    void loadRegion(const Poco::Dynamic::Var & region_json, LoadedRegionInfo & region) const;
+    LoadedRegionInfo loadRegion(const Poco::Dynamic::Var & region_json) const;
     void loadReqAndRsp(const JSONObjectPtr & obj);
     void buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const;
     void buildTables(Context & context);

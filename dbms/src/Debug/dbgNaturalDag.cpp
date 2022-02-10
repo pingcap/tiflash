@@ -117,16 +117,16 @@ void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
         auto regions_json = tbl_json->getArray(TABLE_REGIONS);
         for (auto & region_json : *regions_json)
         {
-            auto region = LoadedRegionInfo();
-            loadRegion(region_json, region);
+            auto region = loadRegion(region_json);
             table.regions.push_back(std::move(region));
         }
         tables.emplace(id, std::move(table));
     }
 }
 
-void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::LoadedRegionInfo & region) const
+NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json) const
 {
+    auto region = LoadedRegionInfo();
     auto region_obj = region_json.extract<JSONObjectPtr>();
     region.id = region_obj->getValue<uint64_t>(REGION_ID);
     region.version = DEFAULT_REGION_VERSION;
@@ -152,6 +152,7 @@ void NaturalDag::loadRegion(const Poco::Dynamic::Var & region_json, NaturalDag::
         TiKVValue tikv_value(std::move(value)); // use value directly, no encoding needed
         region.pairs.push_back(std::make_pair(std::move(tikv_key), std::move(tikv_value)));
     }
+    return region;
 }
 
 const String & NaturalDag::getDatabaseName() const
