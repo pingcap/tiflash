@@ -72,7 +72,7 @@ void NaturalDag::init()
     Poco::Dynamic::Var result = parser.parse(json_str);
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed parsing json file: " << json_dag_path);
 
-    const auto& obj = result.extract<JSONObjectPtr>();
+    const auto & obj = result.extract<JSONObjectPtr>();
     loadTables(obj);
     LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading table data!");
     loadReqAndRsp(obj);

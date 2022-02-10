@@ -27,7 +27,8 @@ class NaturalDag
 public:
     using ReqRspVec = std::vector<std::pair<coprocessor::Request, coprocessor::Response>>;
     using BatchReqRspVec = std::vector<std::pair<coprocessor::BatchRequest, coprocessor::BatchResponse>>;
-    using MPPReqRspVec = std::vector<std::pair<mpp::DispatchTaskRequest, mpp::DispatchTaskResponse>>;
+    /// DispatchTaskResponse only contains status info, without data which are we care about, so use MPPDataPacket instead
+    using MPPReqRspVec = std::vector<std::pair<mpp::DispatchTaskRequest, mpp::MPPDataPacket>>;
     NaturalDag(const String & json_dag_path_, Poco::Logger * log_)
         : json_dag_path(json_dag_path_)
         , log(log_) //To keep the same as MockTests
