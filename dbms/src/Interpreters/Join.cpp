@@ -433,14 +433,15 @@ void Join::setSampleBlock(const Block & block)
 
 namespace
 {
+// NOLINTBEGIN(clang-analyzer-core.NullDereference)
 void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index)
 {
-    assert(list);
     elem->next = list->next;
     list->next = elem;
     elem->block = stored_block;
     elem->row_num = index;
 }
+// NOLINTEND(clang-analyzer-core.NullDereference)
 
 /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
 template <ASTTableJoin::Strictness STRICTNESS, typename Map, typename KeyGetter>
