@@ -115,7 +115,7 @@ cd /path/to/tiflash-env
 
 #### Compile TiFlash
 
-You can simply enter the env to compile and run tiflash:
+You can now build tiflash using the following commands:
 
 ```
 cd /your/build/dir
