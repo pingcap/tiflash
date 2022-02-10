@@ -80,7 +80,7 @@ struct HashMethodString
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
