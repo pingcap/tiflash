@@ -64,9 +64,28 @@ Now you will get TiFlash binary under `WORKSPACE/tics/build/dbms/src/Server/tifl
 
 ### Build TiFlash on Linux
 
-TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`) (for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)). Or you can also use system-wise toolchain if you can install `clang/compiler-rt/libc++/libc++abi` (with development headers, version 13+) in your environment. 
+TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-rt) by default. To quickly setup a LLVM environment, you can use TiFlash Development Environment (see `release-centos7-llvm/env`). Or you can also use system-wise toolchain if you can install `clang/compiler-rt/libc++/libc++abi` (with development headers, version 13+) in your environment. 
 
-#### Option 1: System-wise Toolchain 
+#### Option 1: TiFlash Env
+
+> for faster access of precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tfilash-env-x86_64.tar.xz)
+
+The development environment can be easily created with following commands (`docker` and `tar xz` are needed):
+
+```
+cd release-centos7-llvm/env
+make tiflash-env-$(uname -m).tar.xz
+```
+Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place.
+
+To enter the env (before compiling TiFlash):
+
+```
+cd /path/to/tiflash-env
+./loader
+```
+
+#### Option 2: System-wise Toolchain 
 
 - Debian/Ubuntu users:
 
@@ -94,22 +113,11 @@ TiFlash compiles in full LLVM environment (libc++/libc++abi/libunwind/compiler-r
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ``` 
 
-#### Option 2: Create TiFlash Env
-
-The development environment can be easily created with following commands (`docker` and `tar xz` are needed):
-
-```
-cd release-centos7-llvm/env
-make tiflash-env-$(uname -m).tar.xz
-```
-Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place.
-
 #### Compile TiFlash
 
 You can simply enter the env to compile and run tiflash:
+
 ```
-cd /path/to/tiflash-env
-./loader
 cd /your/build/dir
 cmake /path/to/tiflash/src/dir -GNinja
 ninja
