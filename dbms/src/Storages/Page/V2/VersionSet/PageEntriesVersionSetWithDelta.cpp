@@ -400,6 +400,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::PUT:
             this->applyPut(rec);
             break;
@@ -531,6 +532,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
     {
         switch (rec.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::PUT:
             current->put(rec.page_id, rec.entry);
             break;

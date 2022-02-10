@@ -3,22 +3,22 @@
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
+#include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V2/PageFile.h>
+#include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <ext/scope_guard.h>
 
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
 
-#include <IO/WriteBufferFromFile.h>
-#include <Poco/File.h>
-#include <Storages/Page/PageUtil.h>
-#include <Storages/Page/V2/PageFile.h>
-
-#include <ext/scope_guard.h>
 
 namespace CurrentMetrics
 {
@@ -86,6 +86,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::UPSERT:
             if (write.read_buffer)
                 data_write_bytes += write.size;
@@ -119,9 +120,15 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (auto & write : wb.getWrites())
     {
+        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
+            write.type = WriteBatch::WriteType::PUT;
+
         PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not run into here with PUT_EXTERNAL");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
@@ -340,6 +347,9 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not run into here with PUT_EXTERNAL");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
@@ -564,6 +574,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not run into here with PUT_EXTERNAL");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
