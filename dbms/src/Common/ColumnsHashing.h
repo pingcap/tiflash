@@ -128,7 +128,7 @@ struct HashMethodFixedString
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
