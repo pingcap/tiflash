@@ -89,7 +89,7 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = static_cast<std::make_unsigned_t<typeof(c)>>(escape);
+                        c = static_cast<std::make_unsigned_t<decltype(c)>>(escape);
                 }
             }
             else if (c == '_')
