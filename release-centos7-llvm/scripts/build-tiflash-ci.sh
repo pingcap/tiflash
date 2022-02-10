@@ -145,9 +145,9 @@ ninja tiflash
 
 if $BUILD_TIFLASH_PROXY; then
   echo "try to upload libtiflash_proxy.so"
-  cd target/release
+  pushd "${SRCPATH}/contrib/tiflash-proxy/target/release"
   curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
-  curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
+  popd
 fi
 
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
