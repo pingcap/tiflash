@@ -1763,27 +1763,27 @@ public:
         bool can_skip = false;
         // cast(int/enum as decimal)
         if (castTypeToEither<
-            DataTypeUInt8,
-            DataTypeUInt16,
-            DataTypeUInt32,
-            DataTypeUInt64,
-            DataTypeInt8,
-            DataTypeInt16,
-            DataTypeInt32,
-            DataTypeInt64,
-            DataTypeEnum8,
-            DataTypeEnum16>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto &, bool) -> bool {
-                    using FromFieldType = typename FromDataType::FieldType;
-                    if constexpr (std::is_integral_v<FromFieldType>)
-                    {
-                        PrecType from_prec = IntPrec<FromFieldType>::real_prec;
-                        can_skip = (from_prec + to_decimal_scale) <= to_decimal_prec;
-                    }
-                    else
-                    {
-                        can_skip = false;
-                    }
-                    return true;
+                DataTypeUInt8,
+                DataTypeUInt16,
+                DataTypeUInt32,
+                DataTypeUInt64,
+                DataTypeInt8,
+                DataTypeInt16,
+                DataTypeInt32,
+                DataTypeInt64,
+                DataTypeEnum8,
+                DataTypeEnum16>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto &, bool) -> bool {
+                using FromFieldType = typename FromDataType::FieldType;
+                if constexpr (std::is_integral_v<FromFieldType>)
+                {
+                    PrecType from_prec = IntPrec<FromFieldType>::real_prec;
+                    can_skip = (from_prec + to_decimal_scale) <= to_decimal_prec;
+                }
+                else
+                {
+                    can_skip = false;
+                }
+                return true;
             }))
         {
             return can_skip;
@@ -1825,16 +1825,16 @@ public:
                 DataTypeDecimal64,
                 DataTypeDecimal128,
                 DataTypeDecimal256>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) {
-            Int64 scale_diff = static_cast<Int64>(to_decimal_scale) - static_cast<Int64>(from_type_ptr.getScale());
-            if (scale_diff < 0)
-            {
-                // Why plus 1: if to_scale < from_scale, we need to div and round up if necessary.
-                // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
-                scale_diff += 1;
-            }
-            can_skip = (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
-            return true;
-        }))
+                Int64 scale_diff = static_cast<Int64>(to_decimal_scale) - static_cast<Int64>(from_type_ptr.getScale());
+                if (scale_diff < 0)
+                {
+                    // Why plus 1: if to_scale < from_scale, we need to div and round up if necessary.
+                    // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
+                    scale_diff += 1;
+                }
+                can_skip = (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
+                return true;
+            }))
         {
             return can_skip;
         }
