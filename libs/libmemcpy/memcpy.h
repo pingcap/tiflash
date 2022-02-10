@@ -124,6 +124,38 @@ enum class HugeSizeStrategy
     HugeSizeEVEX64
 };
 
+const char * toString(MediumSizeStrategy strategy)
+{
+    switch (strategy)
+    {
+    case MediumSizeStrategy::MediumSizeSSE:
+        return "sse";
+    case MediumSizeStrategy::MediumSizeRepMovsb:
+        return "rep_movsb";
+    }
+}
+
+const char * toString(HugeSizeStrategy strategy)
+{
+    switch (strategy)
+    {
+    case HugeSizeStrategy::HugeSizeSSE:
+        return "sse";
+    case HugeSizeStrategy::HugeSizeSSENT:
+        return "ssent";
+    case HugeSizeStrategy::HugeSizeRepMovsb:
+        return "rep_movsb";
+    case HugeSizeStrategy::HugeSizeSSSE3Mux:
+        return "ssse3";
+    case HugeSizeStrategy::HugeSizeVEX32:
+        return "vex32";
+    case HugeSizeStrategy::HugeSizeEVEX32:
+        return "evex32";
+    case HugeSizeStrategy::HugeSizeEVEX64:
+        return "evex64";
+    }
+}
+
 struct MemcpyConfig
 {
     size_t medium_size_threshold;

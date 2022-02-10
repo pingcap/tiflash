@@ -883,11 +883,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 __builtin___clear_cache(dst.data(), dst.data() + dst.size());
                 memcpy_config.medium_size_strategy = i;
                 auto begin = std::chrono::high_resolution_clock::now();
-                ::memcpy(dst.data(), src.data(), src.size());
+                __asm__ volatile("" ::
+                                     : "memory");
+                TIFLASH_NO_OPTIMIZE(::memcpy(dst.data(), src.data(), src.size()));
+                __asm__ volatile("" ::
+                                     : "memory");
                 auto end = std::chrono::high_resolution_clock::now();
                 current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
             }
             auto current_time_avg = current_time_sum / 32.0;
+            double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
+            double time = current_time_avg / 1e9;
+            LOG_FMT_INFO(log, "Tested memcpy medium size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
             if (current_time_avg < best_time_avg)
             {
                 strategy = i;
@@ -897,13 +904,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         memcpy_config.medium_size_strategy = strategy;
         double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
         double time = best_time_avg / 1e9;
-        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), size / time);
+        LOG_FMT_INFO(log, "Using medium size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
     }
 
     {
         using namespace memory_copy;
-        std::vector<char> src(memcpy_config.huge_size_threshold * 2 + 1);
-        std::vector<char> dst(memcpy_config.huge_size_threshold * 2 + 1);
+        std::vector<char> src(memcpy_config.huge_size_threshold * 17 + 1);
+        std::vector<char> dst(memcpy_config.huge_size_threshold * 17 + 1);
         HugeSizeStrategy strategy = HugeSizeStrategy::HugeSizeSSE;
         double best_time_avg{std::numeric_limits<size_t>::max()};
         for (auto i : {
@@ -924,11 +931,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 __builtin___clear_cache(dst.data(), dst.data() + dst.size());
                 memcpy_config.huge_size_strategy = i;
                 auto begin = std::chrono::high_resolution_clock::now();
-                ::memcpy(dst.data(), src.data(), src.size());
+                __asm__ volatile("" ::
+                                     : "memory");
+                TIFLASH_NO_OPTIMIZE(::memcpy(dst.data(), src.data(), src.size()));
+                __asm__ volatile("" ::
+                                     : "memory");
                 auto end = std::chrono::high_resolution_clock::now();
                 current_time_sum += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count());
             }
             auto current_time_avg = current_time_sum / 32.0;
+            double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
+            double time = current_time_avg / 1e9;
+            LOG_FMT_INFO(log, "Tested memcpy huge size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
             if (current_time_avg < best_time_avg)
             {
                 strategy = i;
@@ -938,7 +952,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         memcpy_config.huge_size_strategy = strategy;
         double size = static_cast<double>(src.size()) / 1024.0 / 1024.0 / 1024.0;
         double time = best_time_avg / 1e9;
-        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", static_cast<size_t>(strategy), size / time);
+        LOG_FMT_INFO(log, "Using huge size strategy: {}, average throughput: {} GiB/s", memory_copy::toString(strategy), size / time);
     }
 #endif
 
