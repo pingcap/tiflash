@@ -9,7 +9,6 @@
 
 #include <ext/scope_guard.h>
 #include <mutex>
-
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
@@ -485,7 +484,15 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         auto lock = stat->lock();
         auto right_margin = stat->smap->getRightMargin();
 
+        // Avoid divide by zero
+        if (right_margin == 0)
+        {
+            LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
+            continue;
+        }
+
         stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
+
         if (stat->sm_valid_rate > 1.0)
         {
             LOG_FMT_ERROR(
@@ -497,13 +504,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 right_margin,
                 stat->id);
             assert(false);
+            continue;
         }
 
         // Check if GC is required
         if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
         {
             LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
-            stat->sm_total_size = stat->sm_valid_size;
             blob_need_gc.emplace_back(stat->id);
 
             // Change current stat to read only
@@ -517,6 +524,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         if (right_margin != stat->sm_total_size)
         {
             auto blobfile = getBlobFile(stat->id);
+            LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
             blobfile->truncate(right_margin);
             stat->sm_total_size = right_margin;
         }
