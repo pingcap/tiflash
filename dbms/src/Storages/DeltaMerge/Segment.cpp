@@ -1486,26 +1486,12 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     if (unlikely(my_placed_rows != delta_snap->getRows() || my_placed_deletes != delta_snap->getDeletes()))
     {
-        String items_info;
-        for (auto & item : items)
-        {
-            if (item.isBlock())
-            {
-                items_info += "block " + toString(item.getBlockOffset()) + " rows " + toString(item.getBlock().rows()) + " ";
-            }
-            else
-            {
-                items_info += "delete ";
-            }
-        }
         throw Exception(
-            fmt::format("Placed status not match! Expected place rows:{}, deletes:{}, but actually placed rows:{}, deletes:{}, items detail:{}, snap detail:{}",
+            fmt::format("Placed status not match! Expected place rows:{}, deletes:{}, but actually placed rows:{}, deletes:{}",
                         delta_snap->getRows(),
                         delta_snap->getDeletes(),
                         my_placed_rows,
-                        my_placed_deletes,
-                        items_info,
-                        delta_snap->toString()));
+                        my_placed_deletes));
     }
 
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
