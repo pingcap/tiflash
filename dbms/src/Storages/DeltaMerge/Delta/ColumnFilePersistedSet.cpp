@@ -372,7 +372,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
 
 bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs)
 {
-    if (compaction->current_compaction_version != minor_compaction_version)
+    if (compaction->getCompactionVersion() != minor_compaction_version)
     {
         LOG_FMT_WARNING(log, "Structure has been updated during compact");
         return false;
@@ -380,8 +380,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     minor_compaction_version += 1;
     LOG_FMT_DEBUG(log, "Before commit compaction, level summary: {}", info());
     ColumnFilePersistedLevels new_persisted_files_levels;
-    // Copy column files in level range [0, compaction->compaction_src_level)
-    for (size_t i = 0; i < compaction->compaction_src_level; i++)
+    auto compaction_src_level = compaction->getCompactionSourceLevel();
+    // Copy column files in level range [0, compaction_src_level)
+    for (size_t i = 0; i < compaction_src_level; i++)
     {
         auto & new_level = new_persisted_files_levels.emplace_back();
         for (const auto & f : persisted_files_levels[i])
@@ -391,11 +392,11 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     // Actually, just level 0 may contain file that is not in the compaction task, because flush and compaction can happen concurrently.
     // For other levels, we always compact all the files in the level.
     // And because compaction is a single threaded process, so there will be no new files compacted to the source level at the same time.
-    const auto & old_src_level_files = persisted_files_levels[compaction->compaction_src_level];
+    const auto & old_src_level_files = persisted_files_levels[compaction_src_level];
     auto old_src_level_files_iter = old_src_level_files.begin();
-    for (auto & task : compaction->tasks)
+    for (const auto & task : compaction->getTasks())
     {
-        for (auto & file : task.to_compact)
+        for (const auto & file : task.to_compact)
         {
             if (unlikely(old_src_level_files_iter == old_src_level_files.end()
                          || (file->getId() != (*old_src_level_files_iter)->getId())
@@ -410,9 +411,10 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     while (old_src_level_files_iter != old_src_level_files.end())
     {
         src_level_files.emplace_back(*old_src_level_files_iter);
+        old_src_level_files_iter++;
     }
     // Add new file to the target level
-    auto target_level = compaction->compaction_src_level + 1;
+    auto target_level = compaction_src_level + 1;
     auto & target_level_files = new_persisted_files_levels.emplace_back();
     // Copy the old column files in the target level first if exists
     if (persisted_files_levels.size() > target_level)
@@ -421,7 +423,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
             target_level_files.emplace_back(column_file);
     }
     // Add the compaction result to new target level
-    for (auto & task : compaction->tasks)
+    for (const auto & task : compaction->getTasks())
     {
         if (task.is_trivial_move)
             target_level_files.push_back(task.to_compact[0]);

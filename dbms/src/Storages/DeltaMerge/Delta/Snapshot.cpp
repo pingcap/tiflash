@@ -46,6 +46,13 @@ RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
         return persisted_files_snap->getSquashDeleteRange();
     }
 }
+String DeltaValueSnapshot::toString() const
+{
+    String info = columnFilesToString(persisted_files_snap->getColumnFiles());
+    if (mem_table_snap)
+        return info += columnFilesToString(mem_table_snap->getColumnFiles());
+    return info;
+}
 
 // ================================================
 // DeltaValueReader

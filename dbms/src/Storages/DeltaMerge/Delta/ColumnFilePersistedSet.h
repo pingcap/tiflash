@@ -105,6 +105,7 @@ public:
     PageId getId() const { return metadata_id; }
 
     size_t getColumnFileCount() const { return persisted_files_count.load(); }
+    size_t getColumnFileLevelCount() const { return persisted_files_levels.size(); }
     size_t getRows() const { return rows.load(); }
     size_t getBytes() const { return bytes.load(); }
     size_t getDeletes() const { return deletes.load(); }

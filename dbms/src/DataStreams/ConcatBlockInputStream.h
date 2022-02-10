@@ -29,8 +29,8 @@ public:
 protected:
     Block readImpl() override
     {
-        FilterPtr filter;
-        return readImpl(filter, false);
+        FilterPtr filter_;
+        return readImpl(filter_, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override

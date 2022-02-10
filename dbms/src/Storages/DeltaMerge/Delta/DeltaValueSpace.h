@@ -87,6 +87,10 @@ public:
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
+    /// The following two methods are just for test purposes
+    MemTableSetPtr getMemTableSet() const { return mem_table_set; }
+    ColumnFilePersistedSetPtr getPersistedFileSet() const { return persisted_file_set; }
+
     String simpleInfo() const { return "Delta [" + DB::toString(persisted_file_set->getId()) + "]"; }
     String info() const
     {
@@ -299,6 +303,8 @@ public:
 
     const auto & getStorageSnapshot() { return persisted_files_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
+
+    String toString() const;
 };
 
 class DeltaValueReader

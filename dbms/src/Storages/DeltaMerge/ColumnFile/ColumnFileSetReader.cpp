@@ -35,7 +35,8 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
         }
         else
         {
-            rows_count += column_file->getRows();
+            size_t column_file_rows = column_file->getRows();
+            rows_count += column_file_rows;
             if (rows_count > rows_offset)
             {
                 if (unlikely(deletes_count != deletes_offset))
@@ -45,7 +46,7 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
                                         + ", deletes_offset: " + DB::toString(deletes_offset),
                                     ErrorCodes::LOGICAL_ERROR);
 
-                return {column_file_index, column_file->getRows() - (rows_count - rows_offset)};
+                return {column_file_index, column_file_rows - (rows_count - rows_offset)};
             }
         }
     }

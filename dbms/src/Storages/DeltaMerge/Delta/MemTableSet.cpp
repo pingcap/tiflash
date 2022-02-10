@@ -167,9 +167,18 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
     size_t total_deletes = 0;
     for (const auto & file : column_files)
     {
-        // All column files in MemTableSet is constant(except append data to the cache object in ColumnFileInMemory),
-        // and we always create new column file object when flushing, so it's safe to reuse the column file object here.
-        snap->column_files.push_back(file);
+        // ColumnFileInMemory object may still be appendable after creating this snapshot, and it will change some of its internal state.
+        // So it's safe to create a new object and just share the cache object with the original ColumnFileInMemory object instance.
+        if (auto * m = file->tryToInMemoryFile(); m)
+        {
+            // Compact threads could update the value of ColumnTinyFile::cache,
+            // and since ColumnFile is not multi-threads safe, we should create a new column file object.
+            snap->column_files.push_back(std::make_shared<ColumnFileInMemory>(*m));
+        }
+        else
+        {
+            snap->column_files.push_back(file);
+        }
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
     }

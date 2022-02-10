@@ -35,7 +35,7 @@ public:
                         const ColumnDefinesPtr & col_defs_,
                         const RowKeyRange & segment_range_);
 
-    // If we need to read columns besides pk and version, a DeltaValueReader can NOT be used more than once.
+    // If we need to read columns besides pk and version, a ColumnFileSetReader can NOT be used more than once.
     // This method create a new reader based on then current one. It will reuse some caches in the current reader.
     ColumnFileSetReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
 

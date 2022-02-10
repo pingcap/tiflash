@@ -16,8 +16,6 @@ using MinorCompactionPtr = std::shared_ptr<MinorCompaction>;
 /// For `ColumnFileBig` and `ColumnFileDeleteRange`, it just moves it to the next level.
 class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 {
-    friend class ColumnFilePersistedSet;
-
 public:
     struct Task
     {
@@ -75,6 +73,11 @@ public:
         tasks.push_back(std::move(task));
         return is_trivial_move;
     }
+
+    const Tasks & getTasks() const { return tasks; }
+
+    size_t getCompactionSourceLevel() const { return compaction_src_level; }
+    size_t getCompactionVersion() const { return current_compaction_version; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
