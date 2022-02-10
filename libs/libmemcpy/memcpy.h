@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <string_view>
 
 /** Custom memcpy implementation for ClickHouse.
   * It has the following benefits over using glibc's implementation:
