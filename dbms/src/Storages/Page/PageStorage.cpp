@@ -1,5 +1,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 
 namespace DB
 {
@@ -9,7 +10,7 @@ PageStoragePtr PageStorage::create(
     const PageStorage::Config & config,
     const FileProviderPtr & file_provider)
 {
-    return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider);
+    return std::make_shared<PS::V3::PageStorageImpl>(name, delegator, config, file_provider);
 }
 
 } // namespace DB
