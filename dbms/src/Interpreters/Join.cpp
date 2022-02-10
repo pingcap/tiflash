@@ -433,7 +433,7 @@ void Join::setSampleBlock(const Block & block)
 
 namespace
 {
-void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index)
+void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index) __attribute__((analyzer_noreturn))
 {
     elem->next = list->next;
     list->next = elem;
