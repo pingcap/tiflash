@@ -43,6 +43,7 @@ struct SortColumnDescription
     /// For IBlockInputStream.
     std::string getID() const;
 };
+
 /// Description of the sorting rule for several columns.
 using SortDescription = std::vector<SortColumnDescription>;
 

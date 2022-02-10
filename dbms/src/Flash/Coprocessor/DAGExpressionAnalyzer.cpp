@@ -1302,7 +1302,6 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     {
         for (auto & col : updated_after_window_columns)
         {
-            final_window_add_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
         }
     }
@@ -1310,7 +1309,6 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     {
         for (auto & col : after_window_columns)
         {
-            final_window_add_columns.emplace_back(col.name, col.type);
             source_columns.emplace_back(col.name, col.type);
         }
     }

@@ -343,12 +343,6 @@ void Block::setColumns(MutableColumns && columns)
         data[i].column = std::move(columns[i]);
 }
 
-void Block::setColumns(const Columns & columns)
-{
-    size_t num_columns = data.size();
-    for (size_t i = 0; i < num_columns; ++i)
-        data[i].column = columns[i];
-}
 
 Block Block::cloneWithColumns(MutableColumns && columns) const
 {

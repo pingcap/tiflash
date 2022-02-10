@@ -208,11 +208,6 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
-    // all columns after window
-    std::vector<std::vector<NameAndTypePair>> windows_columns;
-    std::vector<std::vector<tipb::Expr>> windows_functions;
-
-    NamesAndTypes final_window_add_columns;
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;
