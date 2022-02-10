@@ -46,7 +46,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    //{tipb::ExprType::Avg, ""},
+    {tipb::ExprType::Avg, "avg"},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -914,6 +914,18 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
         //    case tipb::ExprType::FirstValue:
         //    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::NthValue:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowLagOrLeadFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
         return true;
     default:
         return false;

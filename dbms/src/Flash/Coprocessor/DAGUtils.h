@@ -22,6 +22,7 @@ bool isFunctionExpr(const tipb::Expr & expr);
 bool isScalarFunctionExpr(const tipb::Expr & expr);
 bool isAggFunctionExpr(const tipb::Expr & expr);
 bool isWindowFunctionExpr(const tipb::Expr & expr);
+bool isWindowLagOrLeadFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
 const String & getWindowFunctionName(const tipb::Expr & expr);

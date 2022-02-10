@@ -178,16 +178,9 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     input_header = input->getHeader();
     for (auto & add_column : window_description_.add_columns)
     {
-        std::cout << "add column: " << add_column.name << std::endl;
         input_header.insert({add_column.type, add_column.name});
     }
-
     auto input_columns = input_header.getColumns();
-    for (auto & column : input_columns)
-    {
-        column = std::move(column)->convertToFullColumnIfConst();
-    }
-    //input_header.setColumns(std::move(input_columns));
 
     if (window_description.window_functions_descriptions.size() * window_description.aggregate_descriptions.size() != 0)
     {
@@ -1052,7 +1045,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
             ws.result = current_block.columns();
             if (ws.is_agg_workspace)
             {
-                window_block.output_columns.push_back(ws.window_function->getReturnType()->createColumn());
+                window_block.output_columns.push_back(ws.aggregate_function->getReturnType()->createColumn());
                 current_block.insert({ws.aggregate_function->getReturnType(), ws.column_name});
             }
             else

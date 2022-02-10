@@ -694,7 +694,6 @@ void DAGQueryBlockInterpreter::executeWindow(
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, taskLogger()); });
     Block header = pipeline.firstStream()->getHeader();
 
-    // TODO: extract into function
     for (auto & window_descr : window_description.window_functions_descriptions)
     {
         if (window_descr.arguments.empty())

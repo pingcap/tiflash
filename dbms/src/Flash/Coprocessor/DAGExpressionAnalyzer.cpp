@@ -827,9 +827,13 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
 
     std::vector<NameAndTypePair> window_columns;
 
+    if (window.has_frame())
+    {
+        window_description.setWindowFrame(window.frame());
+    }
+
     for (const tipb::Expr & expr : window.func_desc())
     {
-        // TODO: extract into function
         if (isAggFunctionExpr(expr))
         {
             AggregateDescription aggregate_description;
@@ -872,17 +876,28 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
                     arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
                 else
                     arg_collators.push_back({});
+                if (i == 2 && isWindowLagOrLeadFunctionExpr(expr) && types[i] != types[0])
+                {
+                    arg_name = appendCast(types[0], step.actions, arg_name);
+                    types[i] = types[0];
+                }
                 window_function_description.argument_names[i] = arg_name;
                 step.required_output.push_back(arg_name);
             }
             if (0 == child_size)
                 arg_collators.push_back({});
+
             String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
             window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
             DataTypePtr result_type = window_function_description.window_function->getReturnType();
             window_description.window_functions_descriptions.push_back(window_function_description);
             window_columns.emplace_back(func_string, result_type);
+            if (isWindowLagOrLeadFunctionExpr(expr))
+            {
+                window_description.frame.begin_type = WindowFrame::BoundaryType::Unbounded;
+                window_description.frame.end_type = WindowFrame::BoundaryType::Unbounded;
+            }
         }
         else
         {
@@ -890,10 +905,6 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
         }
     }
 
-    if (window.has_frame())
-    {
-        window_description.setWindowFrame(window.frame());
-    }
     window_description.before_window = chain.getLastActions();
     window_description.partition_by = getWindowSortDescription(window.partition_by(), step);
     window_description.order_by = getWindowSortDescription(window.order_by(), step);
