@@ -478,7 +478,7 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
     Proceed();
 }
 
-bool CallData::TryWrite(std::unique_lock<std::mutex> *p_lk)
+bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
 {
     // The actual processing.
     //    try
@@ -486,12 +486,22 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> *p_lk)
     {
         std::unique_lock lk(mu);
         if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
+        {
+            if (trace)
+                std::cerr << "CallData::TryWrite::ok, ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
             ready = false;
+        }
         else
+        {
+            if (trace)
+                std::cerr << "CallData::TryWrite::fail!!! ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
             return false;
+        }
         //            cv.wait(lk, [&] { return ready.load(); });
     }
-    mpptunnel_->sendOp(p_lk);
+    std::string retstr = mpptunnel_->sendOp(p_lk);
+    if (trace)
+        std::cerr << "mpptunnel_->sendOp(p_lk) result: " << retstr << std::endl;
     return true;
     //        responder_.Write(packet, this);
     //        return 1;

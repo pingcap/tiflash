@@ -87,7 +87,7 @@ public:
 
     bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
 
-    bool TryWrite(std::unique_lock<std::mutex> *p_lk = nullptr);
+    bool TryWrite(std::unique_lock<std::mutex> *p_lk = nullptr, bool trace = false);
 
     void WriteDone(const ::grpc::Status & status, bool need_wait = true);
 

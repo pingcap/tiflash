@@ -175,7 +175,7 @@ void MPPTunnelBase<Writer>::sendLoop()
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
+std::string MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
 {
     assert(!is_local);
     String err_msg;
@@ -187,7 +187,7 @@ void MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
         {
             if (writer->Write(*res, false))
             {
-                return;
+                return "undone.op";
             }
             else
             {
@@ -221,6 +221,7 @@ void MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
         //        std::cerr<<"async mpptunnel end"<<std::endl;
         writer->WriteDone(grpc::Status::OK, false);
     }
+    return err_msg;
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -240,7 +241,7 @@ void MPPTunnelBase<Writer>::writeDone()
         if (fg && !is_local)
         {
             fin_by = 4;
-            writer->TryWrite(&lk);
+            writer->TryWrite(&lk, true);
         }
     }
     waitForConsumerFinish(/*allow_throw=*/true);
