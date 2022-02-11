@@ -428,7 +428,7 @@ void Join::setSampleBlock(const Block & block)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 
     if (isLeftSemiFamily(kind))
-        sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, Join::match_helper_name));
+        sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
 }
 
 
@@ -1172,7 +1172,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
     if (isLeftSemiFamily(kind))
     {
-        const auto helper_pos = block.getPositionByName(Join::match_helper_name);
+        const auto helper_pos = block.getPositionByName(match_helper_name);
 
         const auto * old_match_nullable = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
         const auto & old_match_vec = static_cast<const ColumnVector<Int8> *>(old_match_nullable->getNestedColumnPtr().get())->getData();
