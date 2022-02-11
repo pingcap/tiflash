@@ -80,13 +80,16 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
-    for (const auto & write : wb.getWrites())
+    for (auto & write : wb.getWrites())
     {
         meta_write_bytes += sizeof(IsPut);
+        // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
+        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
+            write.type = WriteBatch::WriteType::PUT;
+
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::UPSERT:
             if (write.read_buffer)
                 data_write_bytes += write.size;
@@ -101,6 +104,9 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatch::WriteType::REF:
             // For ref page, store RefPageId -> PageId. And don't need to write data file.
             meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
+            break;
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
         }
     }
@@ -120,6 +126,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (auto & write : wb.getWrites())
     {
+        // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
         if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
             write.type = WriteBatch::WriteType::PUT;
 
@@ -127,7 +134,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT_EXTERNAL:
-            throw Exception("Should not run into here with PUT_EXTERNAL");
+            throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
@@ -348,7 +355,7 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT_EXTERNAL:
-            throw Exception("Should not run into here with PUT_EXTERNAL");
+            throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
@@ -575,7 +582,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT_EXTERNAL:
-            throw Exception("Should not run into here with PUT_EXTERNAL");
+            throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:

@@ -11,6 +11,7 @@
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
@@ -18,6 +19,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -261,8 +263,10 @@ DeltaMergeStore::~DeltaMergeStore()
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
-    auto dmfile_scanner = [=]() {
-        PageStorage::PathAndIdsVec path_and_ids_vec;
+    ExternalPageCallbacks callbacks;
+    // V2 callbacks for cleaning DTFiles
+    callbacks.v2_scanner = [this]() {
+        ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
         auto delegate = path_pool.getStableDiskDelegator();
         DMFile::ListOptions options;
         options.only_list_can_gc = true;
@@ -276,9 +280,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
         return path_and_ids_vec;
     };
-    auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+    callbacks.v2_remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
         auto delegate = path_pool.getStableDiskDelegator();
-        for (auto & [path, ids] : path_and_ids_vec)
+        for (const auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
             {
@@ -293,11 +297,13 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     dmfile->remove(global_context.getFileProvider());
                 }
 
-                LOG_FMT_DEBUG(log, "GC removed useless dmfile: {}", dmfile->path());
+                LOG_FMT_INFO(log, "GC removed useless dmfile: {}", dmfile->path());
             }
         }
     };
-    storage_pool.data()->registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+    // TODO: callbacks for cleaning DTFiles
+    callbacks.v3_remover = nullptr;
+    storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });

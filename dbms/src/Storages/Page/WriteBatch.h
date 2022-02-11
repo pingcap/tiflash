@@ -26,7 +26,9 @@ public:
         // Create or update a Page. Now only used by GC.
         // Compare to `PUT`, this type won't create the RefPage{id} -> Page{id} by default.
         UPSERT = 3,
-        //
+        // Create an external page.
+        // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
+        // to get its lifetime management correct.
         PUT_EXTERNAL = 4,
     };
 
