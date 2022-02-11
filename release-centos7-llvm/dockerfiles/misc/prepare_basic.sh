@@ -15,7 +15,7 @@ function prepare_basic() {
          python3-devel \
          bzip2 \
          chrpath \
-    yum install -y curl git perl wget cmake3 glibc-static diffutils ninja-build devtoolset-10
+    yum install -y curl git perl wget cmake3 glibc-static zlib diffutils ninja-build devtoolset-10
     yum -y install 'perl(Data::Dumper)' 
     yum clean all -y
 }
