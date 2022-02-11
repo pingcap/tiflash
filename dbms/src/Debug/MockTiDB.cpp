@@ -545,7 +545,7 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 {
     TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
     db_ptr->id = db_id;
-    for (auto database : databases)
+    for (const auto & database : databases)
     {
         if (database.second == db_id)
         {
@@ -558,7 +558,7 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 
 std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name)
 {
-    for (auto database : databases)
+    for (const auto & database : databases)
     {
         if (database.first == database_name)
         {

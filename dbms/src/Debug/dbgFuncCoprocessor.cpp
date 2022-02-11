@@ -49,9 +49,6 @@ extern const int LOGICAL_ERROR;
 extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
-using TiDB::DatumFlat;
-using TiDB::TableInfo;
-
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 static const String ENCODE_TYPE_NAME = "encode_type";
@@ -282,11 +279,11 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             {
                 /// contains a table scan
                 auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-                if (regions.size() < (size_t)properties.mpp_partition_num)
+                if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); i++)
                 {
-                    if (i % properties.mpp_partition_num != (size_t)task.partition_id)
+                    if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
                         continue;
                     auto * region = req->add_regions();
                     region->set_region_id(regions[i].first);
@@ -305,12 +302,12 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
         tipb::ExchangeReceiver tipb_exchange_receiver;
-        for (size_t i = 0; i < root_task_ids.size(); i++)
+        for (auto task_id : root_task_ids)
         {
             mpp::TaskMeta tm;
             tm.set_start_ts(properties.start_ts);
             tm.set_address(LOCAL_HOST);
-            tm.set_task_id(root_task_ids[i]);
+            tm.set_task_id(task_id);
             tm.set_partition_id(-1);
             auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
             tm.AppendToString(tm_string);
@@ -390,7 +387,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     bool unequal_flag = false;
     String unequal_msg;
     int req_idx = 0;
-    for (auto & it : dag.getReqAndRspVec())
+    for (const auto & it : dag.getReqAndRspVec())
     {
         auto && req = it.first;
         auto && res = it.second;
@@ -440,7 +437,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 3)
+    if (args.empty() || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -448,7 +445,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    String prop_string = "";
+    String prop_string;
     if (args.size() == 3)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     DAGProperties properties = getDAGProperties(prop_string);
@@ -484,7 +481,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    String prop_string = "";
+    String prop_string;
     if (args.size() == 4)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     DAGProperties properties = getDAGProperties(prop_string);
@@ -592,7 +589,7 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
     if (expr->tp() == tipb::ScalarFunc)
     {
         bool all_const = true;
-        for (auto c : expr->children())
+        for (const auto & c : expr->children())
         {
             if (!isLiteralExpr(c))
             {
@@ -604,7 +601,7 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
             return;
         DataTypes arguments_types;
         ColumnsWithTypeAndName argument_columns;
-        for (auto & c : expr->children())
+        for (const auto & c : expr->children())
         {
             Field value = decodeLiteral(c);
             DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
@@ -888,7 +885,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             bool found = false;
-            for (auto & field : input)
+            for (const auto & field : input)
             {
                 auto field_name = splitQualifiedName(field.first);
                 if (field_name.second == column_name.second)
@@ -997,7 +994,7 @@ struct Executor
     {
         children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
     }
-    virtual ~Executor() {}
+    virtual ~Executor() = default;
 };
 
 struct ExchangeSender : Executor
@@ -1114,7 +1111,7 @@ struct TableScan : public Executor
             ci->set_decimal(info.second.decimal);
             if (!info.second.elems.empty())
             {
-                for (auto & pair : info.second.elems)
+                for (const auto & pair : info.second.elems)
                 {
                     ci->add_elems(pair.first);
                 }
@@ -1257,14 +1254,14 @@ struct Aggregation : public Executor
             if (func->name == "count")
             {
                 agg_func->set_tp(tipb::Count);
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
             else if (func->name == "sum")
             {
                 agg_func->set_tp(tipb::Sum);
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
@@ -1273,7 +1270,7 @@ struct Aggregation : public Executor
                 agg_func->set_tp(tipb::Max);
                 if (agg_func->children_size() != 1)
                     throw Exception("udaf max only accept 1 argument");
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
                 ft->set_decimal(agg_func->children(0).field_type().decimal());
                 ft->set_flag(agg_func->children(0).field_type().flag());
@@ -1284,7 +1281,7 @@ struct Aggregation : public Executor
                 agg_func->set_tp(tipb::Min);
                 if (agg_func->children_size() != 1)
                     throw Exception("udaf min only accept 1 argument");
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
                 ft->set_decimal(agg_func->children(0).field_type().decimal());
                 ft->set_flag(agg_func->children(0).field_type().flag());
@@ -1293,14 +1290,14 @@ struct Aggregation : public Executor
             else if (func->name == uniq_raw_res_name)
             {
                 agg_func->set_tp(tipb::ApproxCountDistinct);
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
                 ft->set_flag(1);
             }
             else if (func->name == "group_concat")
             {
                 agg_func->set_tp(tipb::GroupConcat);
-                auto ft = agg_func->mutable_field_type();
+                auto * ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
             }
             // TODO: Other agg func.
@@ -1356,7 +1353,7 @@ struct Aggregation : public Executor
         // todo support avg
         if (has_uniq_raw_res)
             throw Exception("uniq raw res not supported in mpp query");
-        if (gby_exprs.size() == 0)
+        if (gby_exprs.empty())
             throw Exception("agg without group by columns not supported in mpp query");
         std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
             executor_index,
@@ -1488,14 +1485,14 @@ struct Join : Executor
 
         std::unordered_set<String> left_used_columns;
         std::unordered_set<String> right_used_columns;
-        for (auto & s : used_columns)
+        for (const auto & s : used_columns)
         {
             if (left_columns.find(s) != left_columns.end())
                 left_used_columns.emplace(s);
             else
                 right_used_columns.emplace(s);
         }
-        for (auto child : join_params.using_expression_list->children)
+        for (const auto & child : join_params.using_expression_list->children)
         {
             if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
             {
@@ -1542,7 +1539,7 @@ struct Join : Executor
         }
     }
 
-    void fillJoinKeyAndFieldType(
+    static void fillJoinKeyAndFieldType(
         ASTPtr key,
         const DAGSchema & schema,
         tipb::Expr * tipb_key,
@@ -1552,7 +1549,7 @@ struct Join : Executor
         auto * identifier = typeid_cast<ASTIdentifier *>(key.get());
         for (size_t index = 0; index < schema.size(); index++)
         {
-            auto & field = schema[index];
+            const auto & field = schema[index];
             if (splitQualifiedName(field.first).second == identifier->getColumnName())
             {
                 auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -1901,9 +1898,9 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
         compileExpr(input->output_schema, elem->children[0]);
     }
     auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*limit_expr).value);
-    auto topN = std::make_shared<mock::TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
-    topN->children.push_back(input);
-    return topN;
+    auto top_n = std::make_shared<mock::TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
+    top_n->children.push_back(input);
+    return top_n;
 }
 
 ExecutorPtr compileLimit(ExecutorPtr input, size_t & executor_index, ASTPtr limit_expr)
@@ -2038,7 +2035,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)
 {
     DAGSchema output_schema;
-    auto & join_params = (static_cast<const ASTTableJoin &>(*params));
+    const auto & join_params = (static_cast<const ASTTableJoin &>(*params));
     for (auto & field : left->output_schema)
     {
         if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
@@ -2076,7 +2073,7 @@ struct QueryFragment
         , task_ids(std::move(task_ids_))
     {}
 
-    QueryTask toQueryTask(const DAGProperties & properties, MPPInfo & mpp_info, const Context & context)
+    QueryTask toQueryTask(const DAGProperties & properties, MPPInfo & mpp_info, const Context & context) const
     {
         std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
         tipb::DAGRequest & dag_request = *dag_request_ptr;
@@ -2102,10 +2099,10 @@ struct QueryFragment
             dag_request.add_output_offsets(i);
         auto * root_tipb_executor = dag_request.mutable_root_executor();
         root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
-        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
+        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.empty() ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
     }
 
-    QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context)
+    QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context) const
     {
         QueryTasks ret;
         if (properties.is_mpp_query)
@@ -2138,7 +2135,7 @@ TableID findTableIdForQueryFragment(ExecutorPtr root_executor, bool must_have_ta
     while (!current_executor->children.empty())
     {
         ExecutorPtr non_exchange_child;
-        for (auto c : current_executor->children)
+        for (const auto & c : current_executor->children)
         {
             if (dynamic_cast<mock::ExchangeReceiver *>(c.get()))
                 continue;
@@ -2181,7 +2178,7 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         std::vector<Int64> task_ids;
-        for (size_t i = 0; i < (size_t)mpp_ctx->partition_num; i++)
+        for (size_t i = 0; i < static_cast<size_t>(mpp_ctx->partition_num); i++)
             task_ids.push_back(mpp_ctx->next_task_id++);
         mpp_ctx->sender_target_task_ids = current_task_ids;
         mpp_ctx->current_task_ids = task_ids;
@@ -2203,7 +2200,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
-        for (size_t i = 0; i < (size_t)properties.mpp_partition_num; i++)
+        for (size_t i = 0; i < static_cast<size_t>(properties.mpp_partition_num); i++)
             mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
@@ -2262,7 +2259,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     const DAGProperties & properties,
     ASTSelectQuery & ast_query)
 {
-    auto joined_table = getJoin(ast_query);
+    const auto * joined_table = getJoin(ast_query);
     /// uniq_raw is used to test `ApproxCountDistinct`, when testing `ApproxCountDistinct` in mock coprocessor
     /// the return value of `ApproxCountDistinct` is just the raw result, we need to convert it to a readable
     /// value when decoding the result(using `UniqRawResReformatBlockOutputStream`)
@@ -2527,7 +2524,7 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
 DAGSchema getSelectSchema(Context & context)
 {
     DAGSchema schema;
-    auto dag_context = context.getDAGContext();
+    auto * dag_context = context.getDAGContext();
     auto result_field_types = dag_context->result_field_types;
     for (int i = 0; i < static_cast<int>(result_field_types.size()); i++)
     {
@@ -2645,10 +2642,9 @@ SortDescription generateSDFromSchema(const DAGSchema & schema)
 {
     SortDescription sort_desc;
     sort_desc.reserve(schema.size());
-    for (size_t i = 0; i < schema.size(); i++)
+    for (auto col : schema)
     {
-        String col_name = schema[i].first;
-        sort_desc.emplace_back(col_name, -1, -1, nullptr);
+        sort_desc.emplace_back(col.first, -1, -1, nullptr);
     }
     return sort_desc;
 }

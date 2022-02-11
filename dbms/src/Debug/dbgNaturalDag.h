@@ -48,7 +48,7 @@ public:
     {
         return mpp_req_rsp;
     }
-    void clean(Context & context);
+    static void clean(Context & context);
 
 private:
     struct LoadedRegionInfo

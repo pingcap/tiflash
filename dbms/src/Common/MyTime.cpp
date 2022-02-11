@@ -884,7 +884,6 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
         }
         else
         {
-            /// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
             to_time = 0;
             return;
         }
