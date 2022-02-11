@@ -1,8 +1,8 @@
 #include <common/crc64.h>
 #include <common/crc64_fast.h>
 #include <common/crc64_table.h>
-#include <common/simd.h>
 #include <common/detect_features.h>
+#include <common/simd.h>
 namespace crc64
 {
 using namespace common;
