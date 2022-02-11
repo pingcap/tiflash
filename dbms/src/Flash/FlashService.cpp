@@ -583,8 +583,10 @@ void CallData::Proceed()
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
         new CallData(service_, cq_);
-
-        notifyReady();
+        {
+            std::unique_lock lk(mu);
+            notifyReady();
+        }
         service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
     }
     else if (state_ == JOIN)
