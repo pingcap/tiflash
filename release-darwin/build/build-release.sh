@@ -15,7 +15,6 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-      -DENABLE_MYSQL=OFF \
       -Wno-dev \
       -DNO_WERROR=ON
 
