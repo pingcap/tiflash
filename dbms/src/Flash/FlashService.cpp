@@ -180,9 +180,11 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     //    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    if (!request->has_sender_meta()) {
-        LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!! "<< request->DebugString());
-//        calldata->GoEnd();
+    if (!request->has_sender_meta())
+    {
+        LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!!  peer: " << grpc_context->peer() << " reqstr: " << request->DebugString());
+        calldata->WriteDone(::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + grpc_context->peer()));
+        //        calldata->GoEnd();
         return false;
     }
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
@@ -608,8 +610,9 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             notifyReady();
         }
-        if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this)) {
-            state_ == FINISH;
+        if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this))
+        {
+            state_ = FINISH;
             delete this;
         }
     }
