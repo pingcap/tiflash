@@ -1781,6 +1781,8 @@ public:
                 }
                 else
                 {
+                    (void)to_decimal_prec;
+                    (void)to_decimal_scale;
                     can_skip = false;
                 }
                 return true;
@@ -1795,7 +1797,7 @@ public:
             return (8 + to_decimal_scale <= to_decimal_prec);
         }
 
-        auto canSkipCheckOverflowDecimalToDecimal = [](PrecType from_prec, ScaleType from_scale, PrecType to_prec, ScaleType to_scale) {
+        auto can_skip_for_decimal_to_decimal = [](PrecType from_prec, ScaleType from_scale, PrecType to_prec, ScaleType to_scale) {
             Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
             if (scale_diff < 0)
             {
@@ -1811,7 +1813,7 @@ public:
         {
             if (datetime_type->getFraction() > 0)
             {
-                return canSkipCheckOverflowDecimalToDecimal(20, 6, to_decimal_prec, to_decimal_scale);
+                return can_skip_for_decimal_to_decimal(20, 6, to_decimal_prec, to_decimal_scale);
             }
             else
             {
@@ -1824,15 +1826,8 @@ public:
                 DataTypeDecimal32,
                 DataTypeDecimal64,
                 DataTypeDecimal128,
-                DataTypeDecimal256>(from_type.get(), [&can_skip, to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) {
-                Int64 scale_diff = static_cast<Int64>(to_decimal_scale) - static_cast<Int64>(from_type_ptr.getScale());
-                if (scale_diff < 0)
-                {
-                    // Why plus 1: if to_scale < from_scale, we need to div and round up if necessary.
-                    // Such as: cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
-                    scale_diff += 1;
-                }
-                can_skip = (from_type_ptr.getPrec() + scale_diff) <= to_decimal_prec;
+                DataTypeDecimal256>(from_type.get(), [&can_skip, &can_skip_for_decimal_to_decimal, to_decimal_prec, to_decimal_scale](const auto & from_type_ptr, bool) {
+                can_skip = can_skip_for_decimal_to_decimal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_prec, to_decimal_scale);
                 return true;
             }))
         {
