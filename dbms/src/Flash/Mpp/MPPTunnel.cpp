@@ -43,8 +43,8 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
                 return;
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
-            send_queue.finish();
-            if (!is_local)
+            bool fg = send_queue.finish();
+            if (fg && !is_local)
                 writer->TryWrite(&lock);
         }
         waitForConsumerFinish(/*allow_throw=*/false);
@@ -79,8 +79,8 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                     tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
                 }
             }
-            send_queue.finish(); //TODO fix all send_queue case
-            if (!is_local)
+            bool fg = send_queue.finish(); //TODO fix all send_queue case
+            if (fg && !is_local)
                 writer->TryWrite(&lk);
         }
         else
@@ -225,8 +225,8 @@ void MPPTunnelBase<Writer>::writeDone()
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
 
-        send_queue.finish();
-        if (!is_local)
+        bool fg = send_queue.finish();
+        if (fg && !is_local)
             writer->TryWrite(&lk);
     }
     waitForConsumerFinish(/*allow_throw=*/true);
