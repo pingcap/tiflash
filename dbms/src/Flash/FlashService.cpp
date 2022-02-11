@@ -185,7 +185,7 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
         LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!!  peer: " << grpc_context->peer() << " reqstr: " << request->DebugString());
         calldata->WriteDone(::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + grpc_context->peer()));
         //        calldata->GoEnd();
-        return false;
+        return true;
     }
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
