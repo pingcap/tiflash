@@ -155,7 +155,7 @@ TEST(MemUtilsTest, MemoryIsZeroGeneric)
 TEST(MemUtilsTest, MemoryIsZeroAVX2)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::avx2))
+    if (!common::cpu_supports(common::CPUFeature::X86_AVX2))
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }
@@ -177,7 +177,8 @@ TEST(MemUtilsTest, MemoryIsZeroAVX2)
 TEST(MemUtilsTest, MemoryIsZeroAVX512)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::avx512vl) || !SIMDRuntimeSupport(SIMDFeature::avx512bw))
+    if (!common::cpu_supports(common::CPUFeature::X86_AVX512VL)
+        || !common::cpu_supports(common::CPUFeature::X86_AVX512BW))
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }
@@ -217,7 +218,7 @@ TEST(MemUtilsTest, MemoryIsZeroSSE2)
 TEST(MemUtilsTest, MemoryIsZeroASIMD)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::asimd))
+    if (!common::cpu_supports(common::CPUFeature::AARCH64_ASIMD))
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }

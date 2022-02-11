@@ -22,11 +22,12 @@ using Cases = std::vector<std::pair<A, B>>;
 
 bool check_basic_support()
 {
+    using namespace common;
 #if defined(__x86_64__)
-    return __builtin_cpu_supports("pclmul");
+    return cpu_supports(CPUFeature::X86_PCLMULQDQ);
 #elif defined(__aarch64__) || defined(__arm64__)
-    return simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::asimd)
-        && simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::pmull);
+    return cpu_supports(CPUFeature::AARCH64_ASIMD)
+        && cpu_supports(CPUFeature::AARCH64_PMULL);
 #endif
 }
 
