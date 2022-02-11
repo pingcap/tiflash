@@ -1091,7 +1091,7 @@ private:
         return true;
     }
 
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
 public:
     String getName() const override

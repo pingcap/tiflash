@@ -74,7 +74,7 @@ public:
     FunctionBuilderPtr function_builder;
     FunctionBasePtr function;
     Names argument_names;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     /// For ARRAY_JOIN
     NameSet array_joined_columns;
