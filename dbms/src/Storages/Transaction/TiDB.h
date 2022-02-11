@@ -195,9 +195,9 @@ struct ColumnInfo
     DB::Field getDecimalValue(const String &) const;
     Int64 getEnumIndex(const String &) const;
     UInt64 getSetValue(const String &) const;
-    Int64 getTimeValue(const String &) const;
-    Int64 getYearValue(const String &) const;
-    UInt64 getBitValue(const String &) const;
+    static Int64 getTimeValue(const String &);
+    static Int64 getYearValue(const String &);
+    static UInt64 getBitValue(const String &);
 };
 
 enum PartitionType
@@ -325,7 +325,7 @@ struct TableInfo
 
     void deserialize(const String & json_str);
 
-    void deserialize(Poco::JSON::Object::Ptr json);
+    void deserialize(Poco::JSON::Object::Ptr obj);
 
     // The meaning of this ID changed after we support TiDB partition table.
     // It is the physical table ID, i.e. table ID for non-partition table,

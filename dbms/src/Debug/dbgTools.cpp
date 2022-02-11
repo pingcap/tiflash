@@ -262,7 +262,7 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
     std::unordered_set<String> pk_column_names;
     if (table_info.is_common_handle)
     {
-        for (auto & idx_col : table_info.getPrimaryIndexInfo().idx_cols)
+        for (const auto & idx_col : table_info.getPrimaryIndexInfo().idx_cols)
         {
             // todo support prefix index
             pk_column_names.insert(idx_col.name);
@@ -318,8 +318,8 @@ void insert( //
         std::vector<Field> keys;
         for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
         {
-            auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
-            auto & column_info = table_info.columns[idx_col.offset];
+            const auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
+            const auto & column_info = table_info.columns[idx_col.offset];
             auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             keys.emplace_back(start_datum.field());
@@ -407,18 +407,18 @@ struct BatchCtrl
         default_str = String(str_len, '_');
     }
 
-    void EncodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
+    void encodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
         EncodeUInt(UInt8(flag), ss);
         switch (flag)
         {
         case TiDB::CodecFlagJson:
-            throw Exception("Not implented yet: BatchCtrl::EncodeDatum, TiDB::CodecFlagJson", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagJson", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagMax:
-            throw Exception("Not implented yet: BatchCtrl::EncodeDatum, TiDB::CodecFlagMax", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagMax", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implented yet: BatchCtrl::EncodeDatum, TiDB::CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagNil:
             return;
         case TiDB::CodecFlagBytes:
@@ -444,15 +444,14 @@ struct BatchCtrl
         }
     }
 
-    TiKVValue EncodeRow(const TiDB::TableInfo & table_info, Int64 magic_num)
+    TiKVValue encodeRow(const TiDB::TableInfo & table_info, Int64 magic_num)
     {
         WriteBufferFromOwnString ss;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
+        for (const auto & column : table_info.columns)
         {
-            const TiDB::ColumnInfo & column = table_info.columns[i];
-            EncodeDatum(ss, TiDB::CodecFlagInt, column.id);
+            encodeDatum(ss, TiDB::CodecFlagInt, column.id);
             // TODO: May need to use BumpyDatum to flatten before encoding.
-            EncodeDatum(ss, column.getCodecFlag(), magic_num);
+            encodeDatum(ss, column.getCodecFlag(), magic_num);
         }
         return TiKVValue(ss.releaseStr());
     }
@@ -477,7 +476,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         for (Int64 cnt = 0; cnt < batch_ctrl->batch_num; ++index, ++cnt)
         {
             TiKVKey key = RecordKVFormat::genKey(table_info.id, index);
-            TiKVValue value = batch_ctrl->EncodeRow(table_info, fn_gen_magic_num(index));
+            TiKVValue value = batch_ctrl->encodeRow(table_info, fn_gen_magic_num(index));
             addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
@@ -542,7 +541,7 @@ Int64 concurrentRangeOperate(
 
     std::list<std::thread> threads;
     Int64 tol = 0;
-    for (auto region : regions)
+    for (const auto & region : regions)
     {
         const auto range = region->getRange();
         const auto & [ss, ee] = getHandleRangeByTable(range->rawKeys(), table_info.id);
@@ -573,7 +572,7 @@ TableID getTableID(Context & context, const std::string & database_name, const s
         TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
 
         if (table->isPartitionTable())
-            return std::atoi(partition_id.c_str());
+            return std::strtol(partition_id.c_str(), nullptr, 0);
 
         return table->id();
     }

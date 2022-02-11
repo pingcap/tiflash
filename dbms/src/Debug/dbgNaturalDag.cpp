@@ -159,7 +159,7 @@ NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & r
     return region;
 }
 
-const String & NaturalDag::getDatabaseName() const
+const String & NaturalDag::getDatabaseName()
 {
     return DEFAULT_DATABASE_NAME;
 }
@@ -206,7 +206,7 @@ void NaturalDag::buildTables(Context & context)
     }
 }
 
-void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name) const
+void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name)
 {
     auto result = MockTiDB::instance().getDBIDByName(db_name);
     if (result.first)
