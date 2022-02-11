@@ -194,9 +194,13 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    // 1. Do the MVCC gc, clean up expired snapshot.
+    // 1. Execute GC on the MVCC, clean up expired snapshots, expired external pages.
     // And get the expired entries.
-    const auto & del_entries = page_directory.gc();
+    const auto & [del_entries, pending_remove_external_pages] = page_directory.gc();
+    if (external_pages_remover)
+    {
+        external_pages_remover(pending_remove_external_pages);
+    }
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -209,7 +213,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
     // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.
     const auto & blob_need_gc = blob_store.getGCStats();
-
     if (blob_need_gc.empty())
     {
         return false;
@@ -219,7 +222,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
     auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_need_gc);
-
     if (blob_gc_info.empty())
     {
         return false;
@@ -241,9 +243,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr);
-
-    (void)page_ids;
+    page_directory.gcApply(std::move(gc_edit));
 
     return true;
 }

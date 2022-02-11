@@ -122,6 +122,17 @@ private:
             .entry = {}});                             \
         dir.apply(std::move(edit));                    \
     }
+#define INSERT_REF(REF_ID, ORI_ID, VERSION)            \
+    {                                                  \
+        PageEntriesEdit edit;                          \
+        edit.appendRecord(PageEntriesEdit::EditRecord{ \
+            .type = WriteBatch::WriteType::REF,        \
+            .page_id = (REF_ID),                       \
+            .ori_page_id = (ORI_ID),                   \
+            .version = PageVersionType((VERSION)),     \
+            .entry = {}});                             \
+        dir.apply(std::move(edit));                    \
+    }
 
 TEST_F(CollapsingPageDirectoryTest, CollapseFromDifferentEdits)
 try
@@ -201,6 +212,38 @@ try
     EXPECT_EQ(num_edits_read, 1);
 }
 CATCH
+
+TEST_F(CollapsingPageDirectoryTest, CollapseRef)
+try
+{
+    // put
+    PageId page_1 = 1;
+    INSERT_ENTRY(page_1, 4);
+
+    // put, ref, del
+    PageId page_2 = 2;
+    PageId page_4 = 4; // ref 4 -> 2
+    INSERT_ENTRY(page_2, 88);
+    INSERT_REF(page_4, page_2, 89);
+
+    // put & del
+    PageId page_3 = 3;
+    INSERT_ENTRY(page_3, 90);
+    INSERT_DELETE(page_3, 91);
+
+    // Should collapsed to the latest version
+    const auto [ver1, entry1] = dir.table_directory.find(page_1)->second;
+    EXPECT_TRUE(isSameEntry(entry1, entry_v4));
+    EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
+
+    const auto [ver2, entry2] = dir.table_directory.find(page_2)->second;
+    EXPECT_TRUE(isSameEntry(entry2, entry_v88));
+    EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
+
+    EXPECT_EQ(dir.table_directory.find(page_3), dir.table_directory.end());
+
+    const auto [ver4, entry4] = dir.table_directory.find(page_4)->second;
+}
 
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY

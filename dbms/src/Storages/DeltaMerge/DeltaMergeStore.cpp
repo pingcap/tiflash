@@ -27,6 +27,9 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
+#include "Storages/DeltaMerge/File/DMFile.h"
+#include "Storages/Page/PageStorage.h"
+
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
 #endif
@@ -301,8 +304,31 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    // TODO: callbacks for cleaning DTFiles
-    callbacks.v3_remover = nullptr;
+    // V3 callbacks for cleaning DTFiles
+    callbacks.v3_remover = [this](const std::set<PageId> & pending_ids) {
+        auto delegate = path_pool.getStableDiskDelegator();
+        DMFile::ListOptions options;
+        options.only_list_can_gc = true;
+        auto file_provider = global_context.getFileProvider();
+        for (auto & root_path : delegate.listPaths())
+        {
+            auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
+            for (auto id : file_ids_in_current_path)
+            {
+                if (pending_ids.count(id))
+                {
+                    // This DTFile is safe to be removed. `ref_id` is useless here.
+                    auto dmfile = DMFile::restore(file_provider, id, /*ref_id=*/0, root_path, DMFile::ReadMetaMode::none());
+                    if (dmfile->canGC())
+                    {
+                        delegate.removeDTFile(dmfile->fileId());
+                        dmfile->remove(file_provider);
+                    }
+                    LOG_FMT_INFO(log, "GC removed useless dmfile: {}", dmfile->path());
+                }
+            }
+        }
+    };
     storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });

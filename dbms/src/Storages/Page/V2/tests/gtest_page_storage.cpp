@@ -19,6 +19,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
+#include "Storages/Page/PageStorage.h"
+
 namespace DB
 {
 namespace FailPoints

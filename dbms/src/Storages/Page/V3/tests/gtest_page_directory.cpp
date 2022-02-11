@@ -19,8 +19,6 @@
 
 #include <memory>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace PS::V3::tests
@@ -1034,7 +1032,11 @@ try
      *   }
      *   snapshot remain: [v3,v5]
      */
-    auto del_entries = dir.gc();
+    std::vector<PageEntriesV3> del_entries;
+    std::set<PageId> pending_ids;
+    std::tie(del_entries, pending_ids) = dir.gc();
+    // TODO: check pending_ids
+    (void)pending_ids;
     EXPECT_EQ(del_entries.size(), 1);
     // v1, v2 have been removed.
     ASSERT_EQ(getNumEntries(del_entries), 2);
@@ -1046,7 +1048,7 @@ try
     // all versions get compacted.
     snapshot3.reset();
     snapshot5.reset();
-    del_entries = dir.gc();
+    std::tie(del_entries, pending_ids) = dir.gc();
     ASSERT_EQ(getNumEntries(del_entries), 2);
 
     auto snapshot_after_gc = dir.createSnapshot();
@@ -1088,7 +1090,9 @@ try
          *   }
          *   snapshot remain: [v3, v5]
          */
-        const auto & del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // page_id: []; another_page_id: v1 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
     }
@@ -1102,7 +1106,9 @@ try
          *   }
          *   snapshot remain: [v5]
          */
-        const auto & del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // page_id: v2; another_page_id: v3 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 2);
     }
@@ -1116,7 +1122,9 @@ try
          *   }
          *   snapshot remain: []
          */
-        const auto & del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // page_id: v5; another_page_id: v6,v7,v8 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 5);
     }
@@ -1162,7 +1170,9 @@ try
          *   }
          *   snapshot remain: [v1,v3,v5,v10]
          */
-        auto removed_entries = dir.gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
+        std::vector<PageEntriesV3> removed_entries;
+        std::set<PageId> pending_ids;
+        std::tie(removed_entries, pending_ids) = dir.gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
         EXPECT_EQ(getNumEntries(removed_entries), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1183,7 +1193,9 @@ try
         snapshot3.reset();
         snapshot5.reset();
         snapshot10.reset();
-        auto removed_entries = dir.gc();
+        std::vector<PageEntriesV3> removed_entries;
+        std::set<PageId> pending_ids;
+        std::tie(removed_entries, pending_ids) = dir.gc();
         EXPECT_EQ(getNumEntries(removed_entries), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1198,7 +1210,9 @@ try
          *   snapshot remain: []
          */
         snapshot1.reset();
-        auto removed_entries = dir.gc(); // this will compact all versions
+        std::vector<PageEntriesV3> removed_entries;
+        std::set<PageId> pending_ids;
+        std::tie(removed_entries, pending_ids) = dir.gc(); // this will compact all versions
         // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
         EXPECT_EQ(getNumEntries(removed_entries), 8);
 
@@ -1255,7 +1269,9 @@ try
          *   }
          *   snapshot remain: [v5,v8,v9]
          */
-        auto del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // page_id: v3; another_page_id: v1,v2 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 3);
         ASSERT_EQ(dir.numPages(), 2);
@@ -1273,7 +1289,9 @@ try
         EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // page_id: v5; another_page_id: v4,v6,v7 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 4);
         ASSERT_EQ(dir.numPages(), 1); // page_id should be removed.
@@ -1289,7 +1307,9 @@ try
         snapshot8.reset();
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // another_page_id: v8 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
     }
@@ -1300,7 +1320,9 @@ try
          *   snapshot remain: []
          */
         snapshot9.reset();
-        auto del_entries = dir.gc();
+        std::vector<PageEntriesV3> del_entries;
+        std::set<PageId> pending_ids;
+        std::tie(del_entries, pending_ids) = dir.gc();
         // another_page_id: v9 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
         ASSERT_EQ(dir.numPages(), 0); // all should be removed.
@@ -1362,7 +1384,7 @@ try
     }
 
     // Full GC execute apply
-    dir.gcApply(std::move(gc_migrate_entries), false);
+    dir.gcApply(std::move(gc_migrate_entries));
 }
 CATCH
 
@@ -1423,7 +1445,7 @@ try
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries), false); }, DB::Exception);
+    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
 }
 CATCH
 

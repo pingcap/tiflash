@@ -21,6 +21,7 @@
 #include <queue>
 #include <set>
 #include <utility>
+#include "Storages/Page/PageStorage.h"
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>

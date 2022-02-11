@@ -645,9 +645,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool /*need_scan_page_ids*/)
+void PageDirectory::gcApply(PageEntriesEdit && migrated_edit)
 {
-    std::set<PageId> pending_remove_external_pages;
     {
         std::shared_lock read_lock(table_rw_mutex);
         for (auto & record : migrated_edit.getMutRecords())
@@ -666,13 +665,10 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool /
             auto page_lock = versioned_entries->acquireLock();
             versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
         }
-        pending_remove_external_pages = external_table_directory.getPendingRemoveIDs();
     } // Then we should release the read lock on `table_rw_mutex`
 
     // Apply migrate edit into WAL with the increased epoch version
     wal->apply(migrated_edit);
-
-    return pending_remove_external_pages;
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -703,7 +699,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 
             if (versioned_pageid_entries.empty())
             {
-                throw Exception(fmt::format("Can't get any entries from [BlobFileId={}]", blob_id));
+                throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
             }
 
             blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
@@ -712,8 +708,8 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
-
-std::vector<PageEntriesV3> PageDirectory::gc()
+std::tuple<std::vector<PageEntriesV3>, std::set<PageId>>
+PageDirectory::gc()
 {
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
@@ -736,6 +732,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
     }
 
     std::vector<PageEntriesV3> all_del_entries;
+    std::set<PageId> pending_remove_external_pages;
     {
         std::unique_lock write_lock(table_rw_mutex);
         for (auto iter = entries_table_directory.begin(); iter != entries_table_directory.end(); /*empty*/)
@@ -756,9 +753,10 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             }
         }
         external_table_directory.cleanUpHolders(lowest_seq);
+        pending_remove_external_pages = external_table_directory.getPendingRemoveIDs();
     }
 
-    return all_del_entries;
+    return {std::move(all_del_entries), std::move(pending_remove_external_pages)};
 }
 
 } // namespace PS::V3

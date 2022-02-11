@@ -360,12 +360,13 @@ try
     size_t times_remover_called = 0;
 
     ExternalPageCallbacks callbacks;
-    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & /*normal_page_ids*/) -> void {
+    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & pending_page_ids) -> void {
+        // FIXME
         times_remover_called += 1;
         // FIXME: the number of normal_page_id
-        // ASSERT_EQ(normal_page_ids.size(), 2UL);
-        // EXPECT_GT(normal_page_ids.count(0), 0UL);
-        // EXPECT_GT(normal_page_ids.count(1024), 0UL);
+        // ASSERT_EQ(pending_page_ids.size(), 2UL);
+        EXPECT_GT(pending_page_ids.count(0), 0UL);
+        EXPECT_GT(pending_page_ids.count(1024), 0UL);
     };
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
@@ -401,11 +402,11 @@ try
     }
 
     snapshot.reset();
-    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & /*normal_page_ids*/) -> void {
+    callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & pending_page_ids) -> void {
         times_remover_called += 1;
         // FIXME: the number of normal_page_id
-        // ASSERT_EQ(normal_page_ids.size(), 1);
-        // EXPECT_GT(normal_page_ids.count(0), 0);
+        // ASSERT_EQ(pending_page_ids.size(), 1);
+        EXPECT_GT(pending_page_ids.count(0), 0);
     };
     page_storage->registerExternalPagesCallbacks(callbacks);
     {

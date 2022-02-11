@@ -1,4 +1,5 @@
 #include <Poco/Logger.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -7,6 +8,7 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -29,7 +31,8 @@ TEST(WALSeriTest, AllPuts)
 
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 2);
-    auto iter = edit.getRecords().begin();
+    auto iter = deseri_edit.getRecords().begin();
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p1));
@@ -43,13 +46,7 @@ try
     PageVersionType ver21(/*seq=*/21);
     PageEntriesEdit edit;
     edit.put(3, entry_p3);
-    // Mock for edit.ref(4, 3);
-    edit.appendRecord(PageEntriesEdit::EditRecord{
-        .type = WriteBatch::WriteType::REF,
-        .page_id = 4,
-        .ori_page_id = 3,
-        .version = {},
-        .entry = entry_p3});
+    edit.ref(4, 3);
     edit.put(5, entry_p5);
     edit.del(2);
     edit.del(1);
@@ -60,15 +57,18 @@ try
 
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 6);
-    auto iter = edit.getRecords().begin();
+    auto iter = deseri_edit.getRecords().begin();
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p3));
     iter++;
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
     EXPECT_EQ(iter->page_id, 4);
     EXPECT_EQ(iter->version, ver21);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p3));
+    EXPECT_EQ(iter->entry.file_id, INVALID_BLOBFILE_ID);
     iter++;
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5));
@@ -87,6 +87,92 @@ try
 }
 CATCH
 
+TEST(WALSeriTest, PutExternalsAndRefsAndDels)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        edit.ref(11, 10);
+        edit.ref(12, 10);
+        edit.del(10);
+
+        PageVersionType ver21(/*seq=*/21);
+        for (auto & rec : edit.getMutRecords())
+            rec.version = ver21;
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 4);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT_EXTERNAL);
+        EXPECT_EQ(iter->page_id, 10);
+        EXPECT_EQ(iter->version, ver21);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->page_id, 11);
+        EXPECT_EQ(iter->ori_page_id, 10);
+        EXPECT_EQ(iter->version, ver21);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->page_id, 12);
+        EXPECT_EQ(iter->ori_page_id, 10);
+        EXPECT_EQ(iter->version, ver21);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->page_id, 10);
+        EXPECT_EQ(iter->version, ver21);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        PageVersionType ver22(/*seq=*/22);
+        for (auto & rec : edit.getMutRecords())
+            rec.version = ver22;
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 1);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->page_id, 11);
+        EXPECT_EQ(iter->version, ver22);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        edit.ref(11, 10);
+        edit.ref(12, 11);
+        edit.del(10);
+
+        PageVersionType ver23(/*seq=*/23);
+        for (auto & rec : edit.getMutRecords())
+            rec.version = ver23;
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 4);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT_EXTERNAL);
+        EXPECT_EQ(iter->page_id, 10);
+        EXPECT_EQ(iter->version, ver23);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->page_id, 11);
+        EXPECT_EQ(iter->ori_page_id, 10);
+        EXPECT_EQ(iter->version, ver23);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->page_id, 12);
+        EXPECT_EQ(iter->ori_page_id, 11);
+        EXPECT_EQ(iter->version, ver23);
+        iter++;
+        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->page_id, 10);
+        EXPECT_EQ(iter->version, ver23);
+    }
+}
+CATCH
+
 TEST(WALSeriTest, Upserts)
 {
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -101,15 +187,18 @@ TEST(WALSeriTest, Upserts)
 
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
-    auto iter = edit.getRecords().begin();
+    auto iter = deseri_edit.getRecords().begin();
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p1_2));
     iter++;
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p3_2));
     iter++;
+    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5_2));
@@ -288,13 +377,7 @@ try
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
-        // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::REF,
-            .page_id = 4,
-            .ori_page_id = 3,
-            .version = {},
-            .entry = entry_p3});
+        edit.ref(4, 3);
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
@@ -384,13 +467,7 @@ try
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
-        // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::REF,
-            .page_id = 4,
-            .ori_page_id = 3,
-            .version = {},
-            .entry = entry_p3});
+        edit.ref(4, 3);
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());

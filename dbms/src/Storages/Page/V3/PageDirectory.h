@@ -323,9 +323,10 @@ public:
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
 
-    std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
+    void gcApply(PageEntriesEdit && migrated_edit);
 
-    std::vector<PageEntriesV3> gc();
+    std::tuple<std::vector<PageEntriesV3>, std::set<PageId>>
+    gc();
 
     size_t numPages() const
     {

@@ -1,4 +1,6 @@
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -18,9 +20,9 @@ inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
 
 void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == WriteBatch::WriteType::PUT || record.type == WriteBatch::WriteType::UPSERT || record.type == WriteBatch::WriteType::REF);
+    assert(record.type == WriteBatch::WriteType::PUT || record.type == WriteBatch::WriteType::UPSERT);
 
-    writeIntBinary(record.type, buf);
+    writeIntBinary(WriteBatch::WriteType::PUT, buf);
 
     UInt32 flags = 0;
     writeIntBinary(flags, buf);
@@ -41,7 +43,7 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
 void deserializePutFrom([[maybe_unused]] const WriteBatch::WriteType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == WriteBatch::WriteType::PUT || record_type == WriteBatch::WriteType::UPSERT || record_type == WriteBatch::WriteType::REF);
+    assert(record_type == WriteBatch::WriteType::PUT || record_type == WriteBatch::WriteType::UPSERT);
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
@@ -79,6 +81,41 @@ void deserializePutFrom([[maybe_unused]] const WriteBatch::WriteType record_type
     rec.entry = entry;
     edit.appendRecord(rec);
 }
+
+void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+{
+    assert(record.type == WriteBatch::WriteType::REF);
+
+    writeIntBinary(record.type, buf);
+
+    UInt32 flags = 0;
+    writeIntBinary(flags, buf);
+    writeIntBinary(record.page_id, buf);
+    writeIntBinary(record.ori_page_id, buf);
+    serializeVersionTo(record.version, buf);
+    assert(record.entry.file_id == INVALID_BLOBFILE_ID);
+}
+
+void deserializeRefFrom([[maybe_unused]] const WriteBatch::WriteType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+{
+    assert(record_type == WriteBatch::WriteType::REF);
+
+    UInt32 flags = 0;
+    readIntBinary(flags, buf);
+    PageId page_id, ori_page_id;
+    readIntBinary(page_id, buf);
+    readIntBinary(ori_page_id, buf);
+    PageVersionType version;
+    deserializeVersionFrom(buf, version);
+
+    PageEntriesEdit::EditRecord rec;
+    rec.type = WriteBatch::WriteType::REF;
+    rec.page_id = page_id;
+    rec.ori_page_id = ori_page_id;
+    rec.version = version;
+    edit.appendRecord(rec);
+}
+
 
 void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
@@ -142,9 +179,13 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
-        case WriteBatch::WriteType::REF:
         {
             deserializePutFrom(record_type, buf, edit);
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            deserializeRefFrom(record_type, buf, edit);
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -174,8 +215,10 @@ String serializeTo(const PageEntriesEdit & edit)
         {
         case DB::WriteBatch::WriteType::PUT:
         case DB::WriteBatch::WriteType::UPSERT:
-        case DB::WriteBatch::WriteType::REF:
             serializePutTo(record, buf);
+            break;
+        case DB::WriteBatch::WriteType::REF:
+            serializeRefTo(record, buf);
             break;
         case DB::WriteBatch::WriteType::DEL:
             serializeDelTo(record, buf);
