@@ -126,6 +126,7 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
     std::atomic<bool> ready{false};
+    std::atomic<int> fail_token{-1};
 
     // Let's implement a tiny state machine with the following states.
     enum CallStatus

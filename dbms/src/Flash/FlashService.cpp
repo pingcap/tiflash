@@ -478,6 +478,8 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
     Proceed();
 }
 
+std::atomic<int> cd_token{0};
+
 bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
 {
     // The actual processing.
@@ -494,7 +496,10 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
         else
         {
             if (trace)
-                std::cerr << "CallData::TryWrite::fail!!! ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
+            {
+                fail_token = cd_token++;
+                std::cerr << "CallData::TryWrite::fail!!! token: " << (fail_token.load()) << " ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
+            }
             return false;
         }
         //            cv.wait(lk, [&] { return ready.load(); });
@@ -604,9 +609,16 @@ void CallData::Proceed()
         {
             //TODO check mem order
             std::unique_lock lk(mu);
+            if (fail_token != -1)
+            {
+                std::cerr << "calldata proceed, token: " << fail_token << " canop: "
+                          << (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
+                          << " sz:" << send_queue_->size() << " is_fin:" << send_queue_->isFinished() << std::endl;
+                fail_token = -1;
+            }
             if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
             {
-                //                ready = false;
+                ready = false;
                 //                ready = true;
                 lk.unlock();
                 mpptunnel_->sendOp();
