@@ -1,7 +1,9 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/assert_cast.h>
+#include <Poco/Logger.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>

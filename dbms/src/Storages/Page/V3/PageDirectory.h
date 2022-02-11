@@ -18,10 +18,6 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-#include "Common/FmtUtils.h"
-#include "Poco/Logger.h"
-#include "common/logger_useful.h"
-
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
@@ -225,16 +221,6 @@ class ExternalMap
 public:
     ExternalMap() = default;
 
-    size_t numPages() const
-    {
-        // FmtBuffer fb;
-        // fb.joinStr(external_table_directory.begin(), external_table_directory.end(), [](const ExternalPagesHolderMap::value_type & iter, FmtBuffer & buf){
-        //     buf.fmtAppend("{{id:{}, holder:{}}}", iter.first, iter.second.toDebugString());
-        // }, ",");
-        // LOG_FMT_TRACE(&Poco::Logger::get("ExternalMap"), "{} [size={}]", fb.toString(), external_table_directory.size());
-        return external_table_directory.size();
-    }
-
     PageId getNormalPageId(PageId page_id, UInt64 sequence) const
     {
         auto iter = external_table_directory.find(page_id);
@@ -258,6 +244,11 @@ public:
     std::set<PageId> getPendingRemoveIDs();
 
     void cleanUpHolders(UInt64 lowest_seq);
+
+    inline size_t numPages() const
+    {
+        return external_table_directory.size();
+    }
 
     PageId getMaxId() const
     {
