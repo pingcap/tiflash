@@ -49,9 +49,9 @@ public:
 
     MappedPtr get(const Key & key)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
 
-        auto res = getImpl(key, lock);
+        auto res = getImpl(key, cache_lock);
         if (res)
             ++hits;
         else
@@ -62,9 +62,9 @@ public:
 
     void set(const Key & key, const MappedPtr & mapped)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
 
-        setImpl(key, mapped, lock);
+        setImpl(key, mapped, cache_lock);
     }
 
     /// If the value for the key is in the cache, returns it. If it is not, calls load_func() to
@@ -126,28 +126,40 @@ public:
         return std::make_pair(token->value, true);
     }
 
+    void remove(const Key & key)
+    {
+        std::lock_guard<std::mutex> cache_lock(mutex);
+        auto it = cells.find(key);
+        if (it == cells.end())
+            return;
+
+        Cell & cell = it->second;
+        queue.erase(cell.queue_iterator);
+        cells.erase(it);
+    }
+
     void getStats(size_t & out_hits, size_t & out_misses) const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
         out_hits = hits;
         out_misses = misses;
     }
 
     size_t weight() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
         return current_size;
     }
 
     size_t count() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
         return cells.size();
     }
 
     void reset()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> cache_lock(mutex);
         queue.clear();
         cells.clear();
         insert_tokens.clear();
