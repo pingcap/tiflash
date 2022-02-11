@@ -103,6 +103,7 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
+    regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
