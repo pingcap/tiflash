@@ -134,22 +134,32 @@ private:
 
     bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret) const
     {
-        static const auto & lut_utc = DateLUT::instance("UTC");
-
-        if (timezone_.is_name_based)
-            convertTimeZone(packed, ret, *timezone_.timezone, lut_utc);
-        else
-            convertTimeZoneByOffset(packed, ret, false, timezone_.timezone_offset);
-
         try
         {
-            ret = getEpochSecond(MyDateTime(ret), lut_utc);
+            time_t from_epoch = getEpochSecond(MyDateTime(packed), *timezone_.timezone);
+            time_t epoch_second = from_epoch;
+            if (!timezone_.is_name_based)
+                epoch_second -= timezone_.timezone_offset;
+            if (epoch_second <= 0)
+            {
+                ret = 0;
+                return false;
+            }
+            else if unlikely (epoch_second > std::numeric_limits<Int32>::max())
+            {
+                ret = 0;
+                return false;
+            }
+            else
+            {
+                ret = epoch_second;
+                return true;
+            }
         }
         catch (...)
         {
             return false;
         }
-        return true;
     }
 };
 
