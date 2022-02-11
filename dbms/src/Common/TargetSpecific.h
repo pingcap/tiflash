@@ -155,7 +155,7 @@ struct AVX512Checker
             && common::cpu_feature_flags.avx512f
             && common::cpu_feature_flags.avx512bw
             && common::cpu_feature_flags.avx512vl
-            &&common::cpu_feature_flags.avx512cd;
+            && common::cpu_feature_flags.avx512cd;
     }
 };
 #else

@@ -23,4 +23,3 @@ extern const CPUInfo cpu_info;
 static inline const CPUFeatures & cpu_feature_flags = cpu_info.features;
 } // namespace common
 #endif
-
