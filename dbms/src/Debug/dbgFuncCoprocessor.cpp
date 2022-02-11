@@ -2642,7 +2642,7 @@ SortDescription generateSDFromSchema(const DAGSchema & schema)
 {
     SortDescription sort_desc;
     sort_desc.reserve(schema.size());
-    for (auto col : schema)
+    for (const auto & col : schema)
     {
         sort_desc.emplace_back(col.first, -1, -1, nullptr);
     }
