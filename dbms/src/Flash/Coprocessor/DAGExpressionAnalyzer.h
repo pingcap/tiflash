@@ -69,7 +69,7 @@ public:
 
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const String & column_prefix);
+        const String & column_prefix) const;
 
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
@@ -193,8 +193,8 @@ private:
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
-    Settings settings;
     const Context & context;
+    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };

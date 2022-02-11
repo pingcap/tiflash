@@ -277,10 +277,10 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-bool Segment::writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack)
+bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isFile{}", segment_id, pack->getRows(), pack->isFile());
-    return delta->appendPack(dm_context, pack);
+    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isBigFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
+    return delta->appendColumnFile(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
@@ -296,10 +296,10 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto pack = DeltaPackBlock::writePack(dm_context, block, 0, block.rows(), wbs);
+    auto pack = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
-    if (delta->appendPack(dm_context, pack))
+    if (delta->appendColumnFile(dm_context, pack))
     {
         flushCache(dm_context);
         return true;
@@ -323,12 +323,12 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: {}", segment_id, new_range.toDebugString());
 
-    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
+    return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
@@ -604,7 +604,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
 {
     LOG_FMT_INFO(log, "Before apply merge delta: {}", info());
 
-    auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getPacks(), wbs);
+    auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFiles(), wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
@@ -1064,11 +1064,11 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
-    DeltaPacks empty_packs;
-    DeltaPacks * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->getPacks();
+    ColumnFiles empty_files;
+    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFiles();
 
-    auto my_delta_packs = delta->checkHeadAndCloneTail(dm_context, my_range, *head_packs, wbs);
-    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
+    auto my_delta_files = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
+    auto other_delta_files = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -1076,8 +1076,8 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id = dm_context.storage_pool.newMetaPageId();
 
-    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_packs);
-    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_packs);
+    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_files);
+    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_files);
 
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
                                             my_range,
@@ -1209,27 +1209,27 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
-    auto left_tail_packs = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getPacks(), wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getPacks(), wbs);
+    auto left_tail_files = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFiles(), wbs);
+    auto right_tail_files = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFiles(), wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
     /// Make sure saved packs are appended before unsaved packs.
-    DeltaPacks merged_packs;
+    ColumnFiles merged_files;
 
     auto l_first_unsaved
-        = std::find_if(left_tail_packs.begin(), left_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
+        = std::find_if(left_tail_files.begin(), left_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
     auto r_first_unsaved
-        = std::find_if(right_tail_packs.begin(), right_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
+        = std::find_if(right_tail_files.begin(), right_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
 
-    merged_packs.insert(merged_packs.end(), left_tail_packs.begin(), l_first_unsaved);
-    merged_packs.insert(merged_packs.end(), right_tail_packs.begin(), r_first_unsaved);
+    merged_files.insert(merged_files.end(), left_tail_files.begin(), l_first_unsaved);
+    merged_files.insert(merged_files.end(), right_tail_files.begin(), r_first_unsaved);
 
-    merged_packs.insert(merged_packs.end(), l_first_unsaved, left_tail_packs.end());
-    merged_packs.insert(merged_packs.end(), r_first_unsaved, right_tail_packs.end());
+    merged_files.insert(merged_files.end(), l_first_unsaved, left_tail_files.end());
+    merged_files.insert(merged_files.end(), r_first_unsaved, right_tail_files.end());
 
-    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
+    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_files);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
                                             merged_range,
