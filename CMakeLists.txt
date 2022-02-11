@@ -4,6 +4,7 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+option(TIFLASH_ENABLE_RUNTIME_RPATH "Add $ORIGIN/ to tiflash installation rpath" OFF)
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
 if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
