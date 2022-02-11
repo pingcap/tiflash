@@ -7,7 +7,7 @@ TiFlash stores data in columnar format and synchronizes data updates in real-tim
 
 TiFlash repository is based on the early version of [ClickHouse](https://github.com/ClickHouse/ClickHouse/tree/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f). We appreciate the excellent work of ClickHouse team.
 
-## Building TiFlash
+## Build TiFlash
 
 TiFlash supports building on the following hardware architectures:
 * x86-64/amd64
@@ -35,7 +35,6 @@ The following packages are needed for all platforms:
   curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
   source $HOME/.cargo/env
   ```
-- clang-format 12.0.0+
 - Python 3.0+
 - Ninja or GNU Make
 
@@ -148,7 +147,7 @@ They are all CMake options thus are specified using `-D...=...`s in CMake comman
 
 - `CMAKE_BUILD_TYPE`: `DEBUG` / `RELWITHDEBINFO` (default) / `RELEASE`
 
-#### Build with Tests
+#### Build with Unit Tests
 
 - `ENABLE_TESTS`: `ON` / `OFF` (default)
 
@@ -171,9 +170,11 @@ cmake -LH | grep "USE_INTERNAL" -A3
 All of these options are default as `ON`, as the names tell, using the internal libraries and build from sources.
 
 There is another option to append extra paths for CMake to find system libraries:
+
 - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
 
 Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
+
 - `USE_INTERNAL_TIFLASH_PROXY`: `TRUE` (default) / `FALSE`
   - One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
   - Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
@@ -184,19 +185,28 @@ Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
 
 Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFlash project with no pain as long as the toolchains are properly configured.
 
-If you are using [TiFlash Env](#tiflash-env)
-Because all shared libs are shipped with `tiflash-env` and you may not add those libs to your system loader config, you may experience difficulties running executables compiled by `tiflash-env` with an IDE like CLion or VSCode. To make life easier, we provide an option `TIFLASH_ENABLE_LLVM_DEVELOPMENT`, which helps you to setup rpaths automatically so that you can run them without entering the env. To do so, you can use the following commands (or setup your IDE toolchain with the flags):
-```
-cmake /path/to/tiflash/src/dir \
-  -GNinja \
-  -DENABLE_TESTS=ON \
-  -DTIFLASH_ENABLE_LLVM_DEVELOPMENT=ON \
-  -DCMAKE_PREFIX_PATH=/path/to/tiflash-env/sysroot 
-```
-Then, you can compile and run tifalsh or tests as normal in your IDE.
+If your toolchain is set up using [TiFlash Env](#tiflash-env), and you may not want to add those libs to your system loader config, you can pass the following CMake options to your IDE:
 
-#### Generate LLVM Coverage Report
+```
+-DTIFLASH_ENABLE_LLVM_DEVELOPMENT=ON -DCMAKE_PREFIX_PATH=$TIFLASH_ENV
+```
+
+Remember that `$TIFLASH_ENV` is a placeholder mentioned in [TiFlash Env](#tiflash-env).
+
+## Run Unit Tests
+
+TBD.
+
+## Run Integration Tests
+
+TBD.
+
+## Generate LLVM Coverage Report
+
+[//]: <> (TODO: This section is not proper for developers outside PingCAP, as it uses docker image only available on internal network.)
+[//]: <> (TODO: Should refine to use local commands rather than docker.)
 To get a coverage report of unit tests, we recommend using the docker image and our scripts.
+
 ```
 docker run --rm -it -v /path/to/tiflash/src:/build/tiflash hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /bin/bash # or aarch64
 cd /build/tiflash/release-centos7-llvm
@@ -221,18 +231,17 @@ mkdir -p /build/tiflash/report
 genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
 ```
 
-### Notice
-
-Before submitting pull request, please use [format-diff.py](format-diff.py) to format source code, otherwise ci-build may raise error.
-```
-# WORKSPACE/tics
-$ python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
-```
-
-You can download the `clang-format` from [muttleyxd/clang-tools-static-binaries](https://github.com/muttleyxd/clang-tools-static-binaries/releases). clang-format 12.0.0+ is required.
-
 ## Contributing
 
-Here is the overview of TiFlash architecture [The architecture of TiFlash's distributed storage engine and transaction layer](/docs/design/0000-00-00-architecture-of-distributed-storage-and-transaction.md)
+Here is the overview of TiFlash architecture [The architecture of TiFlash's distributed storage engine and transaction layer](/docs/design/0000-00-00-architecture-of-distributed-storage-and-transaction.md).
 
 See [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design documents](/docs/design).
+
+Before submitting a pull request, please use [format-diff.py](format-diff.py) to format source code, otherwise CI build may raise error.
+
+> **NOTE**: It is required to use clang-format 12.0.0+.
+
+```
+cd $WORKSPACE/tics
+python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
+```
