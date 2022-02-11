@@ -40,7 +40,7 @@ void PageStorageImpl::restore()
 
 void PageStorageImpl::drop()
 {
-    abort();
+    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 PageId PageStorageImpl::getMaxId()
