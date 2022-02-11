@@ -45,7 +45,10 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             waitUntilConnectedOrFinished(lock);
             bool fg = send_queue.finish();
             if (fg && !is_local)
+            {
+                fin_by = 1;
                 writer->TryWrite(&lock);
+            }
         }
         waitForConsumerFinish(/*allow_throw=*/false);
     }
@@ -81,7 +84,10 @@ void MPPTunnelBase<Writer>::close(const String & reason)
             }
             bool fg = send_queue.finish(); //TODO fix all send_queue case
             if (fg && !is_local)
+            {
+                fin_by = 2;
                 writer->TryWrite(&lk);
+            }
         }
         else
         {
@@ -112,9 +118,13 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 writer->TryWrite(&lk);
             if (close_after_write)
             {
-                send_queue.finish();
-                if (!is_local)
+                bool fg = send_queue.finish();
+                //TODO check where double tryWrite correct
+                if (fg && !is_local)
+                {
+                    fin_by = 3;
                     writer->TryWrite(&lk);
+                }
                 LOG_TRACE(log, "finish write.");
             }
             return;
@@ -218,6 +228,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: " << is_local);
+    bool fg = false;
     {
         std::unique_lock lk(mu);
         if (finished)
@@ -225,9 +236,12 @@ void MPPTunnelBase<Writer>::writeDone()
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
 
-        bool fg = send_queue.finish();
+        fg = send_queue.finish();
         if (fg && !is_local)
+        {
+            fin_by = 4;
             writer->TryWrite(&lk);
+        }
     }
     waitForConsumerFinish(/*allow_throw=*/true);
 }
@@ -319,7 +333,10 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
-    send_queue.finish();
+    if (send_queue.finish())
+    {
+        fin_by = 5;
+    }
     if (need_lock)
     {
         std::unique_lock lk(mu);
