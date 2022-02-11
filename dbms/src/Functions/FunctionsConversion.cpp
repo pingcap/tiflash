@@ -44,7 +44,7 @@ public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); };
     explicit FunctionTiDBUnixTimeStamp(const Context & context)
-        : timezone_(context.getTimezoneInfo()){};
+        : timezone_info(context.getTimezoneInfo()){};
 
     String getName() const override
     {
@@ -66,8 +66,8 @@ public:
         int fsp = 0;
         if (checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
         {
-            auto & datetimeType = dynamic_cast<const DataTypeMyDateTime &>(*arguments[0].type);
-            fsp = datetimeType.getFraction();
+            const auto & datetime_type = dynamic_cast<const DataTypeMyDateTime &>(*arguments[0].type);
+            fsp = datetime_type.getFraction();
         }
         return std::make_shared<DataTypeDecimal64>(12 + fsp, fsp);
     }
@@ -103,8 +103,8 @@ public:
             int fsp = 0, multiplier = 1, divider = 1'000'000;
             if (checkDataType<DataTypeMyDateTime>(col_with_type_and_name.type.get()))
             {
-                auto & datetimeType = dynamic_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
-                fsp = datetimeType.getFraction();
+                const auto & datetime_type = dynamic_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
+                fsp = datetime_type.getFraction();
             }
             multiplier = getScaleMultiplier<Decimal64>(fsp);
             divider = 1'000'000 / multiplier;
@@ -130,16 +130,16 @@ public:
     }
 
 private:
-    const TimezoneInfo & timezone_;
+    const TimezoneInfo & timezone_info;
 
     bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret) const
     {
         try
         {
-            time_t from_epoch = getEpochSecond(MyDateTime(packed), *timezone_.timezone);
+            time_t from_epoch = getEpochSecond(MyDateTime(packed), *timezone_info.timezone);
             time_t epoch_second = from_epoch;
-            if (!timezone_.is_name_based)
-                epoch_second -= timezone_.timezone_offset;
+            if (!timezone_info.is_name_based)
+                epoch_second -= timezone_info.timezone_offset;
             if (epoch_second <= 0)
             {
                 ret = 0;
