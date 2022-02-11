@@ -47,7 +47,7 @@ public:
 class CRC32
 {
 public:
-    using HashType = z_crc_t;
+    using HashType = uint32_t;
     static constexpr size_t hash_size = sizeof(HashType);
     static constexpr auto algorithm = ::DB::ChecksumAlgo::CRC32;
     void update(const void * src, size_t length)
