@@ -175,17 +175,22 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata)
+bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata)
 {
     //    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
+    if (!request->has_sender_meta()) {
+        LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!! "<< request->DebugString());
+//        calldata->GoEnd();
+        return false;
+    }
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
         calldata->WriteDone(grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
-        return;
+        return true;
         //        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
@@ -201,7 +206,7 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     if (!status.ok())
     {
         calldata->WriteDone(status);
-        return;
+        return true;
     }
 
     auto & tmt_context = context->getTMTContext();
@@ -220,7 +225,7 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
             LOG_ERROR(log, err_msg);
 
             calldata->WriteErr(getPacketWithError(err_msg));
-            return;
+            return true;
         }
     }
     //    Stopwatch stopwatch;
@@ -228,6 +233,7 @@ void FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     tunnel->connect(calldata);
     calldata->attachTunnel(tunnel);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
+    return true;
     //    tunnel->waitForFinish();
     //    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     // TODO: Check if there are errors in task.
@@ -602,7 +608,10 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             notifyReady();
         }
-        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
+        if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this)) {
+            state_ == FINISH;
+            delete this;
+        }
     }
     else if (state_ == JOIN)
     {

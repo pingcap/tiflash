@@ -53,7 +53,7 @@ public:
     //                                          const ::mpp::EstablishMPPConnectionRequest * request,
     //                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
-    void EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata);
+    bool EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata);
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
