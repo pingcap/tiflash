@@ -79,3 +79,6 @@
 [submodule "contrib/zlib-ng"]
 	path = contrib/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng
+[submodule "contrib/cpu_features"]
+	path = contrib/cpu_features
+	url = https://github.com/google/cpu_features
