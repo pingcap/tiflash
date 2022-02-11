@@ -230,8 +230,8 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     }
     //    Stopwatch stopwatch;
     tunnel->no_waiter = true;
-    tunnel->connect(calldata);
     calldata->attachTunnel(tunnel);
+    tunnel->connect(calldata);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
     return true;
     //    tunnel->waitForFinish();
