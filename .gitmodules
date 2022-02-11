@@ -63,9 +63,6 @@
 	path = contrib/protobuf
 	url = https://github.com/protocolbuffers/protobuf
 	branch = v3.8.0
-[submodule "contrib/abseil-cpp"]
-	path = contrib/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp
 [submodule "contrib/grpc"]
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
@@ -79,3 +76,6 @@
 [submodule "contrib/zlib-ng"]
 	path = contrib/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng
+[submodule "contrib/abseil-cpp"]
+	path = contrib/abseil-cpp
+	url = https://github.com/schrodingerzhu/abseil-cpp
