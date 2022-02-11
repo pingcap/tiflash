@@ -57,8 +57,7 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
     set (Poco_Data_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/Data/include")
     set (Poco_Data_LIBRARY PocoData)
 
-    # TODO! fix internal ssl
-    if (OPENSSL_FOUND AND NOT USE_INTERNAL_SSL_LIBRARY)
+    if (OPENSSL_FOUND)
         set (Poco_NetSSL_FOUND 1)
         set (Poco_NetSSL_LIBRARY PocoNetSSL)
         set (Poco_Crypto_LIBRARY PocoCrypto)
