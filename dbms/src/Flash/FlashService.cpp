@@ -490,8 +490,9 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> *p_lk)
         else
             return false;
         //            cv.wait(lk, [&] { return ready.load(); });
+
+        mpptunnel_->sendOp(p_lk);
     }
-    mpptunnel_->sendOp(p_lk);
     return true;
     //        responder_.Write(packet, this);
     //        return 1;
@@ -596,7 +597,7 @@ void CallData::Proceed()
             {
                 //                ready = false;
                 //                ready = true;
-                lk.unlock();
+//                lk.unlock();
                 mpptunnel_->sendOp();
                 //                mpptunnel_->
                 //                send_queue->pop();
