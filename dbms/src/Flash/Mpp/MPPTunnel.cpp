@@ -44,6 +44,8 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
             send_queue.finish();
+            if (!is_local)
+                writer->TryWrite(&lock);
         }
         waitForConsumerFinish(/*allow_throw=*/false);
     }
@@ -69,13 +71,17 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
                     send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+                    if (!is_local)
+                        writer->TryWrite(&lk);
                 }
                 catch (...)
                 {
                     tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
                 }
             }
-            send_queue.finish();
+            send_queue.finish(); //TODO fix all send_queue case
+            if (!is_local)
+                writer->TryWrite(&lk);
         }
         else
         {
