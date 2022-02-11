@@ -24,10 +24,10 @@ bool check_basic_support()
 {
     using namespace common;
 #if defined(__x86_64__)
-    return cpu_supports(CPUFeature::X86_PCLMULQDQ);
+    return cpu_feature_flags.pclmulqdq;
 #elif defined(__aarch64__) || defined(__arm64__)
-    return cpu_supports(CPUFeature::AARCH64_ASIMD)
-        && cpu_supports(CPUFeature::AARCH64_PMULL);
+    return cpu_feature_flags.asimd
+        && cpu_feature_flags.pmull;
 #endif
 }
 

@@ -7,6 +7,8 @@ namespace common
 using CPUFeatures = cpu_features::Aarch64Features;
 using CPUFeature = cpu_features::Aarch64FeaturesEnum;
 using CPUInfo = cpu_features::Aarch64Info;
+extern const CPUInfo cpu_info;
+static inline const CPUFeatures & cpu_feature_flags = cpu_info.features;
 } // namespace common
 #endif
 
@@ -17,10 +19,8 @@ namespace common
 using CPUFeatures = cpu_features::X86Features;
 using CPUFeature = cpu_features::X86FeaturesEnum;
 using CPUInfo = cpu_features::X86Info;
+extern const CPUInfo cpu_info;
+static inline const CPUFeatures & cpu_feature_flags = cpu_info.features;
 } // namespace common
 #endif
 
-namespace common
-{
-bool cpu_supports(CPUFeature feature) noexcept;
-}

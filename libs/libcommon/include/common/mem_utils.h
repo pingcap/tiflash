@@ -134,14 +134,14 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
         // for ASIMD target, it is a little bit different because all the compare function is defined in a
         // separate file other than the main loop itself.
-        if (ENABLE_ASIMD && cpu_supports(CPUFeature::AARCH64_ASIMD))
+        if (ENABLE_ASIMD && cpu_feature_flags.asimd)
         {
             return _detail::memoryEqualASIMD(p1, p2, size);
         }
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-        if (ENABLE_AVX512 && cpu_supports(CPUFeature::X86_AVX512F) && cpu_supports(CPUFeature::X86_AVX512VL))
+        if (ENABLE_AVX512 && cpu_feature_flags.avx512f && cpu_feature_flags.avx512vl)
         {
             if (!_detail::memoryEqualAVX512x4Loop(p1, p2, size))
             {
@@ -151,7 +151,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
         }
 #endif
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        if (ENABLE_AVX && cpu_supports(CPUFeature::X86_AVX2))
+        if (ENABLE_AVX && cpu_feature_flags.avx2)
         {
             if (!_detail::memoryEqualAVX2x4Loop(p1, p2, size))
             {
@@ -229,14 +229,14 @@ __attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data,
         return true;
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && cpu_supports(CPUFeature::X86_AVX512VL)
-        && cpu_supports(CPUFeature::X86_AVX512BW))
+    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && cpu_feature_flags.avx512vl
+        && cpu_feature_flags.avx512bw)
     {
         return _detail::memoryIsByteAVX512(data, size, target);
     }
 #endif
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if (size >= /* sizeof(_m256i) */ 32 && ENABLE_AVX && cpu_supports(CPUFeature::X86_AVX2))
+    if (size >= /* sizeof(_m256i) */ 32 && ENABLE_AVX && cpu_feature_flags.avx2)
     {
         return _detail::memoryIsByteAVX2(data, size, target);
     }
@@ -248,7 +248,7 @@ __attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data,
     }
 #endif
 #if TIFLASH_ENABLE_ASIMD_SUPPORT
-    if (size > /* sizeof(uint8x16_t) */ 16 && ENABLE_ASIMD && cpu_supports(CPUFeature::AARCH64_ASIMD))
+    if (size > /* sizeof(uint8x16_t) */ 16 && ENABLE_ASIMD && cpu_feature_flags.asimd)
     {
         return _detail::memoryIsByteASIMD(data, size, target);
     }

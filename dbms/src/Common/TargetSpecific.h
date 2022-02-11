@@ -115,7 +115,7 @@ struct AVXChecker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
-        return simd_option::ENABLE_AVX && common::cpu_supports(common::CPUFeature::X86_AVX2);
+        return simd_option::ENABLE_AVX && common::cpu_feature_flags.avx2;
     }
 };
 #else
@@ -152,10 +152,10 @@ struct AVX512Checker
     {
         using namespace common;
         return simd_option::ENABLE_AVX512
-            && cpu_supports(CPUFeature::X86_AVX512F)
-            && cpu_supports(CPUFeature::X86_AVX512BW)
-            && cpu_supports(CPUFeature::X86_AVX512VL)
-            && cpu_supports(CPUFeature::X86_AVX512CD);
+            && common::cpu_feature_flags.avx512f
+            && common::cpu_feature_flags.avx512bw
+            && common::cpu_feature_flags.avx512vl
+            &&common::cpu_feature_flags.avx512cd;
     }
 };
 #else
@@ -191,8 +191,8 @@ struct SSE4Checker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
-        return common::cpu_supports(common::CPUFeature::X86_SSE4_1)
-            && common::cpu_supports(common::CPUFeature::X86_SSE4_2);
+        return common::cpu_feature_flags.sse4_1
+            && common::cpu_feature_flags.sse4_2;
     }
 };
 #else
