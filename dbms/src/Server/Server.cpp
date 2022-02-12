@@ -491,8 +491,8 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
 {
     // Spawn a new CallData instance to serve new clients.
-    for (int i = 0; i < 10; i++)
-        new CallData(service_, cq);
+//    for (int i = 0; i < 10; i++)
+    new CallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
     while (true)
@@ -553,7 +553,7 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         auto thread_manager = DB::newThreadManager();
-        for (int i = 0; i < 40; i++)
+        for (int i = 0; i < 1; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
         }
