@@ -133,7 +133,7 @@ cmake $WORKSPACE/tics
 make tiflash -j
 ```
 
-After building, you cat get TiFlash binary under `$BUILD/dbms/src/Server/tiflash`.
+After building, you can get TiFlash binary under `$BUILD/dbms/src/Server/tiflash`.
 
 ### Build Options
 
