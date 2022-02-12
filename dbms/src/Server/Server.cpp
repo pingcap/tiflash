@@ -491,8 +491,8 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
 {
     // Spawn a new CallData instance to serve new clients.
-//    for (int i = 0; i < 10; i++)
-    new CallData(service_, cq);
+    for (int i = 0; i < 10; i++)
+        new CallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
     while (true)
@@ -502,13 +502,13 @@ void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
         // memory address of a CallData instance.
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
-        if (!cq->Next(&tag, &ok)) {
+        if (!cq->Next(&tag, &ok))
+        {
             LOG_ERROR(grpc_log, "CQ is fully drained and shut down");
             break;
         }
-        GPR_ASSERT(ok);
-
-        static_cast<CallData *>(tag)->Proceed();
+        if (ok)
+            static_cast<CallData *>(tag)->Proceed();
     }
 }
 
@@ -553,7 +553,7 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         auto thread_manager = DB::newThreadManager();
-        for (int i = 0; i < 1; i++)
+        for (int i = 0; i < 40; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
         }
@@ -562,8 +562,8 @@ public:
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
 
-        for (int i = 0; i < (int)(cqs_.size()); i++)
-            thread_manager->scheduleThenDetach(false, "async_poller", [this, i] { HandleRpcs(flash_service.get(), cqs_[i].get()); });
+        for (int i = 0; i < (int)(cqs_.size() * 3); i++)
+            thread_manager->scheduleThenDetach(false, "async_poller", [this, i] { HandleRpcs(flash_service.get(), cqs_[i / 3].get()); });
     }
 
     ~FlashGrpcServerHolder()
@@ -573,6 +573,10 @@ public:
         gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown(deadline);
+        for (int i = 0; i < (int)(cqs_.size()); i++)
+        {
+            cqs_[i]->Shutdown();
+        }
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         LOG_FMT_INFO(log, "Shut down flash grpc server");
