@@ -173,16 +173,16 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
         if (it != columns.defaults.end())
             default_value = getDefaultValue(it->second.expression);
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
-        for (auto sit = string_tokens.begin(); sit != string_tokens.end(); sit++)
+        for (const auto & tok : string_tokens)
         {
             // todo support prefix index
-            if (*sit == column.name)
+            if (tok == column.name)
             {
                 has_pk = true;
                 if (!column.type->isInteger() && !column.type->isUnsignedInteger())
                     has_non_int_pk = true;
                 table_info.columns.back().setPriKeyFlag();
-                pk_column_pos_map[*sit] = i - 2;
+                pk_column_pos_map[tok] = i - 2;
                 break;
             }
         }
@@ -254,8 +254,13 @@ TableID MockTiDB::newTable(
     auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
+    return addTable(database_name, std::move(*table_info));
+}
 
-    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
+TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
+{
+    auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+    String qualified_name = database_name + "." + table->table_info.name;
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
@@ -540,15 +545,27 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 {
     TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
     db_ptr->id = db_id;
-    for (auto it = databases.begin(); it != databases.end(); it++)
+    for (const auto & database : databases)
     {
-        if (it->second == db_id)
+        if (database.second == db_id)
         {
-            db_ptr->name = it->first;
+            db_ptr->name = database.first;
             break;
         }
     }
     return db_ptr;
+}
+
+std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name)
+{
+    for (const auto & database : databases)
+    {
+        if (database.first == database_name)
+        {
+            return std::make_pair(true, database.second);
+        }
+    }
+    return std::make_pair(false, -1);
 }
 
 SchemaDiff MockTiDB::getSchemaDiff(Int64 version_)
