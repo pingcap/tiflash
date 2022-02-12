@@ -45,6 +45,17 @@ struct PageVersionType
 using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
+enum class EditRecordType
+{
+    PUT,
+    PUT_EXTERNAL,
+    REF,
+    DEL,
+    //
+    UPSERT,
+    //
+    REF_EXTERNAL,
+};
 
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
@@ -60,8 +71,18 @@ public:
     void put(PageId page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::PUT;
+        record.type = EditRecordType::PUT;
         record.page_id = page_id;
+        record.entry = entry;
+        records.emplace_back(record);
+    }
+
+    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::UPSERT;
+        record.page_id = page_id;
+        record.version = ver;
         record.entry = entry;
         records.emplace_back(record);
     }
@@ -69,25 +90,25 @@ public:
     void putExternal(PageId page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::PUT_EXTERNAL;
+        record.type = EditRecordType::PUT_EXTERNAL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    void refExternal(PageId ref_id, PageId page_id, PageVersionType ver)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::UPSERT;
-        record.page_id = page_id;
+        record.type = EditRecordType::REF_EXTERNAL;
+        record.page_id = ref_id;
+        record.ori_page_id = page_id;
         record.version = ver;
-        record.entry = entry;
         records.emplace_back(record);
     }
 
     void del(PageId page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::DEL;
+        record.type = EditRecordType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
@@ -95,7 +116,7 @@ public:
     void ref(PageId ref_id, PageId page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::REF;
+        record.type = EditRecordType::REF;
         record.page_id = ref_id;
         record.ori_page_id = page_id;
         records.emplace_back(record);
@@ -115,7 +136,7 @@ public:
 
     struct EditRecord
     {
-        WriteBatch::WriteType type;
+        EditRecordType type;
         PageId page_id;
         PageId ori_page_id;
         PageVersionType version;

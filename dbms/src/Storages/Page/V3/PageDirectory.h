@@ -7,6 +7,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -162,30 +163,6 @@ private:
     std::map<PageVersionType, EntryOrDelete> entries;
 };
 
-// `CollapsingPageDirectory` only store the latest version
-// of entry for the same page id. It is a util class for
-// restoring from persisted logs and compacting logs.
-// There is no concurrent security guarantee for this class.
-class CollapsingPageDirectory
-{
-public:
-    CollapsingPageDirectory();
-
-    void apply(PageEntriesEdit && edit);
-
-    void dumpTo(std::unique_ptr<LogWriter> & log_writer);
-
-    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
-    CollapsingMapType table_directory;
-
-    PageId max_applied_page_id = 0;
-    PageVersionType max_applied_ver;
-
-    // No copying
-    CollapsingPageDirectory(const CollapsingPageDirectory &) = delete;
-    CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
-};
-
 struct ExternalPageHolder
 {
     const PageId ori_page_id;
@@ -230,7 +207,13 @@ public:
         }
         if (!iter->second.isVisible(sequence))
         {
-            throw Exception(fmt::format("Accessing the normal page id of a deleted page [page_id={}] [holder={}]", page_id, iter->second.toDebugString()));
+            throw Exception(
+                fmt::format(
+                    "Accessing the normal page id of an invisible page [page_id={}] [seq={}] [holder={}]",
+                    page_id,
+                    sequence,
+                    iter->second.toDebugString()),
+                ErrorCodes::LOGICAL_ERROR);
         }
         return iter->second.ori_page_id;
     }
@@ -240,6 +223,10 @@ public:
     bool tryCreateRef(PageId page_id, PageId ori_page_id, UInt64 sequence);
 
     bool tryCreateDel(PageId page_id, UInt64 sequence);
+
+    void dumpTo(PageEntriesEdit & edit);
+
+    void restoreRef(PageId page_id, PageId ori_page_id, UInt64 sequence);
 
     std::set<PageId> getPendingRemoveIDs();
 
@@ -285,6 +272,32 @@ private:
     ExternalPagesHolderMap external_table_directory;
     ExternalPagesRefCounter external_ref_counter;
 };
+
+// `CollapsingPageDirectory` only store the latest version
+// of entry for the same page id. It is a util class for
+// restoring from persisted logs and compacting logs.
+// There is no concurrent security guarantee for this class.
+class CollapsingPageDirectory
+{
+public:
+    CollapsingPageDirectory();
+
+    void apply(PageEntriesEdit && edit);
+
+    void dumpTo(std::unique_ptr<LogWriter> & log_writer);
+
+    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
+    CollapsingMapType table_directory;
+    ExternalMap external_directory;
+
+    PageId max_applied_page_id = 0;
+    PageVersionType max_applied_ver;
+
+    // No copying
+    CollapsingPageDirectory(const CollapsingPageDirectory &) = delete;
+    CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
+};
+
 
 // `PageDiectory` store multi-versions entries for the same
 // page id. User can acquire a snapshot from it and get a

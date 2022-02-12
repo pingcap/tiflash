@@ -155,9 +155,9 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 
         switch (record.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
         {
             // Insert or replace with latest entry
             if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
@@ -176,18 +176,56 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             // Remove the entry if the version of del is newer
-            if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
+            if (!external_directory.tryCreateDel(record.page_id, record.version.sequence))
             {
-                const auto & [ver, entry] = iter->second;
-                (void)entry;
-                if (ver < record.version)
+                if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
                 {
-                    table_directory.erase(iter);
+                    const auto & [ver, entry] = iter->second;
+                    (void)entry;
+                    if (ver < record.version)
+                    {
+                        table_directory.erase(iter);
+                    }
                 }
             }
+            break;
+        }
+        case EditRecordType::REF:
+        {
+            bool create_ref_entry_done = [&record, this]() -> bool {
+                auto iter = table_directory.find(record.ori_page_id);
+                if (iter == table_directory.end())
+                    return false;
+                if (record.version < iter->second.first || record.version == iter->second.first)
+                {
+                    // put after ref, must be sth wrong!!!
+                    // LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with seq={}", record.page_id, record.ori_page_id, record.version.sequence);
+                    return false;
+                }
+                // Copy the entry
+                table_directory[record.page_id] = std::make_pair(record.version, table_directory[record.ori_page_id].second);
+                return true;
+            }();
+            if (create_ref_entry_done)
+                break;
+            // Try to apply ref on external pages
+            if (!external_directory.tryCreateRef(record.page_id, record.ori_page_id, record.version.sequence))
+            {
+                // LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with seq={}", record.page_id, record.ori_page_id, record.version.sequence);
+            }
+            break;
+        }
+        case EditRecordType::PUT_EXTERNAL:
+        {
+            external_directory.createExternal(record.page_id, record.version.sequence);
+            break;
+        }
+        case EditRecordType::REF_EXTERNAL:
+        {
+            external_directory.restoreRef(record.page_id, record.ori_page_id, record.version.sequence);
             break;
         }
         default:
@@ -208,6 +246,7 @@ void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
         const auto & entry = versioned_entry.second;
         edit.upsertPage(page_id, version, entry);
     }
+    external_directory.dumpTo(edit);
     const String serialized = ser::serializeTo(edit);
     ReadBufferFromString payload(serialized);
     log_writer->addRecord(payload, serialized.size());
@@ -289,14 +328,45 @@ bool ExternalMap::tryCreateDel(PageId page_id, UInt64 sequence)
     if (auto iter = external_table_directory.find(page_id);
         iter != external_table_directory.end() && iter->second.deleted_sequence == 0)
     {
+        // Update the deleted_sequence in holder.
+        // Note that the ref_counter should not be decreased till the
+        // holder get removed.
         assert(iter->second.created_sequence <= sequence);
         iter->second.deleted_sequence = sequence;
-        assert(external_ref_counter.find(iter->second.ori_page_id) != external_ref_counter.end());
-        assert(external_ref_counter[iter->second.ori_page_id] > 0);
-        external_ref_counter[iter->second.ori_page_id] -= 1;
         return true;
     }
     return false;
+}
+
+void ExternalMap::dumpTo(PageEntriesEdit & edit)
+{
+    for (const auto iter : external_table_directory)
+    {
+        const auto & holder = iter.second;
+        if (holder.deleted_sequence != 0)
+            continue;
+        edit.refExternal(iter.first, holder.ori_page_id, PageVersionType(holder.created_sequence));
+    }
+}
+
+void ExternalMap::restoreRef(PageId page_id, PageId ori_page_id, UInt64 sequence)
+{
+    auto [ref_iter, new_inserted] = external_ref_counter.insert(std::pair(page_id, 1));
+    if (!new_inserted)
+        ref_iter->second += 1;
+    auto [ref_id_iter, new_inserted_ref] = external_table_directory.insert(
+        std::pair(page_id, ExternalPageHolder(ori_page_id, sequence)));
+    if (!new_inserted_ref)
+    {
+        LOG_FMT_ERROR(
+            &Poco::Logger::get("ExternalMap"),
+            "Restore ref pair fail, already exists"
+            " [page_id={}] [ori_page_id={}] [seq={}] [exist={}]",
+            page_id,
+            ori_page_id,
+            sequence,
+            ref_id_iter->second.toDebugString());
+    }
 }
 
 std::set<PageId> ExternalMap::getPendingRemoveIDs()
@@ -325,6 +395,9 @@ void ExternalMap::cleanUpHolders(UInt64 lowest_seq)
     {
         if (iter->second.isOutdated(lowest_seq))
         {
+            assert(external_ref_counter.find(iter->second.ori_page_id) != external_ref_counter.end());
+            assert(external_ref_counter[iter->second.ori_page_id] > 0);
+            external_ref_counter[iter->second.ori_page_id] -= 1;
             iter = external_table_directory.erase(iter);
         }
         else
@@ -541,7 +614,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     updating_pages.reserve(edit.size());
     for (const auto & r : edit.getRecords())
     {
-        if (r.type == WriteBatch::WriteType::PUT_EXTERNAL)
+        if (r.type == EditRecordType::PUT_EXTERNAL)
         {
             updating_pages.emplace_back(nullptr);
             continue;
@@ -574,15 +647,15 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         const auto & r = records[idx];
         switch (r.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case EditRecordType::PUT_EXTERNAL:
             external_table_directory.createExternal(r.page_id, last_sequence + 1);
             break;
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
             updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
             break;
-        case WriteBatch::WriteType::REF:
+        case EditRecordType::REF:
         {
             // We can't handle `REF` before other writes, because `PUT` and `REF`
             // maybe in the same WriteBatch.
@@ -616,7 +689,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             if (!external_table_directory.tryCreateDel(r.page_id, last_sequence + 1))
             {
@@ -624,9 +697,14 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
+        case EditRecordType::REF_EXTERNAL:
+        {
+            throw Exception("Should not run into here with REF_EXTERNAL");
+            break;
+        }
         }
 
-        if (r.type != WriteBatch::WriteType::PUT_EXTERNAL)
+        if (r.type != EditRecordType::PUT_EXTERNAL)
         {
             auto locks_it = updating_locks.find(r.page_id);
             locks_it->second.second -= 1;

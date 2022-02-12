@@ -27,9 +27,6 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
-#include "Storages/DeltaMerge/File/DMFile.h"
-#include "Storages/Page/PageStorage.h"
-
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
 #endif

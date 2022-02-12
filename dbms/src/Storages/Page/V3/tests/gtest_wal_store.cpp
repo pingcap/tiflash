@@ -32,7 +32,7 @@ TEST(WALSeriTest, AllPuts)
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
+    EXPECT_EQ(iter->type, EditRecordType::PUT);
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p1));
@@ -58,30 +58,30 @@ try
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
+    EXPECT_EQ(iter->type, EditRecordType::PUT);
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p3));
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+    EXPECT_EQ(iter->type, EditRecordType::REF);
     EXPECT_EQ(iter->page_id, 4);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_EQ(iter->entry.file_id, INVALID_BLOBFILE_ID);
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT);
+    EXPECT_EQ(iter->type, EditRecordType::PUT);
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5));
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+    EXPECT_EQ(iter->type, EditRecordType::DEL);
     EXPECT_EQ(iter->page_id, 2);
     EXPECT_EQ(iter->version, ver21);
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+    EXPECT_EQ(iter->type, EditRecordType::DEL);
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver21);
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+    EXPECT_EQ(iter->type, EditRecordType::DEL);
     EXPECT_EQ(iter->page_id, 987);
     EXPECT_EQ(iter->version, ver21);
 }
@@ -104,21 +104,21 @@ try
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 4);
         auto iter = deseri_edit.getRecords().begin();
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT_EXTERNAL);
+        EXPECT_EQ(iter->type, EditRecordType::PUT_EXTERNAL);
         EXPECT_EQ(iter->page_id, 10);
         EXPECT_EQ(iter->version, ver21);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->type, EditRecordType::REF);
         EXPECT_EQ(iter->page_id, 11);
         EXPECT_EQ(iter->ori_page_id, 10);
         EXPECT_EQ(iter->version, ver21);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->type, EditRecordType::REF);
         EXPECT_EQ(iter->page_id, 12);
         EXPECT_EQ(iter->ori_page_id, 10);
         EXPECT_EQ(iter->version, ver21);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->type, EditRecordType::DEL);
         EXPECT_EQ(iter->page_id, 10);
         EXPECT_EQ(iter->version, ver21);
     }
@@ -133,7 +133,7 @@ try
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 1);
         auto iter = deseri_edit.getRecords().begin();
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->type, EditRecordType::DEL);
         EXPECT_EQ(iter->page_id, 11);
         EXPECT_EQ(iter->version, ver22);
     }
@@ -152,21 +152,21 @@ try
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 4);
         auto iter = deseri_edit.getRecords().begin();
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT_EXTERNAL);
+        EXPECT_EQ(iter->type, EditRecordType::PUT_EXTERNAL);
         EXPECT_EQ(iter->page_id, 10);
         EXPECT_EQ(iter->version, ver23);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->type, EditRecordType::REF);
         EXPECT_EQ(iter->page_id, 11);
         EXPECT_EQ(iter->ori_page_id, 10);
         EXPECT_EQ(iter->version, ver23);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::REF);
+        EXPECT_EQ(iter->type, EditRecordType::REF);
         EXPECT_EQ(iter->page_id, 12);
         EXPECT_EQ(iter->ori_page_id, 11);
         EXPECT_EQ(iter->version, ver23);
         iter++;
-        EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
+        EXPECT_EQ(iter->type, EditRecordType::DEL);
         EXPECT_EQ(iter->page_id, 10);
         EXPECT_EQ(iter->version, ver23);
     }
@@ -188,17 +188,17 @@ TEST(WALSeriTest, Upserts)
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p1_2));
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p3_2));
     iter++;
-    EXPECT_EQ(iter->type, WriteBatch::WriteType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_TRUE(isSameEntry(iter->entry, entry_p5_2));

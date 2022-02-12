@@ -351,6 +351,8 @@ try
 {
     WriteBatch batch;
     {
+        // External 0, 1024
+        // Ref 1->0
         batch.putExternal(0, 0);
         batch.putRefPage(1, 0);
         batch.putExternal(1024, 0);
@@ -361,12 +363,9 @@ try
 
     ExternalPageCallbacks callbacks;
     callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & pending_page_ids) -> void {
-        // FIXME
         times_remover_called += 1;
-        // FIXME: the number of normal_page_id
-        // ASSERT_EQ(pending_page_ids.size(), 2UL);
-        EXPECT_GT(pending_page_ids.count(0), 0UL);
-        EXPECT_GT(pending_page_ids.count(1024), 0UL);
+        // Nothing is need to be deleted
+        EXPECT_TRUE(pending_page_ids.empty());
     };
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
@@ -382,31 +381,35 @@ try
         batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
         batch.delPage(1); // free ref 1 -> 0
         batch.delPage(1024); // free normal page 1024
+        // External 0; (deleted) 1024
+        // Ref 2->0; (deleted) 1->0
         page_storage->write(std::move(batch));
     }
 
     {
+        // With `snapshot` is being held, nothing is need to be deleted
         SCOPED_TRACE("gc with snapshot");
         page_storage->gc();
-        // EXPECT_EQ(times_remover_called, 2);
+        EXPECT_EQ(times_remover_called, 2);
     }
 
     {
-        DB::Page page0 = page_storage->read(0);
-        ASSERT_EQ(page0.data.size(), 0UL);
-        ASSERT_EQ(page0.page_id, 0UL);
-
-        DB::Page page2 = page_storage->read(2);
-        ASSERT_EQ(page2.data.size(), 0UL);
-        ASSERT_EQ(page2.page_id, 2UL);
+        auto ori_id_0 = page_storage->getNormalPageId(0, nullptr);
+        ASSERT_EQ(ori_id_0, 0);
+        auto ori_id_2 = page_storage->getNormalPageId(2, nullptr);
+        ASSERT_EQ(ori_id_2, 0);
+        ASSERT_EQ(1024, page_storage->getNormalPageId(1024, snapshot));
+        ASSERT_EQ(0, page_storage->getNormalPageId(1, snapshot));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(1024, nullptr));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(1, nullptr));
     }
 
+    /// After `snapshot` released, should remove 1024
     snapshot.reset();
     callbacks.v3_remover = [&times_remover_called](const std::set<PageId> & pending_page_ids) -> void {
         times_remover_called += 1;
-        // FIXME: the number of normal_page_id
-        // ASSERT_EQ(pending_page_ids.size(), 1);
-        EXPECT_GT(pending_page_ids.count(0), 0);
+        EXPECT_EQ(pending_page_ids.size(), 1);
+        EXPECT_GT(pending_page_ids.count(1024), 0);
     };
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
