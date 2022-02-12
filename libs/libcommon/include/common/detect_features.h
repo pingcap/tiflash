@@ -4,10 +4,11 @@
 #ifdef __APPLE__ // TODO: remove mocked CPU feature for Darwin/aarch64 when `cpu_features` supports it
 namespace common
 {
+// M1 supports these features and we had better set them on to enable developers on darwin debug asimd related code sections
 struct CPUFeatures
 {
-    int asimd : 1 = 0;
-    int pmull : 1 = 0;
+    int asimd : 1 = 1;
+    int pmull : 1 = 1;
 };
 enum CPUFeature
 {
