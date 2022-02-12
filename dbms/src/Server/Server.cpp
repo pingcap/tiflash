@@ -552,7 +552,7 @@ public:
         // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
-        auto thread_manager = DB::newThreadManager();
+        thread_manager = DB::newThreadManager();
         for (int i = 0; i < 40; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
@@ -577,6 +577,7 @@ public:
         {
             cqs_[i]->Shutdown();
         }
+        thread_manager->wait();
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         LOG_FMT_INFO(log, "Shut down flash grpc server");
@@ -593,6 +594,7 @@ private:
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     std::vector<std::unique_ptr<grpc_impl::ServerCompletionQueue>> cqs_;
+    std::shared_ptr<ThreadManager> thread_manager = DB::newThreadManager();
 };
 
 class Server::TcpHttpServersHolder
