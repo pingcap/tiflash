@@ -27,6 +27,8 @@ class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConn
 public:
     explicit FlashService(IServer & server_);
 
+    ~FlashService();
+
     grpc::Status Coprocessor(
         grpc::ServerContext * grpc_context,
         const coprocessor::Request * request,
@@ -73,6 +75,7 @@ private:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+    std::atomic<bool> end_syn = {false}, end_fin{false};
 };
 
 class MPPTunnel;
