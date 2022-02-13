@@ -1670,7 +1670,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({1024, -1024, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(40,20))")}));
-    
+
     // case4: cast(bigint as decimal(38, 20))
     // from_prec(19) + to_scale(20) > Decimal256::prec(38), so we **CANNOT** skip check overflow.
     to_prec = 38;

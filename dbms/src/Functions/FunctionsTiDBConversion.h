@@ -815,17 +815,16 @@ template <typename FromDataType, typename ToFieldType, bool return_nullable, boo
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
+    using ScaleMulNativeType = typename ScaleMulType::NativeType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T int_value, PrecType prec [[maybe_unused]], ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, PrecType prec [[maybe_unused]], const ScaleMulType & scale_mul, const Context & context)
     {
         // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
         static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
-        using ScaleMulNativeType = typename ScaleMulType::NativeType;
 
-        ScaleMulNativeType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
         ScaleMulNativeType scaled_value = static_cast<ScaleMulNativeType>(int_value) * static_cast<ScaleMulNativeType>(scale_mul);
         if constexpr (!can_skip_check_overflow)
         {
@@ -845,7 +844,7 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
+    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, const ScaleMulNativeType & scale_mul, int fsp, const Context & context)
     {
         UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
             + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
@@ -857,24 +856,24 @@ struct TiDBConvertToDecimal
         }
         else
         {
-            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale, context);
+            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale_mul, context);
         }
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDate & date, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimal(MyDate & date, PrecType prec, const ScaleMulNativeType & scale_mul, const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
-        return toTiDBDecimalInternal<UInt64, U>(value, prec, scale, context);
+        return toTiDBDecimalInternal<UInt64, U>(value, prec, scale_mul, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, const ScaleMulNativeType & scale_mul, const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
-            return toTiDBDecimalInternal<T, U>(value, prec, scale, context);
+            return toTiDBDecimalInternal<T, U>(value, prec, scale_mul, context);
         else
-            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale, context);
+            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale_mul, context);
     }
 
     template <typename T, typename U>
@@ -926,7 +925,6 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        using ScaleMulNativeType = typename ScaleMulType::NativeType;
         auto value = ScaleMulNativeType(v.value);
 
         if (v_scale <= scale)
@@ -1169,17 +1167,18 @@ struct TiDBConvertToDecimal
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
+            const ScaleMulNativeType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
             for (size_t i = 0; i < size; ++i)
             {
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, prec, scale, context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, prec, scale_mul, context);
                 }
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, prec, scale, type.getFraction(), context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, prec, scale, scale_mul, type.getFraction(), context);
                 }
             }
         }
@@ -1203,11 +1202,22 @@ struct TiDBConvertToDecimal
         else if (const ColumnVector<FromFieldType> * col_from
                  = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
-            /// cast enum/int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                /// cast enum/int as decimal
+                ScaleMulNativeType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale_mul, context);
+            }
+            else
+            {
+                static_assert(std::is_floating_point_v<FromFieldType>);
+                /// cast real as decimal
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            }
         }
         else
         {
@@ -1813,7 +1823,7 @@ private:
         // cast(date as decimal)
         if (checkDataType<DataTypeMyDate>(from_type.get()))
         {
-            return (8 + to_decimal_scale); 
+            return (8 + to_decimal_scale);
         }
 
         auto get_from_scaled_prec_for_decimal = [](PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool zero_scale_diff) {
