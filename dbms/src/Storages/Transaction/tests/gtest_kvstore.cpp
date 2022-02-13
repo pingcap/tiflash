@@ -169,7 +169,8 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     {
         kvs.handleDestroy(1, tmt);
         {
-            auto lock = kvs.genRegionWriteLock();
+            auto task_lock = kvs.genTaskLock();
+            auto lock = kvs.genRegionWriteLock(task_lock);
             auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
             lock.regions.emplace(1, region);
             lock.index.add(region);
@@ -212,7 +213,8 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
 void RegionKVStoreTest::testRaftChangePeer(KVStore & kvs, TMTContext & tmt)
 {
     {
-        auto lock = kvs.genRegionWriteLock();
+        auto task_lock = kvs.genTaskLock();
+        auto lock = kvs.genRegionWriteLock(task_lock);
         auto region = makeRegion(88, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 100));
         lock.regions.emplace(88, region);
         lock.index.add(region);
@@ -332,7 +334,8 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         }
         {
             // add 7 back
-            auto lock = kvs.genRegionWriteLock();
+            auto task_lock = kvs.genTaskLock();
+            auto lock = kvs.genRegionWriteLock(task_lock);
             auto region = makeRegion(7, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
             lock.regions.emplace(7, region);
             lock.index.add(region);
@@ -475,7 +478,8 @@ void RegionKVStoreTest::testKVStore()
     }
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
-        auto lock = kvs.genRegionWriteLock();
+        auto task_lock = kvs.genTaskLock();
+        auto lock = kvs.genRegionWriteLock(task_lock);
         {
             auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
             lock.regions.emplace(1, region);
@@ -579,6 +583,11 @@ void RegionKVStoreTest::testKVStore()
                 TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::DelFlag, "pk", 77, 0);
                 RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key);
             }
+            ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 7, 6, ctx.getTMTContext()),
+                      EngineStoreApplyRes::None);
+
+            RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Write, TiKVKey("illegal key"));
+            // index <= appliedIndex(), ignore
             ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 7, 6, ctx.getTMTContext()),
                       EngineStoreApplyRes::None);
         }

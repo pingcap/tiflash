@@ -175,7 +175,7 @@ private:
 
     RegionManager::RegionReadLock genRegionReadLock() const;
 
-    RegionManager::RegionWriteLock genRegionWriteLock();
+    RegionManager::RegionWriteLock genRegionWriteLock(const KVStoreTaskLock &);
 
     EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type,

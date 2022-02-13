@@ -35,7 +35,7 @@ KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_met
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
     auto task_lock = genTaskLock();
-    auto manage_lock = genRegionWriteLock();
+    auto manage_lock = genRegionWriteLock(task_lock);
 
     this->proxy_helper = proxy_helper;
     manage_lock.regions = region_persister.restore(proxy_helper);
@@ -183,7 +183,7 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
     LOG_FMT_INFO(log, "Start to remove [region {}]", region_id);
 
     {
-        auto manage_lock = genRegionWriteLock();
+        auto manage_lock = genRegionWriteLock(task_lock);
         auto it = manage_lock.regions.find(region_id);
         manage_lock.index.remove(it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id); // remove index
         manage_lock.regions.erase(it);
@@ -207,7 +207,7 @@ RegionManager::RegionReadLock KVStore::genRegionReadLock() const
     return region_manager.genRegionReadLock();
 }
 
-RegionManager::RegionWriteLock KVStore::genRegionWriteLock()
+RegionManager::RegionWriteLock KVStore::genRegionWriteLock(const KVStoreTaskLock &)
 {
     return region_manager.genRegionWriteLock();
 }
@@ -451,7 +451,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto handle_batch_split = [&](Regions & split_regions) {
             {
-                auto manage_lock = genRegionWriteLock();
+                auto manage_lock = genRegionWriteLock(task_lock);
 
                 for (auto & new_region : split_regions)
                 {
@@ -523,7 +523,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                     region_manager.genRegionTaskLock(source_region_id));
             }
             {
-                auto manage_lock = genRegionWriteLock();
+                auto manage_lock = genRegionWriteLock(task_lock);
                 manage_lock.index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
                 manage_lock.index.add(curr_region_ptr);
             }

@@ -285,6 +285,14 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     }
 
     auto type = request.cmd_type();
+
+    LOG_FMT_INFO(log,
+                 "{} execute admin command {} at [term: {}, index: {}]",
+                 toString(),
+                 raft_cmdpb::AdminCmdType_Name(type),
+                 term,
+                 index);
+
     switch (type)
     {
     case raft_cmdpb::AdminCmdType::ChangePeer:
@@ -704,14 +712,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
-        { // make sure no more write cmd after region is destroyed or merged into other.
-            if (auto state = peerState(); state == raft_serverpb::PeerState::Tombstone)
-            {
-                throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false) + " execute normal raft cmd at index "
-                                    + std::to_string(index) + " under state Tombstone, should not happen",
-                                ErrorCodes::LOGICAL_ERROR);
-            }
-        }
 
         handle_write_cmd_func();
 
