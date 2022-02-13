@@ -224,22 +224,11 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     auto & meta_delegate = meta.makeRaftCommandDelegate();
     const auto & source_meta = commit_merge_request.source();
     auto source_region = kvstore.getRegion(source_meta.id());
-    if (source_region == nullptr)
-    {
-        LOG_FMT_ERROR(log,
-                      "{}: target {} can not find source [region {}], commit index {}",
-                      __FUNCTION__,
-                      toString(false),
-                      source_meta.id(),
-                      commit_merge_request.commit());
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region not found");
-    }
-    else
-        LOG_FMT_INFO(log,
-                     "{} execute commit merge, source [region {}], commit index {}",
-                     toString(false),
-                     source_meta.id(),
-                     commit_merge_request.commit());
+    LOG_FMT_INFO(log,
+                 "{} execute commit merge, source [region {}], commit index {}",
+                 toString(false),
+                 source_meta.id(),
+                 commit_merge_request.commit());
 
     const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
     const auto res = meta_delegate.checkBeforeCommitMerge(request, source_region_meta_delegate);
