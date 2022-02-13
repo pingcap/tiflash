@@ -52,7 +52,6 @@ fi
 
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_TESTS=${ENABLE_TESTS:-1}
-ENABLE_EMBEDDED_COMPILER="FALSE"
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-llvm.tar"
@@ -107,25 +106,24 @@ curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" \
   http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
 proxy_size=$(ls -l "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
-# TODO: Should build tiflash proxy along with tiflash if downloaded one is problematic.
+
+BUILD_TIFLASH_PROXY=false
+
 if [[ ${proxy_size} -lt ${min_size} ]]; then
-  echo "try to build libtiflash_proxy.so"
+  BUILD_TIFLASH_PROXY=true
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=""
+  echo "need to build libtiflash_proxy.so"
   export PATH=$PATH:$HOME/.cargo/bin
   rm -f target/release/libtiflash_proxy.so
-  bash "${SCRIPTPATH}/build-proxy.sh"
-  echo "try to upload libtiflash_proxy.so"
-  cd target/release
-  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
-  curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
+else
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy"
+  chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
 fi
-
-chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
 
 BUILD_DIR="$SRCPATH/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake "$SRCPATH" \
-  -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
+cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
   -DENABLE_TESTS=${ENABLE_TESTS} \
   -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
   -DUSE_CCACHE=${USE_CCACHE} \
@@ -139,11 +137,17 @@ cmake "$SRCPATH" \
   -DCMAKE_AR="/usr/local/bin/llvm-ar" \
   -DRUN_HAVE_STD_REGEX=0 \
   -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
-  -DUSE_INTERNAL_TIFLASH_PROXY=FALSE \
-  -DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy" \
+  -DUSE_INTERNAL_TIFLASH_PROXY=${BUILD_TIFLASH_PROXY} \
   -GNinja
 
 ninja tiflash
+
+if $BUILD_TIFLASH_PROXY; then
+  echo "try to upload libtiflash_proxy.so"
+  pushd "${SRCPATH}/contrib/tiflash-proxy/target/release"
+  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
+  popd
+fi
 
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   ninja page_ctl

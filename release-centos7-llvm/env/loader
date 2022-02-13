@@ -26,7 +26,6 @@ libdir  = "{}lib/".format(sysroot)
 triple  = "{}-unknown-linux-gnu".format(platform.machine())
 shell   = os.getenv('SHELL', '/bin/sh')     
 env     = {
-    "OPENSSL_ROOT_DIR"   : sysroot,
     "PS1"                : "[\\u@\\h \\W] (TiFlash) > ",
     "CMAKE_PREFIX_PATH"  : sysroot,
     "PATH"               : ":".join([bindir, sysroot + "go/bin/", os.getenv("PATH", "")]),
