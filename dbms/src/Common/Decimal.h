@@ -74,6 +74,20 @@ struct IntPrec<uint64_t>
     static constexpr PrecType real_prec = 20;
 };
 
+template <>
+struct IntPrec<Int128>
+{
+    static constexpr PrecType prec = 40;
+    static constexpr PrecType real_prec = 39;
+};
+
+template <>
+struct IntPrec<Int256>
+{
+    static constexpr PrecType prec = 79;
+    static constexpr PrecType real_prec = 78;
+};
+
 //  1) If the declared type of both operands of a dyadic arithmetic operator is exact numeric, then the declared
 //  type of the result is an implementation-defined exact numeric type, with precision and scale determined as
 //  follows:

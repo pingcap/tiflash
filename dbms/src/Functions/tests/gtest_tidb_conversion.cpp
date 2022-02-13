@@ -1615,5 +1615,78 @@ TEST_F(TestTidbConversion, skipCheckOverflowOtherToDecimal)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDuration>(duration_ptr, 60, 1));
 }
 
+// check if template argument of ScaleMulType is correct or not.
+TEST_F(TestTidbConversion, checkScaleMulType)
+try
+{
+    // case1: cast(tinyint as decimal(7, 3))
+    PrecType to_prec = 7;
+    ScaleType to_scale = 3;
+    DataTypePtr int8_ptr = std::make_shared<DataTypeInt8>();
+    // from_prec(3) + to_scale(3) <= Decimal32::prec(9), so we **CAN** skip check overflow.
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
+
+    // from_prec(3) + to_scale(3) <= Int32::real_prec(10) - 1, so ScaleMulType should be **Int32**.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal32>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField32(MAX_INT8 * 1000, to_scale), DecimalField32(MIN_INT8 * 1000, to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(7,3))")}));
+
+    // case2: cast(tinyint as decimal(9, 7))
+    to_prec = 9;
+    to_scale = 7;
+    // from_prec(3) + to_scale(7) > Decimal32::prec(9), so we **CANNOT** skip check overflow.
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
+
+    // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so ScaleMulType should be **Int64**.
+    DAGContext * dag_context = context.getDAGContext();
+    UInt64 ori_flags = dag_context->getFlags();
+    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context->clearWarnings();
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal32>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField32(999999999, to_scale), DecimalField32(-999999999, to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(9,7))")}));
+    dag_context->setFlags(ori_flags);
+
+    // case3: cast(bigint as decimal(40, 20))
+    // from_prec(19) + to_scale(20) <= Decimal256::prec(40), so we **CAN** skip check overflow.
+    to_prec = 40;
+    to_scale = 20;
+    DataTypePtr int64_ptr = std::make_shared<DataTypeInt64>();
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, to_prec, to_scale));
+
+    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so ScaleMulType should be **Int256**.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal256>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField256(1024 * static_cast<Int256>(pow(10, to_scale)), to_scale), DecimalField256(-1024 * static_cast<Int256>(pow(10, to_scale)), to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Int64>>({1024, -1024, {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(40,20))")}));
+    
+    // case4: cast(bigint as decimal(38, 20))
+    // from_prec(19) + to_scale(20) > Decimal256::prec(38), so we **CANNOT** skip check overflow.
+    to_prec = 38;
+    to_scale = 20;
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, to_prec, to_scale));
+
+    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so ScaleMulType should be **Int256**.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal128>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField128(1024 * static_cast<Int128>(pow(10, to_scale)), to_scale), DecimalField128(-1024 * static_cast<Int128>(pow(10, to_scale)), to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Int64>>({1024, -1024, {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(38,20))")}));
+}
+CATCH
+
 } // namespace
 } // namespace DB::tests
