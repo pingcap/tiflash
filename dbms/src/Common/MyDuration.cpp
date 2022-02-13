@@ -65,6 +65,24 @@ String MyDuration::toString() const
     }
     auto fmt_str = fmt::format("{}{}{}", "{}{:02}:{:02}:{:02}.{:.", fsp, "}");
     auto frac_str = fmt::format("{:06}", microsecond);
-    return fmt::format(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    switch (fsp)
+    {
+    case 0:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.0}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 1:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.1}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 2:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.2}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 3:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.3}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 4:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.4}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 5:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.5}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    case 6:
+        return fmt::format("{}{:02}:{:02}:{:02}.{:.6}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
+    default:
+        throw DB::Exception("invalid precision for MyDuration");
+    }
 }
 } // namespace DB

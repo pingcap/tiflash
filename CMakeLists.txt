@@ -14,6 +14,7 @@
 
 project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
+include(CheckCXXCompilerFlag)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
@@ -202,10 +203,17 @@ endif ()
 #    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wno-unused-command-line-argument -mllvm -inline-threshold=10000")
 #endif ()
 
+check_cxx_compiler_flag("-std=c++20 -Werror -Wall -Wextra" TIFLASH_COMPILER_CXX20_SUPPORT)
+message(STATUS "compiler support c++20: ${TIFLASH_COMPILER_CXX20_SUPPORT}")
+
 if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
-    set (CMAKE_CXX_STANDARD 17)
+    if (TIFLASH_COMPILER_CXX20_SUPPORT)
+        set (CMAKE_CXX_STANDARD 20)
+    else()
+        set (CMAKE_CXX_STANDARD 17)
+    endif()
     set (CMAKE_CXX_EXTENSIONS 1) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
@@ -421,7 +429,6 @@ if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
 endif ()
 
 if (ARCH_AMD64)
-    include(CheckCXXCompilerFlag)
     check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
     if(TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)

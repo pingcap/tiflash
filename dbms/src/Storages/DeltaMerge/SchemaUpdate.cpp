@@ -62,7 +62,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             }
             else
             {
-                throw Exception(fmt::format("Unknown float number literal: {}, value type: {}" + applyVisitor(FieldVisitorToString(), value), value.getTypeName()));
+                throw Exception(fmt::format(fmt::runtime("Unknown float number literal: {}, value type: {}" + applyVisitor(FieldVisitorToString(), value)), value.getTypeName()));
             }
         }
         case TypeIndex::String:

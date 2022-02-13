@@ -28,7 +28,9 @@ add_library(boost_internal STATIC ${BOOST_INTERNAL_SRC})
 
 target_include_directories (boost_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
-target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
+target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED BOOST_BIND_GLOBAL_PLACEHOLDERS)
+
+target_compile_options (boost_internal PRIVATE -Wno-non-virtual-dtor)
 
 target_link_libraries (boost_internal boost_fiber boost_context)
 

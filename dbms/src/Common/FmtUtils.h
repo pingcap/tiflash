@@ -25,10 +25,10 @@ class FmtBuffer
 public:
     FmtBuffer() = default;
 
-    template <typename... Args>
-    FmtBuffer & fmtAppend(Args &&... args)
+    template <typename S, typename... Args>
+    FmtBuffer & fmtAppend(S&& s, Args&&... args)
     {
-        fmt::format_to(std::back_inserter(buffer), std::forward<Args>(args)...);
+        fmt::format_to(std::back_inserter(buffer), fmt::runtime(std::forward<S>(s)), std::forward<Args>(args)...);
         return *this;
     }
 
