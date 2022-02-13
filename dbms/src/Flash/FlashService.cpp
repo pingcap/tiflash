@@ -55,7 +55,7 @@ FlashService::FlashService(IServer & server_)
         });
 }
 
-~FlashService::FlashService()
+FlashService::~FlashService()
 {
     end_syn = true;
     while (!end_fin)
