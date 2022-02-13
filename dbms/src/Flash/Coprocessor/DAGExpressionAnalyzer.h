@@ -126,6 +126,9 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+    void updateWindowSourceColumns(
+        NamesAndTypes cols);
+
 private:
     void appendAggSelect(
         ExpressionActionsChain & chain,

@@ -908,7 +908,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     window_description.before_window = chain.getLastActions();
     window_description.partition_by = getWindowSortDescription(window.partition_by(), step);
     window_description.order_by = getWindowSortDescription(window.order_by(), step);
-    chain.finalize();
+    chain.finalize(true);
     chain.clear();
 
     appendWindowSelect(chain, window, window_columns);
@@ -1681,6 +1681,11 @@ String DAGExpressionAnalyzer::buildFunction(
         argument_names.push_back(name);
     }
     return applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
+void DAGExpressionAnalyzer::updateWindowSourceColumns(NamesAndTypes cols)
+{
+    source_columns = cols;
 }
 
 } // namespace DB

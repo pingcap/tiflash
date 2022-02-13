@@ -186,6 +186,7 @@ AnalysisResult analyzeExpressions(
     // Or window, not both.
     if (!query_block.window_op_list.empty())
     {
+        NamesAndTypes final_project_columns;
         // window op list in query_block like : window4 -> window3 -> sort2 -> window2 -> window1 -> sort1
         // so we need reverse the list to handle each op
         for (auto reverse_iter = query_block.window_op_list.rbegin(); reverse_iter != query_block.window_op_list.rend(); ++reverse_iter)
@@ -207,6 +208,10 @@ AnalysisResult analyzeExpressions(
                         chain,
                         window->window());
                     res.window_description_map.insert({name, window_description});
+                    for (auto & col : window_description.add_columns)
+                    {
+                        final_project_columns.emplace_back(col);
+                    }
                     continue;
                 }
             }
@@ -229,6 +234,7 @@ AnalysisResult analyzeExpressions(
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
         //analyzer.updateWindowSourceColumns();
+        //analyzer.updateWindowSourceColumns(final_project_columns);
     }
 
     // Append final project results if needed.

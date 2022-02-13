@@ -714,7 +714,7 @@ std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & colum
     return res;
 }
 
-void ExpressionActions::finalize(const Names & output_columns)
+void ExpressionActions::finalize(const Names & output_columns, bool keep_sorce_column)
 {
     NameSet final_columns;
     for (const auto & name : output_columns)
@@ -848,50 +848,52 @@ void ExpressionActions::finalize(const Names & output_columns)
     /// Deletes unnecessary temporary columns.
 
     /// If the column after performing the function `refcount = 0`, it can be deleted.
-    std::map<String, int> columns_refcount;
-
-    for (const auto & name : final_columns)
-        ++columns_refcount[name];
-
-    for (const auto & action : actions)
+    if (!keep_sorce_column)
     {
-        if (!action.source_name.empty())
-            ++columns_refcount[action.source_name];
+        std::map<String, int> columns_refcount;
 
-        for (const auto & name : action.argument_names)
+        for (const auto & name : final_columns)
             ++columns_refcount[name];
 
-        for (const auto & name_alias : action.projections)
-            ++columns_refcount[name_alias.first];
+        for (const auto & action : actions)
+        {
+            if (!action.source_name.empty())
+                ++columns_refcount[action.source_name];
+
+            for (const auto & name : action.argument_names)
+                ++columns_refcount[name];
+
+            for (const auto & name_alias : action.projections)
+                ++columns_refcount[name_alias.first];
+        }
+
+        Actions new_actions;
+        new_actions.reserve(actions.size());
+
+        for (const auto & action : actions)
+        {
+            new_actions.push_back(action);
+
+            auto process = [&](const String & name) {
+                auto refcount = --columns_refcount[name];
+                if (refcount <= 0)
+                {
+                    new_actions.push_back(ExpressionAction::removeColumn(name));
+                    if (sample_block.has(name))
+                        sample_block.erase(name);
+                }
+            };
+
+            if (!action.source_name.empty())
+                process(action.source_name);
+
+            for (const auto & name : action.argument_names)
+                process(name);
+
+            /// For `projection`, there is no reduction in `refcount`, because the `project` action replaces the names of the columns, in effect, already deleting them under the old names.
+        }
+        actions.swap(new_actions);
     }
-
-    Actions new_actions;
-    new_actions.reserve(actions.size());
-
-    for (const auto & action : actions)
-    {
-        new_actions.push_back(action);
-
-        auto process = [&](const String & name) {
-            auto refcount = --columns_refcount[name];
-            if (refcount <= 0)
-            {
-                new_actions.push_back(ExpressionAction::removeColumn(name));
-                if (sample_block.has(name))
-                    sample_block.erase(name);
-            }
-        };
-
-        if (!action.source_name.empty())
-            process(action.source_name);
-
-        for (const auto & name : action.argument_names)
-            process(name);
-
-        /// For `projection`, there is no reduction in `refcount`, because the `project` action replaces the names of the columns, in effect, already deleting them under the old names.
-    }
-
-    actions.swap(new_actions);
 
     /*    std::cerr << "\n";
     for (const auto & action : actions)
@@ -1029,7 +1031,7 @@ void ExpressionActionsChain::addStep()
     steps.push_back(Step(std::make_shared<ExpressionActions>(columns, settings)));
 }
 
-void ExpressionActionsChain::finalize()
+void ExpressionActionsChain::finalize(bool keep_source_columns)
 {
     /// Finalize all steps. Right to left to define unnecessary input columns.
     for (int i = static_cast<int>(steps.size()) - 1; i >= 0; --i)
@@ -1040,7 +1042,7 @@ void ExpressionActionsChain::finalize()
             for (const auto & it : steps[i + 1].actions->getRequiredColumnsWithTypes())
                 required_output.push_back(it.name);
         }
-        steps[i].actions->finalize(required_output);
+        steps[i].actions->finalize(required_output, keep_source_columns);
     }
 
     /// When possible, move the ARRAY JOIN from earlier steps to later steps.
