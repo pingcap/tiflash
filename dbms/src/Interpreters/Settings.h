@@ -335,7 +335,10 @@ struct Settings
     M(SettingBool, enable_elastic_threadpool, true, "Enable elastic thread pool for thread create usages.")                                                                                                                             \
     M(SettingUInt64, elastic_threadpool_init_cap, 400, "The size of elastic thread pool.")                                                                                                                                              \
     M(SettingUInt64, elastic_threadpool_shrink_period_ms, 300000, "The shrink period(ms) of elastic thread pool.")                                                                                                                      \
-    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
+    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.") \
+    M(SettingUInt64, async_pollers_per_cq, 1, "grpc async pollers per cqs")                                                                                                                                                                           \
+    M(SettingUInt64, async_cqs, 40, "grpc async cqs")                                                                                                                                                                                   \
+    M(SettingUInt64, async_buf_size_per_poller, 10, "grpc async_buf_size_per_poller")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

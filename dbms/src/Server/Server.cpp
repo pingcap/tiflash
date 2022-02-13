@@ -488,10 +488,10 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq)
+void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq, int buf_size)
 {
     // Spawn a new CallData instance to serve new clients.
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < buf_size; i++)
         new CallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
@@ -553,7 +553,7 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         thread_manager = DB::newThreadManager();
-        for (int i = 0; i < 40; i++)
+        for (int i = 0; i < server.context().getSettingsRef().async_cqs; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
         }
@@ -561,9 +561,10 @@ public:
             = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
-
-        for (int i = 0; i < (int)(cqs_.size() * 3); i++)
-            thread_manager->scheduleThenDetach(false, "async_poller", [this, i] { HandleRpcs(flash_service.get(), cqs_[i / 3].get()); });
+        int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
+        int ppc = server.context().getSettingsRef().async_pollers_per_cq;
+        for (int i = 0; i < (int)(cqs_.size() * ppc; i++)
+            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
     }
 
     ~FlashGrpcServerHolder()
