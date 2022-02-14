@@ -595,7 +595,8 @@ void CallData::notifyReady()
 
 void CallData::Proceed()
 {
-    StatsHook stats_ook(service_);
+    service_->current_active_establish_thds++;
+    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
     if (state_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -622,7 +623,10 @@ void CallData::Proceed()
         if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this))
         {
             state_ = FINISH;
+            service_->current_active_establish_thds--;
+            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
             delete this;
+            return;
         }
     }
     else if (state_ == JOIN)
@@ -664,8 +668,13 @@ void CallData::Proceed()
     {
         GPR_ASSERT(state_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (CallData).
+        service_->current_active_establish_thds--;
+        service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
         delete this;
+        return;
     }
+    service_->current_active_establish_thds--;
+    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
 }
 
 void CallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue)
