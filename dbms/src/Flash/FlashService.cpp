@@ -595,8 +595,7 @@ void CallData::notifyReady()
 
 void CallData::Proceed()
 {
-    service_->current_active_establish_thds++;
-    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+    StatsHook stats_ook(service_);
     if (state_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -667,8 +666,6 @@ void CallData::Proceed()
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;
     }
-    service_->current_active_establish_thds--;
-    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
 }
 
 void CallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue)

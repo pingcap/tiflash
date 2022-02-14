@@ -83,6 +83,21 @@ class MPPTunnel;
 class CallData
 {
 public:
+    struct StatsHook
+    {
+        StatsHook(FlashService * service_)
+        {
+            service_->current_active_establish_thds++;
+            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+        }
+        ~StatsHook()
+        {
+            service_->current_active_establish_thds--;
+            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+        }
+        FlashService * service_;
+    };
+
     // Take in the "service" instance (in this case representing an asynchronous
     // server) and the completion queue "cq" used for asynchronous communication
     // with the gRPC runtime.
@@ -90,7 +105,7 @@ public:
 
     bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
 
-    bool TryWrite(std::unique_lock<std::mutex> *p_lk = nullptr, bool trace = false);
+    bool TryWrite(std::unique_lock<std::mutex> * p_lk = nullptr, bool trace = false);
 
     void WriteDone(const ::grpc::Status & status, bool need_wait = true);
 
