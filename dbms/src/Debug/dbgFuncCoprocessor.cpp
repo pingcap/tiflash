@@ -131,6 +131,16 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
 
 });
 
+std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
+    {"min", tipb::ExprType::Min},
+    {"max", tipb::ExprType::Max},
+    {"count", tipb::ExprType::Count},
+    {"sum", tipb::ExprType::Sum},
+    {"first_row", tipb::ExprType::First},
+    {"uniqRawRes", tipb::ExprType::ApproxCountDistinct},
+    {"group_concat", tipb::ExprType::GroupConcat},
+});
+
 std::pair<String, String> splitQualifiedName(String s)
 {
     std::pair<String, String> ret;
@@ -337,12 +347,20 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
         tipb::ExchangeReceiver tipb_exchange_receiver;
+<<<<<<< HEAD
         for (size_t i = 0; i < root_task_ids.size(); i++)
+=======
+        for (const auto root_task_id : root_task_ids)
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
         {
             mpp::TaskMeta tm;
             tm.set_start_ts(properties.start_ts);
             tm.set_address(LOCAL_HOST);
+<<<<<<< HEAD
             tm.set_task_id(root_task_ids[i]);
+=======
+            tm.set_task_id(root_task_id);
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
             tm.set_partition_id(-1);
             auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
             tm.AppendToString(tm_string);
@@ -861,12 +879,18 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 struct MPPCtx
 {
     Timestamp start_ts;
-    Int64 partition_num;
     Int64 next_task_id;
     std::vector<Int64> sender_target_task_ids;
+<<<<<<< HEAD
     std::vector<Int64> current_task_ids;
     std::vector<Int64> partition_keys;
     MPPCtx(Timestamp start_ts_, size_t partition_num_) : start_ts(start_ts_), partition_num(partition_num_), next_task_id(1) {}
+=======
+    explicit MPPCtx(Timestamp start_ts_)
+        : start_ts(start_ts_)
+        , next_task_id(1)
+    {}
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
 };
 
 using MPPCtxPtr = std::shared_ptr<MPPCtx>;
@@ -1170,16 +1194,26 @@ struct Aggregation : public Executor
                 tipb::Expr * arg_expr = agg_func->add_children();
                 astToPB(input_schema, arg, arg_expr, collator_id, context);
             }
+            auto agg_sig_it = agg_func_name_to_sig.find(func->name);
+            if (agg_sig_it == agg_func_name_to_sig.end())
+                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+            auto agg_sig = agg_sig_it->second;
+            agg_func->set_tp(agg_sig);
 
-            if (func->name == "count")
+            if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
             {
+<<<<<<< HEAD
                 agg_func->set_tp(tipb::Count);
                 auto ft = agg_func->mutable_field_type();
+=======
+                auto * ft = agg_func->mutable_field_type();
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
-            else if (func->name == "sum")
+            else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max || agg_sig == tipb::ExprType::First)
             {
+<<<<<<< HEAD
                 agg_func->set_tp(tipb::Sum);
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
@@ -1192,10 +1226,19 @@ struct Aggregation : public Executor
                     throw Exception("udaf max only accept 1 argument");
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
+=======
+                if (agg_func->children_size() != 1)
+                    throw Exception("udaf " + func->name + " only accept 1 argument");
+                auto * ft = agg_func->mutable_field_type();
+                ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_decimal(agg_func->children(0).field_type().decimal());
+                ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
                 ft->set_collate(collator_id);
             }
-            else if (func->name == "min")
+            else if (agg_sig == tipb::ExprType::ApproxCountDistinct)
             {
+<<<<<<< HEAD
                 agg_func->set_tp(tipb::Min);
                 if (agg_func->children_size() != 1)
                     throw Exception("udaf min only accept 1 argument");
@@ -1211,10 +1254,21 @@ struct Aggregation : public Executor
                 ft->set_flag(1);
             }
             // TODO: Other agg func.
-            else
-            {
-                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+=======
+                auto * ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+                ft->set_flag(1);
             }
+            else if (agg_sig == tipb::ExprType::GroupConcat)
+            {
+                auto * ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+            }
+            if (is_final_mode)
+                agg_func->set_aggfuncmode(tipb::AggFunctionMode::FinalMode);
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
+            else
+                agg_func->set_aggfuncmode(tipb::AggFunctionMode::Partial1Mode);
         }
 
         for (const auto & child : gby_exprs)
@@ -1265,8 +1319,11 @@ struct Aggregation : public Executor
         // todo support avg
         if (has_uniq_raw_res)
             throw Exception("uniq raw res not supported in mpp query");
+<<<<<<< HEAD
         if (gby_exprs.size() == 0)
             throw Exception("agg without group by columns not supported in mpp query");
+=======
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
         std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
             executor_index, output_schema_for_partial_agg, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
         partial_agg->children.push_back(children[0]);
@@ -1277,7 +1334,7 @@ struct Aggregation : public Executor
             partition_keys.push_back(i + agg_func_num);
         }
         std::shared_ptr<ExchangeSender> exchange_sender
-            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, tipb::Hash, partition_keys);
+            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
         exchange_sender->children.push_back(partial_agg);
 
         std::shared_ptr<ExchangeReceiver> exchange_receiver
@@ -1826,9 +1883,10 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
             }
-            else if (func->name == "max" || func->name == "min")
+            else if (func->name == "max" || func->name == "min" || func->name == "first_row")
             {
                 ci = children_ci[0];
+                ci.flag &= ~TiDB::ColumnFlagNotNull;
             }
             else if (func->name == UniqRawResName)
             {
@@ -2045,17 +2103,30 @@ QueryFragments mppQueryToQueryFragments(
     root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
     TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
-    std::vector<Int64> current_task_ids = mpp_ctx->current_task_ids;
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    size_t current_task_num = properties.mpp_partition_num;
     for (auto & exchange : exchange_map)
     {
+        if (exchange.second.second->type == tipb::ExchangeType::PassThrough)
+        {
+            current_task_num = 1;
+            break;
+        }
+    }
+    std::vector<Int64> current_task_ids;
+    for (size_t i = 0; i < current_task_num; i++)
+        current_task_ids.push_back(mpp_ctx->next_task_id++);
+    for (auto & exchange : exchange_map)
+    {
+<<<<<<< HEAD
         std::vector<Int64> task_ids;
         for (size_t i = 0; i < (size_t)mpp_ctx->partition_num; i++)
             task_ids.push_back(mpp_ctx->next_task_id++);
+=======
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
         mpp_ctx->sender_target_task_ids = current_task_ids;
-        mpp_ctx->current_task_ids = task_ids;
-        receiver_source_task_ids_map[exchange.first] = task_ids;
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
+        receiver_source_task_ids_map[exchange.first] = sub_fragments.cbegin()->task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
     fragments.emplace_back(root_executor, table_id, for_root_fragment, std::move(sender_target_task_ids),
@@ -2071,10 +2142,13 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
             = std::make_shared<mock::ExchangeSender>(executor_index, root_executor->output_schema, tipb::PassThrough);
         root_exchange_sender->children.push_back(root_executor);
         root_executor = root_exchange_sender;
-        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
+        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
+<<<<<<< HEAD
         for (size_t i = 0; i < (size_t)properties.mpp_partition_num; i++)
             mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
+=======
+>>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
     else
