@@ -141,9 +141,11 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
         {
             wait_ptr = wait_it->second;
         }
-        if ((*wait_ptr).find(id) != wait_ptr->end())
+        if (wait_ptr->find(id) != wait_ptr->end())
         {
-            errMsg = fmt::format("Another same task [{},{}] has been waiting.", meta.start_ts(), meta.task_id());
+
+            errMsg = fmt::format("Another same task [{},{}] has been waiting. {} vs {} ", meta.start_ts(), meta.task_id(), (long long)(wait_ptr->at(id)), (long long)callData);
+            LOG_ERROR(log,  "wwwoody! "<<errMsg);
             return nullptr;
         }
         else
@@ -164,12 +166,6 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
             errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());
             return nullptr;
         }
-        //TODO handle timeout case
-        //        else if (!ret)
-        //        {
-        //            errMsg = fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count());
-        //            return nullptr;
-        //        }
         return it->second;
     }
 }

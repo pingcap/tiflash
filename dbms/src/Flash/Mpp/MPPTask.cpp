@@ -246,6 +246,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_FMT_DEBUG(log, "begin to register the task {}", id.toString());
+    LOG_FMT_ERROR(log, "wwwoody! begin to register the task [{},{}]", id.start_ts, id.task_id);
 
     if (dag_context->isRootMPPTask())
     {
