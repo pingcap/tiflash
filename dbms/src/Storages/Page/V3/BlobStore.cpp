@@ -697,6 +697,7 @@ void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
     {
         const auto & [ver, entry] = versioned_entry;
         (void)ver;
+        (void)page_id;
         auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
         stat->restoreSpaceMap(entry.offset, entry.size);
     }

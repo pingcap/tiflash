@@ -296,6 +296,7 @@ using Decimal32 = Decimal<Int32>;
 using Decimal64 = Decimal<Int64>;
 using Decimal128 = Decimal<Int128>;
 using Decimal256 = Decimal<Int256>;
+using Decimal512 = Decimal<Int512>;
 
 static constexpr PrecType minDecimalPrecision()
 {

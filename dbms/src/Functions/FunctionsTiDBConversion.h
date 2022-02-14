@@ -1812,6 +1812,7 @@ private:
                 }
                 else
                 {
+                    (void)from_scaled_prec;
                     (void)to_decimal_scale;
                 }
                 return true;
@@ -1871,6 +1872,7 @@ private:
     // Determine ScaleMulType template argument.
     // rule: from_scaled_prec <= (Intxxx::real_prec - 1)
     // from_scaled_prec is the scale for result of max_from_val * 10^to_scale, e.g. from_val_prec + scale_diff.
+    // NOTE: ScaleMulType only works for cast(int/enum/decimal as decimal). cast(real/string as decimal) will ignore it.
     template <typename FromDataType, typename ToDataType, bool return_nullable>
     WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
     {
@@ -1895,9 +1897,13 @@ private:
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal128>(decimal_type, can_skip);
         }
-        else
+        else if (from_scaled_prec <= IntPrec<Int256>::real_prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal256>(decimal_type, can_skip);
+        }
+        else
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal512>(decimal_type, can_skip);
         }
     }
 
