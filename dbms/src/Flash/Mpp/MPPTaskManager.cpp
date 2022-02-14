@@ -73,7 +73,9 @@ void MPPTaskManager::BackgroundJob()
 MPPTaskManager::MPPTaskManager()
     : log(&Poco::Logger::get("TaskManager"))
     , bk_thd(std::make_shared<std::thread>(&MPPTaskManager::BackgroundJob, this))
-{}
+{
+    thd_manager = newThreadManager();
+}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
@@ -192,7 +194,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             return;
         it->second.to_be_cancelled = true;
         task_set = it->second;
-        cv.notify_all();
+//        cv.notify_all();
         auto wait_it = wait_map.find(query_id);
 
         if (wait_it != wait_map.end())
@@ -251,7 +253,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     if (it != mpp_query_map.end() && it->second.to_be_cancelled)
     {
         LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
-        cv.notify_all();
+//        cv.notify_all();
         if (wait_it != wait_map.end())
         {
             auto & tasks_map = wait_it->second;
@@ -274,49 +276,53 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     }
     mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
     task->manager = this;
-    cv.notify_all();
+//    cv.notify_all();
     LOG_FMT_ERROR(log, "wwwoody! register the task done [{},{}]  has_waiter:{} ", task->id.start_ts, task->id.task_id, wait_it != wait_map.end() && wait_it->second->find(task->id) != wait_it->second->end());
-    if (wait_it != wait_map.end())
-    {
-        auto & tasks_map = wait_it->second;
-        auto wait_task_it = tasks_map->find(task->id);
-        if (wait_task_it != tasks_map->end())
+    thd_manager->scheduleThenDetach(false, "wake-establish", [this, task] {
+        std::unique_lock<std::mutex> lock(mu);
+        auto wait_it = wait_map.find(task->id.start_ts);
+        if (wait_it != wait_map.end())
         {
-            for (auto & calldata : wait_task_it->second)
+            auto & tasks_map = wait_it->second;
+            auto wait_task_it = tasks_map->find(task->id);
+            if (wait_task_it != tasks_map->end())
             {
-                //                CallData * calldata = wait_task_it->second;
-                std::string err_msg;
-                MPPTunnelPtr tunnel = nullptr;
-                std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));
-                if (tunnel == nullptr)
+                for (auto & calldata : wait_task_it->second)
                 {
-                    LOG_ERROR(log, err_msg);
-                    calldata->WriteErr(getPacketWithError(err_msg));
+                    //                CallData * calldata = wait_task_it->second;
+                    std::string err_msg;
+                    MPPTunnelPtr tunnel = nullptr;
+                    std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));
+                    if (tunnel == nullptr)
+                    {
+                        LOG_ERROR(log, err_msg);
+                        calldata->WriteErr(getPacketWithError(err_msg));
+                    }
+                    else
+                    {
+                        calldata->state_ = CallData::CallStatus::JOIN;
+                        tunnel->no_waiter = true;
+                        calldata->attachTunnel(tunnel);
+                        try
+                        {
+                            tunnel->connect(calldata);
+                        }
+                        catch (...)
+                        {
+                            grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
+                            calldata->WriteDone(status, false);
+                        }
+                    }
                 }
-                else
+                tasks_map->erase(wait_task_it);
+                if (tasks_map->empty())
                 {
-                    calldata->state_ = CallData::CallStatus::JOIN;
-                    tunnel->no_waiter = true;
-                    calldata->attachTunnel(tunnel);
-                    try
-                    {
-                        tunnel->connect(calldata);
-                    }
-                    catch (...)
-                    {
-                        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
-                        calldata->WriteDone(status, false);
-                    }
+                    wait_map.erase(wait_it);
                 }
+                //            wait_task_it->second->
             }
-            tasks_map->erase(wait_task_it);
-            if (tasks_map->empty())
-            {
-                wait_map.erase(wait_it);
-            }
-            //            wait_task_it->second->
         }
-    }
+    });
     return true;
 }
 

@@ -44,6 +44,7 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
     std::atomic<bool> end_syn{false}, end_fin{false};
     std::shared_ptr<std::thread> bk_thd;
+    std::shared_ptr<ThreadManager> thd_manager;
 
 public:
     MPPTaskManager();
