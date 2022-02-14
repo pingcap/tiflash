@@ -300,9 +300,9 @@ Block WindowBlockInputStream::getOutputBlock()
     if (outputBlockEmpty())
         return {};
 
+    int output_column_index = 0;
     for (auto & workspace : workspaces)
     {
-        int output_column_index = 0;
         output_blocks[output_index].getByPosition(workspace.result).column = std::move(window_blocks[output_index].output_columns[output_column_index++]);
     }
     return output_blocks[output_index++];
@@ -331,8 +331,6 @@ void WindowBlockInputStream::advancePartitionEnd()
     }
 
     const RowNumber end = blocksEnd();
-
-    //    fmt::print(stderr, "end {}, partition_end {}\n", end, partition_end);
 
     // If we're at the total end of data, we must end the partition. This is one
     // of the few places in calculations where we need special handling for end
@@ -392,9 +390,6 @@ void WindowBlockInputStream::advancePartitionEnd()
     const auto block_rows = blockRowsNumber(partition_end);
     for (; partition_end.row < block_rows; ++partition_end.row)
     {
-        //        fmt::print(stderr, "compare reference '{}' to compared '{}'\n",
-        //            prev_frame_start, partition_end);
-
         size_t i = 0;
         for (; i < partition_by_columns; i++)
         {
@@ -505,9 +500,6 @@ std::tuple<RowNumber, int64_t> WindowBlockInputStream::moveRowNumber(const RowNu
 #ifndef NDEBUG
     // Check that it was reversible.
     auto [xx, oo] = moveRowNumberNoCheck(x, -(offset - o));
-
-    //    fmt::print(stderr, "{} -> {}, result {}, {}, new offset {}, twice {}, {}\n",
-    //        _x, offset, x, o, -(offset - o), xx, oo);
     assert(xx == _x);
     assert(oo == 0);
 #endif
@@ -526,9 +518,6 @@ void WindowBlockInputStream::advanceFrameStartRowsOffset()
     frame_start = moved_row;
 
     assertValid(frame_start);
-
-    //    fmt::print(stderr, "frame start {} left {} partition start {}\n",
-    //        frame_start, offset_left, partition_start);
 
     if (frame_start <= partition_start)
     {
@@ -577,7 +566,6 @@ void WindowBlockInputStream::advanceFrameStartRangeOffset()
             return;
         }
     }
-
     frame_started = partition_ended;
 }
 
@@ -687,8 +675,6 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
 
 void WindowBlockInputStream::advanceFrameEndCurrentRow()
 {
-    //    fmt::print(stderr, "starting from frame_end {}\n", frame_end);
-
     // We only process one block here, and frame_end must be already in it: if
     // we didn't find the end in the previous block, frame_end is now the first
     // row of the current block. We need this knowledge to write a simpler loop
@@ -724,14 +710,11 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
     // Equality would mean "no data to process", for which we checked above.
     assert(frame_end.row < rows_end);
 
-    //    fmt::print(stderr, "first row {} last {}\n", frame_end.row, rows_end);
-
     // Advance frame_end while it is still peers with the current row.
     for (; frame_end.row < rows_end; ++frame_end.row)
     {
         if (!arePeers(current_row, frame_end))
         {
-            //            fmt::print(stderr, "{} and {} don't match\n", reference, frame_end);
             frame_ended = true;
             return;
         }
@@ -851,8 +834,6 @@ void WindowBlockInputStream::advanceFrameEnd()
         break;
     }
 
-    //    fmt::print(stderr, "frame_end {} -> {}\n", frame_end_before, frame_end);
-
     // We might not have advanced the frame end if we found out we reached the
     // end of input or the partition, or if we still don't know the frame start.
     if (frame_end_before == frame_end)
@@ -864,9 +845,6 @@ void WindowBlockInputStream::advanceFrameEnd()
 // Update the aggregation states after the frame has changed.
 void WindowBlockInputStream::updateAggregationState()
 {
-    //    fmt::print(stderr, "update agg states [{}, {}) -> [{}, {})\n",
-    //        prev_frame_start, prev_frame_end, frame_start, frame_end);
-
     // Assert that the frame boundaries are known, have proper order wrt each
     // other, and have not gone back wrt the previous frame.
     assert(frame_started);
@@ -914,7 +892,6 @@ void WindowBlockInputStream::updateAggregationState()
 
         if (reset_aggregation)
         {
-            //            fmt::print(stderr, "(2) reset aggregation\n");
             a->destroy(buf);
             a->create(buf);
         }
@@ -991,9 +968,6 @@ void WindowBlockInputStream::writeOutCurrentRow()
             a->insertResultInto(buf, *result_column, arena.get());
         }
     }
-
-    //    fmt::print(stderr, "wrote out aggregation state for current row '{}'\n",
-    //        current_row);
 }
 
 static void assertSameColumns(const Columns & left_all,
@@ -1055,10 +1029,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
             }
         }
 
-        auto columns = current_block.getColumns();
-        //        for (auto & column : columns)
-        //            column = std::move(column)->convertToFullColumnIfConst();
-        window_block.input_columns = std::move(columns);
+        window_block.input_columns = std::move(current_block.getColumns());
 
         assertSameColumns(input_header.getColumns(), window_block.input_columns);
     }
