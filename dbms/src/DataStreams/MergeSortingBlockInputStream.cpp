@@ -74,7 +74,7 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     , limit(limit_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
     , tmp_path(tmp_path_)
-    , log(getMPPTaskLog(log_, getName()))
+    , log(getMPPTaskLog(log_, NAME))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -184,7 +184,7 @@ MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , log(getMPPTaskLog(log_, getName()))
+    , log(getMPPTaskLog(log_, NAME))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)
@@ -201,13 +201,13 @@ MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
 
     if (!has_collation)
     {
-        for (size_t i = 0; i < cursors.size(); ++i)
-            queue.push(SortCursor(&cursors[i]));
+        for (auto & cursor : cursors)
+            queue.push(SortCursor(&cursor));
     }
     else
     {
-        for (size_t i = 0; i < cursors.size(); ++i)
-            queue_with_collation.push(SortCursorWithCollation(&cursors[i]));
+        for (auto & cursor : cursors)
+            queue_with_collation.push(SortCursorWithCollation(&cursor));
     }
 }
 
