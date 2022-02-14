@@ -16,10 +16,10 @@ struct ColumnFileV2
 
     bool isDeleteRange() const { return !delete_range.none(); }
 };
-using ColumnFile_V2Ptr = std::shared_ptr<ColumnFileV2>;
-using ColumnFiles_V2 = std::vector<ColumnFile_V2Ptr>;
+using ColumnFileV2Ptr = std::shared_ptr<ColumnFileV2>;
+using ColumnFileV2s = std::vector<ColumnFileV2Ptr>;
 
-inline ColumnFilePersisteds transform_V2_to_V3(const ColumnFiles_V2 & column_files_v2)
+inline ColumnFilePersisteds transform_V2_to_V3(const ColumnFileV2s & column_files_v2)
 {
     ColumnFilePersisteds column_files_v3;
     for (const auto & f : column_files_v2)
@@ -35,9 +35,9 @@ inline ColumnFilePersisteds transform_V2_to_V3(const ColumnFiles_V2 & column_fil
     return column_files_v3;
 }
 
-inline ColumnFiles_V2 transformSaved_V3_to_V2(const ColumnFilePersisteds & column_files_v3)
+inline ColumnFileV2s transformSaved_V3_to_V2(const ColumnFilePersisteds & column_files_v3)
 {
-    ColumnFiles_V2 column_files_v2;
+    ColumnFileV2s column_files_v2;
     for (const auto & f : column_files_v3)
     {
         auto * f_v2 = new ColumnFileV2();
@@ -85,7 +85,7 @@ inline void serializeColumnFile_V2(const ColumnFileV2 & column_file, const Block
     }
 }
 
-void serializeSavedColumnFiles_V2(WriteBuffer & buf, const ColumnFiles_V2 & column_files)
+void serializeSavedColumnFiles_V2(WriteBuffer & buf, const ColumnFileV2s & column_files)
 {
     writeIntBinary(column_files.size(), buf);
     BlockPtr last_schema;
@@ -116,7 +116,7 @@ void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePers
     serializeSavedColumnFiles_V2(buf, transformSaved_V3_to_V2(column_files));
 }
 
-inline ColumnFile_V2Ptr deserializeColumnFile_V2(ReadBuffer & buf, UInt64 version)
+inline ColumnFileV2Ptr deserializeColumnFile_V2(ReadBuffer & buf, UInt64 version)
 {
     auto column_file = std::make_shared<ColumnFileV2>();
     readIntBinary(column_file->rows, buf);
@@ -147,7 +147,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(ReadBuffer & buf, UIn
 {
     size_t size;
     readIntBinary(size, buf);
-    ColumnFiles_V2 column_files;
+    ColumnFileV2s column_files;
     BlockPtr last_schema;
     for (size_t i = 0; i < size; ++i)
     {

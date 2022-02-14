@@ -95,8 +95,8 @@ public:
         , delta_limit_bytes(settings.dt_segment_delta_limit_size)
         , delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows)
         , delta_cache_limit_bytes(settings.dt_segment_delta_cache_limit_size)
-        , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
-        , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
+        , delta_small_column_file_rows(settings.dt_segment_delta_small_pack_rows) // still use `pack` instead of `column_file` in Settings.h for the compatibility of configure file
+        , delta_small_column_file_bytes(settings.dt_segment_delta_small_pack_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
         , enable_logical_split(settings.dt_enable_logical_split)
         , read_delta_only(settings.dt_read_delta_only)
