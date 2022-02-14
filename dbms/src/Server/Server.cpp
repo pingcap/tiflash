@@ -553,7 +553,7 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         thread_manager = DB::newThreadManager();
-        for (int i = 0; i < server.context().getSettingsRef().async_cqs; i++)
+        for (int i = 0; i < (int)server.context().getSettingsRef().async_cqs; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
         }
@@ -563,7 +563,7 @@ public:
         Debug::setServiceAddr(raft_config.flash_server_addr);
         int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
         int ppc = server.context().getSettingsRef().async_pollers_per_cq;
-        for (int i = 0; i < (int)(cqs_.size() * ppc; i++)
+        for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
             thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
     }
 
