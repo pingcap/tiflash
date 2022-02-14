@@ -57,6 +57,7 @@ struct RegionManager : SharedMutexLockWrap
     /// RegionManager can only be constructed by KVStore.
     RegionManager() = default;
 
+private:
     RegionTaskCtrl region_task_ctrl;
     RegionMap regions;
     // region_range_index must be protected by task_mutex. It's used to search for region by range.

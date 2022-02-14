@@ -36,7 +36,6 @@ public:
     static void testBasic();
     static void testKVStore();
     static void testRegion();
-    static void testRegionManager();
 
 private:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
@@ -743,25 +742,6 @@ void RegionKVStoreTest::testKVStore()
     }
 }
 
-void RegionKVStoreTest::testRegionManager()
-{
-    RegionManager manager;
-    {
-        uint64_t rid = 666;
-        {
-            auto tlock = manager.genRegionTaskLock(rid);
-            auto & region = manager.region_task_ctrl.regions.at(rid);
-            auto lock1 = std::unique_lock(region.mutex, std::try_to_lock);
-            ASSERT_FALSE(lock1.owns_lock());
-        }
-        {
-            auto & region = manager.region_task_ctrl.regions.at(rid);
-            auto lock1 = std::unique_lock(region.mutex, std::try_to_lock);
-            ASSERT_TRUE(lock1.owns_lock());
-        }
-    }
-}
-
 void test_mergeresult()
 {
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", ""), createRegionInfo(1000, "", "x")).source_at_left, false);
@@ -922,7 +902,6 @@ TEST_F(RegionKVStoreTest, run)
 try
 {
     testBasic();
-    testRegionManager();
     testKVStore();
     testRegion();
 }
