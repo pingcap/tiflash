@@ -317,7 +317,7 @@ struct PositionImpl
     }
 };
 
-static String getRE2ModeModifiers(const std::string & match_type, const std::shared_ptr<TiDB::ITiDBCollator> & collator)
+static String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator)
 {
     /// for regexp only ci/cs is supported
     re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
@@ -963,7 +963,7 @@ struct ReplaceRegexpImpl
                        const Int64 & pos,
                        const Int64 & occ,
                        const std::string & match_type,
-                       std::shared_ptr<TiDB::ITiDBCollator> collator,
+                       TiDB::TiDBCollatorPtr collator,
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets)
     {
@@ -1012,7 +1012,7 @@ struct ReplaceRegexpImpl
                             const Int64 & pos,
                             const Int64 & occ,
                             const std::string & match_type,
-                            std::shared_ptr<TiDB::ITiDBCollator> collator,
+                            TiDB::TiDBCollatorPtr collator,
                             ColumnString::Chars_t & res_data,
                             ColumnString::Offsets & res_offsets)
     {
@@ -1048,7 +1048,7 @@ struct ReplaceRegexpImpl
             res_offsets[i] = res_offset;
         }
     }
-    static void constant(const String & input, const String & needle, const String & replacement, const Int64 & pos, const Int64 & occ, const String & match_type, std::shared_ptr<TiDB::ITiDBCollator> collator, String & output)
+    static void constant(const String & input, const String & needle, const String & replacement, const Int64 & pos, const Int64 & occ, const String & match_type, TiDB::TiDBCollatorPtr collator, String & output)
     {
         ColumnString::Chars_t input_data;
         input_data.insert(input_data.end(), input.begin(), input.end());
@@ -1081,7 +1081,7 @@ struct ReplaceStringImpl
                        const Int64 & /* pos */,
                        const Int64 & /* occ */,
                        const std::string & /* match_type */,
-                       std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+                       TiDB::TiDBCollatorPtr /* collator */,
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets)
     {
@@ -1169,7 +1169,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1243,7 +1243,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1335,7 +1335,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1410,7 +1410,7 @@ struct ReplaceStringImpl
                             const Int64 & /* pos */,
                             const Int64 & /* occ */,
                             const std::string & /* match_type */,
-                            std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+                            TiDB::TiDBCollatorPtr /* collator */,
                             ColumnString::Chars_t & res_data,
                             ColumnString::Offsets & res_offsets)
     {
@@ -1508,7 +1508,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1583,7 +1583,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1685,7 +1685,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
+        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1755,7 +1755,7 @@ struct ReplaceStringImpl
         }
     }
 
-    static void constant(const std::string & data, const std::string & needle, const std::string & replacement, const Int64 & /* pos */, const Int64 & /* occ */, const std::string & /* match_type */, std::shared_ptr<TiDB::ITiDBCollator> /* collator */, std::string & res_data)
+    static void constant(const std::string & data, const std::string & needle, const std::string & replacement, const Int64 & /* pos */, const Int64 & /* occ */, const std::string & /* match_type */, TiDB::TiDBCollatorPtr /* collator */, std::string & res_data)
     {
         if (needle.empty())
         {
@@ -1826,7 +1826,7 @@ public:
             return {1, 2, 3, 4, 5};
         }
     }
-    void setCollator(const std::shared_ptr<TiDB::ITiDBCollator> & collator_) override { collator = collator_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -2042,7 +2042,7 @@ private:
             throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDB::TiDBCollatorPtr collator;
 };
 
 struct NamePosition

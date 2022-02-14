@@ -392,7 +392,7 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
         String name = analyzer->getActions(child, actions);
         argument_names.push_back(name);
     }
-    std::shared_ptr<TiDB::ITiDBCollator> collator = getCollatorFromExpr(expr);
+    TiDB::TiDBCollatorPtr collator = getCollatorFromExpr(expr);
     if (expr.sig() == tipb::ScalarFuncSig::RegexpReplaceSig || expr.sig() == tipb::ScalarFuncSig::RegexpSig)
     {
         /// according to https://github.com/pingcap/tidb/blob/v5.0.0/expression/builtin_like.go#L126,
