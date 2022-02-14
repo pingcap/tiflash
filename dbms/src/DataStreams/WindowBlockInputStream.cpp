@@ -56,15 +56,6 @@ static int compareValuesWithOffset(const IColumn * _compared_column,
     else
         is_overflow = common::addOverflow(reference_value, offset, reference_value);
 
-    //    fmt::print(stderr,
-    //        "compared [{}] = {}, old ref {}, shifted ref [{}] = {}, offset {} preceding {} overflow {} to negative {}\n",
-    //        compared_row, toString(compared_value),
-    //        // fmt doesn't like char8_t.
-    //        static_cast<Int64>(unalignedLoad<typename ColumnType::value_type>(reference_value_data.data)),
-    //        reference_row, toString(reference_value),
-    //        toString(offset), offset_is_preceding,
-    //        is_overflow, offset_is_preceding);
-
     if (is_overflow)
     {
         if (offset_is_preceding)
@@ -131,9 +122,6 @@ static int compareValuesWithOffsetFloat(const IColumn * _compared_column,
         : compared_value == reference_value              ? 0
                                                          : 1;
 
-    //    fmt::print(stderr, "compared {}, offset {}, reference {}, result {}\n",
-    //        compared_value, offset, reference_value, result);
-
     return result;
 }
 
@@ -188,55 +176,15 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
                         "can not have window and agg functions together in one window");
     }
 
-    // Initialize window function workspaces.
-    workspaces.reserve(std::max(window_description.window_functions_descriptions.size(), window_description.aggregate_descriptions.size()));
+    initialWorkspaces();
 
-    // TODO: extract into a function
-    for (auto window_function_description : window_description.window_functions_descriptions)
-    {
-        WindowFunctionWorkspace workspace;
-        workspace.window_function = window_function_description.window_function;
-        workspace.column_name = window_function_description.column_name;
-        workspace.argument_column_indices = window_function_description.arguments;
-        workspace.argument_columns.assign(window_function_description.argument_names.size(), nullptr);
-        workspace.is_agg_workspace = false;
-        workspaces.push_back(std::move(workspace));
-    }
+    initialPartitionByIndices();
 
-    for (auto aggregate_description : window_description.aggregate_descriptions)
-    {
-        WindowFunctionWorkspace workspace;
-        workspace.aggregate_function = aggregate_description.function;
-        const auto & aggregate_function = workspace.aggregate_function;
-        if (!arena && aggregate_function->allocatesMemoryInArena())
-        {
-            arena = std::make_unique<Arena>();
-        }
-        workspace.argument_column_indices = aggregate_description.arguments;
-        workspace.column_name = aggregate_description.column_name;
-        workspace.argument_columns.assign(aggregate_description.argument_names.size(), nullptr);
-        workspace.aggregate_function_state.reset(
-            aggregate_function->sizeOfData(),
-            aggregate_function->alignOfData());
-        aggregate_function->create(workspace.aggregate_function_state.data());
-        workspace.is_agg_workspace = true;
-        workspaces.push_back(std::move(workspace));
-    }
+    checkRangeOffsetFrameValid();
+}
 
-    partition_by_indices.reserve(window_description.partition_by.size());
-    for (const auto & column : window_description.partition_by)
-    {
-        partition_by_indices.push_back(
-            input_header.getPositionByName(column.column_name));
-    }
-
-    order_by_indices.reserve(window_description.order_by.size());
-    for (const auto & column : window_description.order_by)
-    {
-        order_by_indices.push_back(
-            input_header.getPositionByName(column.column_name));
-    }
-
+void WindowBlockInputStream::checkRangeOffsetFrameValid()
+{
     // Choose a row comparison function for RANGE OFFSET frame based on the
     // type of the ORDER BY column.
     if (window_description.frame.type == WindowFrame::FrameType::Ranges
@@ -285,6 +233,60 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
                                 window_description.frame.end_offset.toString());
             }
         }
+    }
+}
+
+void WindowBlockInputStream::initialPartitionByIndices()
+{
+    partition_by_indices.reserve(window_description.partition_by.size());
+    for (const auto & column : window_description.partition_by)
+    {
+        partition_by_indices.push_back(
+            input_header.getPositionByName(column.column_name));
+    }
+
+    order_by_indices.reserve(window_description.order_by.size());
+    for (const auto & column : window_description.order_by)
+    {
+        order_by_indices.push_back(
+            input_header.getPositionByName(column.column_name));
+    }
+}
+
+void WindowBlockInputStream::initialWorkspaces()
+{
+    // Initialize window function workspaces.
+    workspaces.reserve(window_description.window_functions_descriptions.size() + window_description.aggregate_descriptions.size());
+
+    for (auto window_function_description : window_description.window_functions_descriptions)
+    {
+        WindowFunctionWorkspace workspace;
+        workspace.window_function = window_function_description.window_function;
+        workspace.column_name = window_function_description.column_name;
+        workspace.argument_column_indices = window_function_description.arguments;
+        workspace.argument_columns.assign(window_function_description.argument_names.size(), nullptr);
+        workspace.is_agg_workspace = false;
+        workspaces.push_back(std::move(workspace));
+    }
+
+    for (auto aggregate_description : window_description.aggregate_descriptions)
+    {
+        WindowFunctionWorkspace workspace;
+        workspace.aggregate_function = aggregate_description.function;
+        const auto & aggregate_function = workspace.aggregate_function;
+        if (!arena && aggregate_function->allocatesMemoryInArena())
+        {
+            arena = std::make_unique<Arena>();
+        }
+        workspace.argument_column_indices = aggregate_description.arguments;
+        workspace.column_name = aggregate_description.column_name;
+        workspace.argument_columns.assign(aggregate_description.argument_names.size(), nullptr);
+        workspace.aggregate_function_state.reset(
+            aggregate_function->sizeOfData(),
+            aggregate_function->alignOfData());
+        aggregate_function->create(workspace.aggregate_function_state.data());
+        workspace.is_agg_workspace = true;
+        workspaces.push_back(std::move(workspace));
     }
 }
 
@@ -963,7 +965,6 @@ void WindowBlockInputStream::writeOutCurrentRow()
             IColumn * result_column = block.output_columns[wi].get();
             const auto * a = ws.aggregate_function.get();
             auto * buf = ws.aggregate_function_state.data();
-            // FIXME does it also allocate the result on the arena?
             // We'll have to pass it out with blocks then...
             a->insertResultInto(buf, *result_column, arena.get());
         }
@@ -1029,7 +1030,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
             }
         }
 
-        window_block.input_columns = std::move(current_block.getColumns());
+        window_block.input_columns = current_block.getColumns();
 
         assertSameColumns(input_header.getColumns(), window_block.input_columns);
     }

@@ -10,12 +10,6 @@
 
 namespace DB
 {
-// Interface for true window functions. It's not much of an interface, they just
-// accept the guts of WindowTransform and do 'something'. Given a small number of
-// true window functions, and the fact that the WindowTransform internals are
-// pretty much well defined in domain terms (e.g. frame boundaries), this is
-// somewhat acceptable.
-
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
 {
@@ -102,6 +96,10 @@ public:
 
     Block getOutputBlock();
     bool outputBlockEmpty();
+
+    void initialWorkspaces();
+    void initialPartitionByIndices();
+    void checkRangeOffsetFrameValid();
 
 
     std::tuple<RowNumber, int64_t> moveRowNumber(const RowNumber & _x, int64_t offset) const;
@@ -221,20 +219,11 @@ protected:
     Block readImpl() override;
 
 public:
-    /*
-  * Data (formerly) inherited from ISimpleTransform, needed for the
-  * implementation of the IProcessor interface.
-  */
-
-
     bool has_input = false;
     bool input_is_finished = false;
     bool has_output = false;
     UInt64 output_index = 0;
 
-    /*
-     * Data for window transform itself.
-     */
     Block input_header;
 
     WindowDescription window_description;
@@ -247,8 +236,6 @@ public:
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> workspaces;
 
-    // FIXME Reset it when the partition changes. We only save the temporary
-    // states in it (probably?).
     std::unique_ptr<Arena> arena;
 
     // A sliding window of blocks we currently need. We add the input blocks as
