@@ -509,6 +509,7 @@ void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq, int b
         }
         if (ok)
             static_cast<CallData *>(tag)->Proceed();
+        //TODO try catch
     }
 }
 

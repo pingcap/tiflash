@@ -103,6 +103,10 @@ public:
     // with the gRPC runtime.
     CallData(FlashService * service, grpc::ServerCompletionQueue * cq);
 
+    void Pending();
+
+    void OnCancel();
+
     bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
 
     bool TryWrite(std::unique_lock<std::mutex> * p_lk = nullptr, bool trace = false);
@@ -122,7 +126,7 @@ public:
 
     void attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel);
 
-private:
+//private:
     // The means of communication with the gRPC runtime for an asynchronous
     // server.
     FlashService * service_;
@@ -151,6 +155,7 @@ private:
     {
         CREATE,
         PROCESS,
+        PENDING,
         JOIN,
         ERR_HANDLE,
         FINISH

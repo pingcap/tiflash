@@ -227,20 +227,28 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     std::string err_msg;
     MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeoutAsync(request->sender_meta(), calldata, timeout, err_msg);
         if (sender_task != nullptr)
         {
             std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
         }
         if (tunnel == nullptr)
         {
-            LOG_ERROR(log, err_msg);
+            if (err_msg == "pending")
+            {
+                return true;
+            }
+            else
+            {
+                LOG_ERROR(log, err_msg);
 
-            calldata->WriteErr(getPacketWithError(err_msg));
-            return true;
+                calldata->WriteErr(getPacketWithError(err_msg));
+                return true;
+            }
         }
     }
     //    Stopwatch stopwatch;
+    //std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
     tunnel->no_waiter = true;
     calldata->attachTunnel(tunnel);
     tunnel->connect(calldata);
@@ -485,6 +493,22 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     }
 }
 
+std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
+{
+    try
+    {
+        if (eptr)
+        {
+            std::rethrow_exception(eptr);
+        }
+    }
+    catch (const std::exception & e)
+    {
+        return std::string(e.what());
+    }
+    return "";
+}
+
 CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
     : service_(service)
     , cq_(cq)
@@ -507,8 +531,8 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
         std::unique_lock lk(mu);
         if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
         {
-            if (trace)
-                std::cerr << "CallData::TryWrite::ok, ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
+//            if (trace)
+//                std::cerr << "CallData::TryWrite::ok, ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
             ready = false;
         }
         else
@@ -516,15 +540,15 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
             if (trace)
             {
                 fail_token = cd_token++;
-                std::cerr << "CallData::TryWrite::fail!!! token: " << (fail_token.load()) << " ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
+//                std::cerr << "CallData::TryWrite::fail!!! token: " << (fail_token.load()) << " ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
             }
             return false;
         }
         //            cv.wait(lk, [&] { return ready.load(); });
     }
     std::string retstr = mpptunnel_->sendOp(p_lk);
-    if (trace)
-        std::cerr << "mpptunnel_->sendOp(p_lk) result: " << retstr << std::endl;
+//    if (trace)
+//        std::cerr << "mpptunnel_->sendOp(p_lk) result: " << retstr << std::endl;
     return true;
     //        responder_.Write(packet, this);
     //        return 1;
@@ -533,6 +557,15 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
     //    {
     //        return -1;
     //    }
+}
+
+void CallData::Pending()
+{
+    state_ = PENDING;
+}
+
+void CallData::OnCancel()
+{
 }
 
 bool CallData::Write(const mpp::MPPDataPacket & packet, bool need_wait)
@@ -620,14 +653,33 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             notifyReady();
         }
-        if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this))
+        std::exception_ptr eptr = nullptr;
+        try
+        {
+            if (!service_->EstablishMPPConnection4Async(&ctx_, &request_, this))
+            {
+                state_ = FINISH;
+                service_->current_active_establish_thds--;
+                service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+                delete this;
+                return;
+            }
+        }
+        catch (...)
+        {
+            eptr = std::current_exception();
+        }
+        if (eptr)
         {
             state_ = FINISH;
-            service_->current_active_establish_thds--;
-            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-            delete this;
+            grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), DeriveErrWhat(eptr));
+            responder_.Finish(status, this);
             return;
         }
+    }
+    else if (state_ == PENDING)
+    {
+        return;
     }
     else if (state_ == JOIN)
     {
@@ -636,9 +688,9 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             if (fail_token != -1)
             {
-                std::cerr << "calldata proceed, token: " << fail_token << " canop: "
-                          << (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
-                          << " sz:" << send_queue_->size() << " is_fin:" << send_queue_->isFinished() << std::endl;
+//                std::cerr << "calldata proceed, token: " << fail_token << " canop: "
+//                          << (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
+//                          << " sz:" << send_queue_->size() << " is_fin:" << send_queue_->isFinished() << std::endl;
                 fail_token = -1;
             }
             if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
