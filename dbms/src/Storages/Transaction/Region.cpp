@@ -316,8 +316,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
         execRollbackMerge(request, response, index, term);
         break;
     default:
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("unsupported admin command type {}", raft_cmdpb::AdminCmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
         break;
     }
 

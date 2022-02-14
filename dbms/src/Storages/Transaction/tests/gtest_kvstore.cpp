@@ -590,6 +590,21 @@ void RegionKVStoreTest::testKVStore()
             // index <= appliedIndex(), ignore
             ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 7, 6, ctx.getTMTContext()),
                       EngineStoreApplyRes::None);
+            try
+            {
+                //
+                request.clear_requests();
+                RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Write, TiKVKey("illegal key"));
+                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 9, 6, ctx.getTMTContext()),
+                          EngineStoreApplyRes::None);
+                ASSERT_TRUE(false);
+            }
+            catch (Exception & e)
+            {
+                ASSERT_EQ(e.message(), "Key padding");
+            }
+
+            ASSERT_EQ(kvs.getRegion(1)->appliedIndex(), 7);
         }
         ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[]");
 
@@ -707,6 +722,23 @@ void RegionKVStoreTest::testKVStore()
                 1,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(19)->dataInfo(), "[default 2 ]");
+        }
+    }
+    {
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+
+        request.mutable_compact_log();
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::InvalidAdmin);
+
+        try
+        {
+            kvs.handleAdminRaftCmd(std::move(request), std::move(response), 19, 110, 6, ctx.getTMTContext());
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
     }
 }
