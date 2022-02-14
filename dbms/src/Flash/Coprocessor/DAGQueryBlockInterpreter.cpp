@@ -888,11 +888,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(DAGPipeline & pipeline,
     dag_req.SerializeToString(&(req->data));
     req->tp = pingcap::coprocessor::ReqType::DAG;
     req->start_ts = context.getSettingsRef().read_tso;
-<<<<<<< HEAD
-=======
     req->schema_version = context.getSettingsRef().schema_version;
-    bool has_enforce_encode_type = dag_req.has_force_encode_type() && dag_req.force_encode_type();
->>>>>>> 14c57400d8 (set request schema version when do remote read (#4021))
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
