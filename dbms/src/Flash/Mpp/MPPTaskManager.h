@@ -29,10 +29,12 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-    std::mutex mu;
-
-    MPPQueryMap mpp_query_map;
-    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> wait_map;
+//    std::mutex mu;
+    std::mutex pri_mu;
+    const int bucket_num = 10000;
+    std::mutex *mu_arr = new std::mutex[bucket_num]; //TODO delete these ptr when destruct
+    MPPQueryMap *mpp_query_maps = new MPPQueryMap[bucket_num];
+    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> *wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>>[bucket_num];
     std::priority_queue<std::pair<long, MPPTaskId>, std::vector<std::pair<long, MPPTaskId>>, auto (*)(const std::pair<long, MPPTaskId> &, const std::pair<long, MPPTaskId> &)->bool> wait_deadline_queue{
         [](const std::pair<long, MPPTaskId> & a, const std::pair<long, MPPTaskId> & b) -> bool {
             return a.first > b.first;
@@ -44,7 +46,6 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
     std::atomic<bool> end_syn{false}, end_fin{false};
     std::shared_ptr<std::thread> bk_thd;
-    std::shared_ptr<ThreadManager> thd_manager;
 
 public:
     MPPTaskManager();
