@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 class RegionTaskLock;
 
 struct RegionTaskCtrl : MutexLockWrap
@@ -21,6 +20,7 @@ struct RegionTaskCtrl : MutexLockWrap
     /// Encapsulate the task lock for region
     RegionTaskLock genRegionTaskLock(RegionID region_id) const;
 
+private:
     mutable std::unordered_map<RegionID, RegionTaskElement> regions;
 };
 
