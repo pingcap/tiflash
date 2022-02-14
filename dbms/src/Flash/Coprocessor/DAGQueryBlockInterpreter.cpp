@@ -907,6 +907,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     dag_req.SerializeToString(&(req->data));
     req->tp = pingcap::coprocessor::ReqType::DAG;
     req->start_ts = context.getSettingsRef().read_tso;
+    req->schema_version = context.getSettingsRef().schema_version;
     bool has_enforce_encode_type = dag_req.has_force_encode_type() && dag_req.force_encode_type();
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
