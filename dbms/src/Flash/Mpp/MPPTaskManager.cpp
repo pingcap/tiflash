@@ -176,7 +176,10 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
         //            return nullptr;
         //        }
         (*wait_ptr)[id].emplace_back(callData);
-        wait_deadline_queue.push(std::make_pair(deadline, id));
+        {
+            std::unique_lock<std::mutex> lock(pri_mu);
+            wait_deadline_queue.push(std::make_pair(deadline, id));
+        }
         errMsg = "pending";
         return nullptr;
         //return a flag to indiact need wait async
