@@ -150,6 +150,8 @@
     M(DMFileFilterAftPKAndPackSet)              \
     M(DMFileFilterAftRoughSet)                  \
                                                 \
+    M(ChecksumDigestBytes)                      \
+                                                \
     M(RaftWaitIndexTimeout)
 
 namespace ProfileEvents
