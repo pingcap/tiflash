@@ -139,7 +139,7 @@ private:
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
-        bool result_is_nullable);
+        bool empty_input_as_null);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
