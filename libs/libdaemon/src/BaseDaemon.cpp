@@ -14,7 +14,14 @@
 #ifndef USE_LLVM_LIBUNWIND
 #define UNW_LOCAL_ONLY
 #endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextern-c-compat"
+#endif
 #include <libunwind.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #ifdef __APPLE__
