@@ -952,7 +952,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
     if (storage_config.format_version)
+    {
         setStorageFormat(storage_config.format_version);
+        LOG_FMT_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
+    }
+    else
+    {
+        LOG_FMT_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+    }
 
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
