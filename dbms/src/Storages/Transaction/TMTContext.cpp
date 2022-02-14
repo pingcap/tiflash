@@ -19,6 +19,8 @@ extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
 // default wait-index timeout is 5 * 60_000ms.
 extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
+const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
+
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
     , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
@@ -36,6 +38,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , disable_bg_flush(raft_config.disable_bg_flush)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
+    , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
 void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -167,16 +170,19 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
         wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
         wait_region_ready_timeout_sec = ({
-            int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ 20 * 60);
+            int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC);
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
             t;
         });
     }
     {
-        LOG_INFO(&Poco::Logger::get(__FUNCTION__),
-                 "read-index max thread num: " << replicaReadMaxThread() << ", timeout: " << batchReadIndexTimeout() << "ms;"
-                                               << " wait-index timeout: " << waitIndexTimeout() << "ms;"
-                                               << " wait-region-ready timeout: " << waitRegionReadyTimeout() << "s");
+        LOG_FMT_INFO(
+            &Poco::Logger::root(),
+            "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; ",
+            replicaReadMaxThread(),
+            batchReadIndexTimeout(),
+            waitIndexTimeout(),
+            waitRegionReadyTimeout());
     }
 }
 
@@ -221,7 +227,6 @@ Int64 TMTContext::waitRegionReadyTimeout() const
 {
     return wait_region_ready_timeout_sec.load(std::memory_order_relaxed);
 }
-
 const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
 {
     static const std::string StoreStatusName[] = {

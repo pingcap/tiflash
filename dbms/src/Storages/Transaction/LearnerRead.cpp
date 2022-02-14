@@ -88,7 +88,7 @@ private:
 
     RegionException::UnavailableRegions ids;
     std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
-    std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
+    std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
 };
 
 class MvccQueryInfoWrap
