@@ -41,7 +41,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
-    bool result_is_nullable)
+    bool empty_input_as_null)
 {
     AggregateDescription aggregate;
     /// the last parametric is the separator
@@ -103,8 +103,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
-    /// if there is group by clause, there is no need to consider the empty input case
-    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
+    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, empty_input_as_null);
 
     /// TODO(FZH) deliver these arguments through aggregate.parameters of Array() type to keep the same code fashion, the special arguments
     /// sort_description, all_columns_names_and_types can be set like the way of collators
@@ -180,7 +179,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
-    bool result_is_nullable)
+    bool empty_input_as_null)
 {
     AggregateDescription aggregate;
     auto child_size = expr.children_size();
@@ -214,7 +213,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
     /// if there is group by clause, there is no need to consider the empty input case
-    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
+    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
     aggregate_descriptions.push_back(aggregate);
     DataTypePtr result_type = aggregate.function->getReturnType();
@@ -244,13 +243,15 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
+        /// if there is group by clause, there is no need to consider the empty input case
+        bool empty_input_as_null = agg.group_by().empty();
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, agg.group_by().empty());
+            buildGroupConcat(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, empty_input_as_null);
         }
         else
         {
-            buildCommonAggFunc(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, agg.group_by().empty());
+            buildCommonAggFunc(expr, step, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, empty_input_as_null);
         }
     }
 
