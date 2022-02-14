@@ -32,7 +32,7 @@ class MPPTaskManager : private boost::noncopyable
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
-    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, CallData *>>> wait_map;
+    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> wait_map;
     std::priority_queue<std::pair<long, MPPTaskId>, std::vector<std::pair<long, MPPTaskId>>, auto (*)(const std::pair<long, MPPTaskId> &, const std::pair<long, MPPTaskId> &)->bool> wait_deadline_queue{
         [](const std::pair<long, MPPTaskId> & a, const std::pair<long, MPPTaskId> & b) -> bool {
             return a.first > b.first;
