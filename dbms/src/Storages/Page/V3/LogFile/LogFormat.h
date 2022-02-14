@@ -29,13 +29,14 @@ static constexpr UInt8 MaxRecordType = RecyclableLastType;
 static constexpr UInt32 BLOCK_SIZE = 32 * 1024;
 static_assert(BLOCK_SIZE < std::numeric_limits<UInt16>::max());
 
-using ChecksumClass = Digest::CRC32; // TODO: CRC64
+// CRC32 or CRC64; City128, XXH3 is not well tested for LogFile
+using ChecksumClass = Digest::CRC64;
 
 using ChecksumType = ChecksumClass::HashType;
 
-static constexpr UInt32 CHECKSUM_FIELD_SIZE = sizeof(ChecksumType);
+static constexpr UInt32 CHECKSUM_FIELD_SIZE = ChecksumClass::hash_size;
 
-// If the size of payload is larger than `BLOCK_SIZE`, it will be splited into
+// If the size of payload is larger than `BLOCK_SIZE`, it will be splitted into
 // fragments. So `PAYLOAD_FIELD_SIZE` must be fit in UInt16.
 static constexpr UInt32 PAYLOAD_FIELD_SIZE = sizeof(UInt16);
 
