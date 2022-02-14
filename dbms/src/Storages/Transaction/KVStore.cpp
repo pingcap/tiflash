@@ -57,7 +57,7 @@ void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
         // init range index
         for (const auto & [id, region] : manage_lock.regions)
         {
-            msgs[id % batch] << (region->toString()) << ";";
+            msgs[id % batch] << region->getDebugString() << ";";
         }
 
         for (const auto & msg : msgs)
