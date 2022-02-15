@@ -19,7 +19,6 @@
 
 #include <cmath>
 
-
 namespace DB
 {
 /** Stuff for comparing numbers.
@@ -141,16 +140,17 @@ inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
-template <typename targetType, typename encodeType>
-inline targetType decodeInt(const char * pos)
+template <typename TargetType, typename EncodeType>
+inline std::enable_if_t<!std::is_same_v<::DB::Null, TargetType>, TargetType>
+decodeInt(const char * pos)
 {
-    if (is_signed_v<targetType>)
+    if (is_signed_v<TargetType>)
     {
-        return static_cast<targetType>(static_cast<std::make_signed_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+        return static_cast<TargetType>(static_cast<std::make_signed_t<EncodeType>>(readLittleEndian<EncodeType>(pos)));
     }
     else
     {
-        return static_cast<targetType>(static_cast<std::make_unsigned_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+        return static_cast<TargetType>(static_cast<std::make_unsigned_t<EncodeType>>(readLittleEndian<EncodeType>(pos)));
     }
 }
 
@@ -307,7 +307,8 @@ public:
     }
 
     /// This method implemented in header because it could be possibly devirtualized.
-    int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override
+    std::enable_if_t<!std::is_same_v<::DB::Null, T>, int>
+    compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override
     {
         return CompareHelper<T>::compare(data[n], static_cast<const Self &>(rhs_).data[m], nan_direction_hint);
     }
