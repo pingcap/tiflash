@@ -1306,7 +1306,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
-
+            size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
+            tmt_context.getKVStore()->initReadIndexWorkers(
+                [&]() {
+                    // get from tmt context
+                    return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
+                },
+                /*running thread count*/ runner_cnt);
+            tmt_context.getKVStore()->asyncRunReadIndexWorkers();
             WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
         SCOPE_EXIT({
@@ -1323,6 +1330,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
             }
             tmt_context.setStatusTerminated();
+            tmt_context.getKVStore()->stopReadIndexWorkers();
             LOG_FMT_INFO(log, "Set store context status Terminated");
             {
                 // update status and let proxy stop all services except encryption.

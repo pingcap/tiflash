@@ -495,8 +495,9 @@ kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 st
         {
             request.set_start_ts(start_ts);
             auto * key_range = request.add_ranges();
-            key_range->set_start_key(*meta_snap.range->rawKeys().first);
-            key_range->set_end_key(*meta_snap.range->rawKeys().second);
+            // use original tikv key
+            key_range->set_start_key(meta_snap.range->comparableKeys().first.key);
+            key_range->set_end_key(meta_snap.range->comparableKeys().second.key);
         }
     }
     return request;
@@ -507,7 +508,7 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running)
 {
     if (proxy_helper != nullptr)
     {
@@ -518,8 +519,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTCon
                           "{} need to wait learner index {}",
                           toString(),
                           index);
-            auto timeout_ms = tmt.waitIndexTimeout();
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+            auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
             {

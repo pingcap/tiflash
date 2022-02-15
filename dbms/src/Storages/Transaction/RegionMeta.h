@@ -51,12 +51,10 @@ public:
     UInt64 storeId() const;
 
     UInt64 appliedIndex() const;
-    UInt64 appliedTerm() const;
 
     ImutRegionRangePtr getRange() const;
 
     metapb::Peer getPeer() const;
-    pingcap::kv::RegionVerID getRegionVerID() const;
 
     UInt64 version() const;
 

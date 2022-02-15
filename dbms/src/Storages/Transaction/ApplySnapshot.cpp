@@ -50,10 +50,10 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         old_applied_index = old_region->appliedIndex();
         if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
-            auto s = fmt::format("{}: [region {}] already has newer apply-index {}, should not happen",
-                                 __PRETTY_FUNCTION__,
+            auto s = fmt::format("[region {}] already has newer apply-index {} than {}, should not happen",
                                  region_id,
-                                 old_applied_index);
+                                 old_applied_index,
+                                 new_index);
             throw Exception(s, ErrorCodes::LOGICAL_ERROR);
         }
         else if (old_applied_index == new_index)

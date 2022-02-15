@@ -56,13 +56,6 @@ metapb::Peer RegionMeta::getPeer() const
     return peer;
 }
 
-pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    return pingcap::kv::RegionVerID{regionId(), region_state.getConfVersion(), region_state.getVersion()};
-}
-
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -98,12 +91,6 @@ UInt64 RegionMeta::appliedIndex() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return apply_state.applied_index();
-}
-
-UInt64 RegionMeta::appliedTerm() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    return applied_term;
 }
 
 RegionMeta::RegionMeta(RegionMeta && rhs)

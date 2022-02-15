@@ -7,6 +7,7 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/ReadIndexWorker.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -187,6 +188,13 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
         auto it = manage_lock.regions.find(region_id);
         manage_lock.index.remove(it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id); // remove index
         manage_lock.regions.erase(it);
+    }
+    {
+        if (read_index_worker_manager) //std::atomic_thread_fence will protect it
+        {
+            // remove cache & read-index task
+            read_index_worker_manager->getWorkerByRegion(region_id).removeRegion(region_id);
+        }
     }
 
     region_persister.drop(region_id, region_lock);
@@ -600,7 +608,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
                 it = remain_regions.erase(it);
             }
         }
-        auto read_index_res = tmt.getKVStore()->getProxyHelper()->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+        auto read_index_res = tmt.getKVStore()->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
         for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
@@ -726,6 +734,11 @@ void KVStore::StoreMeta::update(Base && base_)
 {
     base = std::move(base_);
     store_id = base.id();
+}
+
+KVStore::~KVStore()
+{
+    releaseReadIndexWorkers();
 }
 
 } // namespace DB
