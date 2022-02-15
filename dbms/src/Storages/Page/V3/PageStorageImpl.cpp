@@ -190,13 +190,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    /// Get all pending external pages and BlobFiles. Note that we should get external pages before BlobFiles.
-    // ExternalPageCallbacks::PathAndIdsVec external_pages;
-    // if (external_pages_scanner)
-    // {
-    //     external_pages = external_pages_scanner();
-    // }
-
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
     const auto & del_entries = page_directory.gc();
@@ -215,10 +208,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     if (blob_need_gc.empty())
     {
-        // if (external_pages_remover)
-        // {
-        //     external_pages_remover(external_pages, page_directory.getAllPageIds());
-        // }
         return false;
     }
 
@@ -229,10 +218,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     if (blob_gc_info.empty())
     {
-        // if (external_pages_remover)
-        // {
-        //     external_pages_remover(external_pages, page_directory.getAllPageIds());
-        // }
         return false;
     }
 
@@ -255,10 +240,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr);
 
     (void)page_ids;
-    // if (external_pages_remover)
-    // {
-    //     external_pages_remover(external_pages, page_ids);
-    // }
 
     return true;
 }

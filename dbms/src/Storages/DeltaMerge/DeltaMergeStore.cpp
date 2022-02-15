@@ -1288,7 +1288,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
         {
-            return (segmentSplit(*dm_context, my_segment, true).first != nullptr);
+            return segmentSplit(*dm_context, my_segment, true).first != nullptr;
         }
         return false;
     };
