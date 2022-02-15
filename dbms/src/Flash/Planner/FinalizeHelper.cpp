@@ -1,7 +1,7 @@
+#include <Common/FmtUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Interpreters/ExpressionActions.h>
 #include <common/types.h>
-#include <Common/FmtUtils.h>
 
 namespace DB
 {

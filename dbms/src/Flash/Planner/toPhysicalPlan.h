@@ -4,10 +4,10 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
-#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
@@ -30,7 +30,6 @@ public:
     void toPhysicalPlan(const String & executor_id, const tipb::Aggregation & aggregation);
     void toPhysicalPlan(const String & executor_id, const tipb::Selection & selection);
     void toPhysicalPlan(const String & executor_id, const tipb::Limit & limit);
-    void toPhysicalPlan(const String & executor_id, const tipb::Projection & projection);
     void toPhysicalPlan(const String & executor_id, const tipb::TopN & top_n);
     void toPhysicalPlan(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block);
 
@@ -40,6 +39,7 @@ public:
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
         bool keep_session_timezone_info);
+
 private:
     ExpressionActionsPtr newActionsForNewPlan();
 

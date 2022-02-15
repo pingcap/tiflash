@@ -1,6 +1,6 @@
-#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Planner/PhysicalPlan.h>
 
 namespace DB
 {

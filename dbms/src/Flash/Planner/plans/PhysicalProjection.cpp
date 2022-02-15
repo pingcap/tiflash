@@ -2,9 +2,9 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
-#include <Flash/Planner/FinalizeHelper.h>
 
 namespace DB
 {

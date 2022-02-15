@@ -2,10 +2,10 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Planner/plans/PhysicalFilter.h>
-#include <Flash/Planner/PhysicalPlan.h>
-#include <Interpreters/Context.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {

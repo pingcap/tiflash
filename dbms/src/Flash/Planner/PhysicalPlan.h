@@ -1,9 +1,10 @@
 #pragma once
 
-#include <Core/NamesAndTypes.h>
-#include <Core/Names.h>
 #include <Core/Block.h>
+#include <Core/Names.h>
+#include <Core/NamesAndTypes.h>
 #include <Flash/Planner/PlanType.h>
+
 #include <memory>
 
 namespace DB

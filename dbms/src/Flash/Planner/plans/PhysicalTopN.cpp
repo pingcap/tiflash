@@ -4,9 +4,9 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
-#include <Flash/Planner/FinalizeHelper.h>
 
 namespace DB
 {

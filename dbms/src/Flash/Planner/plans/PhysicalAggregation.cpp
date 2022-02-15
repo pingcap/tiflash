@@ -5,9 +5,9 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Interpreters/Context.h>
-#include <Flash/Planner/FinalizeHelper.h>
 
 namespace DB
 {
