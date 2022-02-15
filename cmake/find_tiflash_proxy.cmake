@@ -33,24 +33,6 @@ if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
     endif()
 endif()
 
-if (APPLE AND USE_INTERNAL_TIFLASH_PROXY)
-    execute_process(
-        COMMAND brew --prefix openssl@1.1
-        RESULT_VARIABLE BREW_OPENSSL
-        OUTPUT_VARIABLE BREW_OPENSSL_PREFIX
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    if (BREW_OPENSSL EQUAL 0 AND EXISTS "${BREW_OPENSSL_PREFIX}")
-        message(STATUS "Found openssl installed by Homebrew at ${BREW_OPENSSL_PREFIX}")
-    else()
-        if(NOT DEFINED ENV{OPENSSL_ROOT_DIR})
-            message(FATAL_ERROR "Not found openssl installed by Homebrew or env `OPENSSL_ROOT_DIR`, please install openssl by `brew install openssl@1.1`")
-        else()
-            message(STATUS "Found openssl by `OPENSSL_ROOT_DIR` at $ENV{OPENSSL_ROOT_DIR}")
-        endif()
-    endif()
-endif ()
-
 set(TIFLASH_PROXY_FOUND TRUE)
 
 message(STATUS "Using tiflash proxy: ${USE_INTERNAL_TIFLASH_PROXY} : ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}")
