@@ -141,10 +141,13 @@ inline UInt64 unionCastToUInt64(Float32 x)
 }
 
 template <typename TargetType, typename EncodeType>
-inline std::enable_if_t<!std::is_same_v<::DB::Null, TargetType>, TargetType>
-decodeInt(const char * pos)
+inline TargetType decodeInt(const char * pos)
 {
-    if (is_signed_v<TargetType>)
+    if constexpr (std::is_same_v<::DB::Null, TargetType>)
+    {
+        return Null{};
+    }
+    else if constexpr (is_signed_v<TargetType>)
     {
         return static_cast<TargetType>(static_cast<std::make_signed_t<EncodeType>>(readLittleEndian<EncodeType>(pos)));
     }
@@ -307,9 +310,10 @@ public:
     }
 
     /// This method implemented in header because it could be possibly devirtualized.
-    std::enable_if_t<!std::is_same_v<::DB::Null, T>, int>
-    compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override
+    int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override
     {
+        if constexpr (std::is_same_v<::DB::Null, T>)
+            return 0;
         return CompareHelper<T>::compare(data[n], static_cast<const Self &>(rhs_).data[m], nan_direction_hint);
     }
 
