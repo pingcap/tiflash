@@ -324,6 +324,7 @@ try
 CATCH
 
 TEST_F(PageStorageTest, DeadLockInMVCC)
+try
 {
     WriteBatch batch;
     {
@@ -343,6 +344,7 @@ TEST_F(PageStorageTest, DeadLockInMVCC)
         page_storage->write(std::move(batch));
     }
 }
+CATCH
 
 TEST_F(PageStorageTest, WriteReadGcExternalPage)
 try
