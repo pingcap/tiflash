@@ -70,6 +70,7 @@ void MPPTaskManager::BackgroundJob()
             }
         }
         usleep(1000000);
+        LOG_ERROR(log, "act_tasks: " << act_tasks);
     }
     //TODO clear rest waiters
     end_fin = true;
@@ -269,6 +270,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 
 bool MPPTaskManager::registerTask(MPPTaskPtr task)
 {
+    act_tasks++;
     //    std::unique_lock<std::mutex> lock(mu);
     int bucket_id = task->id.start_ts % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);
@@ -350,6 +352,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
 {
+    act_tasks--;
     //    std::unique_lock<std::mutex> lock(mu);
     int bucket_id = task->id.start_ts % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);

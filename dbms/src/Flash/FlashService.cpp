@@ -18,6 +18,8 @@
 
 #include <ext/scope_guard.h>
 
+std::atomic<int> act_rpcs{0};
+
 namespace DB
 {
 namespace ErrorCodes
@@ -48,7 +50,8 @@ FlashService::FlashService(IServer & server_)
         [&] {
             while (!end_syn)
             {
-                LOG_ERROR(log, "max active establish thds: " << max_active_establish_thds);
+                // LOG_ERROR(log, "max active establish thds: " << max_active_establish_thds);
+                LOG_ERROR(log, "act_rpcq: "<< act_rpcs.load());
                 usleep(1000000);
             }
             end_fin = true;
@@ -644,6 +647,7 @@ void CallData::Proceed()
     }
     else if (state_ == PROCESS)
     {
+        act_rpcs++;
         state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
@@ -661,6 +665,7 @@ void CallData::Proceed()
                 state_ = FINISH;
                 service_->current_active_establish_thds--;
                 service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+                act_rpcs--;
                 delete this;
                 return;
             }
@@ -722,6 +727,7 @@ void CallData::Proceed()
         // Once in the FINISH state, deallocate ourselves (CallData).
         service_->current_active_establish_thds--;
         service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
+        act_rpcs--;
         delete this;
         return;
     }
