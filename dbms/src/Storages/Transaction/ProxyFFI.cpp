@@ -6,7 +6,6 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <diagnosticspb.pb.h>
 
 namespace CurrentMetrics
 {
@@ -108,6 +107,7 @@ static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper
 void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy)
 {
     server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
+    std::atomic_thread_fence(std::memory_order::memory_order_seq_cst);
 }
 
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
@@ -219,12 +219,6 @@ void CppStrVec::updateView()
     {
         view.emplace_back(strIntoView(&e));
     }
-}
-
-kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
-{
-    auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-    return std::move(res.at(0).first);
 }
 
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
@@ -355,7 +349,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         break;
     }
     default:
-        LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+        LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
         exit(-1);
     }
 }
@@ -376,7 +370,7 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
             break;
         default:
-            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+            LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
         }
     }
@@ -404,12 +398,6 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
 {
     return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
-}
-
-void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
-{
-    using diagnosticspb::ServerInfoResponse;
-    reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
 }
 
 CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_t full)

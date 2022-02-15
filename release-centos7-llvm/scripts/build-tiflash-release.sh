@@ -21,7 +21,6 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
-ENABLE_EMBEDDED_COMPILER="FALSE"
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
@@ -29,7 +28,6 @@ rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-      -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
       -Wno-dev \

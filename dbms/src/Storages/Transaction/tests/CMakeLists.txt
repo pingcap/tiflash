@@ -1,8 +1,5 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable (region_test region.cpp)
-target_link_libraries (region_test dbms)
-
 # glob all unit tests of tmt into gtests_tmt
 macro (grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories
