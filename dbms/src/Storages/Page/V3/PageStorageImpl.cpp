@@ -38,9 +38,12 @@ void PageStorageImpl::restore()
     auto wal = WALStore::create(callback, file_provider, delegator, /*write_limiter*/ nullptr);
     // PageId max_page_id = collapsing_directory.max_applied_page_id; // TODO: return it to outer function
 
+    // TODO: Now `PageDirectory::create` and `BlobStore::restore` iterate all entries in `collapsing_directory`,
+    // find a better way may reduce the cost of iterating.
     page_directory = PageDirectory::create(collapsing_directory, std::move(wal));
 
-    // TODO: restore BlobStore
+    // restore BlobStore
+    blob_store.restore(collapsing_directory);
 }
 
 void PageStorageImpl::drop()
@@ -187,13 +190,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    /// Get all pending external pages and BlobFiles. Note that we should get external pages before BlobFiles.
-    PathAndIdsVec external_pages;
-    if (external_pages_scanner)
-    {
-        external_pages = external_pages_scanner();
-    }
-
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
     const auto & del_entries = page_directory.gc();
@@ -212,10 +208,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     if (blob_need_gc.empty())
     {
-        if (external_pages_remover)
-        {
-            external_pages_remover(external_pages, page_directory.getAllPageIds());
-        }
         return false;
     }
 
@@ -226,10 +218,6 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     if (blob_gc_info.empty())
     {
-        if (external_pages_remover)
-        {
-            external_pages_remover(external_pages, page_directory.getAllPageIds());
-        }
         return false;
     }
 
@@ -249,22 +237,17 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_scanner != nullptr);
+    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr);
 
-    if (external_pages_remover)
-    {
-        external_pages_remover(external_pages, page_ids);
-    }
+    (void)page_ids;
 
     return true;
 }
 
-void PageStorageImpl::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
+void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
-    assert(scanner != nullptr);
-    assert(remover != nullptr);
-    external_pages_scanner = scanner;
-    external_pages_remover = remover;
+    assert(callbacks.v3_remover != nullptr);
+    external_pages_remover = callbacks.v3_remover;
 }
 
 } // namespace PS::V3

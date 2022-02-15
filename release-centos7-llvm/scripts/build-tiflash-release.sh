@@ -21,29 +21,23 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
-ENABLE_EMBEDDED_COMPILER="FALSE"
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
-
-rm -rf ${SRCPATH}/libs/libtiflash-proxy
-mkdir -p ${SRCPATH}/libs/libtiflash-proxy
-ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
-
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-      -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
       -Wno-dev \
       -DUSE_CCACHE=OFF \
       -DLINKER_NAME=lld \
       -DUSE_LIBCXX=ON \
-      -DUSE_LLVM_LIBUNWIND=ON \
-      -DUSE_LLVM_COMPILER_RT=ON \
+      -DUSE_LLVM_LIBUNWIND=OFF \
+      -DUSE_LLVM_COMPILER_RT=OFF \
       -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
+      -DRUN_HAVE_STD_REGEX=0 \
       -DCMAKE_AR="/usr/local/bin/llvm-ar" \
       -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
       -GNinja
@@ -55,12 +49,10 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 # compress debug symbols
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 
-# Vendor dependencies
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
 
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
+cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 # unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH

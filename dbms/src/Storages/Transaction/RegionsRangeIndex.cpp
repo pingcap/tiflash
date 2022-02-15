@@ -23,7 +23,7 @@ void RegionsRangeIndex::add(const RegionPtr & new_region)
         it->second.region_map.emplace(new_region->id(), new_region);
 }
 
-void RegionsRangeIndex::remove(const RegionRange & range, const RegionID region_id)
+void RegionsRangeIndex::remove(const RegionRange & range, RegionID region_id)
 {
     auto begin_it = root.find(range.first);
     if (begin_it == root.end())

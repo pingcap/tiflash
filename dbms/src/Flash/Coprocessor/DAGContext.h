@@ -22,12 +22,6 @@ class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
 
-struct ProfileStreamsInfo
-{
-    UInt32 qb_id;
-    BlockInputStreams input_streams;
-};
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 struct JoinExecuteInfo
@@ -151,9 +145,11 @@ public:
     {}
 
     void attachBlockIO(const BlockIO & io_);
-    std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
-    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
-    std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
+    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+
+    void initExecutorIdToJoinIdMap();
+    std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
+
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
@@ -263,18 +259,12 @@ public:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
-    std::map<String, ProfileStreamsInfo> profile_streams_map;
-    /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to
-    /// the last BlockInputStreams for join build side. In TiFlash, a hash join's build side is
-    /// finished before probe side starts, so the join probe side's running time does not include
-    /// hash table's build time, when construct ExecSummaries, we need add the build cost to probe executor
-    std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
-    /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
-    /// in this query block and all its children query block
-    std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
+    std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
+    std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
-    /// JoinStatistics gets JoinExecuteInfo through it.
+    /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
     /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.

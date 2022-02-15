@@ -82,30 +82,10 @@ else
 fi
 ccache -z
 
-rm -rf ${SRCPATH}/libs/libtiflash-proxy
-mkdir -p ${SRCPATH}/libs/libtiflash-proxy
-
-cd ${SRCPATH}/contrib/tiflash-proxy
-proxy_git_hash=$(git log -1 --format="%H")
-
-while [[ true ]]; do
-  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-    http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy-llvm/${proxy_git_hash}/libtiflash_proxy.so
-  proxy_size=$(ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}')
-  if [[ ${proxy_size} -lt $((102400)) ]]; then
-    echo "fail to get ci build tiflash proxy, sleep 60s"
-    sleep 60
-  else
-    chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
-    break
-  fi
-done
-
 BUILD_DIR="/build/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "${SRCPATH}" \
-  -DENABLE_EMBEDDED_COMPILER=FALSE \
   -DENABLE_TESTS=ON \
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
   -DUSE_CCACHE=${USE_CCACHE} \
@@ -113,8 +93,9 @@ cmake "${SRCPATH}" \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON \
   -DLINKER_NAME=lld \
   -DUSE_LIBCXX=ON \
-  -DUSE_LLVM_LIBUNWIND=ON \
-  -DUSE_LLVM_COMPILER_RT=ON \
+  -DUSE_LLVM_LIBUNWIND=OFF \
+  -DRUN_HAVE_STD_REGEX=0 \
+  -DUSE_LLVM_COMPILER_RT=OFF \
   -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -GNinja

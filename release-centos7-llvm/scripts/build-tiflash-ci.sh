@@ -52,7 +52,6 @@ fi
 
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_TESTS=${ENABLE_TESTS:-1}
-ENABLE_EMBEDDED_COMPILER="FALSE"
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-llvm.tar"
@@ -97,47 +96,58 @@ else
 fi
 ccache -z
 
-rm -rf ${SRCPATH}/libs/libtiflash-proxy
-mkdir -p ${SRCPATH}/libs/libtiflash-proxy
+# Download prebuilt tiflash proxy to accelerate CI build.
+rm -rf ${SRCPATH}/contrib/tiflash-proxy/target/release
+mkdir -p ${SRCPATH}/contrib/tiflash-proxy/target/release
 
 cd ${SRCPATH}/contrib/tiflash-proxy
 proxy_git_hash=$(git log -1 --format="%H")
-curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
+curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" \
   http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
-proxy_size=$(ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}')
+proxy_size=$(ls -l "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
-if [[ ${proxy_size} -lt ${min_size} ]]; then
-  echo "try to build libtiflash_proxy.so"
-  export PATH=$PATH:$HOME/.cargo/bin
-  bash "${SCRIPTPATH}/build-proxy.sh"
-  echo "try to upload libtiflash_proxy.so"
-  cd target/release
-  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
-  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
-fi
 
-chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
+BUILD_TIFLASH_PROXY=false
+
+if [[ ${proxy_size} -lt ${min_size} ]]; then
+  BUILD_TIFLASH_PROXY=true
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=""
+  echo "need to build libtiflash_proxy.so"
+  export PATH=$PATH:$HOME/.cargo/bin
+  rm -f target/release/libtiflash_proxy.so
+else
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy"
+  chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
+fi
 
 BUILD_DIR="$SRCPATH/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake "$SRCPATH" \
-  -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
+cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
   -DENABLE_TESTS=${ENABLE_TESTS} \
   -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
   -DUSE_CCACHE=${USE_CCACHE} \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON \
   -DLINKER_NAME=lld \
   -DUSE_LIBCXX=ON \
-  -DUSE_LLVM_LIBUNWIND=ON \
-  -DUSE_LLVM_COMPILER_RT=ON \
+  -DUSE_LLVM_LIBUNWIND=OFF \
+  -DUSE_LLVM_COMPILER_RT=OFF \
   -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -DCMAKE_AR="/usr/local/bin/llvm-ar" \
+  -DRUN_HAVE_STD_REGEX=0 \
   -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
+  -DUSE_INTERNAL_TIFLASH_PROXY=${BUILD_TIFLASH_PROXY} \
   -GNinja
 
 ninja tiflash
+
+if $BUILD_TIFLASH_PROXY; then
+  echo "try to upload libtiflash_proxy.so"
+  pushd "${SRCPATH}/contrib/tiflash-proxy/target/release"
+  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
+  popd
+fi
 
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   ninja page_ctl
@@ -158,12 +168,13 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 
 # Reduce binary size by compressing.
 llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so    "${INSTALL_DIR}/"
 vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so    "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libunwind.so    "${INSTALL_DIR}/"
 
+cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
+
+# unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH
 readelf -d "${INSTALL_DIR}/tiflash"
 ldd "${INSTALL_DIR}/tiflash"

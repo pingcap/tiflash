@@ -28,10 +28,6 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
-find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
-if (TARGET CURL::libcurl)
-    set(CURL_LIBRARIES CURL::libcurl)
-endif()
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
@@ -54,10 +50,10 @@ add_headers_and_sources(dbms src/Core)
 add_headers_and_sources(dbms src/DataStreams)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
+add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
-add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
@@ -134,7 +130,7 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
 endif ()
 
-target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
+target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
@@ -191,7 +187,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}

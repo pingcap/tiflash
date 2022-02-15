@@ -69,7 +69,7 @@ public:
 
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const String & column_prefix);
+        const String & column_prefix) const;
 
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
@@ -114,7 +114,7 @@ public:
         String & filter_column_name);
 
 private:
-    void appendAggSelect(
+    void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
 
@@ -132,6 +132,14 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool result_is_nullable);
+
+    void buildCommonAggFunc(
+        const tipb::Expr & expr,
+        ExpressionActionsChain::Step & step,
+        const String & agg_func_name,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        bool empty_input_as_null);
 
     void makeExplicitSet(
         const tipb::Expr & expr,

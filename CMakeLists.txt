@@ -4,6 +4,7 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+option(TIFLASH_ENABLE_RUNTIME_RPATH "Add $ORIGIN/ to tiflash installation rpath" OFF)
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
 if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
@@ -11,7 +12,7 @@ if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
     set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
     set(ENV{LD_LIBRARY_PATH} "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
-    set(CMAKE_INSTALL_RPATH "${TiFlash_SOURCE_DIR}/libs/libtiflash-proxy;$ORIGIN/;${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/;${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/;${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/;${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
@@ -206,8 +207,6 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-# Due to ODR restriction and profiing bugs (https://llvm.discourse.group/t/segfault-in-libunwind-during-cpu-profiling/5806/2)
-# We keep runtime libs to be dynamically linked when LLVM toolchain is used
 if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
@@ -221,8 +220,8 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
-    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" ON)
-    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" ON)
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" OFF)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" OFF)
 
 
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
@@ -303,7 +302,6 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
@@ -329,8 +327,9 @@ include (cmake/find_protobuf.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
+include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
-include (cmake/find_raftstore_proxy.cmake)
+include (cmake/find_tiflash_proxy.cmake)
 include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
@@ -349,9 +348,6 @@ include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
-if (ENABLE_MYSQL_STORAGE)
-    include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
-endif()
 
 include (cmake/print_flags.cmake)
 
