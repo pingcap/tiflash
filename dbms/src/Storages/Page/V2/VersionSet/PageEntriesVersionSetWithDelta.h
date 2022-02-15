@@ -201,11 +201,11 @@ private:
     //          created thread id of the oldest snapshot      >
     std::tuple<size_t, double, unsigned> removeExpiredSnapshots() const;
 
-    void collectLiveFilesFromVersionList( //
+    static void collectLiveFilesFromVersionList( //
         const PageEntriesView & view,
         std::set<PageFileIdAndLevel> & live_files,
         std::set<PageId> & live_normal_pages,
-        bool need_scan_page_ids) const;
+        bool need_scan_page_ids);
 
 private:
     mutable std::shared_mutex read_write_mutex;
