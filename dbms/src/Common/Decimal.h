@@ -414,6 +414,12 @@ __attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleT
     return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
 }
 
+template <typename T, std::enable_if_t<std::is_integral_v<T> || std::is_same_v<T, Int128> || std::is_same_v<T, Int256> || std::is_same_v<T, Int512>> * = nullptr>
+__attribute__((flatten)) inline T getScaleMultiplier(ScaleType scale)
+{
+    return static_cast<T>(DecimalMaxValue::get(scale) + 1);
+}
+
 template <typename T>
 inline void checkDecimalOverflow(Decimal<T> v, PrecType prec)
 {

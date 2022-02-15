@@ -815,7 +815,6 @@ template <typename FromDataType, typename ToFieldType, bool return_nullable, boo
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
-    using ScaleMulNativeType = typename ScaleMulType::NativeType;
 
     template <typename T, typename U>
     static U toTiDBDecimalInternal(T int_value, PrecType prec [[maybe_unused]], const ScaleMulType & scale_mul, const Context & context)
@@ -825,10 +824,10 @@ struct TiDBConvertToDecimal
         static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
 
-        ScaleMulNativeType scaled_value = static_cast<ScaleMulNativeType>(int_value) * static_cast<ScaleMulNativeType>(scale_mul);
+        ScaleMulType scaled_value = static_cast<ScaleMulType>(int_value) * static_cast<ScaleMulType>(scale_mul);
         if constexpr (!can_skip_check_overflow)
         {
-            ScaleMulNativeType scaled_max_value = static_cast<ScaleMulNativeType>(DecimalMaxValue::get(prec));
+            ScaleMulType scaled_max_value = static_cast<ScaleMulType>(DecimalMaxValue::get(prec));
 
             if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
             {
@@ -844,7 +843,7 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, const ScaleMulNativeType & scale_mul, int fsp, const Context & context)
+    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, const ScaleMulType & scale_mul, int fsp, const Context & context)
     {
         UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
             + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
@@ -861,14 +860,14 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDate & date, PrecType prec, const ScaleMulNativeType & scale_mul, const Context & context)
+    static U toTiDBDecimal(MyDate & date, PrecType prec, const ScaleMulType & scale_mul, const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
         return toTiDBDecimalInternal<UInt64, U>(value, prec, scale_mul, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, const ScaleMulNativeType & scale_mul, const Context & context)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, const ScaleMulType & scale_mul, const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
             return toTiDBDecimalInternal<T, U>(value, prec, scale_mul, context);
@@ -925,7 +924,7 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        auto value = ScaleMulNativeType(v.value);
+        auto value = ScaleMulType(v.value);
 
         if (v_scale <= scale)
         {
@@ -952,7 +951,7 @@ struct TiDBConvertToDecimal
 
         if constexpr (!can_skip_check_overflow)
         {
-            ScaleMulNativeType max_value = static_cast<ScaleMulNativeType>(DecimalMaxValue::get(prec));
+            ScaleMulType max_value = static_cast<ScaleMulType>(DecimalMaxValue::get(prec));
             if (value > max_value || value < -max_value)
             {
                 context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
@@ -1167,7 +1166,7 @@ struct TiDBConvertToDecimal
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            const ScaleMulNativeType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
+            const ScaleMulType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
             for (size_t i = 0; i < size; ++i)
             {
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
@@ -1207,7 +1206,7 @@ struct TiDBConvertToDecimal
             if constexpr (std::is_integral_v<FromFieldType>)
             {
                 /// cast enum/int as decimal
-                ScaleMulNativeType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
+                ScaleMulType scale_mul = getScaleMultiplier<ScaleMulType>(scale);
                 for (size_t i = 0; i < size; ++i)
                     vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale_mul, context);
             }
@@ -1887,23 +1886,23 @@ private:
 
         if (from_scaled_prec <= IntPrec<Int32>::real_prec - 1)
         {
-            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal32>(decimal_type, can_skip);
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int32>(decimal_type, can_skip);
         }
         else if (from_scaled_prec <= IntPrec<Int64>::real_prec - 1)
         {
-            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal64>(decimal_type, can_skip);
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int64>(decimal_type, can_skip);
         }
         else if (from_scaled_prec <= IntPrec<Int128>::real_prec - 1)
         {
-            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal128>(decimal_type, can_skip);
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int128>(decimal_type, can_skip);
         }
         else if (from_scaled_prec <= IntPrec<Int256>::real_prec - 1)
         {
-            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal256>(decimal_type, can_skip);
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int256>(decimal_type, can_skip);
         }
         else
         {
-            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Decimal512>(decimal_type, can_skip);
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int512>(decimal_type, can_skip);
         }
     }
 
