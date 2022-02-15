@@ -90,6 +90,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             case WriteBatch::WriteType::PUT:
             case WriteBatch::WriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
+                                ErrorCodes::LOGICAL_ERROR);
             }
         }
         return edit;

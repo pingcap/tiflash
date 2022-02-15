@@ -354,6 +354,39 @@ TEST(ExternalMapTest, CreateInvaildRef)
     ASSERT_EQ(page_id, *ids.begin());
 }
 
+TEST(ExternalMapTest, CreateInvaildRef2)
+{
+    ExternalMap m;
+    // 10->10, 11->10, 10->11
+    EXPECT_TRUE(m.createExternal(10, 50));
+    EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
+    // fail, can not create cycle ref
+    EXPECT_FALSE(m.tryCreateRef(10, 11, 51));
+}
+
+TEST(ExternalMapTest, CreateInvaildRef3)
+{
+    ExternalMap m;
+    // 10->10, 11->10; del 10->10; 10->11
+    EXPECT_TRUE(m.createExternal(10, 50));
+    EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
+    EXPECT_TRUE(m.tryCreateDel(10, 51));
+    // fail, can not create cycle ref
+    EXPECT_FALSE(m.tryCreateRef(10, 11, 52));
+}
+
+TEST(ExternalMapTest, CreateInvaildRef4)
+{
+    ExternalMap m;
+    // 10->10, 11->10; del 10->10; 10->11
+    EXPECT_TRUE(m.createExternal(10, 50));
+    EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
+    EXPECT_TRUE(m.tryCreateDel(10, 51));
+    m.cleanUpHolders(51);
+    // fail, can not create cycle ref
+    EXPECT_FALSE(m.tryCreateRef(10, 11, 52));
+}
+
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
