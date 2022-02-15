@@ -1,8 +1,8 @@
 #pragma once
 
-#include <map>
-
 #include <Storages/Transaction/Types.h>
+
+#include <map>
 
 namespace DB
 {
@@ -31,7 +31,7 @@ public:
 
     void add(const RegionPtr & new_region);
 
-    void remove(const RegionRange & range, const RegionID region_id);
+    void remove(const RegionRange & range, RegionID region_id);
 
     RegionMap findByRangeOverlap(const RegionRange & range) const;
 
