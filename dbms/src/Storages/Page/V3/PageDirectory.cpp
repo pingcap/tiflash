@@ -47,19 +47,19 @@ namespace PS::V3
  * VersionedPageEntries methods *
  ********************************/
 
-std::optional<PageEntryV3> VersionedPageEntries::getEntryNotSafe(UInt64 seq) const
+std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntryNotSafe(UInt64 seq) const
 {
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
     if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
     {
-        if (!iter->second.is_delete)
-            return iter->second.entry;
+        if (!iter->second.isDelete())
+            return iter->second.entryPtr();
     }
     return std::nullopt;
 }
 
-std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     return getEntryNotSafe(seq);
@@ -71,68 +71,62 @@ std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(B
     VersionedEntries versioned_entries;
 
     auto page_lock = acquireLock();
-    for (const auto & [versioned_type, entry_del] : entries)
+    for (const auto & [versioned_type, entry_or_del] : entries)
     {
-        if (entry_del.is_delete)
+        if (entry_or_del.isDelete())
         {
             continue;
         }
 
-        const auto & entry = entry_del.entry;
-
-        if (entry.file_id == blob_id)
+        const auto & entry_ptr = entry_or_del.entryPtr();
+        if (entry_ptr->file_id == blob_id)
         {
-            single_page_size += entry.size;
-            versioned_entries.emplace_back(std::make_pair(versioned_type, entry_del.entry));
+            single_page_size += entry_ptr->size;
+            versioned_entries.emplace_back(std::make_pair(versioned_type, *entry_ptr));
         }
     }
 
     return std::make_pair(std::move(versioned_entries), single_page_size);
 }
 
-std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
+bool VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
 {
-    PageEntriesV3 del_entries;
-
     auto page_lock = acquireLock();
 
     if (entries.empty())
     {
-        return std::make_pair(del_entries, true);
+        return true;
     }
 
+    // Nothing need to be GC
     auto iter = MapUtils::findLessEQ(entries, PageVersionType(lowest_seq, UINT64_MAX));
-
-    // Nothing need be GC
     if (iter == entries.begin())
     {
-        return std::make_pair(del_entries, false);
+        return false;
     }
 
     // If we can't find any seq lower than `lowest_seq`
     // It means all seq in this entry no need gc.
     if (iter == entries.end())
     {
-        return std::make_pair(del_entries, false);
+        return false;
     }
 
     for (--iter; iter != entries.begin(); iter--)
     {
         // Already deleted, no need put in `del_entries`
-        if (iter->second.is_delete)
+        if (iter->second.isDelete())
         {
             continue;
         }
 
-        del_entries.emplace_back(iter->second.entry);
         iter = entries.erase(iter);
     }
 
     // erase begin
-    del_entries.emplace_back(iter->second.entry);
     entries.erase(iter);
 
-    return std::make_pair(std::move(del_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.is_delete));
+    return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
 /**********************************
@@ -240,7 +234,7 @@ PageDirectory PageDirectory::create(const CollapsingPageDirectory & collapsing_d
         auto [iter, created] = dir.mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
             iter->second = std::make_shared<VersionedPageEntries>();
-        iter->second->createNewVersion(version.sequence, version.epoch, entry);
+        iter->second->createNewVersion(version.sequence, version.epoch, dir.createRecyclableEntry(entry));
     }
     return dir;
 }
@@ -322,7 +316,7 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
 
     if (auto entry = iter->second->getEntry(snap->sequence); entry)
     {
-        return PageIDAndEntryV3(page_id, *entry);
+        return PageIDAndEntryV3(page_id, *entry.value());
     }
 
     throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
@@ -359,7 +353,7 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
         const auto & iter = iters[idx];
         if (auto entry = iter->second->getEntry(snap->sequence); entry)
         {
-            id_entries.emplace_back(page_ids[idx], *entry);
+            id_entries.emplace_back(page_ids[idx], *entry.value());
         }
         else
             throw Exception(fmt::format("Entry [id={}] [seq={}] at [idx={}] not exist!", page_ids[idx], snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
@@ -441,8 +435,10 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         case WriteBatch::WriteType::PUT:
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
-            updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
+        {
+            updating_pages[idx]->createNewVersion(last_sequence + 1, createRecyclableEntry(r.entry));
             break;
+        }
         case WriteBatch::WriteType::REF:
         {
             // We can't handle `REF` before other writes, because `PUT` and `REF`
@@ -464,8 +460,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
                                   : iter->second->getEntry(last_sequence + 1));
                 entry)
             {
-                // copy the entry to be ref
-                updating_pages[idx]->createNewVersion(last_sequence + 1, *entry);
+                // copy the entry shared ptr to be ref
+                std::shared_ptr<PageEntryV3> entry_ptr_copy = entry.value();
+                updating_pages[idx]->createNewVersion(last_sequence + 1, std::move(entry_ptr_copy));
             }
             else
             {
@@ -514,7 +511,7 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
             // Append the gc version to version list
             auto & versioned_entries = iter->second;
             auto page_lock = versioned_entries->acquireLock();
-            versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
+            versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, createRecyclableEntry(record.entry));
         }
     } // Then we should release the read lock on `table_rw_mutex`
 
@@ -557,7 +554,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 
             if (versioned_pageid_entries.empty())
             {
-                throw Exception(fmt::format("Can't get any entries from [BlobFileId={}]", blob_id));
+                throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
             }
 
             blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
@@ -567,7 +564,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 }
 
 
-std::vector<PageEntriesV3> PageDirectory::gc()
+PageEntriesV3 PageDirectory::gc()
 {
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
@@ -589,17 +586,12 @@ std::vector<PageEntriesV3> PageDirectory::gc()
         }
     }
 
-    std::vector<PageEntriesV3> all_del_entries;
+    PageEntriesV3 all_del_entries;
     {
         std::unique_lock write_lock(table_rw_mutex);
         for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
         {
-            const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
-            if (!del_entries.empty())
-            {
-                all_del_entries.emplace_back(std::move(del_entries));
-            }
-
+            bool all_deleted = iter->second->deleteAndGC(lowest_seq);
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
@@ -609,6 +601,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
                 iter++;
             }
         }
+        pending_remove_entries.swap(all_del_entries);
     }
 
     return all_del_entries;

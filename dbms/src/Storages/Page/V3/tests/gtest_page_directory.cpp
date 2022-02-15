@@ -449,33 +449,58 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     dir.apply(std::move(edit2));
 }
 
+class VersionedEntriesTest : public ::testing::Test
+{
+public:
+    std::pair<PageEntriesV3, bool> gcAndGetRemovedEntries(DB::UInt64 seq)
+    {
+        bool remove_all = entries.deleteAndGC(seq);
+        PageEntriesV3 ret;
+        ret.swap(recycle_bin);
+        return std::make_pair(ret, remove_all);
+    }
+
+protected:
+    // the lifetime of `recycle_bin` must be longer than `entries`
+    PageEntriesV3 recycle_bin;
+    VersionedPageEntries entries;
+};
+
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    entries.createNewVersion((VERSION), entry_v##VERSION);
+    entries.createNewVersion(                                                                                            \
+        (VERSION),                                                                                                       \
+        std::shared_ptr<PageEntryV3>(                                                                                    \
+            new PageEntryV3(entry_v##VERSION),                                                                           \
+            [this](PageEntryV3 * ptr) { if (ptr) { recycle_bin.emplace_back(*ptr); delete ptr;} }));
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                        \
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = (VERSION), .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    entries.createNewVersion((VERSION), (EPOCH), entry_gc_v##VERSION##_##EPOCH);
+    entries.createNewVersion(                                                                                                  \
+        (VERSION),                                                                                                             \
+        (EPOCH),                                                                                                               \
+        std::shared_ptr<PageEntryV3>(                                                                                          \
+            new PageEntryV3(entry_gc_v##VERSION##_##EPOCH),                                                                    \
+            [this](PageEntryV3 * ptr) { if (ptr) {recycle_bin.emplace_back(*ptr); delete ptr;} }));
 
-TEST(VersionedEntriesTest, InsertGet)
+TEST_F(VersionedEntriesTest, InsertGet)
 {
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_ENTRY(5);
     INSERT_ENTRY(10);
 
     // Insert some entries with version
     ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_v2));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_v2));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_v2));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_v2));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_v2));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_v2));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v5));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v5));
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
     }
 
     // Insert some entries with version && gc epoch
@@ -483,32 +508,32 @@ TEST(VersionedEntriesTest, InsertGet)
     INSERT_GC_ENTRY(5, 1);
     INSERT_GC_ENTRY(5, 2);
     ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_gc_v2_1));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_gc_v5_2));
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
     }
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
     entries.createDelete(15);
     ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_gc_v2_1));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_gc_v5_2));
     }
     for (UInt64 seq = 10; seq < 15; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
     }
     for (UInt64 seq = 15; seq < 20; ++seq)
     {
@@ -516,10 +541,9 @@ TEST(VersionedEntriesTest, InsertGet)
     }
 }
 
-TEST(VersionedEntriesTest, GC)
+TEST_F(VersionedEntriesTest, GC)
 try
 {
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
     INSERT_ENTRY(5);
@@ -530,24 +554,24 @@ try
     entries.createDelete(15);
 
     // noting to be removed
-    auto removed_entries = entries.deleteAndGC(1);
+    auto removed_entries = gcAndGetRemovedEntries(1);
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 0);
 
     // <2,0> get removed.
-    removed_entries = entries.deleteAndGC(2);
+    removed_entries = gcAndGetRemovedEntries(2);
     ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 1);
+
     auto iter = removed_entries.first.begin();
     ASSERT_TRUE(isSameEntry(entry_v2, *iter));
 
     // nothing get removed.
-    removed_entries = entries.deleteAndGC(4);
+    removed_entries = gcAndGetRemovedEntries(4);
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 0);
 
     // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
-    removed_entries = entries.deleteAndGC(11);
+    removed_entries = gcAndGetRemovedEntries(11);
     ASSERT_FALSE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 5);
     iter = removed_entries.first.begin();
@@ -562,39 +586,37 @@ try
     ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *iter)) << toString(*iter);
 
     // <11,0> get removed, all cleared.
-    removed_entries = entries.deleteAndGC(20);
+    removed_entries = gcAndGetRemovedEntries(20);
     ASSERT_TRUE(removed_entries.second);
     ASSERT_EQ(removed_entries.first.size(), 1);
 }
 CATCH
 
-TEST(VersionedEntriesTest, ReadAfterGcApplied)
+TEST_F(VersionedEntriesTest, ReadAfterGcApplied)
 try
 {
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_ENTRY(3);
     INSERT_ENTRY(5);
 
     // Read with snapshot seq=2
-    ASSERT_TRUE(isSameEntry(entry_v2, *entries.getEntry(2)));
+    ASSERT_TRUE(isSameEntry(entry_v2, **entries.getEntry(2)));
 
     // Mock that gc applied and insert <2, 1>
     INSERT_GC_ENTRY(2, 1);
 
     // Now we should read the entry <2, 1> with seq=2
-    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *entries.getEntry(2)));
+    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, **entries.getEntry(2)));
 
     // <2,0> get removed
-    auto removed_entries = entries.deleteAndGC(2);
+    auto removed_entries = gcAndGetRemovedEntries(2);
     ASSERT_EQ(removed_entries.first.size(), 1);
+    ASSERT_FALSE(removed_entries.second);
 }
 CATCH
 
-TEST(VersionedEntriesTest, getEntriesByBlobId)
+TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 {
-    VersionedPageEntries entries;
-
     INSERT_BLOBID_ENTRY(1, 1);
     INSERT_BLOBID_ENTRY(1, 2);
     INSERT_BLOBID_ENTRY(2, 3);
@@ -681,12 +703,9 @@ class PageDirectoryGCTest : public PageDirectoryTest
         dir.apply(std::move(edit)); \
     }
 
-static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
+static size_t getNumEntries(const PageEntriesV3 & entries)
 {
-    size_t num = 0;
-    for (const auto & es : entries)
-        num += es.size();
-    return num;
+    return entries.size();
 }
 
 TEST_F(PageDirectoryGCTest, GCPushForward)
@@ -716,9 +735,8 @@ try
      *   snapshot remain: [v3,v5]
      */
     auto del_entries = dir.gc();
-    EXPECT_EQ(del_entries.size(), 1);
     // v1, v2 have been removed.
-    ASSERT_EQ(getNumEntries(del_entries), 2);
+    EXPECT_EQ(getNumEntries(del_entries), 2);
 
     EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
     EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
@@ -992,6 +1010,42 @@ try
     EXPECT_ENTRY_NOT_EXIST(dir, another_page_id, snapshot_after_all);
 }
 CATCH
+
+TEST_F(PageDirectoryGCTest, GCOnRefedEntries)
+{
+    // 10->entry1, 11->10=>11->entry1; del 10->entry1
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(10, entry1);
+        dir.apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.del(10);
+        dir.apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir.gc();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    // del 11->entry1
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir.apply(std::move(edit));
+    }
+    // entry1 get removed
+    {
+        auto outdated_entries = dir.gc();
+        EXPECT_EQ(1, outdated_entries.size());
+        EXPECT_TRUE(isSameEntry(entry1, *outdated_entries.begin()));
+    }
+}
+
 
 TEST_F(PageDirectoryGCTest, FullGCApply)
 try

@@ -197,10 +197,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
-    for (const auto & del_version_entry : del_entries)
-    {
-        blob_store.remove(del_version_entry);
-    }
+    blob_store.remove(del_entries);
 
     // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
     // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.

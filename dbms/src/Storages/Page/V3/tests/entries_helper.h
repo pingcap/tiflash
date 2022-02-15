@@ -21,10 +21,6 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3::tests
 {
-inline String toString(const PageEntryV3 & entry)
-{
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
-}
 
 inline String toString(const PageIDAndEntriesV3 & entries)
 {
@@ -34,7 +30,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{},{}>", id_entry.first, toString(id_entry.second));
+            buf.fmtAppend("<{},{}>", id_entry.first, PS::V3::toString(id_entry.second));
         },
         ", ");
     buf.append("]");

@@ -66,19 +66,30 @@ using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
 struct EntryOrDelete
 {
-    bool is_delete;
-    PageEntryV3 entry;
-
+public:
     explicit EntryOrDelete(bool del)
-        : is_delete(del)
+        : entry_or_delete(std::nullopt)
     {
         assert(del == true);
     }
-    explicit EntryOrDelete(const PageEntryV3 & entry_)
-        : is_delete(false)
-        , entry(entry_)
-    {}
+    explicit EntryOrDelete(std::shared_ptr<PageEntryV3> && entry)
+        : entry_or_delete(std::move(entry))
+    {
+        assert(entry_or_delete.value() != nullptr);
+    }
+
+    inline bool isDelete() const { return !entry_or_delete.has_value(); }
+
+    const std::shared_ptr<PageEntryV3> & entryPtr() const
+    {
+        assert(!isDelete());
+        return entry_or_delete.value();
+    }
+
+private:
+    std::optional<std::shared_ptr<PageEntryV3>> entry_or_delete;
 };
+
 using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
@@ -88,14 +99,14 @@ public:
         return std::make_unique<std::lock_guard<std::mutex>>(m);
     }
 
-    void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
+    void createNewVersion(UInt64 seq, std::shared_ptr<PageEntryV3> && entry)
     {
-        entries.emplace(PageVersionType(seq), entry);
+        entries.emplace(PageVersionType(seq), EntryOrDelete(std::move(entry)));
     }
 
-    void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
+    void createNewVersion(UInt64 seq, UInt64 epoch, std::shared_ptr<PageEntryV3> && entry)
     {
-        entries.emplace(PageVersionType(seq, epoch), entry);
+        entries.emplace(PageVersionType(seq, epoch), EntryOrDelete(std::move(entry)));
     }
 
     void createDelete(UInt64 seq)
@@ -103,9 +114,12 @@ public:
         entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
     }
 
-    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+    // Return the shared_ptr to the entry that is visible by `seq`.
+    // If the entry is not visible (deleted or not exist for `seq`), then
+    // return `std::nullopt`.
+    std::optional<std::shared_ptr<PageEntryV3>> getEntry(UInt64 seq) const;
 
-    std::optional<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
+    std::optional<std::shared_ptr<PageEntryV3>> getEntryNotSafe(UInt64 seq) const;
 
     /**
      * Take out the `VersionedEntries` which exist in the `BlobFileId`.
@@ -147,7 +161,7 @@ public:
      *    lowest_seq : 1
      *    Then no entry should be delete.
      */
-    std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
+    bool deleteAndGC(UInt64 lowest_seq);
 
     size_t size() const
     {
@@ -185,11 +199,11 @@ public:
     CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
 };
 
-// `PageDiectory` store multi-versions entries for the same
+// `PageDirectory` store multi-versions entries for the same
 // page id. User can acquire a snapshot from it and get a
 // consist result by the snapshot.
 // All its functions are consider concurrent safe.
-// User should call `gc` periodly to remove outdated version
+// User should call `gc` periodic to remove outdated version
 // of entries in order to keep the memory consumption as well
 // as the restoring time in a reasonable level.
 class PageDirectory
@@ -221,7 +235,7 @@ public:
 
     std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
 
-    std::vector<PageEntriesV3> gc();
+    PageEntriesV3 gc();
 
     size_t numPages() const
     {
@@ -253,7 +267,30 @@ public:
     }
 
 private:
+    inline std::shared_ptr<PageEntryV3> createRecyclableEntry(const PageEntryV3 & entry)
+    {
+        // If there exist a shared ptr to the entry inside `mvcc_table_directory`, applying `REF`
+        // only increase the ref count of the shared ptr.
+        // After this shared ptr to the entry is totally removed from `mvcc_table_directory`, it
+        // will be emplaced to `pending_remove_entries`.
+        return std::shared_ptr<PageEntryV3>(
+            new PageEntryV3(entry),
+            [this](PageEntryV3 * ptr) {
+                if (ptr)
+                {
+                    // Copy the entry to recycle bin
+                    this->pending_remove_entries.emplace_back(*ptr);
+                    delete ptr;
+                }
+            });
+    }
+
+private:
     std::atomic<UInt64> sequence;
+
+    // The lifetime of `pending_remove_entries` must be longer than `mvcc_table_directory`
+    PageEntriesV3 pending_remove_entries;
+
     mutable std::shared_mutex table_rw_mutex;
     using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
