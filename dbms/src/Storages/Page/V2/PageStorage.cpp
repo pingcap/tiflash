@@ -7,6 +7,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
@@ -748,12 +749,12 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
     }
 }
 
-void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
+void PageStorage::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
-    assert(scanner != nullptr);
-    assert(remover != nullptr);
-    external_pages_scanner = scanner;
-    external_pages_remover = remover;
+    assert(callbacks.v2_scanner != nullptr);
+    assert(callbacks.v2_remover != nullptr);
+    external_pages_scanner = callbacks.v2_scanner;
+    external_pages_remover = callbacks.v2_remover;
 }
 
 void PageStorage::drop()
@@ -894,7 +895,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
 
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
-    PathAndIdsVec external_pages;
+    ExternalPageCallbacks::PathAndIdsVec external_pages;
     if (external_pages_scanner)
     {
         external_pages = external_pages_scanner();
