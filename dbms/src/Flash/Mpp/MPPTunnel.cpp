@@ -14,8 +14,10 @@ void mergePacket(mpp::MPPDataPacket & a, mpp::MPPDataPacket & b)
 {
     if (!b.data().empty())
         a.set_allocated_data(b.release_data());
+    if (b.has_error())
+        a.set_allocated_error(b.release_error());
     for (int i = 0; i < b.chunks_size(); ++i)
-        a.add_chunks(std::move(*b.mutable_chunks(i)));
+        a.add_chunks()->swap(*b.mutable_chunks(i));
 }
 } // namespace
 namespace FailPoints
@@ -137,7 +139,7 @@ void MPPTunnelBase<Writer>::sendLoop()
         while (send_queue.pop(res))
         {
             MPPDataPacketPtr next;
-            while (res->data().empty() && send_queue.tryPop(next, std::chrono::milliseconds(0)))
+            if (res->data().empty() && !res->has_error() && send_queue.tryPop(next, std::chrono::milliseconds(0)))
                 mergePacket(*res, *next);
 
             if (!writer->Write(*res))
