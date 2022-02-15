@@ -633,7 +633,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             break;
 
         LOG_FMT_INFO(log,
-                     "{} regions need to fetch latest commit-index in next round, sleep for {:.2f}s",
+                     "{} regions need to fetch latest commit-index in next round, sleep for {:.3f}s",
                      remain_regions.size(),
                      wait_tick_time);
         std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(wait_tick_time * 1000)));
@@ -677,7 +677,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             break;
 
         LOG_FMT_INFO(log,
-                     "{} regions need to apply to latest index, sleep for {:.2f}s",
+                     "{} regions need to apply to latest index, sleep for {:.3f}s",
                      regions_to_check.size(),
                      wait_tick_time);
         std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(wait_tick_time * 1000)));
@@ -695,7 +695,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
     }
 
     LOG_FMT_INFO(log,
-                 "finish to check {} regions, time cost {:.2f}s",
+                 "finish to check {} regions, time cost {:.3f}s",
                  total_regions_cnt,
                  region_check_watch.elapsedSeconds());
 }

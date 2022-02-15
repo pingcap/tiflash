@@ -118,11 +118,39 @@ void RegionKVStoreTest::testReadIndex()
             1);
         ASSERT_NE(kvs.read_index_worker_manager, nullptr);
 
-        kvs.asyncRunReadIndexWorkers();
         {
+            kvs.asyncRunReadIndexWorkers();
+            auto tar_region_id = 9;
+            {
+                auto task_lock = kvs.genTaskLock();
+                auto lock = kvs.genRegionWriteLock(task_lock);
+
+                auto region = makeRegion(tar_region_id, RecordKVFormat::genKey(2, 0), RecordKVFormat::genKey(2, 10));
+                lock.regions.emplace(region->id(), region);
+            }
+            {
+                ASSERT_EQ(proxy_instance.regions.at(tar_region_id)->getLatestCommitIndex(), 5);
+                proxy_instance.regions.at(tar_region_id)->updateCommitIndex(66);
+            }
+
+            AsyncWaker::Notifier notifier;
             const std::atomic_size_t terminate_signals_counter{};
-            WaitCheckRegionReady(ctx.getTMTContext(), terminate_signals_counter, 2, 20);
+            std::thread t([&]() {
+                notifier.wake();
+                WaitCheckRegionReady(ctx.getTMTContext(), terminate_signals_counter, 1 / 1000.0, 20);
+            });
+            SCOPE_EXIT({
+                t.join();
+            });
+            ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            auto tar = kvs.getRegion(tar_region_id);
+            ASSERT_EQ(
+                tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()),
+                EngineStoreApplyRes::None);
+            kvs.stopReadIndexWorkers();
         }
+        kvs.asyncRunReadIndexWorkers();
         {
             // test read index
             auto region = kvs.getRegion(1);
@@ -173,7 +201,7 @@ void RegionKVStoreTest::testReadIndex()
                 SCOPE_EXIT({
                     t.join();
                 });
-                notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600));
+                ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 region->handleWriteRaftCmd({}, 667 + 1, 6, ctx.getTMTContext());
             }

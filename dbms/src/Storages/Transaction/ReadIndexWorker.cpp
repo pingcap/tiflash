@@ -1011,9 +1011,9 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
         {
             auto base_tick_timeout = fn_min_dur_handle_region();
             blockedWaitFor(base_tick_timeout);
+            runOneRound(base_tick_timeout);
             if (state.load(std::memory_order_acquire) != State::Running)
                 break;
-            runOneRound(base_tick_timeout);
         }
         LOG_FMT_INFO(logger, "Start to stop read-index runner {}", id);
     });

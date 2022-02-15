@@ -109,6 +109,11 @@ raft_serverpb::RaftApplyState MockProxyRegion::getApply()
     return apply;
 }
 
+uint64_t MockProxyRegion::getLatestCommitIndex()
+{
+    return this->getApply().commit_index();
+}
+
 void MockProxyRegion::updateCommitIndex(uint64_t index)
 {
     auto _ = genLockGuard();
@@ -142,7 +147,7 @@ std::optional<kvrpcpb::ReadIndexResponse> RawMockReadIndexTask::poll(std::shared
         resp.mutable_region_error()->mutable_data_is_not_ready();
         return resp;
     }
-    resp.set_read_index(region->getApply().commit_index());
+    resp.set_read_index(region->getLatestCommitIndex());
     return resp;
 }
 
