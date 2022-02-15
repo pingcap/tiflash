@@ -27,10 +27,18 @@ endif()
 
 add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     COMMENT "Building tiflash proxy"
-    COMMAND  ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} make release
+    COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} make release
     VERBATIM
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
     DEPENDS "${_TIFLASH_PROXY_SRCS}" "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock" "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
+
+if(APPLE)
+    # For MacOS, we need to explicitly adjust install name for tiflash_proxy library, as it is copied from raftstore_proxy library and the install name is kept as "raftstore_proxy".
+    add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
+        APPEND
+        COMMENT "Changing install name for tiflash proxy library on MacOS"
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -id @executable_path/libtiflash_proxy.dylib ${_TIFLASH_PROXY_LIBRARY})
+endif()
 
 add_custom_target(tiflash_proxy ALL
     DEPENDS ${_TIFLASH_PROXY_LIBRARY})
