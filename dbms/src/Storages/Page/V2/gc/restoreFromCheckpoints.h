@@ -9,9 +9,8 @@ namespace DB::PS::V2
 template <class MergineQueue>
 static std::tuple<std::optional<PageFile>, std::optional<WriteBatch::SequenceID>, PageFileSet> //
 restoreFromCheckpoints(MergineQueue & merging_queue,
-                       PageStorage::VersionedPageEntries & version_set,
-                       PageStorage::StatisticsInfo & info,
                        const String & storage_name,
+                       PageEntriesEdit & last_checkpoint_edits,
                        Poco::Logger * logger)
 {
     // The sequence number of checkpoint. We should ignore the WriteBatch with
@@ -20,7 +19,6 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
 
     std::vector<PageFile> checkpoints;
 
-    PageEntriesEdit last_checkpoint_edits;
     PageFileIdAndLevel last_checkpoint_file_id;
     // Collect all checkpoints file, but just restore from the latest checkpoint.
     while (!merging_queue.empty() //
@@ -42,17 +40,6 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
     PageFileSet page_files_to_drop;
     for (size_t i = 0; i < checkpoints.size() - 1; ++i)
         page_files_to_drop.emplace(checkpoints[i]);
-    try
-    {
-        // Apply edits from latest checkpoint
-        version_set.apply(last_checkpoint_edits);
-        info.mergeEdits(last_checkpoint_edits);
-    }
-    catch (Exception & e)
-    {
-        /// TODO: Better diagnostics.
-        throw;
-    }
 
     if (!checkpoints.empty() && checkpoint_wb_sequence == 0)
     {
@@ -60,16 +47,14 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
         while (!merging_queue.empty() && merging_queue.top()->fileIdLevel() <= last_checkpoint_file_id)
         {
             auto reader = merging_queue.top();
-            LOG_INFO(logger,
-                     storage_name << " Removing old PageFile: " + reader->belongingPageFile().toString()
-                                  << " after restore checkpoint PageFile_" << last_checkpoint_file_id.first << "_"
-                                  << last_checkpoint_file_id.second);
+            LOG_FMT_INFO(logger, "{} Removing old PageFile: {} after restore checkpoint PageFile_{}_{}", storage_name, reader->belongingPageFile().toString(), last_checkpoint_file_id.first, last_checkpoint_file_id.second);
             if (reader->writeBatchSequence() != 0)
             {
-                throw Exception("Try to remove old PageFile: " + reader->belongingPageFile().toString()
-                                    + " after restore checkpoint PageFile_" + DB::toString(last_checkpoint_file_id.first) + "_"
-                                    + DB::toString(last_checkpoint_file_id.second)
-                                    + ", but write batch sequence is not zero: " + DB::toString(reader->writeBatchSequence()),
+                throw Exception(fmt::format("Try to remove old PageFile: {} after restore checkpoint PageFile_{}_{}, but write batch sequence is not zero: {}",
+                                            reader->belongingPageFile().toString(),
+                                            last_checkpoint_file_id.first,
+                                            last_checkpoint_file_id.second,
+                                            reader->writeBatchSequence()),
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
@@ -78,12 +63,49 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
             merging_queue.pop();
         }
     }
-    LOG_INFO(logger,
-             storage_name << " restore " << info.toString() << " from checkpoint PageFile_" //
-                          << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second //
-                          << " sequence: " << checkpoint_wb_sequence);
+
+    LOG_FMT_INFO(logger,
+                 "{} restore  from checkpoint PageFile_{}_{} sequence: {}",
+                 storage_name,
+                 last_checkpoint_file_id.first,
+                 last_checkpoint_file_id.second,
+                 checkpoint_wb_sequence);
+
     // The latest checkpoint, the WriteBatch's sequence of latest checkpoint, old PageFiles that somehow have not been clean before
-    return {checkpoints.back(), checkpoint_wb_sequence, page_files_to_drop};
+    return std::make_tuple(checkpoints.back(), checkpoint_wb_sequence, page_files_to_drop);
+}
+
+template <class MergineQueue>
+static std::tuple<std::optional<PageFile>, std::optional<WriteBatch::SequenceID>, PageFileSet> //
+restoreFromCheckpoints(MergineQueue & merging_queue,
+                       PageStorage::VersionedPageEntries & version_set,
+                       PageStorage::StatisticsInfo & info,
+                       const String & storage_name,
+                       Poco::Logger * logger)
+{
+    std::optional<PageFile> checkpoint_file;
+    std::optional<WriteBatch::SequenceID> checkpoint_sequence;
+    PageFileSet page_files_to_remove;
+
+    PageEntriesEdit last_checkpoint_edits;
+
+    std::tie(checkpoint_file, checkpoint_sequence, page_files_to_remove) = restoreFromCheckpoints(merging_queue, storage_name, last_checkpoint_edits, logger);
+    if (checkpoint_file)
+    {
+        try
+        {
+            // Apply edits from latest checkpoint
+            version_set.apply(last_checkpoint_edits);
+            info.mergeEdits(last_checkpoint_edits);
+        }
+        catch (Exception & e)
+        {
+            /// TODO: Better diagnostics.
+            throw;
+        }
+    }
+
+    return {checkpoint_file, checkpoint_sequence, page_files_to_remove};
 }
 
 } // namespace DB::PS::V2

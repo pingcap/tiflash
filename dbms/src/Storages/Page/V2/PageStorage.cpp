@@ -239,7 +239,7 @@ void PageStorage::restore()
 #endif
 
         // If no checkpoint, we apply all edits.
-        // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
+        // Else restored from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
         // apply WriteBatch edits only if its WriteBatch sequence is larger than or equal to checkpoint.
         const auto cur_sequence = reader->writeBatchSequence();
