@@ -1432,6 +1432,44 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryGCTest, GCOnRefedEntries)
+{
+    // 10->entry1, 11->10=>11->entry1; del 10->entry1
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(10, entry1);
+        dir.apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.del(10);
+        dir.apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto [outdated_entries, outdated_external_ids] = dir.gc();
+        EXPECT_TRUE(outdated_external_ids.empty());
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    // del 11->entry1
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir.apply(std::move(edit));
+    }
+    // entry1 get removed
+    {
+        auto [outdated_entries, outdated_external_ids] = dir.gc();
+        EXPECT_TRUE(outdated_external_ids.empty());
+        EXPECT_EQ(1, outdated_entries.size());
+        EXPECT_TRUE(isSameEntry(entry1, *outdated_entries.begin()->begin()));
+    }
+}
+
+
 TEST_F(PageDirectoryGCTest, FullGCApply)
 try
 {
