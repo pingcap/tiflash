@@ -32,6 +32,25 @@ class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 
+struct ExternalPageCallbacks
+{
+    // For V2
+    // `v2_scanner` for scanning avaliable external page ids on disks.
+    // `v2_remover` will be called with living normal page ids after gc run a round, user should remove those
+    //              external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
+    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
+    using V2ExternalPagesScanner = std::function<PathAndIdsVec()>;
+    using V2ExternalPagesRemover
+        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
+    V2ExternalPagesScanner v2_scanner = nullptr;
+    V2ExternalPagesRemover v2_remover = nullptr;
+
+    // For V3
+    // `v3_remover` will be called with the external pages to be removed.
+    using V3ExternalPagesRemover = std::function<void(const std::set<PageId> & pending_remove_external_pages)>;
+    V3ExternalPagesRemover v3_remover = nullptr;
+};
+
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
  * will covered the old ones.
@@ -117,11 +136,6 @@ public:
     Config getSettings() const { return config; }
 
 
-    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
-    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
-
 public:
     static PageStoragePtr
     create(
@@ -179,10 +193,8 @@ public:
     // We may skip the GC to reduce useless reading by default.
     virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
 
-    // Register two callback:
-    // `scanner` for scanning avaliable external page ids.
-    // `remover` will be called with living normal page ids after gc run a round.
-    virtual void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) = 0;
+    // Register external pages GC callbacks
+    virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:

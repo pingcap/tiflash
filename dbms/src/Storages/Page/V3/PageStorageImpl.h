@@ -48,7 +48,7 @@ public:
 
     bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
-    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
@@ -75,8 +75,7 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPagesScanner external_pages_scanner = nullptr;
-    ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::V3ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 } // namespace PS::V3
