@@ -21,6 +21,7 @@ cmake "$SRCPATH" \
 make -j $NPROC tiflash
 
 cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
+install_name_tool -id @executable_path/libtiflash_proxy.dylib ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib
 cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib" "$install_dir/libtiflash_proxy.dylib"
 
 FILE="$install_dir/tiflash"
