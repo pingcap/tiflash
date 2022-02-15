@@ -538,7 +538,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
+                LOG_FMT_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
                 return {wait_idx_res, elapsed_secs};
             }
             }

@@ -58,9 +58,9 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         }
         else if (old_applied_index == new_index)
         {
-            LOG_WARNING(log,
-                        old_region->toString(false) << " already has same applied index, just ignore next process. "
-                                                    << "Please check log whether server crashed after successfully applied snapshot.");
+            LOG_FMT_WARNING(log,
+                            "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
+                            old_region->getDebugString());
             return;
         }
 
@@ -188,7 +188,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (old_region != nullptr)
         {
-            LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+            LOG_FMT_DEBUG(log, "{}: previous {}, new {}", __FUNCTION__, old_region->getDebugString(), new_region->getDebugString());
             {
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
