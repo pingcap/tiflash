@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
@@ -576,12 +577,21 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     }
 }
 
-void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & terminate_signals_counter, double wait_tick_time, double max_wait_tick_time)
+void WaitCheckRegionReady(
+    const TMTContext & tmt,
+    const std::atomic_size_t & terminate_signals_counter,
+    double wait_tick_time,
+    double max_wait_tick_time,
+    double get_wait_region_ready_timeout_sec)
 {
     constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
     Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
 
-    LOG_FMT_INFO(log, "start to check regions ready, min-wait-tick {}s, max-wait-tick {}s", wait_tick_time, max_wait_tick_time);
+    LOG_FMT_INFO(log,
+                 "start to check regions ready, min-wait-tick {}s, max-wait-tick {}s, wait-region-ready-timeout {:.3f}s",
+                 wait_tick_time,
+                 max_wait_tick_time,
+                 get_wait_region_ready_timeout_sec);
 
     std::unordered_set<RegionID> remain_regions;
     std::unordered_map<RegionID, uint64_t> regions_to_check;
@@ -591,7 +601,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
         tmt.getKVStore()->traverseRegions([&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
         total_regions_cnt = remain_regions.size();
     }
-    while (region_check_watch.elapsedSeconds() < tmt.waitRegionReadyTimeout() * batch_read_index_time_rate
+    while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec * batch_read_index_time_rate
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
@@ -642,16 +652,19 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
 
     if (!remain_regions.empty())
     {
-        LOG_WARNING(
-            log, remain_regions.size() << " regions CANNOT fetch latest commit-index from TiKV, (region-id): "; do {
-                for (auto && r : remain_regions)
-                {
-                    oss_internal_rare << "(" << r << ") ";
-                }
-            } while (0));
+        FmtBuffer buffer;
+        buffer.joinStr(
+            remain_regions.begin(),
+            remain_regions.end(),
+            [&](const auto & e, FmtBuffer & b) { b.fmtAppend("{}", e); },
+            " ");
+        LOG_FMT_WARNING(
+            log,
+            "{} regions CANNOT fetch latest commit-index from TiKV, (region-id): {}",
+            remain_regions.size(),
+            buffer.toString());
     }
-    while (region_check_watch.elapsedSeconds() < static_cast<double>(tmt.waitRegionReadyTimeout())
-           && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
+    do
     {
         for (auto it = regions_to_check.begin(); it != regions_to_check.end();)
         {
@@ -682,16 +695,27 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
                      wait_tick_time);
         std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(wait_tick_time * 1000)));
         wait_tick_time = std::min(max_wait_tick_time, wait_tick_time * 2);
-    }
+    } while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec
+             && terminate_signals_counter.load(std::memory_order_relaxed) == 0);
+
     if (!regions_to_check.empty())
     {
-        LOG_WARNING(
-            log, regions_to_check.size() << " regions CANNOT catch up with latest index, (region-id,latest-index): "; do {
-                for (auto && [region_id, latest_index] : regions_to_check)
+        FmtBuffer buffer;
+        buffer.joinStr(
+            regions_to_check.begin(),
+            regions_to_check.end(),
+            [&](const auto & e, FmtBuffer & b) {
+                if (auto r = tmt.getKVStore()->getRegion(e.first); r)
                 {
-                    oss_internal_rare << "(" << region_id << "," << latest_index << ") ";
+                    b.fmtAppend("{},{},{}", e.first, e.second, r->appliedIndex());
                 }
-            } while (0));
+                else
+                {
+                    b.fmtAppend("{},{},none", e.first, e.second);
+                }
+            },
+            " ");
+        LOG_FMT_WARNING(log, "{} regions CANNOT catch up with latest index, (region-id,latest-index,apply-index): {}", regions_to_check.size(), buffer.toString());
     }
 
     LOG_FMT_INFO(log,
@@ -704,9 +728,10 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
 {
     // wait interval to check region ready, not recommended to modify only if for tesing
     auto wait_region_ready_tick = tmt.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
-    const double max_wait_tick_time = 0 == wait_region_ready_tick ? 20.0 : static_cast<double>(tmt.waitRegionReadyTimeout());
+    auto wait_region_ready_timeout_sec = static_cast<double>(tmt.waitRegionReadyTimeout());
+    const double max_wait_tick_time = 0 == wait_region_ready_tick ? 20.0 : wait_region_ready_timeout_sec;
     double min_wait_tick_time = 0 == wait_region_ready_tick ? 2.5 : static_cast<double>(wait_region_ready_tick); // default tick in TiKV is about 2s (without hibernate-region)
-    return WaitCheckRegionReady(tmt, terminate_signals_counter, min_wait_tick_time, max_wait_tick_time);
+    return WaitCheckRegionReady(tmt, terminate_signals_counter, min_wait_tick_time, max_wait_tick_time, wait_region_ready_timeout_sec);
 }
 
 void KVStore::setStore(metapb::Store store_)

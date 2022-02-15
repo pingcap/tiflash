@@ -90,6 +90,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
 
     std::unordered_set<uint64_t> region_id_to_drop;
+    std::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;

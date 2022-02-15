@@ -120,6 +120,10 @@ void RegionKVStoreTest::testReadIndex()
 
         {
             kvs.asyncRunReadIndexWorkers();
+            SCOPE_EXIT({
+                kvs.stopReadIndexWorkers();
+            });
+
             auto tar_region_id = 9;
             {
                 auto task_lock = kvs.genTaskLock();
@@ -137,7 +141,7 @@ void RegionKVStoreTest::testReadIndex()
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReady(ctx.getTMTContext(), terminate_signals_counter, 1 / 1000.0, 20);
+                WaitCheckRegionReady(ctx.getTMTContext(), terminate_signals_counter, 1 / 1000.0, 20, 20 * 60);
             });
             SCOPE_EXIT({
                 t.join();
@@ -148,7 +152,32 @@ void RegionKVStoreTest::testReadIndex()
             ASSERT_EQ(
                 tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()),
                 EngineStoreApplyRes::None);
-            kvs.stopReadIndexWorkers();
+        }
+        {
+            kvs.asyncRunReadIndexWorkers();
+            SCOPE_EXIT({
+                kvs.stopReadIndexWorkers();
+            });
+
+            auto tar_region_id = 9;
+            {
+                ASSERT_EQ(proxy_instance.regions.at(tar_region_id)->getLatestCommitIndex(), 66);
+                proxy_instance.unsafeInvokeForTest([&](MockRaftStoreProxy & p) {
+                    p.region_id_to_error.emplace(tar_region_id);
+                    p.regions.at(2)->updateCommitIndex(6);
+                });
+            }
+
+            AsyncWaker::Notifier notifier;
+            const std::atomic_size_t terminate_signals_counter{};
+            std::thread t([&]() {
+                notifier.wake();
+                WaitCheckRegionReady(ctx.getTMTContext(), terminate_signals_counter, 1 / 1000.0, 2 / 1000.0, 5 / 1000.0);
+            });
+            SCOPE_EXIT({
+                t.join();
+            });
+            ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
         }
         kvs.asyncRunReadIndexWorkers();
         {

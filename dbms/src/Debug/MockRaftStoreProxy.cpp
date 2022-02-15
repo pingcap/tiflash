@@ -234,11 +234,13 @@ void MockRaftStoreProxy::runOneRound()
     while (!tasks.empty())
     {
         auto & t = *tasks.front();
-        if (region_id_to_drop.find(t.req.context().region_id()) != region_id_to_drop.end())
+        if (!region_id_to_drop.count(t.req.context().region_id()))
         {
+            if (region_id_to_error.count(t.req.context().region_id()))
+                t.update(false, true);
+            else
+                t.update(false, false);
         }
-        else
-            t.update();
         tasks.pop_front();
     }
 }
