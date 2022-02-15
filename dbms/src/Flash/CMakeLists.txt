@@ -4,6 +4,7 @@ add_headers_and_sources(flash_service .)
 add_headers_and_sources(flash_service ./Coprocessor)
 add_headers_and_sources(flash_service ./Mpp)
 add_headers_and_sources(flash_service ./Planner)
+add_headers_and_sources(flash_service ./Planner/plans)
 add_headers_and_sources(flash_service ./Statistics)
 
 add_library(flash_service ${flash_service_headers} ${flash_service_sources})

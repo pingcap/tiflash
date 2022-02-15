@@ -1,22 +1,26 @@
 #pragma once
 
 #include <Flash/Planner/PhysicalPlan.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
-class PhysicalLimit : public PhysicalPlan
+class PhysicalFilter : public PhysicalPlan
 {
 public:
-    PhysicalLimit(
+    PhysicalFilter(
         const String & executor_id_,
-        const Names & schema_,
-        size_t limit_)
-        : PhysicalPlan(executor_id_, PlanType::Limit, schema_)
-        , limit(limit_)
+        const NamesAndTypes & schema_,
+        const String & filter_column_,
+        const ExpressionActionsPtr & before_filter_actions_)
+        : PhysicalPlan(executor_id_, PlanType::Selection, schema_)
+        , filter_column(filter_column_)
+        , before_filter_actions(before_filter_actions_)
     {}
 
     PhysicalPlanPtr children(size_t) const override
     {
+        assert(child);
         return child;
     }
 
@@ -29,12 +33,13 @@ public:
     void appendChild(const PhysicalPlanPtr & new_child) override
     {
         assert(!child);
+        assert(new_child);
         child = new_child;
     }
 
     size_t childrenSize() const override { return 1; };
 
-    void transform(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void transform(DAGPipeline & pipeline, const Context & context, size_t max_streams) override;
 
     bool finalize(const Names & parent_require) override;
 
@@ -42,6 +47,7 @@ public:
 
 private:
     PhysicalPlanPtr child;
-    size_t limit;
+    String filter_column;
+    ExpressionActionsPtr before_filter_actions;
 };
 } // namespace DB

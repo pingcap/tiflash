@@ -11,7 +11,7 @@ class PhysicalAggregation : public PhysicalPlan
 public:
     PhysicalAggregation(
         const String & executor_id_,
-        const Names & schema_,
+        const NamesAndTypes & schema_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
         const TiDB::TiDBCollators & aggregation_collators_,
@@ -27,6 +27,7 @@ public:
 
     PhysicalPlanPtr children(size_t) const override
     {
+        assert(child);
         return child;
     }
 
@@ -39,12 +40,13 @@ public:
     void appendChild(const PhysicalPlanPtr & new_child) override
     {
         assert(!child);
+        assert(new_child);
         child = new_child;
     }
 
     size_t childrenSize() const override { return 1; };
 
-    void transform(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void transform(DAGPipeline & pipeline, const Context & context, size_t max_streams) override;
 
     bool finalize(const Names & parent_require) override;
 

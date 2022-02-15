@@ -28,6 +28,7 @@ enum class ExtraCastAfterTSMode
 };
 
 class DAGExpressionAnalyzerHelper;
+class ToPhysicalPlanBuilder;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
 class DAGExpressionAnalyzer : private boost::noncopyable
@@ -205,6 +206,7 @@ private:
     Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
+    friend class ToPhysicalPlanBuilder;
 };
 
 } // namespace DB

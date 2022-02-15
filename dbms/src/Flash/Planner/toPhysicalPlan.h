@@ -4,13 +4,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Planner/PhysicalAggregation.h>
-#include <Flash/Planner/PhysicalFilter.h>
-#include <Flash/Planner/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/PhysicalPlan.h>
-#include <Flash/Planner/PhysicalProjection.h>
-#include <Flash/Planner/PhysicalSource.h>
-#include <Flash/Planner/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalProjection.h>
+#include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Planner/toPhysicalPlan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -27,16 +27,26 @@ public:
         , settings(context.getSettingsRef())
     {}
 
-    std::shared_ptr<PhysicalAggregation> toPhysicalPlan(const String & executor_id, const tipb::Aggregation & aggregation);
-    std::shared_ptr<PhysicalFilter> toPhysicalPlan(const String & executor_id, const tipb::Selection & selection);
-    std::shared_ptr<PhysicalLimit> toPhysicalPlan(const String & executor_id, const tipb::Limit & limit);
-    std::shared_ptr<PhysicalProjection> toPhysicalPlan(const String & executor_id, const tipb::Projection & projection);
-    std::shared_ptr<PhysicalTopN> toPhysicalPlan(const String & executor_id, const tipb::TopN & top_n);
-    std::shared_ptr<PhysicalSource> toPhysicalPlan(const String & executor_id, const Names & source_schema, const Block & source_sample_block);
+    void toPhysicalPlan(const String & executor_id, const tipb::Aggregation & aggregation);
+    void toPhysicalPlan(const String & executor_id, const tipb::Selection & selection);
+    void toPhysicalPlan(const String & executor_id, const tipb::Limit & limit);
+    void toPhysicalPlan(const String & executor_id, const tipb::Projection & projection);
+    void toPhysicalPlan(const String & executor_id, const tipb::TopN & top_n);
+    void toPhysicalPlan(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block);
 
+    void appendNonRootFinalProjection(const String & column_prefix);
+    void appendRootFinalProjection(
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
 private:
+    ExpressionActionsPtr newActionsForNewPlan();
+
+    PhysicalPlanPtr cur_plan;
+
     Context & context;
     Settings settings;
-    Names schema;
+    NamesAndTypes schema;
 };
 } // namespace DB

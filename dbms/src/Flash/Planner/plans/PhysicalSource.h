@@ -10,7 +10,7 @@ class PhysicalSource : public PhysicalPlan
 public:
     PhysicalSource(
         const String & executor_id_,
-        const Names & schema_,
+        const NamesAndTypes & schema_,
         const Block & sample_block_)
         : PhysicalPlan(executor_id_, PlanType::Source, schema_)
         , sample_block(sample_block_)
@@ -18,22 +18,22 @@ public:
 
     PhysicalPlanPtr children(size_t) const override
     {
-        throw Exception("");
+        throw Exception("the children size of PhysicalSource is zero");
     }
 
     void setChild(size_t, const PhysicalPlanPtr &) override
     {
-        throw Exception("");
+        throw Exception("the children size of PhysicalSource is zero");
     }
 
     void appendChild(const PhysicalPlanPtr &) override
     {
-        throw Exception("");
+        throw Exception("the children size of PhysicalSource is zero");
     }
 
     size_t childrenSize() const override { return 0; };
 
-    void transform(DAGPipeline &, Context &, size_t) override {}
+    void transform(DAGPipeline &, const Context &, size_t) override {}
 
     bool finalize(const Names &) override { return false; }
 

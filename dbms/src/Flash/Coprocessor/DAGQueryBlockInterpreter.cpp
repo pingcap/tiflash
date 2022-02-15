@@ -25,12 +25,12 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Planner/PhysicalAggregation.h>
-#include <Flash/Planner/PhysicalFilter.h>
-#include <Flash/Planner/PhysicalLimit.h>
-#include <Flash/Planner/PhysicalProjection.h>
-#include <Flash/Planner/PhysicalSource.h>
-#include <Flash/Planner/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalProjection.h>
+#include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -115,13 +115,7 @@ AnalysisResult analyzeExpressions(
     NamesWithAliases & final_project,
     const Block & source_sample_block)
 {
-    auto get_schema = [&analyzer]() {
-        Names schema;
-        for (const auto & column : analyzer.getCurrentInputColumns())
-            schema.push_back(column.name);
-        return schema;
-    };
-    PhysicalPlanPtr plan = std::make_shared<PhysicalSource>(query_block.source_name, get_schema(), source_sample_block);
+    PhysicalPlanPtr plan = std::make_shared<PhysicalSource>(query_block.source_name, analyzer.getCurrentInputColumns(), source_sample_block);
 
     AnalysisResult res;
     ExpressionActionsChain chain;
@@ -135,7 +129,7 @@ AnalysisResult analyzeExpressions(
         res.before_where = chain.getLastActions();
         chain.addStep();
 
-        auto filter_plan = std::make_shared<PhysicalFilter>(query_block.selection_name, get_schema(), res.filter_column_name, res.before_where);
+        auto filter_plan = std::make_shared<PhysicalFilter>(query_block.selection_name, analyzer.getCurrentInputColumns(), res.filter_column_name, res.before_where);
         filter_plan->appendChild(plan);
         plan = filter_plan;
     }
@@ -166,7 +160,7 @@ AnalysisResult analyzeExpressions(
 
         auto agg_plan = std::make_shared<PhysicalAggregation>(
             query_block.aggregation_name,
-            get_schema(),
+            analyzer.getCurrentInputColumns(),
             res.before_aggregation,
             res.aggregation_keys,
             res.aggregation_collators,
@@ -184,7 +178,7 @@ AnalysisResult analyzeExpressions(
             res.before_having = chain.getLastActions();
             chain.addStep();
 
-            auto having_plan = std::make_shared<PhysicalFilter>(query_block.having_name, get_schema(), res.having_column_name, res.before_having);
+            auto having_plan = std::make_shared<PhysicalFilter>(query_block.having_name, analyzer.getCurrentInputColumns(), res.having_column_name, res.before_having);
             having_plan->appendChild(plan);
             plan = having_plan;
         }
@@ -197,7 +191,7 @@ AnalysisResult analyzeExpressions(
         SortDescription order_descr = getSortDescription(res.order_columns, query_block.limit_or_topn->topn().order_by());
         auto top_n_plan = std::make_shared<PhysicalTopN>(
             query_block.limit_or_topn_name,
-            get_schema(),
+            analyzer.getCurrentInputColumns(),
             order_descr,
             chain.getLastActions(),
             query_block.limit_or_topn->topn().limit());
@@ -207,7 +201,7 @@ AnalysisResult analyzeExpressions(
 
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeLimit)
     {
-        auto limit_plan = std::make_shared<PhysicalLimit>(query_block.limit_or_topn_name, get_schema(), query_block.limit_or_topn->limit().limit());
+        auto limit_plan = std::make_shared<PhysicalLimit>(query_block.limit_or_topn_name, analyzer.getCurrentInputColumns(), query_block.limit_or_topn->limit().limit());
         limit_plan->appendChild(plan);
         plan = limit_plan;
     }
@@ -224,7 +218,7 @@ AnalysisResult analyzeExpressions(
             chain,
             query_block.qb_column_prefix);
 
-    auto project_plan = std::make_shared<PhysicalProjection>(query_block.source_name, get_schema(), chain.getLastActions());
+    auto project_plan = std::make_shared<PhysicalProjection>(query_block.source_name, analyzer.getCurrentInputColumns(), chain.getLastActions());
     project_plan->appendChild(plan);
     plan = project_plan;
 

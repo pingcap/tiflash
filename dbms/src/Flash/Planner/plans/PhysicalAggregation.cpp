@@ -5,12 +5,13 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Interpreters/Context.h>
+#include <Flash/Planner/FinalizeHelper.h>
 
 namespace DB
 {
-void PhysicalAggregation::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalAggregation::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
 
@@ -66,7 +67,7 @@ void PhysicalAggregation::transform(DAGPipeline & pipeline, Context & context, s
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             logger);
         pipeline.streams.resize(1);
-
+        recordProfileStreams(pipeline, *context.getDAGContext());
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, logger);
     }
     else
@@ -85,6 +86,7 @@ void PhysicalAggregation::transform(DAGPipeline & pipeline, Context & context, s
             context.getFileProvider(),
             true,
             logger);
+        recordProfileStreams(pipeline, *context.getDAGContext());
     }
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, cast_after_agg, logger); });
@@ -92,25 +94,13 @@ void PhysicalAggregation::transform(DAGPipeline & pipeline, Context & context, s
 
 bool PhysicalAggregation::finalize(const Names & parent_require)
 {
-    NameSet schema_require_set;
-    for (const auto & name : schema)
-        schema_require_set.insert(name);
-    for (const auto & parent_require_column : parent_require)
-    {
-        if (schema_require_set.find(parent_require_column) == schema_require_set.end())
-            throw Exception("");
-    }
+    checkSchemaContainsParentRequire(schema, parent_require);
 
-    cast_after_agg->finalize(schema);
+    cast_after_agg->finalize(schemaToNames(schema));
     before_agg_actions->finalize(cast_after_agg->getRequiredColumns());
 
     if (child->finalize(before_agg_actions->getRequiredColumns()))
-    {
-        size_t columns_from_previous = child->getSampleBlock().columns();
-        if (!before_agg_actions->getRequiredColumnsWithTypes().empty()
-            && columns_from_previous > before_agg_actions->getRequiredColumnsWithTypes().size())
-            before_agg_actions->prependProjectInput();
-    }
+        prependProjectInputIfNeed(before_agg_actions, child->getSampleBlock().columns());
 
     return false;
 }

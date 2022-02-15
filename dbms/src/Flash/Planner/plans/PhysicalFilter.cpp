@@ -2,17 +2,18 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Planner/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Flash/Planner/FinalizeHelper.h>
 
 namespace DB
 {
-void PhysicalFilter::transform(DAGPipeline & pipeline, Context & context, size_t)
+void PhysicalFilter::transform(DAGPipeline & pipeline, const Context & context, size_t)
 {
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, logger); });
+    recordProfileStreams(pipeline, *context.getDAGContext());
 }
 
 bool PhysicalFilter::finalize(const Names & parent_require)
@@ -22,12 +23,7 @@ bool PhysicalFilter::finalize(const Names & parent_require)
     before_filter_actions->finalize(required_output);
 
     if (child->finalize(before_filter_actions->getRequiredColumns()))
-    {
-        size_t columns_from_previous = child->getSampleBlock().columns();
-        if (!before_filter_actions->getRequiredColumnsWithTypes().empty()
-            && columns_from_previous > before_filter_actions->getRequiredColumnsWithTypes().size())
-            before_filter_actions->prependProjectInput();
-    }
+        prependProjectInputIfNeed(before_filter_actions, child->getSampleBlock().columns());
 
     return true;
 }
