@@ -113,6 +113,13 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+    std::pair<bool, Names> buildJoinKey(
+        ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
+
 private:
     void appendCastAfterAgg(
         ExpressionActionsChain & chain,

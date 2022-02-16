@@ -568,22 +568,19 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 
-bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
-    ExpressionActionsChain & chain,
+std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
+    ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const DataTypes & key_types,
-    Names & key_names,
     bool left,
-    bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name)
+    bool is_right_out_join)
 {
-    bool ret = false;
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
-    UniqueNameGenerator unique_name_generator;
+    bool has_actions_of_keys = false;
 
-    for (int i = 0; i < keys.size(); i++)
+    Names key_names;
+
+    UniqueNameGenerator unique_name_generator;
+    for (int i = 0; i < keys.size(); ++i)
     {
         const auto & key = keys.at(i);
         bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
@@ -628,17 +625,34 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
             }
         }
         key_names.push_back(key_name);
-        ret |= has_actions;
+        has_actions_of_keys |= has_actions;
     }
+
+    return std::make_pair(has_actions_of_keys, std::move(key_names));
+}
+
+bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
+    ExpressionActionsChain & chain,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types,
+    Names & key_names,
+    bool left,
+    bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    String & filter_column_name)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+
+    bool ret = false;
+    std::tie(ret, key_names) = buildJoinKey(actions, keys, key_types, left, is_right_out_join);
 
     if (!filters.empty())
     {
         ret = true;
         std::vector<const tipb::Expr *> filter_vector;
         for (const auto & c : filters)
-        {
             filter_vector.push_back(&c);
-        }
         filter_column_name = appendWhere(chain, filter_vector);
     }
     /// remove useless columns to avoid duplicate columns
