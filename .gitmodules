@@ -62,14 +62,14 @@
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
 	url = https://github.com/protocolbuffers/protobuf
-	branch = v3.8.0
+	branch = v3.19.4
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp
 [submodule "contrib/grpc"]
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
- 	branch = v1.26.0
+ 	branch = v1.44.0
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
