@@ -392,25 +392,6 @@ String DAGExpressionAnalyzer::applyFunction(
     return result_name;
 }
 
-String DAGExpressionAnalyzer::buildSingleConditionAsUint8(
-    const tipb::Expr & condition,
-    ExpressionActionsPtr & actions)
-{
-    String filter_column_name = getActions(condition, actions, true);
-    if (isColumnExpr(condition)
-        && (!exprHasValidFieldType(condition)
-            /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-            || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(condition.field_type()))))
-    {
-        /// FilterBlockInputStream will CHANGE the filter column inplace, so
-        /// filter column should never be a columnRef in DAG request, otherwise
-        /// for queries like select c1 from t where c1 will got wrong result
-        /// as after FilterBlockInputStream, c1 will become a const column of 1
-        filter_column_name = convertToUInt8(actions, filter_column_name);
-    }
-    return filter_column_name;
-}
-
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
     const std::vector<const tipb::Expr *> & conditions)
@@ -765,65 +746,6 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
     for (const auto & name : final_project)
         chain.steps.back().required_output.push_back(name.first);
     return final_project;
-}
-
-NamesWithAliases DAGExpressionAnalyzer::appendCastForRootProject(
-    ExpressionActionsPtr & actions,
-    const std::vector<Int32> & output_offsets,
-    bool need_append_timezone_cast,
-    const std::vector<tipb::FieldType> & require_schema,
-    const String & column_prefix,
-    const BoolVec & need_append_type_cast_vec)
-{
-    /// for all the columns that need to be returned, if the type is timestamp, then convert
-    /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
-
-    tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-    String tz_col;
-    String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-    std::vector<Int32> casted(require_schema.size(), 0);
-    std::unordered_map<String, String> casted_name_map;
-    UniqueNameGenerator unique_name_generator;
-    NamesWithAliases final_project_aliases;
-
-    for (size_t index = 0; index < output_offsets.size(); ++index)
-    {
-        UInt32 i = output_offsets[index];
-        if ((need_append_timezone_cast && require_schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
-        {
-            const auto & it = casted_name_map.find(source_columns[i].name);
-            if (it == casted_name_map.end())
-            {
-                /// first add timestamp cast
-                String updated_name = source_columns[i].name;
-                if (need_append_timezone_cast && require_schema[i].tp() == TiDB::TypeTimestamp)
-                {
-                    if (tz_col.length() == 0)
-                        tz_col = getActions(tz_expr, actions);
-                    updated_name = appendTimeZoneCast(tz_col, source_columns[i].name, tz_cast_func_name, actions);
-                }
-                /// then add type cast
-                if (need_append_type_cast_vec[index])
-                {
-                    updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(require_schema[i]), actions, updated_name);
-                }
-                final_project_aliases.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
-                casted_name_map[source_columns[i].name] = updated_name;
-            }
-            else
-            {
-                final_project_aliases.emplace_back(it->second, unique_name_generator.toUniqueName(column_prefix + it->second));
-            }
-        }
-        else
-        {
-            final_project_aliases.emplace_back(
-                source_columns[i].name,
-                unique_name_generator.toUniqueName(column_prefix + source_columns[i].name));
-        }
-    }
-
-    return final_project_aliases;
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
