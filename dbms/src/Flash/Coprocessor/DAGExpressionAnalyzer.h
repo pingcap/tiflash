@@ -204,7 +204,7 @@ private:
         const String & column_prefix,
         const std::vector<Int32> & output_offsets) const;
 
-    NamesWithAliases appendCastForRootFinalProjection(
+    void appendCastForRootFinalProjection(
         ExpressionActionsPtr & actions,
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets,

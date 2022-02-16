@@ -749,7 +749,7 @@ NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
     return final_project_aliases;
 }
 
-NamesWithAliases DAGExpressionAnalyzer::appendCastForRootFinalProjection(
+void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     ExpressionActionsPtr & actions,
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets,
@@ -771,6 +771,8 @@ NamesWithAliases DAGExpressionAnalyzer::appendCastForRootFinalProjection(
         assert(offset < require_schema.size());
         assert(offset < after_cast_columns.size());
 
+        /// for all the columns that need to be returned, if the type is timestamp, then convert
+        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         if ((need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
         {
             const auto & it = had_casted_map.find(current_columns[offset].name);
@@ -817,7 +819,7 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::checkIfCastIsRequired(
     const auto & current_columns = getCurrentInputColumns();
     bool need_append_type_cast = false;
     BoolVec need_append_type_cast_vec;
-    /// we need to append type cast for root block if necessary
+    /// we need to append type cast for root final projection if necessary
     for (UInt32 i : output_offsets)
     {
         const auto & actual_type = current_columns[i].type;
@@ -850,12 +852,8 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
 
     if (need_append_timezone_cast || need_append_type_cast)
     {
-        /// for all the columns that need to be returned, if the type is timestamp, then convert
-        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         initChain(chain, getCurrentInputColumns());
-        ExpressionActionsChain::Step & step = chain.steps.back();
-
-        appendCastForRootFinalProjection(step.actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+        appendCastForRootFinalProjection(chain.steps.back().actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
     }
 
     NamesWithAliases final_project = genRootFinalProjectAliases(column_prefix, output_offsets);
