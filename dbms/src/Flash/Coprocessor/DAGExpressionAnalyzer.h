@@ -201,7 +201,7 @@ private:
     String buildFilterColumn(
         ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
-        
+
     NamesAndTypes buildOrderColumns(
         ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> order_by);
