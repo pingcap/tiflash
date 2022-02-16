@@ -63,6 +63,7 @@
 	path = contrib/protobuf
 	url = https://github.com/protocolbuffers/protobuf
 	branch = v3.19.4
+	ignore = dirty
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp
@@ -70,6 +71,7 @@
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
  	branch = v1.44.0
+	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
