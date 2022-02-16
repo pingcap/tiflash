@@ -8,23 +8,6 @@
 
 namespace DB
 {
-namespace
-{
-tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
-{
-    if (dag_timezone_info.is_name_based)
-        return constructStringLiteralTiExpr(dag_timezone_info.timezone_name);
-    else
-        return constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
-}
-
-bool isUInt8Type(const DataTypePtr & type)
-{
-    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
-    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
-}
-} // namespace
-
 ExpressionActionsPtr ToPhysicalPlanBuilder::newActionsForNewPlan()
 {
     assert(!schema.empty());
@@ -56,7 +39,7 @@ void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tip
         if (isColumnExpr(selection.conditions(0))
             && (!exprHasValidFieldType(selection.conditions(0))
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(selection.conditions(0).field_type()))))
+                || DAGExpressionAnalyzerHelper::isUInt8Type(getDataTypeByFieldTypeForComputingLayer(selection.conditions(0).field_type()))))
         {
             /// FilterBlockInputStream will CHANGE the filter column inplace, so
             /// filter column should never be a columnRef in DAG request, otherwise
@@ -202,7 +185,7 @@ void ToPhysicalPlanBuilder::appendRootFinalProjection(
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         DAGExpressionAnalyzer analyzer{schema, context};
 
-        tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+        tipb::Expr tz_expr = DAGExpressionAnalyzerHelper::constructTZExpr(context.getTimezoneInfo());
         String tz_col;
         String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
         std::vector<Int32> casted(require_schema.size(), 0);

@@ -378,6 +378,20 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
 }
 
+tipb::Expr DAGExpressionAnalyzerHelper::constructTZExpr(const TimezoneInfo & dag_timezone_info)
+{
+    if (dag_timezone_info.is_name_based)
+        return constructStringLiteralTiExpr(dag_timezone_info.timezone_name);
+    else
+        return constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
+}
+
+bool DAGExpressionAnalyzerHelper::isUInt8Type(const DataTypePtr & type)
+{
+    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
+    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
+}
+
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
     {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
      {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},

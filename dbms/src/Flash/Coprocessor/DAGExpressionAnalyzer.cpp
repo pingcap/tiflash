@@ -337,12 +337,6 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
-bool isUInt8Type(const DataTypePtr & type)
-{
-    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
-    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
-}
-
 String DAGExpressionAnalyzer::applyFunction(
     const String & func_name,
     const Names & arg_names,
@@ -372,7 +366,7 @@ String DAGExpressionAnalyzer::appendWhere(
         if (isColumnExpr(*conditions[0])
             && (!exprHasValidFieldType(*conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+                || DAGExpressionAnalyzerHelper::isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
         {
             /// FilterBlockInputStream will CHANGE the filter column inplace, so
             /// filter column should never be a columnRef in DAG request, otherwise
@@ -471,14 +465,6 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
     return source_columns;
 }
 
-tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
-{
-    if (dag_timezone_info.is_name_based)
-        return constructStringLiteralTiExpr(dag_timezone_info.timezone_name);
-    else
-        return constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
-}
-
 String DAGExpressionAnalyzer::appendTimeZoneCast(
     const String & tz_col,
     const String & ts_col,
@@ -498,7 +484,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.getLastStep();
     // For TimeZone
-    tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+    tipb::Expr tz_expr = DAGExpressionAnalyzerHelper::constructTZExpr(context.getTimezoneInfo());
     String tz_col = getActions(tz_expr, step.actions);
     static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
     static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
@@ -776,7 +762,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         initChain(chain, current_columns);
         ExpressionActionsChain::Step & step = chain.steps.back();
 
-        tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+        tipb::Expr tz_expr = DAGExpressionAnalyzerHelper::constructTZExpr(context.getTimezoneInfo());
         String tz_col;
         String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
         std::vector<Int32> casted(schema.size(), 0);
@@ -835,11 +821,11 @@ String DAGExpressionAnalyzer::alignReturnType(
     bool force_uint8)
 {
     DataTypePtr orig_type = actions->getSampleBlock().getByName(expr_name).type;
-    if (force_uint8 && isUInt8Type(orig_type))
+    if (force_uint8 && DAGExpressionAnalyzerHelper::isUInt8Type(orig_type))
         return expr_name;
     String updated_name = appendCastIfNeeded(expr, actions, expr_name);
     DataTypePtr updated_type = actions->getSampleBlock().getByName(updated_name).type;
-    if (force_uint8 && !isUInt8Type(updated_type))
+    if (force_uint8 && !DAGExpressionAnalyzerHelper::isUInt8Type(updated_type))
         updated_name = convertToUInt8(actions, updated_name);
     return updated_name;
 }
@@ -938,7 +924,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
         {
             /// append timezone cast for timestamp literal
-            tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+            tipb::Expr tz_expr = DAGExpressionAnalyzerHelper::constructTZExpr(context.getTimezoneInfo());
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffsetFromUTC";
             String tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
