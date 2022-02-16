@@ -44,7 +44,7 @@ class MPPTaskManager : private boost::noncopyable
 
 public:
     MPPTaskManager();
-    ~MPPTaskManager();
+    ~MPPTaskManager() = default;
 
     std::vector<UInt64> getCurrentQueries();
 

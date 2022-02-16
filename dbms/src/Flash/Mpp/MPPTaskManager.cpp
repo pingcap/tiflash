@@ -139,8 +139,6 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
 }
 
-MPPTaskManager::~MPPTaskManager() {}
-
 std::vector<UInt64> MPPTaskManager::getCurrentQueries()
 {
     std::vector<UInt64> ret;
