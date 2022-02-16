@@ -1808,7 +1808,7 @@ private:
                 // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
                 if constexpr (std::is_integral_v<FromFieldType>)
                 {
-                    from_scaled_prec = IntPrec<FromFieldType>::real_prec + to_decimal_scale;
+                    from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
                 }
                 else
                 {
@@ -1874,7 +1874,7 @@ private:
     }
 
     // Determine CastInternalType template argument.
-    // rule: from_scaled_prec <= (Intxxx::real_prec - 1)
+    // rule: from_scaled_prec <= (Intxxx::prec - 1)
     // from_scaled_prec is the scale for result of max_from_val * 10^to_scale, e.g. from_val_prec + scale_diff.
     // NOTE: CastInternalType only works for cast(int/enum/decimal as decimal). cast(real/string as decimal) will ignore it.
     template <typename FromDataType, typename ToDataType, bool return_nullable>
@@ -1889,19 +1889,19 @@ private:
             from_scaled_prec = std::max(from_scaled_prec, decimal_type->getPrec());
         }
 
-        if (from_scaled_prec <= IntPrec<Int32>::real_prec - 1)
+        if (from_scaled_prec <= IntPrec<Int32>::prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int32>(decimal_type, can_skip);
         }
-        else if (from_scaled_prec <= IntPrec<Int64>::real_prec - 1)
+        else if (from_scaled_prec <= IntPrec<Int64>::prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int64>(decimal_type, can_skip);
         }
-        else if (from_scaled_prec <= IntPrec<Int128>::real_prec - 1)
+        else if (from_scaled_prec <= IntPrec<Int128>::prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int128>(decimal_type, can_skip);
         }
-        else if (from_scaled_prec <= IntPrec<Int256>::real_prec - 1)
+        else if (from_scaled_prec <= IntPrec<Int256>::prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int256>(decimal_type, can_skip);
         }
