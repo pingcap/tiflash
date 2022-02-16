@@ -198,6 +198,23 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
+
+    NamesWithAliases genRootFinalProjectAliases(
+        const String & column_prefix,
+        const std::vector<Int32> & output_offsets) const;
+
+    NamesWithAliases appendCastForRootFinalProjection(
+        ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        bool need_append_timezone_cast,
+        const BoolVec & need_append_type_cast_vec);
+
+    std::pair<bool, BoolVec> checkIfCastIsRequired(
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets);
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
