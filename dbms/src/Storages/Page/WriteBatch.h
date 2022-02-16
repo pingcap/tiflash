@@ -26,6 +26,10 @@ public:
         // Create or update a Page. Now only used by GC.
         // Compare to `PUT`, this type won't create the RefPage{id} -> Page{id} by default.
         UPSERT = 3,
+        // Create an external page.
+        // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
+        // to get its lifetime management correct.
+        PUT_EXTERNAL = 4,
     };
 
     using SequenceID = UInt64;
@@ -86,7 +90,7 @@ public:
     void putExternal(PageId page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
-        Write w{WriteType::PUT, page_id, tag, nullptr, 0, 0, {}, 0, 0, {}};
+        Write w{WriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, 0, {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 

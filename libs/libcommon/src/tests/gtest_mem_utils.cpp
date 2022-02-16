@@ -76,8 +76,8 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
     aligned2 += 23;
@@ -103,8 +103,8 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 
@@ -283,8 +283,8 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 
@@ -311,8 +311,8 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 

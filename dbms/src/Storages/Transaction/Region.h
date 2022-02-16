@@ -114,7 +114,7 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    std::string getDebugString(std::stringstream & ss) const;
+    std::string getDebugString() const;
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -141,8 +141,6 @@ public:
 
         return region1.meta == region2.meta && region1.data == region2.data;
     }
-
-    ReadIndexResult learnerRead(UInt64 start_ts);
 
     bool checkIndex(UInt64 index) const;
 
