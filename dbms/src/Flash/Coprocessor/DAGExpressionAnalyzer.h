@@ -115,7 +115,7 @@ public:
 
 private:
     void appendCastAfterAgg(
-        ExpressionActionsChain & chain,
+        ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -127,7 +127,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -135,11 +135,33 @@ private:
 
     void buildCommonAggFunc(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
+
+    void buildAggGroupBy(
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    String buildSingleConditionAsUint8(
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    NamesWithAliases appendCastForRootProject(
+        ExpressionActionsPtr & actions,
+        const std::vector<Int32> & output_offsets,
+        bool need_append_timezone_cast,
+        const std::vector<tipb::FieldType> & require_schema,
+        const String & column_prefix,
+        const BoolVec & need_append_type_cast_vec);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
