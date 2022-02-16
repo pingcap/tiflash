@@ -194,12 +194,14 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.TemplateUsingCase
     value: lower_case
+  - key: readability-identifier-naming.TypeTemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeTemplateParameterIgnoredRegexp
+    value: 'expr-type'
+    # LLVM bug: https://stackoverflow.com/questions/68475958/clang-tidy-emits-warning-when-compiling-with-c20-enabled
   - key: readability-identifier-naming.TypedefCase
     value: CamelCase
   - key: readability-identifier-naming.UnionCase
     value: CamelCase
   - key: readability-identifier-naming.UsingCase
     value: CamelCase
-  # LLVM bug: https://stackoverflow.com/questions/68475958/clang-tidy-emits-warning-when-compiling-with-c20-enabled
-  # - key: readability-identifier-naming.TypeTemplateParameterCase
-  #  value: CamelCase
