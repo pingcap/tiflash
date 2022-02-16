@@ -18,6 +18,8 @@ extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const Ti
 
 extern std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true);
 extern void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
+extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
+extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
 
 namespace tests
 {
@@ -287,6 +289,55 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
                 rollback_merge->set_commit(merge_state.commit());
             }
         }
+        region->setStateApplying();
+        try
+        {
+            kvs.handleAdminRaftCmd(std::move(request),
+                                   std::move(response),
+                                   region_id,
+                                   32,
+                                   6,
+                                   tmt);
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "execRollbackMerge: region state is Applying, expect Merging");
+        }
+        ASSERT_EQ(region->peerState(), raft_serverpb::PeerState::Applying);
+        region->setPeerState(raft_serverpb::PeerState::Merging);
+
+        region->meta.region_state.getMutMergeState().set_commit(1234);
+        try
+        {
+            kvs.handleAdminRaftCmd(std::move(request),
+                                   std::move(response),
+                                   region_id,
+                                   32,
+                                   6,
+                                   tmt);
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "execRollbackMerge: merge commit index is 1234, expect 31");
+        }
+        region->meta.region_state.getMutMergeState().set_commit(31);
+    }
+    {
+        auto region = kvs.getRegion(region_id);
+
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        {
+            request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
+
+            auto * rollback_merge = request.mutable_rollback_merge();
+            {
+                auto merge_state = region->getMergeState();
+                rollback_merge->set_commit(merge_state.commit());
+            }
+        }
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -497,6 +548,45 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
                                6,
                                tmt);
         ASSERT_EQ(source_region->peerState(), raft_serverpb::PeerState::Merging);
+    }
+
+    {
+        auto source_id = 7, target_id = 1;
+        auto source_region = kvs.getRegion(source_id);
+        raft_cmdpb::AdminRequest request;
+        {
+            request.set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
+            auto * commit_merge = request.mutable_commit_merge();
+            {
+                commit_merge->set_commit(source_region->appliedIndex());
+                *commit_merge->mutable_source() = source_region->getMetaRegion();
+            }
+        }
+        source_region->setStateApplying();
+        source_region->makeRaftCommandDelegate(kvs.genTaskLock());
+        const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
+        try
+        {
+            kvs.getRegion(target_id)->meta.makeRaftCommandDelegate().checkBeforeCommitMerge(request, source_region_meta_delegate);
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "checkBeforeCommitMerge: unexpected state Applying of source 1");
+        }
+        source_region->setPeerState(raft_serverpb::PeerState::Normal);
+        {
+            request.mutable_commit_merge()->mutable_source()->mutable_start_key()->clear();
+        }
+        try
+        {
+            kvs.getRegion(target_id)->meta.makeRaftCommandDelegate().checkBeforeCommitMerge(request, source_region_meta_delegate);
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "checkBeforeCommitMerge: source region not match exist region meta");
+        }
     }
 
     {
@@ -1003,6 +1093,43 @@ void test_mergeresult()
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "", "x"), createRegionInfo(1000, "x", "")).source_at_left, true);
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", "y"), createRegionInfo(1000, "y", "z")).source_at_left, true);
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "y", "z"), createRegionInfo(1000, "x", "y")).source_at_left, false);
+
+    {
+        RegionState region_state;
+        bool source_at_left;
+        RegionState source_region_state;
+
+        region_state.setStartKey(RecordKVFormat::genKey(1, 0));
+        region_state.setEndKey(RecordKVFormat::genKey(1, 10));
+
+        source_region_state.setStartKey(RecordKVFormat::genKey(1, 10));
+        source_region_state.setEndKey(RecordKVFormat::genKey(1, 20));
+
+        source_at_left = false;
+
+        ChangeRegionStateRange(region_state, source_at_left, source_region_state);
+
+        ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(1, 0));
+        ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(1, 20));
+    }
+    {
+        RegionState region_state;
+        bool source_at_left;
+        RegionState source_region_state;
+
+        region_state.setStartKey(RecordKVFormat::genKey(2, 5));
+        region_state.setEndKey(RecordKVFormat::genKey(2, 10));
+
+        source_region_state.setStartKey(RecordKVFormat::genKey(2, 0));
+        source_region_state.setEndKey(RecordKVFormat::genKey(2, 5));
+
+        source_at_left = true;
+
+        ChangeRegionStateRange(region_state, source_at_left, source_region_state);
+
+        ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(2, 0));
+        ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(2, 10));
+    }
 }
 
 void RegionKVStoreTest::testBasic()
@@ -1150,6 +1277,20 @@ void RegionKVStoreTest::testBasic()
     }
     {
         test_mergeresult();
+    }
+    {
+        raft_cmdpb::AdminResponse response;
+        response.mutable_split()->mutable_left()->add_peers()->set_id(123);
+        RegionState region_state;
+        region_state.getMutRegion().add_peers()->set_id(456);
+        try
+        {
+            CheckRegionForMergeCmd(response, region_state);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "CheckRegionForMergeCmd: current region meta: peers { id: 456 }, expect: peers { id: 123 }");
+        }
     }
 }
 

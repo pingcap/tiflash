@@ -15,6 +15,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
+
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -185,6 +190,7 @@ private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
+    friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -227,6 +233,8 @@ public:
     UInt64 appliedIndex();
 
 private:
+    friend class tests::RegionKVStoreTest;
+
     RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(

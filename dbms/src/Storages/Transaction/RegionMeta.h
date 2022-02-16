@@ -11,6 +11,11 @@ struct RegionVerID;
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
+
 struct RegionMergeResult;
 class Region;
 class MetaRaftCommandDelegate;
@@ -94,6 +99,7 @@ public:
 private:
     RegionMeta() = delete;
     friend class MetaRaftCommandDelegate;
+    friend class tests::RegionKVStoreTest;
 
     void doSetRegion(const metapb::Region & region);
     void doSetApplied(UInt64 index, UInt64 term);
@@ -135,6 +141,7 @@ class MetaRaftCommandDelegate
     , private boost::noncopyable
 {
     friend class RegionRaftCommandDelegate;
+    friend class tests::RegionKVStoreTest;
 
     MetaRaftCommandDelegate() = delete;
 
