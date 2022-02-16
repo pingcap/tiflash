@@ -16,6 +16,7 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -Wno-dev \
+      -DENABLE_PROXY_RUNTIME_RELATIVE_PATH=ON \
       -DNO_WERROR=ON
 
 make -j $NPROC tiflash
