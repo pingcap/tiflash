@@ -69,6 +69,10 @@ public:
         const Names & argument_names,
         const TiDB::TiDBCollators & collators);
 
+    static bool isUInt8Type(const DataTypePtr & type);
+
+    static tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info);
+
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
