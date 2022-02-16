@@ -61,11 +61,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             return;
         it->second->to_be_cancelled = true;
         task_set = it->second;
-        /// release all tasks of to_be_cancelled queries
-        if (!task_set->task_map.empty())
-        {
-            task_set->task_map.begin()->second->deleteAndScheduleQueries();
-        }
         cv.notify_all();
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
@@ -135,8 +130,8 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                mpp_query_map.erase(it);
                 task->deleteAndScheduleQueries();
+                mpp_query_map.erase(it);
             }
             return;
         }
@@ -180,6 +175,7 @@ String MPPTaskManager::toString()
     }
     return res + ")";
 }
+
 MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
 {
     std::lock_guard<std::mutex> lock(mu);
@@ -193,6 +189,5 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
         return it->second;
     }
 }
-
 
 } // namespace DB

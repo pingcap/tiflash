@@ -74,39 +74,31 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
 void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
 {
     std::lock_guard<std::mutex> lock(mu);
+    /// delete from working set and return threads
     active_set.erase(query_id);
     waiting_set.erase(query_id);
     auto query_task_set = task_manager->getQueryTaskSet(query_id);
     if (nullptr != query_task_set)
     {
         used_threads -= query_task_set->used_threads;
-        if (query_task_set->to_be_cancelled)
-            for (const auto & task_it : query_task_set->task_map)
-            {
-                task_it.second->scheduleThisTask(); /// release this task to run for cancelled tasks
-            }
+        query_task_set->used_threads = 0;
     }
-
+    /// update min tso from active_set
     min_tso = query_id == min_tso ? 0 : min_tso;
-    if (min_tso == 0 && !active_set.empty()) /// update the tso from active_set
+    if (min_tso == 0 && !active_set.empty())
     {
         min_tso = *active_set.begin();
     }
+
+    /// schedule new tasks
     while (used_threads + default_threads <= thread_soft_limit)
     {
+        /// find a normal query
         UInt64 current_query_id = 0;
         query_task_set = task_manager->getQueryTaskSet(current_query_id);
-        while (nullptr == query_task_set || query_task_set->to_be_cancelled) /// find a normal query
+        while (nullptr == query_task_set || query_task_set->to_be_cancelled)
         {
             waiting_set.erase(current_query_id);
-            if (nullptr != query_task_set && query_task_set->to_be_cancelled)
-            {
-                ++query_task_set->scheduled_task;
-                for (const auto & task_it : query_task_set->task_map)
-                {
-                    task_it.second->scheduleThisTask(); /// release this task to run
-                }
-            }
             if (waiting_set.empty())
             {
                 return;
@@ -114,30 +106,34 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
             current_query_id = *waiting_set.begin();
             query_task_set = task_manager->getQueryTaskSet(current_query_id);
         }
-        for (const auto & task_it : query_task_set->task_map)
+        /// get a snapshot tasks to schedule (TODO: schedule tasks in batch)
+        auto tasks = task_manager->getCurrentTasksForQuery(current_query_id);
+        auto to_schedule_tasks = tasks.size() - query_task_set->scheduled_task;
+        auto needed_threads = to_schedule_tasks * default_threads;
+        if (used_threads + needed_threads <= thread_soft_limit || ((min_tso == current_query_id || min_tso == 0) && used_threads + needed_threads <= thread_hard_limit))
         {
-            if (used_threads + default_threads <= thread_soft_limit || ((min_tso == current_query_id || min_tso == 0) && used_threads + default_threads <= thread_hard_limit))
+            query_task_set->scheduled_task += to_schedule_tasks;
+            query_task_set->used_threads += needed_threads;
+            used_threads += needed_threads;
+            active_set.insert(current_query_id);
+            waiting_set.erase(current_query_id); /// all tasks of this query are fully active
+            if (min_tso == 0)
             {
-                ++query_task_set->scheduled_task;
-                query_task_set->used_threads += default_threads;
-                active_set.insert(current_query_id);
-                used_threads += default_threads;
-                task_it.second->scheduleThisTask();
-                if (min_tso == 0)
-                {
-                    min_tso = current_query_id;
-                }
+                min_tso = current_query_id;
             }
-            else /// this query cannot fully run
+            for (const auto & task_it : tasks)
             {
-                if (min_tso == current_query_id || min_tso == 0) /// the min_tso query should fully run
-                {
-                    throw Exception("threads are unavailable!");
-                }
-                return;
+                task_it->scheduleThisTask();
             }
         }
-        waiting_set.erase(current_query_id); /// all tasks of this query are fully active
+        else
+        {
+            if (min_tso == current_query_id || min_tso == 0) /// the min_tso query should fully run
+            {
+                throw Exception("threads are unavailable!");
+            }
+            return;
+        }
     }
 }
 } // namespace DB

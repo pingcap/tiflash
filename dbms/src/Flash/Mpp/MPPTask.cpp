@@ -424,6 +424,7 @@ void MPPTask::cancel(const String & reason)
             return;
         }
     }
+    scheduleThisTask();
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
