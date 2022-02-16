@@ -3,6 +3,8 @@ set(_TIFLASH_PROXY_LIBRARY "${_TIFLASH_PROXY_SOURCE_DIR}/target/release/${CMAKE_
 file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
 list(FILTER _TIFLASH_PROXY_SRCS EXCLUDE REGEX ${_TIFLASH_PROXY_SOURCE_DIR}/target/.*)
 
+option(ENABLE_PROXY_RUNTIME_RELATIVE_PATH "Make proxy dynamic lib to be linked by relative path" OFF)
+
 if(TIFLASH_LLVM_TOOLCHAIN AND USE_LIBCXX)
     set(TIFLASH_RUST_LINKER ${CMAKE_CURRENT_BINARY_DIR}/tiflash-linker)
     set(TIFLASH_RUST_LINKER_TMP ${CMAKE_CURRENT_BINARY_DIR}/tmp/tiflash-linker)
@@ -27,12 +29,13 @@ endif()
 
 add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     COMMENT "Building tiflash proxy"
-    COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} make release
+    # `ENGINE_LABEL_VALUE` is used in proxy for copying `libraftstore_proxy.xx` to `lib${ENGINE_LABEL_VALUE}_proxy.xx`
+    COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} ENGINE_LABEL_VALUE=tiflash make release
     VERBATIM
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
     DEPENDS "${_TIFLASH_PROXY_SRCS}" "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock" "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
 
-if(APPLE)
+if(APPLE AND ENABLE_PROXY_RUNTIME_RELATIVE_PATH)
     # For MacOS, we need to explicitly adjust install name for tiflash_proxy library, as it is copied from raftstore_proxy library and the install name is kept as "raftstore_proxy".
     add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
         APPEND
