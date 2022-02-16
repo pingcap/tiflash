@@ -198,6 +198,10 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+    String buildFilterColumn(
+        ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+        
     NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     NamesWithAliases genRootFinalProjectAliases(
