@@ -151,18 +151,6 @@ private:
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 
-    String buildSingleConditionAsUint8(
-        const tipb::Expr & condition,
-        ExpressionActionsPtr & actions);
-
-    NamesWithAliases appendCastForRootProject(
-        ExpressionActionsPtr & actions,
-        const std::vector<Int32> & output_offsets,
-        bool need_append_timezone_cast,
-        const std::vector<tipb::FieldType> & require_schema,
-        const String & column_prefix,
-        const BoolVec & need_append_type_cast_vec);
-
     void makeExplicitSet(
         const tipb::Expr & expr,
         const Block & sample_block,

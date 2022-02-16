@@ -328,12 +328,12 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
     }
 
-    AggregateDescriptions aggregate_descriptions;
     NamesAndTypes aggregated_columns;
 
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
 
+    AggregateDescriptions aggregate_descriptions;
     for (const tipb::Expr & expr : agg.agg_func())
     {
         if (expr.tp() == tipb::ExprType::GroupConcat)
@@ -361,7 +361,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     for (const auto & aggregation_key : aggregation_keys)
         step.required_output.push_back(aggregation_key);
 
-    source_columns = aggregated_columns;
+    source_columns = std::move(aggregated_columns);
 
     auto before_agg = chain.getLastActions();
     chain.finalize();
@@ -370,7 +370,8 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     initChain(chain, getCurrentInputColumns());
     auto actions = chain.getLastActions();
     appendCastAfterAgg(actions, agg);
-    for (const auto & column : source_columns)
+    // after appendCastAfterAgg, current input columns has been modified.
+    for (const auto & column : getCurrentInputColumns())
         step.required_output.push_back(column.name);
 
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
@@ -420,7 +421,18 @@ String DAGExpressionAnalyzer::appendWhere(
     String filter_column_name;
     if (conditions.size() == 1)
     {
-        buildSingleConditionAsUint8(*conditions[0], last_step.actions);
+        filter_column_name = getActions(*conditions[0], last_step.actions, true);
+        if (isColumnExpr(*conditions[0])
+            && (!exprHasValidFieldType(*conditions[0])
+                /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
+                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+        {
+            /// FilterBlockInputStream will CHANGE the filter column inplace, so
+            /// filter column should never be a columnRef in DAG request, otherwise
+            /// for queries like select c1 from t where c1 will got wrong result
+            /// as after FilterBlockInputStream, c1 will become a const column of 1
+            filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
+        }
     }
     else
     {
@@ -825,6 +837,8 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     NamesWithAliases final_project;
+    const auto & current_columns = getCurrentInputColumns();
+    UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
     /// TiFlash will append extra type cast if needed.
@@ -833,7 +847,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     /// we need to append type cast for root block if necessary
     for (UInt32 i : output_offsets)
     {
-        const auto & actual_type = source_columns[i].type;
+        const auto & actual_type = current_columns[i].type;
         auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
         if (actual_type->getName() != expected_type->getName())
         {
@@ -847,28 +861,65 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     }
     if (!need_append_timezone_cast && !need_append_type_cast)
     {
-        UniqueNameGenerator unique_name_generator;
         for (auto i : output_offsets)
         {
             final_project.emplace_back(
-                source_columns[i].name,
-                unique_name_generator.toUniqueName(column_prefix + source_columns[i].name));
+                current_columns[i].name,
+                unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
         }
     }
     else
     {
-        auto actions = chain.getLastActions();
-        initChain(chain, source_columns);
-        final_project = appendCastForRootProject(
-            actions,
-            output_offsets,
-            need_append_timezone_cast,
-            schema,
-            column_prefix,
-            need_append_type_cast_vec);
+        /// for all the columns that need to be returned, if the type is timestamp, then convert
+        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
+        initChain(chain, current_columns);
+        ExpressionActionsChain::Step & step = chain.steps.back();
+
+        tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+        String tz_col;
+        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
+        std::vector<Int32> casted(schema.size(), 0);
+        std::unordered_map<String, String> casted_name_map;
+
+        for (size_t index = 0; index < output_offsets.size(); index++)
+        {
+            UInt32 i = output_offsets[index];
+            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
+            {
+                const auto & it = casted_name_map.find(current_columns[i].name);
+                if (it == casted_name_map.end())
+                {
+                    /// first add timestamp cast
+                    String updated_name = current_columns[i].name;
+                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
+                    {
+                        if (tz_col.length() == 0)
+                            tz_col = getActions(tz_expr, step.actions);
+                        updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
+                    }
+                    /// then add type cast
+                    if (need_append_type_cast_vec[index])
+                    {
+                        updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name);
+                    }
+                    final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
+                    casted_name_map[current_columns[i].name] = updated_name;
+                }
+                else
+                {
+                    final_project.emplace_back(it->second, unique_name_generator.toUniqueName(column_prefix + it->second));
+                }
+            }
+            else
+            {
+                final_project.emplace_back(
+                    current_columns[i].name,
+                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
+            }
+        }
     }
 
-    initChain(chain, source_columns);
+    initChain(chain, current_columns);
     for (const auto & name : final_project)
     {
         chain.steps.back().required_output.push_back(name.first);
