@@ -471,7 +471,7 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain::Step & step = chain.steps.back();
     auto order_columns = buildOrderColumns(step.actions, topN.order_by());
 
-    assert(order_columns.size() == topN.order_by_size());
+    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
     for (const auto & order_column : order_columns)
         step.required_output.push_back(order_column.name);
 
