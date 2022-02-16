@@ -29,6 +29,7 @@ endif()
 
 add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     COMMENT "Building tiflash proxy"
+    # `ENGINE_LABEL_VALUE` is used in proxy for copying `libraftstore_proxy.xx` to `lib${ENGINE_LABEL_VALUE}_proxy.xx`
     COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} ENGINE_LABEL_VALUE=tiflash make release
     VERBATIM
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
