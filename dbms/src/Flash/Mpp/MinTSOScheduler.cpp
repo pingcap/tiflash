@@ -14,9 +14,7 @@ MinTSOScheduler::MinTSOScheduler(MPPTaskManagerPtr task_manager_)
 {
     assert(thread_hard_limit > thread_soft_limit);
 }
-MinTSOScheduler::~MinTSOScheduler()
-{
-}
+
 bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
 {
     auto id = task->getId();
@@ -33,7 +31,7 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
                 return false;
             }
 
-            if (query_task_set->scheduled_task == 0 && query_task_set->to_be_cancelled == false)
+            if (query_task_set->scheduled_task == 0 && !query_task_set->to_be_cancelled)
             {
                 active_set.insert(id.start_ts);
                 min_tso = id.start_ts;
@@ -58,7 +56,7 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
             {
                 return false;
             }
-            if (query_task_set->scheduled_task == 0 && query_task_set->to_be_cancelled == false)
+            if (query_task_set->scheduled_task == 0 && !query_task_set->to_be_cancelled)
             {
                 active_set.insert(id.start_ts);
             }

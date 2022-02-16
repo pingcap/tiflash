@@ -10,7 +10,7 @@ class MinTSOScheduler : private boost::noncopyable
 {
 public:
     MinTSOScheduler(MPPTaskManagerPtr);
-    ~MinTSOScheduler();
+    ~MinTSOScheduler() = default;
     bool putWaitingQuery(MPPTaskPtr);
     void deleteAndScheduleQueries(UInt64);
 
