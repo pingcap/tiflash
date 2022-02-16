@@ -198,6 +198,10 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+    NamesAndTypes buildOrderColumns(
+        ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> order_by);
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
