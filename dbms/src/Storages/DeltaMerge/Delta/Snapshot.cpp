@@ -151,8 +151,9 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
         || placed_delete_ranges != delta_snap->getDeletes())
         return true;
 
+    size_t rows_in_persisted_file_snap = delta_snap->getMemTableSetRowsOffset();
     return persisted_files_reader->shouldPlace(context, relevant_range, max_version, placed_rows)
-        || (mem_table_reader && mem_table_reader->shouldPlace(context, relevant_range, max_version, placed_rows));
+        || (mem_table_reader && mem_table_reader->shouldPlace(context, relevant_range, max_version, placed_rows <= rows_in_persisted_file_snap ? 0 : placed_rows - rows_in_persisted_file_snap));
 }
 
 } // namespace DB::DM
