@@ -5,7 +5,7 @@
 
 TiFlash stores data in columnar format and synchronizes data updates in real-time from [TiKV](https://github.com/tikv/tikv) by Raft logs with sub-second latency. Reads in TiFlash are guaranteed transactionally consistent with Snapshot Isolation level. TiFlash utilizes Massively Parallel Processing (MPP) computing architecture to accelerate the analytical workloads.
 
-TiFlash repository is based on the early version of [ClickHouse](https://github.com/ClickHouse/ClickHouse/tree/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f). We appreciate the excellent work of ClickHouse team.
+TiFlash repository is based on [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of ClickHouse team.
 
 ## Build TiFlash
 
