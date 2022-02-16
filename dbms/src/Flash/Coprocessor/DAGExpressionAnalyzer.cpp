@@ -810,7 +810,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendCastForRootFinalProjection(
 
 std::pair<bool, BoolVec> DAGExpressionAnalyzer::checkIfCastIsRequired(
     const std::vector<tipb::FieldType> & require_schema,
-    const std::vector<Int32> & output_offsets)
+    const std::vector<Int32> & output_offsets) const
 {
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
     /// TiFlash will append extra type cast if needed.

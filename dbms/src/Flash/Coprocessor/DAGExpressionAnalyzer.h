@@ -213,7 +213,7 @@ private:
 
     std::pair<bool, BoolVec> checkIfCastIsRequired(
         const std::vector<tipb::FieldType> & require_schema,
-        const std::vector<Int32> & output_offsets);
+        const std::vector<Int32> & output_offsets) const;
 
     // all columns from table scan
     NamesAndTypes source_columns;
