@@ -256,7 +256,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
             cmd_cf.push_back(NameToCF(req.delete_().cf()));
             break;
         default:
-            break;
+            throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
         }
     }
     return handleWriteRaftCmd(
@@ -569,8 +569,6 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         case RaftCommandResult::Type::CommitMerge:
             handle_commit_merge(result.source_region_id);
             break;
-        default:
-            throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
         }
 
         return EngineStoreApplyRes::Persist;

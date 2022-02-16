@@ -789,6 +789,18 @@ void RegionKVStoreTest::testKVStore()
             {
                 ASSERT_EQ(e.message(), "Unexpected eof");
             }
+            try
+            {
+                raft_cmdpb::RaftCmdRequest request;
+                request.add_requests()->set_cmd_type(::raft_cmdpb::CmdType::Invalid);
+                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 10, 6, ctx.getTMTContext()),
+                          EngineStoreApplyRes::None);
+                ASSERT_TRUE(false);
+            }
+            catch (Exception & e)
+            {
+                ASSERT_EQ(e.message(), "Unsupport raft cmd Invalid");
+            }
         }
         ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[lock 1 ]");
         {
@@ -833,6 +845,9 @@ void RegionKVStoreTest::testKVStore()
     }
     {
         testRaftSplit(kvs, ctx.getTMTContext());
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{}, raft_cmdpb::AdminResponse{}, 8192, 5, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+    }
+    {
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{}, raft_cmdpb::AdminResponse{}, 8192, 5, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
     {
