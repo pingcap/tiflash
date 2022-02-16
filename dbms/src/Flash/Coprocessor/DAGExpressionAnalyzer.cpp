@@ -454,7 +454,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
 
 NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
     ExpressionActionsPtr & actions,
-    const ::google::protobuf::RepeatedPtrField<tipb::ByItem> order_by)
+    const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by)
 {
     NamesAndTypes order_columns;
     order_columns.reserve(order_by.size());

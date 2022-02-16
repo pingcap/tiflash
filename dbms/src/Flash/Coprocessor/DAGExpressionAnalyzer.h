@@ -114,6 +114,10 @@ public:
         String & filter_column_name);
 
 private:
+    NamesAndTypes buildOrderColumns(
+        ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
+
     void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
@@ -201,10 +205,6 @@ private:
     String buildFilterColumn(
         ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
-
-    NamesAndTypes buildOrderColumns(
-        ExpressionActionsPtr & actions,
-        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> order_by);
 
     // all columns from table scan
     NamesAndTypes source_columns;
