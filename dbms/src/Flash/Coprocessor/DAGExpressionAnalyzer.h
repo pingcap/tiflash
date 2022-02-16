@@ -198,6 +198,10 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+    String buildFilterColumn(
+        ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
