@@ -11,6 +11,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
@@ -300,6 +301,9 @@ void MPPTask::runImpl()
 
         int new_thd_cnt = estimateCountOfNewThreads();
         LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
+
+        waitForScheduling();
+
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -425,6 +429,19 @@ void MPPTask::cancel(const String & reason)
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 {
     return status.compare_exchange_strong(from, to);
+}
+void MPPTask::waitForScheduling()
+{
+    context->getTMTContext().getMPPTaskScheduler()->putWaitingQuery(shared_from_this());
+    schedule_future.get();
+}
+void MPPTask::scheduleThisTask()
+{
+    schedule_promise.set_value(true);
+}
+void MPPTask::deleteAndScheduleQueries()
+{
+    context->getTMTContext().getMPPTaskScheduler()->deleteAndScheduleQueries(id.start_ts);
 }
 
 int MPPTask::estimateCountOfNewThreads()

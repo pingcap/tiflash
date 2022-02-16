@@ -23,6 +23,9 @@ using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
+class MinTSOScheduler;
+using MPPTaskSchedulerPtr = std::shared_ptr<MinTSOScheduler>;
+
 class GCManager;
 using GCManagerPtr = std::shared_ptr<GCManager>;
 
@@ -73,6 +76,7 @@ public:
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
     MPPTaskManagerPtr getMPPTaskManager();
+    MPPTaskSchedulerPtr getMPPTaskScheduler();
 
     void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
@@ -117,6 +121,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
     MPPTaskManagerPtr mpp_task_manager;
+    MPPTaskSchedulerPtr mpp_task_scheduler;
 
     ::TiDB::StorageEngine engine;
 

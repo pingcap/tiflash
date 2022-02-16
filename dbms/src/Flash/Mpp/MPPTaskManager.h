@@ -19,12 +19,16 @@ struct MPPQueryTaskSet
     /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
     bool to_be_cancelled = false;
     MPPTaskMap task_map;
+    UInt32 scheduled_task = 0;
+    UInt32 used_threads = 0;
 };
+
+using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 /// a map from the mpp query id to mpp query task set, we use
 /// the start ts of a query as the query id as TiDB will guarantee
 /// the uniqueness of the start ts
-using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
+using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSetPtr>;
 
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
@@ -44,6 +48,8 @@ public:
     std::vector<UInt64> getCurrentQueries();
 
     std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id);
+
+    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
 
     bool registerTask(MPPTaskPtr task);
 

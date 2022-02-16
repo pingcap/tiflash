@@ -48,12 +48,16 @@ public:
 
     void preprocess();
 
+    void waitForScheduling();
+    void scheduleThisTask();
+
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
     int estimateCountOfNewThreads();
 
+    void deleteAndScheduleQueries();
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
@@ -104,6 +108,9 @@ private:
     Exception err;
 
     friend class MPPTaskManager;
+
+    std::promise<bool> schedule_promise;
+    std::future<bool> schedule_future = schedule_promise.get_future();
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
