@@ -31,9 +31,13 @@ public:
         DataTypePtr from_type_int8 = std::make_shared<DataTypeInt8>();
         DataTypePtr from_type_uint8 = std::make_shared<DataTypeUInt8>();
         DataTypePtr from_type_int32 = std::make_shared<DataTypeInt32>();
+        DataTypePtr from_type_dec60 = std::make_shared<DataTypeDecimal256>(60, 0);
+
         auto tmp_col_int8 = from_type_int8->createColumn();
         auto tmp_col_uint8 = from_type_uint8->createColumn();
         auto tmp_col_int32 = from_type_int32->createColumn();
+        auto tmp_col_dec60 = from_type_dec60->createColumn();
+
         std::default_random_engine randomer;
         auto max_decimal32_value = DecimalMaxValue::get(maxDecimalPrecision<Decimal32>());
         for (int i = 0; i < row_num; ++i)
@@ -42,15 +46,17 @@ public:
             tmp_col_uint8->insert(Field(static_cast<Int64>(randomer())));
             // To make sure no overflow happens when cast int32(max_prec:10) to decimal32(max_prec:9).
             tmp_col_int32->insert(Field(static_cast<Int64>(randomer() % max_decimal32_value)));
+            tmp_col_dec60->insert(DecimalField(Decimal(static_cast<Int256>(randomer())), 0));
         }
         from_col_int8 = ColumnWithTypeAndName(std::move(tmp_col_int8), from_type_int8, "from_col_int8");
         from_col_uint8 = ColumnWithTypeAndName(std::move(tmp_col_uint8), from_type_uint8, "from_col_uint8");
         from_col_int32 = ColumnWithTypeAndName(std::move(tmp_col_int32), from_type_int32, "from_col_int32");
+        from_col_dec60 = ColumnWithTypeAndName(std::move(tmp_col_dec60), from_type_dec60, "from_col_dec60");
 
         DataTypePtr dest_type_decimal32 = createDecimal(9, 0);
         DataTypePtr dest_type_decimal64 = createDecimal(18, 0);
         DataTypePtr dest_type_decimal128 = createDecimal(38, 0);
-        DataTypePtr dest_type_decimal256 = createDecimal(65, 0);
+        DataTypePtr dest_type_decimal256 = createDecimal(65, 30);
 
         dest_col_decimal32 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal32->getName()), std::make_shared<DataTypeString>(), "");
         res_col_decimal32 = ColumnWithTypeAndName(nullptr, dest_type_decimal32, "");
@@ -67,18 +73,21 @@ public:
     ColumnWithTypeAndName from_col_int8;
     ColumnWithTypeAndName from_col_uint8;
     ColumnWithTypeAndName from_col_int32;
+    ColumnWithTypeAndName from_col_dec60;
 
     // second arg is a const string describing dest type.
     ColumnWithTypeAndName dest_col_decimal32;
     ColumnWithTypeAndName dest_col_decimal64;
     ColumnWithTypeAndName dest_col_decimal128;
     ColumnWithTypeAndName dest_col_decimal256;
+    ColumnWithTypeAndName dest_col_decimal256_1;
 
     // res_col stores the casted value.
     ColumnWithTypeAndName res_col_decimal32;
     ColumnWithTypeAndName res_col_decimal64;
     ColumnWithTypeAndName res_col_decimal128;
     ColumnWithTypeAndName res_col_decimal256;
+    ColumnWithTypeAndName res_col_decimal256_1;
 };
 
 // We can skip check overflow because int8_prec(3) < decimal32_prec(9).
@@ -131,6 +140,23 @@ try
 CATCH
 BENCHMARK_REGISTER_F(CastIntToDecimalBench, int32_to_decimal32)->Iterations(1000);
 
+// Cannot skip check overflow because 60 + 30 > 65.
+// Also the cast internal type is Int256.
+BENCHMARK_DEFINE_F(CastIntToDecimalBench, dec60_0_to_dec65_30)
+(benchmark::State & state)
+try
+{
+    const String func_name = "tidb_cast";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    auto dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context.setDAGContext(dag_context_ptr.get());
+    for (auto _ : state)
+    {
+        executeFunction(context, func_name, from_col_dec60, dest_col_decimal256);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(CastIntToDecimalBench, dec60_0_to_dec65_30)->Iterations(1000);
 } // namespace tests
 } // namespace DB
 
