@@ -152,7 +152,7 @@ private:
         TiDB::TiDBCollators & collators);
 
     String buildSingleConditionAsUint8(
-        const tipb::Expr & expr,
+        const tipb::Expr & condition,
         ExpressionActionsPtr & actions);
 
     NamesWithAliases appendCastForRootProject(
