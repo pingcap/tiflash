@@ -102,6 +102,11 @@ public:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const tipb::TableScan & table_scan);
 
+    bool buildExtraCastsAfterTS(
+        ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,

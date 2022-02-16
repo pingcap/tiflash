@@ -498,17 +498,16 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
-    ExpressionActionsChain & chain,
+bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
+    ExpressionActionsPtr & actions,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const tipb::TableScan & table_scan)
+    const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns)
 {
-    bool ret = false;
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & step = chain.getLastStep();
+    bool has_cast = false;
+
     // For TimeZone
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-    String tz_col = getActions(tz_expr, step.actions);
+    String tz_col = getActions(tz_expr, actions);
     static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
     static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
     const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
@@ -516,37 +515,50 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     // For Duration
     String fsp_col;
     static const String dur_func_name = "FunctionConvertDurationFromNanos";
-    const auto & columns = table_scan.columns();
     for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
         if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, step.actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
-            ret = true;
+            has_cast = true;
         }
 
         if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
         {
-            if (columns[i].decimal() > 6)
+            if (table_scan_columns[i].decimal() > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
-            auto fsp = columns[i].decimal() < 0 ? 0 : columns[i].decimal();
+            auto fsp = table_scan_columns[i].decimal() < 0 ? 0 : table_scan_columns[i].decimal();
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
-            fsp_col = getActions(fsp_expr, step.actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, step.actions);
+            fsp_col = getActions(fsp_expr, actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
             source_columns[i].name = casted_name;
-            source_columns[i].type = step.actions->getSampleBlock().getByName(casted_name).type;
-            ret = true;
+            source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
+            has_cast = true;
         }
     }
     NamesWithAliases project_cols;
     for (auto & col : source_columns)
-    {
-        step.required_output.push_back(col.name);
         project_cols.emplace_back(col.name, col.name);
-    }
-    step.actions->add(ExpressionAction::project(project_cols));
-    return ret;
+    actions->add(ExpressionAction::project(project_cols));
+
+    return has_cast;
+}
+
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
+    ExpressionActionsChain & chain,
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const tipb::TableScan & table_scan)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & step = chain.getLastStep();
+
+    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.columns());
+
+    for (auto & col : source_columns)
+        step.required_output.push_back(col.name);
+
+    return has_cast;
 }
 
 String DAGExpressionAnalyzer::appendDurationCast(
