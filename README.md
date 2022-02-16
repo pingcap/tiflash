@@ -71,6 +71,13 @@ cd $TIFLASH_ENV
 ./loader
 ```
 
+Or you can dump the env settings and put them to the end of your `~/.bashrc` or `~/.zshrc`
+
+```bash
+cd $TIFLASH_ENV
+./loader-env-dump
+```
+
 ###### System-wise Toolchain
 
 - Debian/Ubuntu users:
