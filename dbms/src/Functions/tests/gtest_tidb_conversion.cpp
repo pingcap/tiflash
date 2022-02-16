@@ -1579,8 +1579,9 @@ TEST_F(TestTidbConversion, skipCheckOverflowMyDateTimeToDeciaml)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 14, 1));
 
     // rule for fsp: 20 + scale_diff <= to_prec.
-    // 20 + (3-6+1) = 18
-    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 18, 3));
+    // 20 + (3-5+1) = 18
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 19, 3));
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 18, 3));
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 17, 3));
 }
 
