@@ -64,6 +64,8 @@ String MyDuration::toString() const
         return fmt::format("{}{:02}:{:02}:{:02}", sign > 0 ? "" : "-", hour, minute, second);
     }
     auto frac_str = fmt::format("{:06}", microsecond);
+    // "{:.2}" will keep the left most 2 char
+    // fmt::format("{:.2}", "0123") -> "01"
     switch (fsp)
     {
     case 0:
@@ -81,7 +83,7 @@ String MyDuration::toString() const
     case 6:
         return fmt::format("{}{:02}:{:02}:{:02}.{:.6}", sign > 0 ? "" : "-", hour, minute, second, frac_str);
     default:
-        throw DB::Exception("invalid precision for MyDuration");
+        throw DB::Exception(fmt::format("invalid precision for MyDuration [fsp={}]", fsp));
     }
 }
 } // namespace DB

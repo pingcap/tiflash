@@ -71,4 +71,27 @@ TEST_F(LoggerUsefulTest, LogFmt)
     LOG_FMT_ERROR(log, "Error log");
 }
 
+TEST(FmtTest, StringLenControl)
+{
+    int microsecond = 123456;
+    auto frac_str = fmt::format("{:06}", microsecond);
+    EXPECT_EQ(fmt::format(".{:.0}", frac_str), ".");
+    EXPECT_EQ(fmt::format(".{:.1}", frac_str), ".1");
+    EXPECT_EQ(fmt::format(".{:.2}", frac_str), ".12");
+    EXPECT_EQ(fmt::format(".{:.3}", frac_str), ".123");
+    EXPECT_EQ(fmt::format(".{:.4}", frac_str), ".1234");
+    EXPECT_EQ(fmt::format(".{:.5}", frac_str), ".12345");
+    EXPECT_EQ(fmt::format(".{:.6}", frac_str), ".123456");
+
+    microsecond = 6;
+    frac_str = fmt::format("{:06}", microsecond);
+    EXPECT_EQ(fmt::format(".{:.0}", frac_str), ".");
+    EXPECT_EQ(fmt::format(".{:.1}", frac_str), ".0");
+    EXPECT_EQ(fmt::format(".{:.2}", frac_str), ".00");
+    EXPECT_EQ(fmt::format(".{:.3}", frac_str), ".000");
+    EXPECT_EQ(fmt::format(".{:.4}", frac_str), ".0000");
+    EXPECT_EQ(fmt::format(".{:.5}", frac_str), ".00000");
+    EXPECT_EQ(fmt::format(".{:.6}", frac_str), ".000006");
+}
+
 } // namespace tests
