@@ -56,16 +56,16 @@ public:
         DataTypePtr dest_type_decimal32 = createDecimal(9, 0);
         DataTypePtr dest_type_decimal64 = createDecimal(18, 0);
         DataTypePtr dest_type_decimal128 = createDecimal(38, 0);
-        DataTypePtr dest_type_decimal256 = createDecimal(65, 30);
+        // CastInternalType is Int512
+        DataTypePtr dest_type_decimal256_65_30 = createDecimal(65, 30);
+        // CastInternalType is Int256
+        DataTypePtr dest_type_decimal256_65_10 = createDecimal(65, 10);
 
         dest_col_decimal32 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal32->getName()), std::make_shared<DataTypeString>(), "");
-        res_col_decimal32 = ColumnWithTypeAndName(nullptr, dest_type_decimal32, "");
         dest_col_decimal64 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal64->getName()), std::make_shared<DataTypeString>(), "");
-        res_col_decimal64 = ColumnWithTypeAndName(nullptr, dest_type_decimal64, "");
         dest_col_decimal128 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal128->getName()), std::make_shared<DataTypeString>(), "");
-        res_col_decimal128 = ColumnWithTypeAndName(nullptr, dest_type_decimal128, "");
-        dest_col_decimal256 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal256->getName()), std::make_shared<DataTypeString>(), "");
-        res_col_decimal256 = ColumnWithTypeAndName(nullptr, dest_type_decimal256, "");
+        dest_col_decimal256_65_30 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal256_65_30->getName()), std::make_shared<DataTypeString>(), "");
+        dest_col_decimal256_65_10 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_decimal256_65_10->getName()), std::make_shared<DataTypeString>(), "");
     }
 
     const int row_num = 2000;
@@ -79,15 +79,8 @@ public:
     ColumnWithTypeAndName dest_col_decimal32;
     ColumnWithTypeAndName dest_col_decimal64;
     ColumnWithTypeAndName dest_col_decimal128;
-    ColumnWithTypeAndName dest_col_decimal256;
-    ColumnWithTypeAndName dest_col_decimal256_1;
-
-    // res_col stores the casted value.
-    ColumnWithTypeAndName res_col_decimal32;
-    ColumnWithTypeAndName res_col_decimal64;
-    ColumnWithTypeAndName res_col_decimal128;
-    ColumnWithTypeAndName res_col_decimal256;
-    ColumnWithTypeAndName res_col_decimal256_1;
+    ColumnWithTypeAndName dest_col_decimal256_65_30;
+    ColumnWithTypeAndName dest_col_decimal256_65_10;
 };
 
 // We can skip check overflow because int8_prec(3) < decimal32_prec(9).
@@ -141,7 +134,7 @@ CATCH
 BENCHMARK_REGISTER_F(CastIntToDecimalBench, int32_to_decimal32)->Iterations(1000);
 
 // Cannot skip check overflow because 60 + 30 > 65.
-// Also the cast internal type is Int256.
+// Also the cast internal type is Int512.
 BENCHMARK_DEFINE_F(CastIntToDecimalBench, dec60_0_to_dec65_30)
 (benchmark::State & state)
 try
@@ -152,11 +145,29 @@ try
     context.setDAGContext(dag_context_ptr.get());
     for (auto _ : state)
     {
-        executeFunction(context, func_name, from_col_dec60, dest_col_decimal256);
+        executeFunction(context, func_name, from_col_dec60, dest_col_decimal256_65_30);
     }
 }
 CATCH
 BENCHMARK_REGISTER_F(CastIntToDecimalBench, dec60_0_to_dec65_30)->Iterations(1000);
+
+// Cannot skip check overflow because 60 + 10 > 65.
+// Also the cast internal type is Int256.
+BENCHMARK_DEFINE_F(CastIntToDecimalBench, dec60_0_to_dec65_10)
+(benchmark::State & state)
+try
+{
+    const String func_name = "tidb_cast";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    auto dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context.setDAGContext(dag_context_ptr.get());
+    for (auto _ : state)
+    {
+        executeFunction(context, func_name, from_col_dec60, dest_col_decimal256_65_10);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(CastIntToDecimalBench, dec60_0_to_dec65_10)->Iterations(1000);
 } // namespace tests
 } // namespace DB
 

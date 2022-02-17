@@ -851,7 +851,7 @@ struct TiDBConvertToDecimal
         {
             Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
-            return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
+            return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, scale_mul, context);
         }
         else
         {
@@ -921,6 +921,7 @@ struct TiDBConvertToDecimal
         ScaleType v_scale,
         PrecType prec [[maybe_unused]],
         ScaleType scale,
+        const CastInternalType & scale_mul,
         const Context & context)
     {
         using UType = typename U::NativeType;
@@ -928,18 +929,13 @@ struct TiDBConvertToDecimal
 
         if (v_scale <= scale)
         {
-            for (ScaleType i = v_scale; i < scale; i++)
-                value *= 10;
+            value *= scale_mul;
         }
         else
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            bool need_to_round = false;
-            for (ScaleType i = scale; i < v_scale; i++)
-            {
-                need_to_round = (value < 0 ? -value : value) % 10 >= 5;
-                value /= 10;
-            }
+            value /= scale_mul;
+            const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
             if (need_to_round)
             {
                 if (value < 0)
@@ -1153,8 +1149,11 @@ struct TiDBConvertToDecimal
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
+            const ScaleType from_scale = col_from->getScale();
+            const ScaleType scale_diff = ((from_scale > scale) ? (from_scale - scale) : (scale - from_scale));
+            const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale_diff);
             for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, context);
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, scale_mul, context);
         }
         else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
