@@ -102,11 +102,6 @@ public:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const tipb::TableScan & table_scan);
 
-    bool buildExtraCastsAfterTS(
-        ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
-
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
@@ -117,13 +112,6 @@ public:
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-
-    std::pair<bool, Names> buildJoinKey(
-        ExpressionActionsPtr & actions,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        bool left,
-        bool is_right_out_join);
 
 private:
     void appendCastAfterAgg(
@@ -183,6 +171,18 @@ private:
         ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
+
+    bool buildExtraCastsAfterTS(
+        ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
+    std::pair<bool, Names> buildJoinKey(
+        ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
 
     String applyFunction(
         const String & func_name,
