@@ -96,6 +96,11 @@ public:
         return std::make_pair(file_id, level);
     }
 
+    PageFieldOffsetChecksums getPageFieldOffsetChecksums() const
+    {
+        return field_offsets;
+    }
+
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))

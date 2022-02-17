@@ -8,9 +8,12 @@
 namespace DB
 {
 using PageStorageV2 = PS::V2::PageStorage;
-using PageStorageV3 = PS::V3::PageStorageImpl;
 using PageFile = PS::V2::PageFile;
 using PageEntriesEditV2 = PS::V2::PageEntriesEdit;
+using EditRecordsV2 = PS::V2::PageEntriesEdit::EditRecords;
+
+using PageStorageV3 = PS::V3::PageStorageImpl;
+
 class PageConverter
 {
 public:
@@ -23,9 +26,13 @@ private:
 
     void cleanV2data();
 
-    std::pair<PageEntriesEditV2, std::vector<PageEntriesEditV2>> readFromV2();
+    std::pair<PageEntriesEditV2, std::vector<PageEntriesEditV2>> readV2meta();
 
-    void writeIntoV3(const PageEntriesEditV2 & edit);
+    WriteBatch record2WriteBatch(const EditRecordsV2 & record);
+
+    char * readV2data(const PageEntry & entry);
+
+    void writeIntoV3(const PageEntriesEditV2 & edit, const std::vector<PageEntriesEditV2> & edits);
 
 private:
     PSDiskDelegatorPtr delegator;

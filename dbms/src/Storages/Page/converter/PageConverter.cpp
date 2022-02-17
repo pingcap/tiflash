@@ -1,3 +1,4 @@
+#include <Encryption/PosixRandomAccessFile.h>
 #include <Poco/FileStream.h>
 #include <Poco/Path.h>
 #include <Storages/Page/PageStorage.h>
@@ -25,9 +26,106 @@ PageConverter::PageConverter(FileProviderPtr file_provider_, PSDiskDelegatorPtr 
     LOG_FMT_INFO(log, "PageConverter will converter from paths[{}]", paths);
 };
 
-void PageConverter::writeIntoV3(const PageEntriesEditV2 & edit)
+
+char * PageConverter::readV2data(const PageEntry & entry)
 {
-    (void)edit;
+    // FIXME : we may not need folder_prefix_temp/folder_prefix_legacy
+    std::vector<String> folder_prefixs = {
+        "page", // folder_prefix_formal
+        ".temp.page", // folder_prefix_temp
+        "legacy.page", // folder_prefix_legacy
+        "checkpoint.page" // folder_prefix_checkpoint
+    };
+
+    std::vector<String> pagefile_names;
+    for (const auto & prefix : folder_prefixs)
+    {
+        pagefile_names.emplace_back(fmt::format("/{}_{}_{}", prefix, entry.file_id, entry.level));
+    }
+
+    // We can't found path by delegator
+    // Casue current delegator is not runtime delegator
+    // So we need search the file in paths.
+    for (const auto & path : delegator->listPaths())
+    {
+        for (const auto & pf_name : pagefile_names)
+        {
+            Poco::File pf(path + pf_name);
+            if (pf.exists())
+            {
+                char * data_buf = (char *)malloc(entry.size);
+                if (data_buf == nullptr)
+                {
+                    throw Exception("OOM happened.", ErrorCodes::LOGICAL_ERROR);
+                }
+
+                RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(pf.path(), -1, nullptr);
+                PageUtil::readFile(file_for_read, entry.offset, data_buf, entry.size, nullptr);
+                return data_buf;
+            }
+        }
+    }
+
+    // throw Exception(fmt::format("Can't found PageFile [id={},level={}]",entry.file_id,entry.level), ErrorCodes::LOGICAL_ERROR);
+}
+
+WriteBatch PageConverter::record2WriteBatch(const EditRecordsV2 & records)
+{
+    WriteBatch wb;
+
+    for (const auto & record : records)
+    {
+        switch (record.type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            // TODO
+            char * data_buf = readV2data(record.entry);
+            // FIXME : maybe not right.
+            MemHolder mem_holder = createMemHolder(data_buf, [&](char * p) { free(p); });
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(data_buf, sizeof(data_buf));
+
+            if (record.type == WriteBatch::WriteType::PUT)
+            {
+                wb.putPage(record.page_id, buff, record.entry.size, record.entry.getPageFieldOffsetChecksums());
+            }
+            else
+            {
+                // FIXME : it's not right
+                PageFileIdAndLevel id_level;
+                id_level.first = record.entry.file_id;
+                id_level.second = record.entry.level;
+                wb.upsertPage(record.page_id, record.entry.tag, id_level, buff, record.entry.size, record.entry.getPageFieldOffsetChecksums());
+            }
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            wb.delPage(record.page_id);
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            wb.putRefPage(record.ori_page_id, record.page_id);
+        }
+        }
+    }
+
+    return wb;
+}
+
+void PageConverter::writeIntoV3(const PageEntriesEditV2 & edits_from_checkpoints, const std::vector<PageEntriesEditV2> & edits)
+{
+    PageStorage::Config config;
+    PageStorageV3 pagestorage("PageConverter", delegator, config, file_provider);
+
+    WriteBatch wb = record2WriteBatch(edits_from_checkpoints.getRecords());
+    pagestorage.write(std::move(wb));
+
+    for (const auto & edit : edits)
+    {
+        WriteBatch wb_from_edit = record2WriteBatch(edit.getRecords());
+        pagestorage.write(std::move(wb_from_edit));
+    }
 }
 
 void PageConverter::packV2data()
@@ -77,7 +175,7 @@ void PageConverter::cleanV2data()
 
 void PageConverter::convertV2toV3()
 {
-    const auto & [edits_from_checkpoints, edits] = readFromV2();
+    const auto & [edits_from_checkpoints, edits] = readV2meta();
     // TODO : verify
 
     if (options.old_data_packed)
@@ -85,16 +183,12 @@ void PageConverter::convertV2toV3()
         packV2data();
     }
 
-    cleanV2data();
+    writeIntoV3(edits_from_checkpoints, edits);
 
-    writeIntoV3(edits_from_checkpoints);
-    for (const auto & edit : edits)
-    {
-        writeIntoV3(edit);
-    }
+    // cleanV2data();
 }
 
-std::pair<PageEntriesEditV2, std::vector<PageEntriesEditV2>> PageConverter::readFromV2()
+std::pair<PageEntriesEditV2, std::vector<PageEntriesEditV2>> PageConverter::readV2meta()
 {
     PageStorageV2::ListPageFilesOption opt;
     opt.remove_tmp_files = false;

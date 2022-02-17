@@ -62,6 +62,14 @@ public:
         , sequence(rhs.sequence)
     {}
 
+    void putPage(PageId page_id, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldOffsetChecksums & data_sizes = {})
+    {
+        Write w{WriteType::PUT, page_id, 0, read_buffer, size, 0, data_sizes, 0, 0, {}};
+        total_data_size += size;
+        writes.emplace_back(std::move(w));
+    }
+
+
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Conver from data_sizes to the offset of each field
