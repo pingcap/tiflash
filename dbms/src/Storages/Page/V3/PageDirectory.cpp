@@ -320,9 +320,9 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 
         switch (record.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
         {
             // Insert or replace with latest entry
             if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
@@ -341,7 +341,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             // Remove the entry if the version of del is newer
             if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
@@ -582,7 +582,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         }
 
         auto & version_list = iter->second;
-        if (r.type == WriteBatch::WriteType::REF)
+        if (r.type == EditRecordType::REF)
         {
             // applying ref 3->2, existing ref 2->1, normal entry 1, then we should collapse
             // the ref to be 3->1, increase the refcounting of normale entry 1
@@ -653,13 +653,13 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
 
         switch (r.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case EditRecordType::PUT_EXTERNAL:
         {
             throw Exception("Not implemented");
         }
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
         {
             try
             {
@@ -672,12 +672,12 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             version_list->createDelete(last_sequence + 1);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case EditRecordType::REF:
             throw Exception(fmt::format("should handle ref before switch statement"));
         }
     }
