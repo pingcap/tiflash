@@ -2,10 +2,12 @@
 
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
+#include <fmt/format.h>
 
 #include <cerrno>
 #include <memory>
 #include <vector>
+
 
 namespace Poco
 {
@@ -25,6 +27,13 @@ public:
     explicit Exception(const std::string & msg, int code = 0)
         : Poco::Exception(msg, code)
     {}
+
+    // Format message with fmt::format, like the logging functions.
+    template <typename... Args>
+    Exception(int code, const std::string & fmt, Args &&... args)
+        : Exception(fmt::format(fmt, std::forward<Args>(args)...), code)
+    {}
+
     Exception(const std::string & msg, const std::string & arg, int code = 0)
         : Poco::Exception(msg, arg, code)
     {}

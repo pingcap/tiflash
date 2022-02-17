@@ -30,6 +30,14 @@ extern const String uniq_raw_res_name;
 
 namespace
 {
+const std::unordered_map<tipb::ExprType, String> window_func_map({
+    {tipb::ExprType::Rank, "rank"},
+    {tipb::ExprType::DenseRank, "dense_rank"},
+    {tipb::ExprType::RowNumber, "row_number"},
+    {tipb::ExprType::Lag, "lag_in_frame"},
+    {tipb::ExprType::Lead, "lead_in_frame"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -38,7 +46,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    //{tipb::ExprType::Avg, ""},
+    {tipb::ExprType::Avg, "avg"},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -699,7 +707,7 @@ bool isScalarFunctionExpr(const tipb::Expr & expr)
 
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr) || isWindowFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -723,6 +731,19 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         expr.has_distinct() ? "true" : "false");
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
+
+const String & getWindowFunctionName(const tipb::Expr & expr)
+{
+    auto it = window_func_map.find(expr.tp());
+    if (it != distinct_agg_func_map.end())
+        return it->second;
+
+    const auto errmsg = fmt::format(
+        "{} is not supported.",
+        tipb::ExprType_Name(expr.tp()));
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+}
+
 
 const String & getFunctionName(const tipb::Expr & expr)
 {
@@ -872,6 +893,39 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::JsonArrayAgg:
     case tipb::ExprType::JsonObjectAgg:
     case tipb::ExprType::ApproxCountDistinct:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::RowNumber:
+    case tipb::ExprType::Rank:
+    case tipb::ExprType::DenseRank:
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+        //    case tipb::ExprType::CumeDist:
+        //    case tipb::ExprType::PercentRank:
+        //    case tipb::ExprType::Ntile:
+        //    case tipb::ExprType::FirstValue:
+        //    case tipb::ExprType::LastValue:
+        //    case tipb::ExprType::NthValue:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowLagOrLeadFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
         return true;
     default:
         return false;

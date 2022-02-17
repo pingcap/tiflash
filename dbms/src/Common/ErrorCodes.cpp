@@ -375,6 +375,7 @@ extern const int CANNOT_MPROTECT = 445;
 extern const int DECIMAL_OVERFLOW = 446;
 extern const int CANNOT_PARSE_BOOL = 447;
 extern const int CANNOT_FTRUNCATE = 448;
+extern const int UNKNOWN_WINDOW_FUNCTION = 449;
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;
