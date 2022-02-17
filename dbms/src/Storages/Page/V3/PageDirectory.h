@@ -121,6 +121,8 @@ public:
 
     std::optional<std::shared_ptr<PageEntryV3>> getEntryNotSafe(UInt64 seq) const;
 
+    std::shared_ptr<PageEntryV3> getLatestEntryNotSafe() const;
+
     /**
      * Take out the `VersionedEntries` which exist in the `BlobFileId`.
      * Also return the total size of entries.
@@ -188,7 +190,23 @@ public:
 
     void dumpTo(std::unique_ptr<LogWriter> & log_writer);
 
-    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
+    struct CollapsedVersionEntry
+    {
+        PageVersionType ver;
+        PageEntryV3 entry;
+        Int64 ref_count;
+
+        CollapsedVersionEntry()
+            : ref_count(1)
+        {}
+        CollapsedVersionEntry(PageVersionType ver_, PageEntryV3 entry_)
+            : ver(ver_)
+            , entry(entry_)
+            , ref_count(1)
+        {}
+    };
+    using CollapsingMapType = std::unordered_map<PageId, CollapsedVersionEntry>;
+    std::unordered_map<PageId, std::pair<PageVersionType, PageId>> id_mapping;
     CollapsingMapType table_directory;
 
     PageId max_applied_page_id = 0;
@@ -197,6 +215,9 @@ public:
     // No copying
     CollapsingPageDirectory(const CollapsingPageDirectory &) = delete;
     CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
+
+private:
+    PageId getOriId(PageId page_id) const;
 };
 
 // `PageDirectory` store multi-versions entries for the same

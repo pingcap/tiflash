@@ -65,6 +65,14 @@ std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntry(UInt6
     return getEntryNotSafe(seq);
 }
 
+std::shared_ptr<PageEntryV3> VersionedPageEntries::getLatestEntryNotSafe() const
+{
+    assert(!entries.empty());
+    auto iter = entries.rbegin();
+    assert(!iter->second.isDelete());
+    return iter->second.entryPtr();
+}
+
 std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
 {
     PageSize single_page_size = 0;
@@ -135,6 +143,18 @@ bool VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
 
 CollapsingPageDirectory::CollapsingPageDirectory() = default;
 
+PageId CollapsingPageDirectory::getOriId(PageId page_id) const
+{
+    while (true)
+    {
+        auto iter = id_mapping.find(page_id);
+        if (iter == id_mapping.end() || iter->second.second == page_id)
+            break;
+        page_id = iter->second.second;
+    }
+    return page_id;
+}
+
 void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 {
     for (const auto & record : edit.getRecords())
@@ -152,17 +172,22 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
         case EditRecordType::UPSERT:
         {
             // Insert or replace with latest entry
-            if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
+            PageId raw_id = getOriId(record.page_id);
+            if (auto iter = table_directory.find(raw_id); iter == table_directory.end())
             {
-                table_directory[record.page_id] = std::make_pair(record.version, record.entry);
+                // create the entry
+                table_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
+                id_mapping[record.page_id] = std::make_pair(record.version, raw_id);
             }
             else
             {
-                const auto & [ver, entry] = iter->second;
-                (void)entry;
-                if (ver < record.version)
+                const auto & entry = iter->second;
+                if (entry.ver < record.version)
                 {
-                    iter->second = std::make_pair(record.version, record.entry);
+                    // replace the entry with later version
+                    iter->second.ver = record.version;
+                    iter->second.entry = record.entry;
+                    id_mapping[record.page_id] = std::make_pair(record.version, raw_id);
                 }
                 // else just ignore outdate version
             }
@@ -171,37 +196,54 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
         case EditRecordType::DEL:
         {
             // Remove the entry if the version of del is newer
-            if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
+            PageId raw_id = getOriId(record.page_id);
+            if (auto iter = table_directory.find(raw_id); iter != table_directory.end())
             {
-                const auto & [ver, entry] = iter->second;
-                (void)entry;
-                if (ver < record.version)
+                auto & entry = iter->second;
+                if (entry.ver < record.version)
                 {
-                    table_directory.erase(iter);
+                    entry.ref_count -= 1;
+                    id_mapping.erase(record.page_id);
+                    if (entry.ref_count == 0)
+                    {
+                        table_directory.erase(iter);
+                    }
                 }
             }
             break;
         }
         case EditRecordType::REF:
         {
+            LOG_FMT_INFO(&Poco::Logger::get("CollapsingPageDirectory"), "adding ref from {} to {}", record.page_id, record.ori_page_id);
             bool create_ref_entry_done = [&record, this]() -> bool {
-                auto iter = table_directory.find(record.ori_page_id);
-                if (iter == table_directory.end())
+                PageId raw_id = getOriId(record.ori_page_id);
+                auto iter_to_ori = table_directory.find(raw_id);
+                if (iter_to_ori == table_directory.end())
                     return false;
-                if (record.version < iter->second.first || record.version == iter->second.first)
+                auto & existing_entry = iter_to_ori->second;
+                if (record.version < existing_entry.ver)
                 {
-                    // put after ref, must be sth wrong!!!
+                    // If the version of ref is less than the version of existing entry,
+                    // it means we apply put after ref to the same page id, must be sth wrong!!!
                     // LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
                     return false;
                 }
-                // Copy the entry
-                table_directory[record.page_id] = std::make_pair(record.version, table_directory[record.ori_page_id].second);
+                // Mark down the id mapping and increase the ref counting
+                existing_entry.ref_count += 1;
+                id_mapping[record.page_id] = std::make_pair(record.version, raw_id);
                 return true;
             }();
             if (create_ref_entry_done)
                 break;
+            // LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
         }
-        default:
+        case EditRecordType::COLLAPSED_ENTRY:
+            table_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
+            break;
+        case EditRecordType::COLLAPSED_MAPPING:
+            id_mapping[record.page_id] = std::make_pair(record.version, record.ori_page_id);
+            break;
+        case EditRecordType::PUT_EXTERNAL:
         {
             throw Exception(fmt::format("Unknown write type: {}", record.type));
         }
@@ -212,11 +254,13 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
 {
     PageEntriesEdit edit;
-    for (const auto & [page_id, versioned_entry] : table_directory)
+    for (const auto & [page_id, collapsed_version_entry] : table_directory)
     {
-        const auto & version = versioned_entry.first;
-        const auto & entry = versioned_entry.second;
-        edit.upsertPage(page_id, version, entry);
+        edit.collapsedEntry(page_id, collapsed_version_entry.ver, collapsed_version_entry.entry);
+    }
+    for (const auto & [ref_id, ver_page_id] : id_mapping)
+    {
+        edit.collapsedMapping(ref_id, ver_page_id.second, ver_page_id.first);
     }
     const String serialized = ser::serializeTo(edit);
     ReadBufferFromString payload(serialized);
@@ -247,12 +291,42 @@ PageDirectoryPtr PageDirectory::create(const CollapsingPageDirectory & collapsin
         std::move(wal));
     for (const auto & [page_id, versioned_entry] : collapsing_directory.table_directory)
     {
-        const auto & version = versioned_entry.first;
-        const auto & entry = versioned_entry.second;
         auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
             iter->second = std::make_shared<VersionedPageEntries>();
-        iter->second->createNewVersion(version.sequence, version.epoch, dir->createRecyclableEntry(entry));
+        iter->second->createNewVersion(versioned_entry.ver.sequence, versioned_entry.ver.epoch, dir->createRecyclableEntry(versioned_entry.entry));
+    }
+    for (auto mapping_iter : collapsing_directory.id_mapping)
+    {
+        if (mapping_iter.first == mapping_iter.second.second)
+            continue;
+        auto ori_iter = dir->mvcc_table_directory.find(mapping_iter.second.second);
+        if (ori_iter == dir->mvcc_table_directory.end())
+        {
+            // fail
+            continue;
+        }
+
+        const auto & version = mapping_iter.second.first;
+
+        auto [ref_iter, created] = dir->mvcc_table_directory.insert(std::make_pair(mapping_iter.first, nullptr));
+        if (created)
+            ref_iter->second = std::make_shared<VersionedPageEntries>();
+        std::shared_ptr<PageEntryV3> entry_ptr_copy = ori_iter->second->getLatestEntryNotSafe();
+        ref_iter->second->createNewVersion(version.sequence, version.epoch, std::move(entry_ptr_copy)); // FIXME: version
+        LOG_FMT_INFO(dir->log, "adding ref from {} to {}, ver: {}", mapping_iter.first, mapping_iter.second.second, version);
+    }
+    for (const auto & iter : collapsing_directory.table_directory)
+    {
+        if (collapsing_directory.id_mapping.find(iter.first) == collapsing_directory.id_mapping.end())
+        {
+            dir->mvcc_table_directory.erase(iter.first);
+            LOG_FMT_INFO(dir->log, "cleanup entry ref {}", iter.first);
+        }
+        else
+        {
+            LOG_FMT_INFO(dir->log, "not cleanup entry ref {} because exist {} -> {}", iter.first, iter.first, collapsing_directory.id_mapping.find(iter.first)->second.second);
+        }
     }
     return dir;
 }
@@ -268,7 +342,6 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
     CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
     return snap;
 }
-
 
 std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 {
@@ -493,6 +566,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             updating_pages[idx]->createDelete(last_sequence + 1);
             break;
         }
+        case EditRecordType::COLLAPSED_ENTRY:
+        case EditRecordType::COLLAPSED_MAPPING:
+            break;
         }
 
         auto locks_it = updating_locks.find(r.page_id);

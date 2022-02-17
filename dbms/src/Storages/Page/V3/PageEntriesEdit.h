@@ -45,14 +45,23 @@ struct PageVersionType
 using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
-enum class EditRecordType
+enum class EditRecordType : UInt8
 {
     PUT,
     PUT_EXTERNAL,
     REF,
     DEL,
-    //
+
+    // `UPSERT` is created by `PageStorage::gc` that copy and move data to another
+    // BlobFile to reduce space amplification.
     UPSERT,
+
+    // `COLLAPSED_ENTRY`, `COLLAPSED_MAPPING` is created by `CollapsingPageDirectory`
+    // to save the collapsed state of log files. We need these kinds of edits to
+    // reconstruct the memory collapsed state created by writebatches like:
+    // put 10, ref 11->10, ref 12->11, del 10
+    COLLAPSED_ENTRY,
+    COLLAPSED_MAPPING,
 };
 
 /// Page entries change to apply to PageDirectory
@@ -99,6 +108,26 @@ public:
         record.type = EditRecordType::REF;
         record.page_id = ref_id;
         record.ori_page_id = page_id;
+        records.emplace_back(record);
+    }
+
+    void collapsedEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::COLLAPSED_ENTRY;
+        record.page_id = page_id;
+        record.version = ver;
+        record.entry = entry;
+        records.emplace_back(record);
+    }
+
+    void collapsedMapping(PageId ref_id, PageId page_id, const PageVersionType & ver)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::COLLAPSED_MAPPING;
+        record.page_id = ref_id;
+        record.ori_page_id = page_id;
+        record.version = ver;
         records.emplace_back(record);
     }
 

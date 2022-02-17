@@ -723,6 +723,12 @@ class PageDirectoryGCTest : public PageDirectoryTest
         edit.ref((REF_ID), (ORI_ID)); \
         dir->apply(std::move(edit));  \
     }
+#define INSERT_REF(REF_ID, ORI_ID)    \
+    {                                 \
+        PageEntriesEdit edit;         \
+        edit.ref((REF_ID), (ORI_ID)); \
+        dir->apply(std::move(edit));  \
+    }
 
 static size_t getNumEntries(const PageEntriesV3 & entries)
 {
@@ -1201,7 +1207,47 @@ TEST_F(PageDirectoryGCTest, RestoreWithRefThenGC)
     // after 51 get deleted, should remove the entry
     INSERT_DELETE(ref_id);
     removed_entries = dir->gc();
-    EXPECT_EQ(removed_entries.size(), 1);
+    ASSERT_EQ(removed_entries.size(), 1);
+    EXPECT_TRUE(isSameEntry(entry_v1, removed_entries[0]));
+}
+
+TEST_F(PageDirectoryGCTest, RestoreWithRefThenGC2)
+{
+    PageId page_id = 50;
+    PageId ref_id1 = 51;
+    PageId ref_id2 = 52;
+    // put 50, ref 51->50, ref 52->51
+    INSERT_ENTRY(page_id, 1);
+    INSERT_REF(ref_id1, page_id);
+    INSERT_REF(ref_id2, ref_id1);
+    // del 50 only decrease the ref page count, should not remove the entry
+    INSERT_DELETE(page_id);
+    auto removed_entries = dir->gc();
+    EXPECT_EQ(removed_entries.size(), 0);
+
+    restoreFromDisk();
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_EQ(entry_v1, dir, ref_id1, snap);
+        EXPECT_ENTRY_EQ(entry_v1, dir, ref_id2, snap);
+    }
+
+    // after 51 get deleted, should not remove the entry
+    INSERT_DELETE(ref_id1);
+    removed_entries = dir->gc();
+    EXPECT_EQ(removed_entries.size(), 0);
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_EQ(entry_v1, dir, ref_id2, snap);
+    }
+
+    // after 52 get deleted, should remove the entry
+    INSERT_DELETE(ref_id2);
+    removed_entries = dir->gc();
+    ASSERT_EQ(removed_entries.size(), 1);
+    EXPECT_TRUE(isSameEntry(entry_v1, removed_entries[0]));
 }
 
 #undef INSERT_ENTRY_TO

@@ -19,11 +19,11 @@ inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
     readIntBinary(version.epoch, buf);
 }
 
-void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+bool serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT);
+    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::COLLAPSED_ENTRY);
 
-    writeIntBinary(EditRecordType::PUT, buf);
+    writeIntBinary(record.type, buf);
 
     UInt32 flags = 0;
     writeIntBinary(flags, buf);
@@ -40,11 +40,12 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
+    return true;
 }
 
-void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+bool deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT);
+    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT || record_type == EditRecordType::COLLAPSED_ENTRY);
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
@@ -74,30 +75,31 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
         }
     }
 
-    // All consider as put
     PageEntriesEdit::EditRecord rec;
-    rec.type = EditRecordType::PUT;
+    rec.type = record_type;
     rec.page_id = page_id;
     rec.version = version;
     rec.entry = entry;
     edit.appendRecord(rec);
+    return true;
 }
 
-void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+bool serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::REF);
+    assert(record.type == EditRecordType::REF || record.type == EditRecordType::COLLAPSED_MAPPING);
+    assert(record.entry.file_id == INVALID_BLOBFILE_ID);
 
     writeIntBinary(record.type, buf);
 
     writeIntBinary(record.page_id, buf);
     writeIntBinary(record.ori_page_id, buf);
     serializeVersionTo(record.version, buf);
-    assert(record.entry.file_id == INVALID_BLOBFILE_ID);
+    return true;
 }
 
-void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+bool deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::REF);
+    assert(record_type == EditRecordType::REF || record_type == EditRecordType::COLLAPSED_MAPPING);
 
     PageId page_id, ori_page_id;
     readIntBinary(page_id, buf);
@@ -111,10 +113,11 @@ void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     rec.ori_page_id = ori_page_id;
     rec.version = version;
     edit.appendRecord(rec);
+    return true;
 }
 
 
-void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+bool serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
     assert(record.type == EditRecordType::PUT_EXTERNAL);
 
@@ -122,9 +125,10 @@ void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuf
 
     writeIntBinary(record.page_id, buf);
     serializeVersionTo(record.version, buf);
+    return true;
 }
 
-void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+bool deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
     assert(record_type == EditRecordType::PUT_EXTERNAL);
 
@@ -138,9 +142,10 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
     rec.page_id = page_id;
     rec.version = version;
     edit.appendRecord(rec);
+    return true;
 }
 
-void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+bool serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
     assert(record.type == EditRecordType::DEL);
 
@@ -148,9 +153,10 @@ void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
     writeIntBinary(record.page_id, buf);
     serializeVersionTo(record.version, buf);
+    return true;
 }
 
-void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+bool deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
     assert(record_type == EditRecordType::DEL);
 
@@ -164,6 +170,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     rec.page_id = page_id;
     rec.version = version;
     edit.appendRecord(rec);
+    return true;
 }
 
 void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
@@ -171,31 +178,38 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
     EditRecordType record_type;
     while (!buf.eof())
     {
+        bool parse_done = false;
         readIntBinary(record_type, buf);
         switch (record_type)
         {
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
+        case EditRecordType::COLLAPSED_ENTRY:
         {
-            deserializePutFrom(record_type, buf, edit);
+            parse_done = deserializePutFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::REF:
+        case EditRecordType::COLLAPSED_MAPPING:
         {
-            deserializeRefFrom(record_type, buf, edit);
+            parse_done = deserializeRefFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::DEL:
         {
-            deserializeDelFrom(record_type, buf, edit);
+            parse_done = deserializeDelFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::PUT_EXTERNAL:
         {
-            deserializePutExternalFrom(record_type, buf, edit);
+            parse_done = deserializePutExternalFrom(record_type, buf, edit);
             break;
         }
-        default:
+        } // do not add "default" so that we need to adjust this method after adding new type by warnings
+
+        // the parsed `record_type` don't exist in enum, maybe downgrade from a cluster with newer type of data
+        if (unlikely(!parse_done))
+        {
             throw Exception(fmt::format("Unknown record type: {}", record_type));
         }
     }
@@ -208,22 +222,29 @@ String serializeTo(const PageEntriesEdit & edit)
     writeIntBinary(version, buf);
     for (const auto & record : edit.getRecords())
     {
+        bool seri_done = false;
         switch (record.type)
         {
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
-            serializePutTo(record, buf);
+        case EditRecordType::COLLAPSED_ENTRY:
+            seri_done = serializePutTo(record, buf);
             break;
         case EditRecordType::REF:
-            serializeRefTo(record, buf);
+        case EditRecordType::COLLAPSED_MAPPING:
+            seri_done = serializeRefTo(record, buf);
             break;
         case EditRecordType::DEL:
-            serializeDelTo(record, buf);
+            seri_done = serializeDelTo(record, buf);
             break;
         case EditRecordType::PUT_EXTERNAL:
-            serializePutExternalTo(record, buf);
+            seri_done = serializePutExternalTo(record, buf);
             break;
-        default:
+        } // do not add "default" so that we need to adjust this method after adding new type by warnings
+
+        // the `record.type` does not exist in enum, should not happen
+        if (unlikely(!seri_done))
+        {
             throw Exception(fmt::format("Unknown record type: {}", record.type), ErrorCodes::LOGICAL_ERROR);
         }
     }
@@ -237,7 +258,7 @@ PageEntriesEdit deserializeFrom(std::string_view record)
     UInt32 version = 0;
     readIntBinary(version, buf);
     if (version != 1)
-        throw Exception("");
+        throw Exception(""); //FIXME
 
     deserializeFrom(buf, edit);
     return edit;

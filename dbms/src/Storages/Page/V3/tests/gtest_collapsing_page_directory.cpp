@@ -164,19 +164,19 @@ try
     // Should collapsed to the latest version
     auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
         SCOPED_TRACE(scope);
-        const auto [ver1, entry1] = d.table_directory.find(page_1)->second;
-        EXPECT_TRUE(isSameEntry(entry1, entry_v4));
-        EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
+        const auto ver1 = d.table_directory.find(page_1)->second;
+        EXPECT_TRUE(isSameEntry(ver1.entry, entry_v4));
+        EXPECT_EQ(ver1.ver, PageVersionType(4, 0)) << fmt::format("{}", ver1.ver);
 
-        const auto [ver2, entry2] = d.table_directory.find(page_2)->second;
-        EXPECT_TRUE(isSameEntry(entry2, entry_v88));
-        EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
+        const auto ver2 = d.table_directory.find(page_2)->second;
+        EXPECT_TRUE(isSameEntry(ver2.entry, entry_v88));
+        EXPECT_EQ(ver2.ver, PageVersionType(88, 0)) << fmt::format("{}", ver2.ver);
 
         EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
 
-        const auto [ver4, entry4] = d.table_directory.find(page_4)->second;
-        EXPECT_TRUE(isSameEntry(entry4, entry_v92));
-        EXPECT_EQ(ver4, PageVersionType(92, 0)) << fmt::format("{}", ver4);
+        const auto ver4 = d.table_directory.find(page_4)->second;
+        EXPECT_TRUE(isSameEntry(ver4.entry, entry_v92));
+        EXPECT_EQ(ver4.ver, PageVersionType(92, 0)) << fmt::format("{}", ver4.ver);
 
         // Check the max applied version
         EXPECT_EQ(d.max_applied_ver, PageVersionType(92, 0));
@@ -184,7 +184,9 @@ try
     checker(dir, "before restore");
 
     // Dump to a log file and get a reader from that file to verify.
-    // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=92)
+    // The collapsed state should be:
+    //   page 1(ver=4), page 2(ver=88), page 4(ver=92)
+    //   1->1, 2->2, 4->4
     CollapsingPageDirectory another_dir;
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
@@ -196,23 +198,56 @@ try
         ++num_edits_read;
 
         auto edit = ser::deserializeFrom(record);
-        EXPECT_EQ(edit.size(), 3);
+        EXPECT_EQ(edit.size(), 6);
         for (auto iter = edit.getRecords().begin(); iter != edit.getRecords().end(); ++iter)
         {
-            if (iter->page_id == 1)
+            if (iter->type == EditRecordType::COLLAPSED_ENTRY)
             {
-                EXPECT_EQ(iter->version, PageVersionType(4));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v4));
+                if (iter->page_id == 1)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(4));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v4)) << toString(iter->entry);
+                }
+                else if (iter->page_id == 2)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(88));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v88)) << toString(iter->entry);
+                }
+                else if (iter->page_id == 4)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(92));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v92)) << toString(iter->entry);
+                }
+                else
+                {
+                    ASSERT_TRUE(false) << fmt::format("unknown id {}", iter->page_id);
+                }
             }
-            else if (iter->page_id == 2)
+            else if (iter->type == EditRecordType::COLLAPSED_MAPPING)
             {
-                EXPECT_EQ(iter->version, PageVersionType(88));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+                if (iter->page_id == 1)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(4));
+                    EXPECT_EQ(iter->page_id, iter->ori_page_id);
+                }
+                else if (iter->page_id == 2)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(88));
+                    EXPECT_EQ(iter->page_id, iter->ori_page_id);
+                }
+                else if (iter->page_id == 4)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(92));
+                    EXPECT_EQ(iter->page_id, iter->ori_page_id);
+                }
+                else
+                {
+                    ASSERT_TRUE(false) << fmt::format("unknown id {}", iter->page_id);
+                }
             }
-            else if (iter->page_id == 4)
+            else
             {
-                EXPECT_EQ(iter->version, PageVersionType(92));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v92));
+                ASSERT_TRUE(false); // unknown type
             }
         }
         another_dir.apply(std::move(edit));
@@ -231,7 +266,7 @@ try
     PageId page_1 = 1;
     INSERT_ENTRY(page_1, 4);
 
-    // put, ref, del
+    // put, ref
     PageId page_2 = 2;
     PageId page_4 = 4; // ref 4 -> 2
     INSERT_ENTRY(page_2, 88);
@@ -242,31 +277,40 @@ try
     INSERT_ENTRY(page_3, 90);
     INSERT_DELETE(page_3, 91);
 
+    // put, ref, del
+    PageId page_5 = 5;
+    PageId page_6 = 6; // ref 6 -> 5
+    INSERT_ENTRY(page_5, 108);
+    INSERT_REF(page_6, page_5, 109);
+    INSERT_DELETE(page_5, 109);
+
     // Should collapsed to the latest version
     auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
         SCOPED_TRACE(scope);
-        const auto [ver1, entry1] = d.table_directory.find(page_1)->second;
-        EXPECT_TRUE(isSameEntry(entry1, entry_v4));
-        EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
+        const auto ver1 = d.table_directory.find(page_1)->second;
+        EXPECT_TRUE(isSameEntry(ver1.entry, entry_v4));
+        EXPECT_EQ(ver1.ver, PageVersionType(4, 0)) << fmt::format("{}", ver1.ver);
 
-        const auto [ver2, entry2] = d.table_directory.find(page_2)->second;
-        EXPECT_TRUE(isSameEntry(entry2, entry_v88));
-        EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
+        const auto ver2 = d.table_directory.find(page_2)->second;
+        EXPECT_TRUE(isSameEntry(ver2.entry, entry_v88));
+        EXPECT_EQ(ver2.ver, PageVersionType(88, 0)) << fmt::format("{}", ver2.ver);
 
         EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
 
-        // 4 is a entry copy of 2
-        const auto [ver4, entry4] = d.table_directory.find(page_4)->second;
-        EXPECT_TRUE(isSameEntry(entry4, entry_v88));
-        EXPECT_EQ(ver4, PageVersionType(89, 0)) << fmt::format("{}", ver2);
+        // 4 is a ref to 2
+        const auto ver4 = d.id_mapping.find(page_4)->second;
+        EXPECT_EQ(ver4.second, page_2);
+        EXPECT_EQ(ver4.first, PageVersionType(89, 0)) << fmt::format("{}", ver4.first);
 
         // Check the max applied version
-        EXPECT_EQ(d.max_applied_ver, PageVersionType(91, 0));
+        EXPECT_EQ(d.max_applied_ver, PageVersionType(109, 0));
     };
     checker(dir, "before restore");
 
     // Dump to a log file and get a reader from that file to verify.
-    // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=89),
+    // The collapsed state should be:
+    //   1(ver=4), page 2(ver=88), page 5(ver=108)
+    //   1->1, 2->2, 4->2, 6->5
     CollapsingPageDirectory another_dir;
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
@@ -278,26 +322,61 @@ try
         ++num_edits_read;
 
         auto edit = ser::deserializeFrom(record);
-        EXPECT_EQ(edit.size(), 3);
+        EXPECT_EQ(edit.size(), 7);
         for (auto iter = edit.getRecords().begin(); iter != edit.getRecords().end(); ++iter)
         {
-            if (iter->page_id == 1)
+            if (iter->type == EditRecordType::COLLAPSED_ENTRY)
             {
-                EXPECT_EQ(iter->type, EditRecordType::PUT);
-                EXPECT_EQ(iter->version, PageVersionType(4));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v4));
+                if (iter->page_id == 1)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(4));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v4));
+                }
+                else if (iter->page_id == 2)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(88));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+                }
+                else if (iter->page_id == 5)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(108));
+                    EXPECT_TRUE(isSameEntry(iter->entry, entry_v108));
+                }
+                else
+                {
+                    ASSERT_TRUE(false) << fmt::format("unknown id {}", iter->page_id);
+                }
             }
-            else if (iter->page_id == 2)
+            else if (iter->type == EditRecordType::COLLAPSED_MAPPING)
             {
-                EXPECT_EQ(iter->type, EditRecordType::PUT);
-                EXPECT_EQ(iter->version, PageVersionType(88));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+                if (iter->page_id == 1)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(4));
+                    EXPECT_EQ(iter->page_id, iter->ori_page_id);
+                }
+                else if (iter->page_id == 2)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(88));
+                    EXPECT_EQ(iter->page_id, iter->ori_page_id);
+                }
+                else if (iter->page_id == 4)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(89));
+                    EXPECT_EQ(iter->ori_page_id, page_2);
+                }
+                else if (iter->page_id == 6)
+                {
+                    EXPECT_EQ(iter->version, PageVersionType(109));
+                    EXPECT_EQ(iter->ori_page_id, page_5);
+                }
+                else
+                {
+                    ASSERT_TRUE(false) << fmt::format("unknown id {}", iter->page_id);
+                }
             }
-            else if (iter->page_id == 4)
+            else
             {
-                EXPECT_EQ(iter->type, EditRecordType::PUT);
-                EXPECT_EQ(iter->version, PageVersionType(89));
-                EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+                ASSERT_TRUE(false); // unknown type
             }
         }
         another_dir.apply(std::move(edit)); // apply to `another_dir`
