@@ -89,6 +89,10 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
+            if (!canceled_task_set->task_map.empty())
+            {
+                canceled_task_set->task_map.begin()->second->deleteAndScheduleQueries();
+            }
             mpp_query_map.erase(it);
         }
     }
@@ -109,7 +113,16 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         throw Exception("The task " + task->id.toString() + " has been registered");
     }
-    mpp_query_map[task->id.start_ts]->task_map.emplace(task->id, task);
+    if (it == mpp_query_map.end())
+    {
+        auto ptr = std::make_shared<MPPQueryTaskSet>();
+        ptr->task_map.emplace(task->id, task);
+        mpp_query_map.insert({task->id.start_ts, ptr});
+    }
+    else
+    {
+        mpp_query_map[task->id.start_ts]->task_map.emplace(task->id, task);
+    }
     task->manager = this;
     cv.notify_all();
     return true;
@@ -174,18 +187,16 @@ String MPPTaskManager::toString()
     return res + ")";
 }
 
-MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
+MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
+{
+    const auto & it = mpp_query_map.find(query_id);
+    return it == mpp_query_map.end() ? nullptr : it->second;
+}
+
+MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithLock(UInt64 query_id)
 {
     std::lock_guard<std::mutex> lock(mu);
-    const auto & it = mpp_query_map.find(query_id);
-    if (it == mpp_query_map.end() || it->second->to_be_cancelled)
-    {
-        return nullptr;
-    }
-    else
-    {
-        return it->second;
-    }
+    return getQueryTaskSetWithoutLock(query_id);
 }
 
 } // namespace DB

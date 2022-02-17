@@ -109,8 +109,9 @@ private:
 
     friend class MPPTaskManager;
 
-    std::promise<bool> schedule_promise;
-    std::future<bool> schedule_future = schedule_promise.get_future();
+    std::mutex schedule_mu;
+    std::condition_variable schedule_cv;
+    bool scheduled;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

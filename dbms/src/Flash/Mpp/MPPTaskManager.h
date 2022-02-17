@@ -50,7 +50,8 @@ public:
 
     std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id);
 
-    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
+    MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
+    MPPQueryTaskSetPtr getQueryTaskSetWithLock(UInt64 query_id);
 
     bool registerTask(MPPTaskPtr task);
 

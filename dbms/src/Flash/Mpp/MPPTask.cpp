@@ -43,6 +43,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
     , mpp_task_statistics(id, meta.address())
+    , scheduled(false)
 {}
 
 MPPTask::~MPPTask()
@@ -298,9 +299,17 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
-
         int new_thd_cnt = estimateCountOfNewThreads();
         LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
+
+        if (status.load() != RUNNING)
+        {
+            /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
+            /// if the task is cancelled during preprocess, sendCancelToQuery may just be ignored because the processlist of
+            /// current task is not registered yet, so need to check the task status explicitly
+            throw Exception("task not in running state, may be cancelled");
+        }
+
 
         waitForScheduling();
 
@@ -417,6 +426,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
+            scheduleThisTask();
             context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
@@ -424,21 +434,31 @@ void MPPTask::cancel(const String & reason)
             return;
         }
     }
-    scheduleThisTask();
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 {
     return status.compare_exchange_strong(from, to);
 }
+
 void MPPTask::waitForScheduling()
 {
-    context->getTMTContext().getMPPTaskScheduler()->putWaitingQuery(shared_from_this());
-    schedule_future.get();
+    if (context->getTMTContext().getMPPTaskScheduler()->putWaitingQuery(shared_from_this()))
+    {
+        LOG_FMT_INFO(log, "task waits for schedule");
+        Stopwatch stopwatch;
+        std::unique_lock<std::mutex> lock(schedule_mu);
+        schedule_cv.wait(lock, [&] { return scheduled; });
+        LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
+    }
 }
+
 void MPPTask::scheduleThisTask()
 {
-    schedule_promise.set_value(true);
+    LOG_FMT_INFO(log, "task gets schedule");
+    std::unique_lock<std::mutex> lock(schedule_mu);
+    scheduled = true;
+    schedule_cv.notify_one();
 }
 void MPPTask::deleteAndScheduleQueries()
 {

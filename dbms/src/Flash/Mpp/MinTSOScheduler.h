@@ -27,5 +27,4 @@ private:
     Poco::Logger * log;
 };
 
-
 } // namespace DB
