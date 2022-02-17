@@ -9,6 +9,11 @@ namespace Poco
 class Logger;
 }
 
+namespace DB
+{
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+} // namespace DB
 namespace DB::PS::V3
 {
 enum LogFileStage
@@ -28,7 +33,7 @@ struct LogFilename
     static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
     static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
 
-    static LogFilename parseFrom(const String & parent_path, const String & filename, Poco::Logger * log);
+    static LogFilename parseFrom(const String & parent_path, const String & filename, const LogWithPrefixPtr & log);
 
     inline String filename(LogFileStage stage) const
     {

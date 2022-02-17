@@ -30,7 +30,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 void PageStorageImpl::restore()
 {
     // TODO: Speedup restoring
-    CollapsingPageDirectory collapsing_directory;
+    CollapsingPageDirectory collapsing_directory(log);
     auto callback = [&collapsing_directory](PageEntriesEdit && edit) {
         collapsing_directory.apply(std::move(edit));
     };

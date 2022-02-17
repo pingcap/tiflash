@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/RedactHelpers.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
@@ -56,7 +57,7 @@ WALStorePtr WALStore::create(
 
     // Create a new LogFile for writing new logs
     auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
-    auto * logger = &Poco::Logger::get("WALStore");
+    auto logger = getLogWithPrefix(nullptr, "WALStore");
     auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
     (void)filename;
     return std::unique_ptr<WALStore>(new WALStore(delegator, provider, write_limiter, std::move(log_file)));
@@ -71,7 +72,7 @@ WALStore::WALStore(
     , provider(provider_)
     , write_limiter(write_limiter_)
     , log_file(std::move(cur_log))
-    , logger(&Poco::Logger::get("WALStore"))
+    , logger(getLogWithPrefix(nullptr, "WALStore"))
 {
 }
 
@@ -110,7 +111,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     const FileProviderPtr & provider,
     const WriteLimiterPtr & write_limiter,
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-    Poco::Logger * logger,
+    const LogWithPrefixPtr & logger,
     bool manual_flush)
 {
     const auto path = delegator->defaultPath(); // TODO: multi-path
@@ -161,7 +162,7 @@ bool WALStore::compactLogs()
     if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
         return false;
 
-    CollapsingPageDirectory collapsing_directory;
+    CollapsingPageDirectory collapsing_directory(logger);
     auto reader = WALStoreReader::create(provider, compact_log_files);
     while (reader->remained())
     {

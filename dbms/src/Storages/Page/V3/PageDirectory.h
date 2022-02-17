@@ -24,6 +24,11 @@ namespace CurrentMetrics
 extern const Metric PSMVCCNumSnapshots;
 } // namespace CurrentMetrics
 
+namespace DB
+{
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+} // namespace DB
 namespace DB::PS::V3
 {
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
@@ -196,7 +201,9 @@ struct ExternalPageHolder
 class ExternalMap
 {
 public:
-    ExternalMap() = default;
+    explicit ExternalMap(LogWithPrefixPtr logger)
+        : log(std::move(logger))
+    {}
 
     PageId getNormalPageId(PageId page_id, UInt64 sequence) const
     {
@@ -261,6 +268,7 @@ public:
         {
             external_table_directory = std::move(rhs.external_table_directory);
             external_ref_counter = std::move(rhs.external_ref_counter);
+            log = std::move(rhs.log);
         }
         return *this;
     }
@@ -271,6 +279,8 @@ private:
 
     ExternalPagesHolderMap external_table_directory;
     ExternalPagesRefCounter external_ref_counter;
+
+    LogWithPrefixPtr log;
 };
 
 // `CollapsingPageDirectory` only store the latest version
@@ -280,11 +290,13 @@ private:
 class CollapsingPageDirectory
 {
 public:
-    CollapsingPageDirectory();
+    CollapsingPageDirectory(LogWithPrefixPtr logger);
 
     void apply(PageEntriesEdit && edit);
 
     void dumpTo(std::unique_ptr<LogWriter> & log_writer);
+
+    LogWithPrefixPtr log;
 
     using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
     CollapsingMapType table_directory;
@@ -352,6 +364,7 @@ public:
     PageDirectory & operator=(const PageDirectory &) = delete;
     // Only moving
     PageDirectory(PageDirectory && rhs) noexcept
+        : external_table_directory(rhs.log)
     {
         *this = std::move(rhs);
     }
@@ -359,6 +372,7 @@ public:
     {
         if (this != &rhs)
         {
+            log = std::move(rhs.log);
             // Note: Not making it thread safe for moving, don't
             // care about `table_rw_mutex` and `snapshots_mutex`
             sequence.store(rhs.sequence.load());
@@ -366,12 +380,13 @@ public:
             external_table_directory = std::move(rhs.external_table_directory);
             snapshots = std::move(rhs.snapshots);
             wal = std::move(rhs.wal);
-            log = std::move(rhs.log);
         }
         return *this;
     }
 
 private:
+    LogWithPrefixPtr log;
+
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
     using EntriesMap = std::unordered_map<PageId, VersionedPageEntriesPtr>;
@@ -382,8 +397,6 @@ private:
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
     WALStorePtr wal;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB::PS::V3

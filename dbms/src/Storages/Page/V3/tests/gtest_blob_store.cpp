@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -31,7 +32,7 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
 {
     BlobStats stats(logger, config);
 
-    CollapsingPageDirectory dir;
+    CollapsingPageDirectory dir(getLogWithPrefix(nullptr, "BlobStoreStatsTest"));
     {
         PageEntriesEdit edit;
         dir.apply(std::move(edit));
@@ -55,7 +56,7 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
-    CollapsingPageDirectory dir;
+    CollapsingPageDirectory dir(getLogWithPrefix(nullptr, "BlobStoreStatsTest"));
     {
         PageEntriesEdit edit;
         edit.appendRecord(PageEntriesEdit::EditRecord{
@@ -304,7 +305,7 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
-    CollapsingPageDirectory dir;
+    CollapsingPageDirectory dir(getLogWithPrefix(nullptr, "BlobStoreStatsTest"));
     {
         PageEntriesEdit edit;
         edit.appendRecord(PageEntriesEdit::EditRecord{

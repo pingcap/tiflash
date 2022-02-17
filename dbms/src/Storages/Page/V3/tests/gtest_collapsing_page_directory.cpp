@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/LogWithPrefix.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
@@ -35,7 +36,8 @@ class CollapsingPageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     CollapsingPageDirectoryTest()
-        : logger(&Poco::Logger::get("CollapsingPageDirectoryTest"))
+        : logger(getLogWithPrefix(nullptr, "CollapsingPageDirectoryTest"))
+        , dir(logger)
     {}
 
     void SetUp() override
@@ -86,12 +88,12 @@ public:
             logger);
     }
 
-protected:
-    CollapsingPageDirectory dir;
-
 private:
     ReportCollector reporter;
-    Poco::Logger * logger;
+
+protected:
+    LogWithPrefixPtr logger;
+    CollapsingPageDirectory dir;
 };
 
 #define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID) \
@@ -194,7 +196,7 @@ try
 
     // Dump to a log file and get a reader from that file to verify.
     // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=92)
-    CollapsingPageDirectory another_dir;
+    CollapsingPageDirectory another_dir(logger);
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
     while (true)
@@ -319,7 +321,7 @@ try
     // Dump to a log file and get a reader from that file to verify.
     // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=89),
     // (external) page5, 6->5, 7->5, 10->8
-    CollapsingPageDirectory another_dir;
+    CollapsingPageDirectory another_dir(logger);
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
     while (true)

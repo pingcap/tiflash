@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/LogWithPrefix.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
@@ -47,7 +48,7 @@ TEST(ExternalPageHolderTest, Visible)
 
 TEST(ExternalMapTest, CreateDelete)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     EXPECT_ANY_THROW(m.getNormalPageId(page_id, 50));
 
@@ -95,7 +96,7 @@ TEST(ExternalMapTest, CreateDelete)
 
 TEST(ExternalMapTest, CreateDelete2)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     PageId page_id2 = 11;
     EXPECT_ANY_THROW(m.getNormalPageId(page_id, 50));
@@ -152,7 +153,7 @@ TEST(ExternalMapTest, CreateDelete2)
 
 TEST(ExternalMapTest, CreateRefDelete)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     PageId ref_id1 = 11;
     PageId ref_id2 = 12;
@@ -213,7 +214,7 @@ TEST(ExternalMapTest, CreateRefDelete)
 
 TEST(ExternalMapTest, CreateAgainAfterRef)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     PageId ref_id1 = 11;
     PageId ref_id2 = 12;
@@ -284,7 +285,7 @@ TEST(ExternalMapTest, CreateAgainAfterRef)
 
 TEST(ExternalMapTest, CreateRefOnRef)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     PageId ref_id1 = 11;
     PageId ref_id2 = 12;
@@ -323,7 +324,7 @@ TEST(ExternalMapTest, CreateRefOnRef)
 
 TEST(ExternalMapTest, CreateInvaildRef)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     PageId page_id = 10;
     PageId ref_id1 = 11;
     PageId ref_id2 = 12;
@@ -356,7 +357,7 @@ TEST(ExternalMapTest, CreateInvaildRef)
 
 TEST(ExternalMapTest, CreateInvaildRef2)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     // 10->10, 11->10, 10->11
     EXPECT_TRUE(m.createExternal(10, 50));
     EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
@@ -366,7 +367,7 @@ TEST(ExternalMapTest, CreateInvaildRef2)
 
 TEST(ExternalMapTest, CreateInvaildRef3)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     // 10->10, 11->10; del 10->10; 10->11
     EXPECT_TRUE(m.createExternal(10, 50));
     EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
@@ -377,7 +378,7 @@ TEST(ExternalMapTest, CreateInvaildRef3)
 
 TEST(ExternalMapTest, CreateInvaildRef4)
 {
-    ExternalMap m;
+    ExternalMap m(getLogWithPrefix(nullptr, "ExternalMapTest"));
     // 10->10, 11->10; del 10->10; 10->11
     EXPECT_TRUE(m.createExternal(10, 50));
     EXPECT_TRUE(m.tryCreateRef(11, 10, 51));
@@ -398,7 +399,7 @@ public:
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        CollapsingPageDirectory collapsed_state;
+        CollapsingPageDirectory collapsed_state(getLogWithPrefix(nullptr, "PageDirectoryTest"));
         auto wal = WALStore::create(nullptr, provider, delegator);
         dir = PageDirectory::create(collapsed_state, std::move(wal));
     }

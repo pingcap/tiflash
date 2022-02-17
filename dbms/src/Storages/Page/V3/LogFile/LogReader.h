@@ -11,6 +11,8 @@ class Logger;
 }
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 class ReadBuffer;
 class WriteBufferFromFile;
 namespace PS::V3
@@ -36,7 +38,7 @@ public:
         bool verify_checksum_,
         Format::LogNumberType log_num_,
         WALRecoveryMode recovery_mode_,
-        Poco::Logger * log_);
+        LogWithPrefixPtr log_);
 
     LogReader(const LogReader &) = delete;
     LogReader & operator=(const LogReader &) = delete;
@@ -114,7 +116,7 @@ private:
     // which log number it is
     const Format::LogNumberType log_number;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace PS::V3

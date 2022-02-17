@@ -8,7 +8,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
 #include <Encryption/EncryptionPath.h>
@@ -211,7 +213,7 @@ private:
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
     std::unique_ptr<LogReader> reader;
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 
 protected:
     bool recyclable_log;
@@ -220,7 +222,7 @@ protected:
 
 public:
     LogFileRWTest()
-        : log(&Poco::Logger::get("LogFileRWTest"))
+        : log(getLogWithPrefix(nullptr, "LogFileRWTest"))
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {

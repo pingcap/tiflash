@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/FileProvider.h>
@@ -17,7 +18,7 @@ namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
     PSDiskDelegatorPtr & delegator,
-    Poco::Logger * logger)
+    const LogWithPrefixPtr & logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
@@ -69,7 +70,7 @@ WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilename
 
 WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
 {
-    Poco::Logger * logger = &Poco::Logger::get("WALStore");
+    auto logger = getLogWithPrefix(nullptr, "WALStore");
     LogFilenameSet log_files = listAllFiles(delegator, logger);
     return create(provider, std::move(log_files));
 }
@@ -78,7 +79,7 @@ WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && fi
     : provider(provider_)
     , files(std::move(files_))
     , next_reading_file(files.begin())
-    , logger(&Poco::Logger::get("LogReader"))
+    , logger(getLogWithPrefix(nullptr, "LogReader"))
 {}
 
 bool WALStoreReader::remained() const

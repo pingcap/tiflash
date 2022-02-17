@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -10,7 +11,7 @@
 
 namespace DB::PS::V3
 {
-LogFilename LogFilename::parseFrom(const String & parent_path, const String & filename, Poco::Logger * log)
+LogFilename LogFilename::parseFrom(const String & parent_path, const String & filename, const LogWithPrefixPtr & log)
 {
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {

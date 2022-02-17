@@ -5,6 +5,8 @@
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
@@ -31,7 +33,7 @@ private:
 class WALStoreReader
 {
 public:
-    static LogFilenameSet listAllFiles(PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
+    static LogFilenameSet listAllFiles(PSDiskDelegatorPtr & delegator, const LogWithPrefixPtr & logger);
 
     static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files);
 
@@ -70,7 +72,7 @@ private:
     const LogFilenameSet files;
     LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
-    Poco::Logger * logger;
+    LogWithPrefixPtr logger;
 };
 
 } // namespace PS::V3

@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -206,7 +207,7 @@ TEST(WALSeriTest, Upserts)
 
 TEST(WALLognameTest, parsing)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    auto log = getLogWithPrefix(nullptr, "WALLognameTest");
     const String parent_path("/data1");
 
     {
@@ -252,7 +253,7 @@ TEST(WALLognameTest, parsing)
 
 TEST(WALLognameSetTest, ordering)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    auto log = getLogWithPrefix(nullptr, "WALLognameTest");
     const String parent_path("/data1");
 
     LogFilenameSet filenames;

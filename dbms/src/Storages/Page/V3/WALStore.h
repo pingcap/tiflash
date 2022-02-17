@@ -11,6 +11,8 @@
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 class WriteLimiter;
@@ -94,7 +96,7 @@ private:
         const FileProviderPtr & provider,
         const WriteLimiterPtr & write_limiter,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        Poco::Logger * logger,
+        const LogWithPrefixPtr & logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
@@ -103,7 +105,7 @@ private:
     std::mutex log_file_mutex;
     std::unique_ptr<LogWriter> log_file;
 
-    Poco::Logger * logger;
+    LogWithPrefixPtr logger;
 };
 
 } // namespace PS::V3

@@ -141,7 +141,10 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_s
   * CollapsingPageDirectory methods *
   *********************************/
 
-CollapsingPageDirectory::CollapsingPageDirectory() = default;
+CollapsingPageDirectory::CollapsingPageDirectory(LogWithPrefixPtr logger)
+    : log(std::move(logger))
+    , external_directory(log)
+{}
 
 void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 {
@@ -262,7 +265,7 @@ bool ExternalMap::createExternal(PageId page_id, UInt64 sequence)
     if (unlikely(!new_inserted))
     {
         LOG_FMT_ERROR(
-            &Poco::Logger::get("ExternalMap"),
+            log,
             "Create external page fail, already exists"
             " [page_id={}] [seq={}] [exist={}]",
             page_id,
@@ -275,7 +278,7 @@ bool ExternalMap::createExternal(PageId page_id, UInt64 sequence)
     {
         external_table_directory.erase(iter); // rollback
         LOG_FMT_ERROR(
-            &Poco::Logger::get("ExternalMap"),
+            log,
             "Create external page ref count fail, there exists ref to old external page!"
             " [page_id={}] [seq={}] [old_ref_count={}]",
             page_id,
@@ -312,7 +315,7 @@ bool ExternalMap::tryCreateRef(PageId page_id, PageId ori_page_id, UInt64 sequen
 
     // else we have already created the ref pair of `page_id`, should be sth wrong
     LOG_FMT_ERROR(
-        &Poco::Logger::get("ExternalMap"),
+        log,
         "Create ref pair fail, already exists"
         " [page_id={}] [ori_page_id={}] [seq={}]"
         " [exist={}]",
@@ -359,7 +362,7 @@ void ExternalMap::restoreRef(PageId page_id, PageId ori_page_id, UInt64 sequence
     if (!new_inserted_ref)
     {
         LOG_FMT_ERROR(
-            &Poco::Logger::get("ExternalMap"),
+            log,
             "Restore ref pair fail, already exists"
             " [page_id={}] [ori_page_id={}] [seq={}] [exist={}]",
             page_id,
@@ -416,9 +419,10 @@ PageDirectory::PageDirectory()
 }
 
 PageDirectory::PageDirectory(UInt64 init_seq, WALStorePtr && wal_)
-    : sequence(init_seq)
+    : log(getLogWithPrefix(nullptr, "PageDirectory"))
+    , sequence(init_seq)
+    , external_table_directory(log)
     , wal(std::move(wal_))
-    , log(getLogWithPrefix(nullptr, "PageDirectory"))
 {
 }
 
