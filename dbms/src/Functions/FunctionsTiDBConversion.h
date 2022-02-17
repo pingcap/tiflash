@@ -1148,10 +1148,10 @@ struct TiDBConvertToDecimal
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
+            const CastInternalType max_value = getMaxValueIfNecessary(prec);
             const ScaleType from_scale = col_from->getScale();
             const ScaleType scale_diff = ((from_scale > scale) ? (from_scale - scale) : (scale - from_scale));
             const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale_diff);
-            const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), max_value, scale, scale_mul, context);
         }
@@ -1165,8 +1165,8 @@ struct TiDBConvertToDecimal
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
+            const CastInternalType max_value = getMaxValueIfNecessary(prec);
             const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
-            const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
             for (size_t i = 0; i < size; ++i)
             {
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
@@ -1206,8 +1206,8 @@ struct TiDBConvertToDecimal
             if constexpr (std::is_integral_v<FromFieldType>)
             {
                 /// cast enum/int as decimal
+                const CastInternalType max_value = getMaxValueIfNecessary(prec);
                 const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
-                const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
                 for (size_t i = 0; i < size; ++i)
                     vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], max_value, scale_mul, context);
             }
@@ -1229,6 +1229,19 @@ struct TiDBConvertToDecimal
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         else
             block.getByPosition(result).column = std::move(col_to);
+    }
+
+    // max_value is useless if can_skip_check_overflow is true.
+    static CastInternalType getMaxValueIfNecessary(PrecType prec [[maybe_unused]])
+    {
+        if constexpr (!can_skip_check_overflow)
+        {
+            return static_cast<CastInternalType>(DecimalMaxValue::get(prec));
+        }
+        else
+        {
+            return CastInternalType(0);
+        }
     }
 };
 
