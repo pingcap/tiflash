@@ -240,9 +240,9 @@ LearnerReadSnapshot doLearnerRead(
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
-            if (const auto * proxy_helper = kvstore->getProxyHelper(); proxy_helper)
+            if (kvstore->getProxyHelper())
             {
-                auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+                auto res = kvstore->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
                 for (auto && [resp, region_id] : res)
                 {
                     batch_read_index_result.emplace(region_id, std::move(resp));
@@ -320,7 +320,7 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
+                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
                 if (wait_res != WaitIndexResult::Finished)
                 {
                     handle_wait_timeout_region(region_to_query.region_id);
