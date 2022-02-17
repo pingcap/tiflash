@@ -65,7 +65,8 @@ bool isValidSeperator(char c, int previous_parts)
     if (isPunctuation(c))
         return true;
 
-    return previous_parts == 2 && (c == ' ' || c == 'T');
+    // for https://github.com/pingcap/tics/issues/4036
+    return previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c));
 }
 
 std::vector<String> parseDateFormat(String format)
