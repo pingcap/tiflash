@@ -21,7 +21,6 @@ struct always_false : std::false_type
 
 namespace DB
 {
-
 class MutexLockWrap
 {
 public:
