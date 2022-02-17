@@ -246,7 +246,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
-    for (const tipb::Expr & expr : aggregation.group_by())
+    for (const tipb::Expr & expr : group_by)
     {
         String name = getActions(expr, actions);
         bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
