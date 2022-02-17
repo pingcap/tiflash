@@ -9,7 +9,9 @@ void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_fr
 {
     if (!actions->getRequiredColumnsWithTypes().empty()
         && columns_from_previous > actions->getRequiredColumnsWithTypes().size())
+    {
         actions->prependProjectInput();
+    }
 }
 
 void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names & parent_require)

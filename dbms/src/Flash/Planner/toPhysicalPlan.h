@@ -42,6 +42,8 @@ private:
 
     ExpressionActionsPtr newActionsFromSchema();
 
+    void assignCurPlan(const PhysicalPlanPtr & new_cur_plan);
+
     PhysicalPlanPtr cur_plan;
 
     Context & context;

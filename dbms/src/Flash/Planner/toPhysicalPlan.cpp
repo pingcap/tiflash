@@ -27,6 +27,12 @@ bool isFinalAgg(const tipb::Expr & expr)
 }
 } // namespace
 
+void PhysicalPlanBuilder::assignCurPlan(const PhysicalPlanPtr & new_cur_plan)
+{
+    new_cur_plan->appendChild(cur_plan);
+    cur_plan = new_cur_plan;
+}
+
 ExpressionActionsPtr PhysicalPlanBuilder::newActionsForNewPlan()
 {
     assert(!schema.empty());
@@ -61,7 +67,7 @@ void PhysicalPlanBuilder::buildAggregation(const String & executor_id, const tip
     bool is_final_agg = true;
     if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
         is_final_agg = false;
-    for (int i = 1; i < aggregation.agg_func_size(); i++)
+    for (int i = 1; i < aggregation.agg_func_size(); ++i)
     {
         if (is_final_agg != isFinalAgg(aggregation.agg_func(i)))
             throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
@@ -98,9 +104,7 @@ void PhysicalPlanBuilder::buildAggregation(const String & executor_id, const tip
     analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
     schema = analyzer.getCurrentInputColumns();
 
-    auto agg_plan = std::make_shared<PhysicalAggregation>(executor_id, schema, before_agg_actions, aggregation_keys, collators, aggregate_descriptions, cast_after_agg_actions);
-    agg_plan->appendChild(cur_plan);
-    cur_plan = agg_plan;
+    assignCurPlan(std::make_shared<PhysicalAggregation>(executor_id, schema, before_agg_actions, aggregation_keys, collators, aggregate_descriptions, cast_after_agg_actions));
 }
 
 void PhysicalPlanBuilder::buildFilter(const String & executor_id, const tipb::Selection & selection)
@@ -117,9 +121,7 @@ void PhysicalPlanBuilder::buildFilter(const String & executor_id, const tipb::Se
         conditions.push_back(&c);
     String filter_column_name = analyzer.buildFilterColumn(actions, conditions);
 
-    auto filter_plan = std::make_shared<PhysicalFilter>(executor_id, schema, filter_column_name, actions);
-    filter_plan->appendChild(cur_plan);
-    cur_plan = filter_plan;
+    assignCurPlan(std::make_shared<PhysicalFilter>(executor_id, schema, filter_column_name, actions));
 }
 
 void PhysicalPlanBuilder::buildLimit(const String & executor_id, const tipb::Limit & limit)
@@ -127,9 +129,7 @@ void PhysicalPlanBuilder::buildLimit(const String & executor_id, const tipb::Lim
     assert(!schema.empty());
     assert(cur_plan);
 
-    auto limit_plan = std::make_shared<PhysicalLimit>(executor_id, schema, limit.limit());
-    limit_plan->appendChild(cur_plan);
-    cur_plan = limit_plan;
+    assignCurPlan(std::make_shared<PhysicalLimit>(executor_id, schema, limit.limit()));
 }
 
 void PhysicalPlanBuilder::buildTopN(const String & executor_id, const tipb::TopN & top_n)
@@ -147,9 +147,7 @@ void PhysicalPlanBuilder::buildTopN(const String & executor_id, const tipb::TopN
     auto order_columns = analyzer.buildOrderColumns(actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
-    auto top_n_plan = std::make_shared<PhysicalTopN>(executor_id, schema, order_descr, actions, top_n.limit());
-    top_n_plan->appendChild(cur_plan);
-    cur_plan = top_n_plan;
+    assignCurPlan(std::make_shared<PhysicalTopN>(executor_id, schema, order_descr, actions, top_n.limit()));
 }
 
 void PhysicalPlanBuilder::buildExchangeSender(const String & executor_id, const tipb::ExchangeSender & exchange_sender)
@@ -185,9 +183,7 @@ void PhysicalPlanBuilder::buildExchangeSender(const String & executor_id, const 
         }
     }
 
-    auto exchange_sender_plan = std::make_shared<PhysicalExchangeSender>(executor_id, schema, partition_col_id, collators, exchange_sender.tp());
-    exchange_sender_plan->appendChild(cur_plan);
-    cur_plan = exchange_sender_plan;
+    assignCurPlan(std::make_shared<PhysicalExchangeSender>(executor_id, schema, partition_col_id, collators, exchange_sender.tp()));
 }
 
 void PhysicalPlanBuilder::buildSource(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block)
@@ -211,9 +207,7 @@ void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_pref
 
     schema = analyzer.getCurrentInputColumns();
 
-    auto non_root_final_projection_plan = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, actions);
-    non_root_final_projection_plan->appendChild(cur_plan);
-    cur_plan = non_root_final_projection_plan;
+    assignCurPlan(std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, actions));
     cur_plan->disableRecordProfileStreams();
 }
 
@@ -245,9 +239,7 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
 
     schema = analyzer.getCurrentInputColumns();
 
-    auto root_final_projection_plan = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions);
-    root_final_projection_plan->appendChild(cur_plan);
-    cur_plan = root_final_projection_plan;
+    assignCurPlan(std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions));
     cur_plan->disableRecordProfileStreams();
 }
 } // namespace DB
