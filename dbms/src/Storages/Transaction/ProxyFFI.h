@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace kvrpcpb
@@ -38,9 +39,43 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
     String,
     PreHandledSnapshotWithBlock,
     PreHandledSnapshotWithFiles,
+    WakerNotifier,
 };
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
+
+struct ReadIndexTask;
+struct RawRustPtrWrap;
+
+struct RawRustPtrWrap : RawRustPtr
+{
+    RawRustPtrWrap(const RawRustPtrWrap &) = delete;
+    RawRustPtrWrap & operator=(const RawRustPtrWrap &) = delete;
+
+    explicit RawRustPtrWrap(RawRustPtr inner);
+    ~RawRustPtrWrap();
+    RawRustPtrWrap(RawRustPtrWrap &&);
+};
+
+struct ReadIndexTask : RawRustPtrWrap
+{
+    explicit ReadIndexTask(RawRustPtr inner_)
+        : RawRustPtrWrap(inner_)
+    {}
+};
+
+struct TimerTask : RawRustPtrWrap
+{
+    explicit TimerTask(RawRustPtr inner_)
+        : RawRustPtrWrap(inner_)
+    {}
+};
+
+class MockSetFFI
+{
+    friend struct MockRaftStoreProxy;
+    static void MockSetRustGcHelper(void (*)(RawVoidPtr, RawRustPtrType));
+};
 
 struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
 {
@@ -51,8 +86,15 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     FileEncryptionInfo newFile(const std::string &) const;
     FileEncryptionInfo deleteFile(const std::string &) const;
     FileEncryptionInfo linkFile(const std::string &, const std::string &) const;
-    kvrpcpb::ReadIndexResponse readIndex(const kvrpcpb::ReadIndexRequest &) const;
+    BatchReadIndexRes batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
+    BatchReadIndexRes batchReadIndex_v2(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
+    // return null if meet error `Full` or `Disconnected`
+    std::optional<ReadIndexTask> makeReadIndexTask(const kvrpcpb::ReadIndexRequest & req) const;
+    bool pollReadIndexTask(ReadIndexTask & task, kvrpcpb::ReadIndexResponse & resp, RawVoidPtr waker = nullptr) const;
+    RawRustPtr makeAsyncWaker(void (*wake_fn)(RawVoidPtr), RawCppPtr data) const;
+    TimerTask makeTimerTask(uint64_t time_ms) const;
+    bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
 };
 
 extern "C" {
@@ -82,6 +124,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, Bas
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
+void SetReadIndexResp(RawVoidPtr, BaseBuffView);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
@@ -110,6 +153,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+        .fn_set_read_index_resp = SetReadIndexResp,
         .fn_set_server_info_resp = SetServerInfoResp,
         .fn_get_config = GetConfig,
         .fn_set_store = SetStore,
