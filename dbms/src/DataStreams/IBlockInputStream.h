@@ -85,7 +85,7 @@ public:
      *  However, most of new threads in certainty are considered
      *  and that's enough to be used to estimate the expected threads load of the system.
      */
-    virtual int estimateNewThreadCount()
+    int estimateNewThreadCount()
     {
         int cnt = 0;
         resetNewThreadCountCompute();
@@ -148,7 +148,7 @@ public:
 
     virtual void collectNewThreadCountOfThisLevel(int &) {}
 
-    virtual void resetNewThreadCountCompute()
+    void resetNewThreadCountCompute()
     {
         if (collected)
         {

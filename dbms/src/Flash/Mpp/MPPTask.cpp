@@ -300,7 +300,7 @@ void MPPTask::runImpl()
         preprocess();
 
         int new_thd_cnt = estimateCountOfNewThreads();
-        LOG_DEBUG(log, "Estimate new thread count of query :" << new_thd_cnt << " including tunnel_thds: " << mpp_task_statistics.getRemoteTunnelCnt() << " , receiver_thds: " << dag_context->getNewThreadCountOfExchangeReceiver());
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, mpp_task_statistics.getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
