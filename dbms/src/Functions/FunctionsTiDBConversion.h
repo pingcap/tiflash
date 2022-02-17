@@ -817,7 +817,7 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T int_value, PrecType prec [[maybe_unused]], const CastInternalType & scale_mul, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, const CastInternalType & max_value [[maybe_unused]], const CastInternalType & scale_mul, const Context & context)
     {
         // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
@@ -827,15 +827,13 @@ struct TiDBConvertToDecimal
         CastInternalType scaled_value = static_cast<CastInternalType>(int_value) * static_cast<CastInternalType>(scale_mul);
         if constexpr (!can_skip_check_overflow)
         {
-            CastInternalType scaled_max_value = static_cast<CastInternalType>(DecimalMaxValue::get(prec));
-
-            if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
+            if (scaled_value > max_value || scaled_value < -max_value)
             {
                 context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
                 if (int_value > 0)
-                    return static_cast<UType>(scaled_max_value);
+                    return static_cast<UType>(max_value);
                 else
-                    return static_cast<UType>(-scaled_max_value);
+                    return static_cast<UType>(-max_value);
             }
         }
 
@@ -843,7 +841,7 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, const CastInternalType & scale_mul, int fsp, const Context & context)
+    static U toTiDBDecimal(MyDateTime & date_time, const CastInternalType & max_value, ScaleType scale, const CastInternalType & scale_mul, int fsp, const Context & context)
     {
         UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
             + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
@@ -851,28 +849,28 @@ struct TiDBConvertToDecimal
         {
             Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
-            return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, scale_mul, context);
+            return toTiDBDecimal<Decimal128, U>(decimal, 6, max_value, scale, scale_mul, context);
         }
         else
         {
-            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale_mul, context);
+            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, max_value, scale_mul, context);
         }
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDate & date, PrecType prec, const CastInternalType & scale_mul, const Context & context)
+    static U toTiDBDecimal(MyDate & date, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
-        return toTiDBDecimalInternal<UInt64, U>(value, prec, scale_mul, context);
+        return toTiDBDecimalInternal<UInt64, U>(value, max_value, scale_mul, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, const CastInternalType & scale_mul, const Context & context)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
-            return toTiDBDecimalInternal<T, U>(value, prec, scale_mul, context);
+            return toTiDBDecimalInternal<T, U>(value, max_value, scale_mul, context);
         else
-            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale_mul, context);
+            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), max_value, scale_mul, context);
     }
 
     template <typename T, typename U>
@@ -919,7 +917,7 @@ struct TiDBConvertToDecimal
     static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
         const T & v,
         ScaleType v_scale,
-        PrecType prec [[maybe_unused]],
+        const CastInternalType & max_value [[maybe_unused]],
         ScaleType scale,
         const CastInternalType & scale_mul,
         const Context & context)
@@ -947,7 +945,6 @@ struct TiDBConvertToDecimal
 
         if constexpr (!can_skip_check_overflow)
         {
-            CastInternalType max_value = static_cast<CastInternalType>(DecimalMaxValue::get(prec));
             if (value > max_value || value < -max_value)
             {
                 context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
@@ -1152,8 +1149,9 @@ struct TiDBConvertToDecimal
             const ScaleType from_scale = col_from->getScale();
             const ScaleType scale_diff = ((from_scale > scale) ? (from_scale - scale) : (scale - from_scale));
             const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale_diff);
+            const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
             for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, scale_mul, context);
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), max_value, scale, scale_mul, context);
         }
         else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
@@ -1166,17 +1164,18 @@ struct TiDBConvertToDecimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+            const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
             for (size_t i = 0; i < size; ++i)
             {
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, prec, scale_mul, context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, max_value, scale_mul, context);
                 }
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, prec, scale, scale_mul, type.getFraction(), context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, max_value, scale, scale_mul, type.getFraction(), context);
                 }
             }
         }
@@ -1205,9 +1204,10 @@ struct TiDBConvertToDecimal
             if constexpr (std::is_integral_v<FromFieldType>)
             {
                 /// cast enum/int as decimal
-                CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                const CastInternalType max_value = getScaleMultiplier<CastInternalType>(prec);
                 for (size_t i = 0; i < size; ++i)
-                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale_mul, context);
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], max_value, scale_mul, context);
             }
             else
             {
