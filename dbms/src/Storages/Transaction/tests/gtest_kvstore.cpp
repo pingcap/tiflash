@@ -133,6 +133,7 @@ void RegionKVStoreTest::testReadIndex()
 
                 auto region = makeRegion(tar_region_id, RecordKVFormat::genKey(2, 0), RecordKVFormat::genKey(2, 10));
                 lock.regions.emplace(region->id(), region);
+                lock.index.add(region);
             }
             {
                 ASSERT_EQ(proxy_instance.regions.at(tar_region_id)->getLatestCommitIndex(), 5);
@@ -147,6 +148,7 @@ void RegionKVStoreTest::testReadIndex()
             });
             SCOPE_EXIT({
                 t.join();
+                kvs.handleDestroy(tar_region_id, ctx.getTMTContext());
             });
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -181,7 +183,12 @@ void RegionKVStoreTest::testReadIndex()
             });
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
         }
+
         kvs.asyncRunReadIndexWorkers();
+        SCOPE_EXIT({
+            kvs.stopReadIndexWorkers();
+        });
+
         {
             // test read index
             auto region = kvs.getRegion(1);
@@ -765,6 +772,8 @@ void RegionKVStoreTest::testKVStore()
     KVStore & kvs = *ctx.getTMTContext().getKVStore();
     kvs.restore(nullptr);
     {
+        // Run without read-index workers
+
         kvs.initReadIndexWorkers(
             []() {
                 return std::chrono::milliseconds(10);
