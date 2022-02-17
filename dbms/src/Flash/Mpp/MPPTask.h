@@ -101,6 +101,8 @@ private:
 
     MPPTaskStatistics mpp_task_statistics;
 
+    int remote_tunnel_cnt = 0;
+
     Exception err;
 
     friend class MPPTaskManager;

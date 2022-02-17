@@ -39,9 +39,6 @@ public:
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
-    int getRemoteTunnelCnt() const;
-
-    void incRemoteTunnelCnt();
 
 private:
     void recordInputBytes(DAGContext & dag_context);
@@ -74,6 +71,5 @@ private:
     Int64 working_time = 0;
     Int64 memory_peak = 0;
 
-    int remote_tunnel_cnt = 0;
 };
 } // namespace DB

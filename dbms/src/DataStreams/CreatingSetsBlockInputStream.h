@@ -46,23 +46,11 @@ public:
     /// Takes `totals` only from the main source, not from subquery sources.
     Block getTotals() override;
 
-    virtual void collectNewThreadCount(int & cnt) override
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
-        if (!collected)
+        if (!children.empty())
         {
-            collected = true;
-            for (auto & subqueries_for_sets : subqueries_for_sets_list)
-            {
-                for (auto & elem : subqueries_for_sets)
-                {
-                    if (elem.second.source)
-                    {
-                        cnt++; // new thread is scheduled, so update the counter
-                        elem.second.source->collectNewThreadCount(cnt);
-                    }
-                }
-            }
-            children.back()->collectNewThreadCount(cnt);
+            cnt += (children.size() - 1);
         }
     }
 

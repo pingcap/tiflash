@@ -67,14 +67,9 @@ public:
             throw Exception(exception_msg);
     }
 
-    virtual void collectNewThreadCount(int & cnt) override
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
-        if (!collected)
-        {
-            collected = true;
-            cnt++;
-            in->collectNewThreadCount(cnt);
-        }
+        cnt++;
     }
 
 protected:
