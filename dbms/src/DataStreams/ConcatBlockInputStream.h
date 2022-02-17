@@ -12,25 +12,25 @@ namespace DB
   */
 class ConcatBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "Concat";
+
 public:
     ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, name))
+        : log(getMPPTaskLog(log_, NAME))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
     }
 
-    static constexpr auto name = "Concat";
-
-    String getName() const override { return name; }
+    String getName() const override { return NAME; }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
 protected:
     Block readImpl() override
     {
-        FilterPtr filter_;
-        return readImpl(filter_, false);
+        FilterPtr filter_ignored;
+        return readImpl(filter_ignored, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override

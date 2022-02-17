@@ -434,6 +434,10 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         const auto & r = records[idx];
         switch (r.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+        {
+            throw Exception("Not implemented");
+        }
         case WriteBatch::WriteType::PUT:
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
@@ -562,11 +566,11 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
+
 std::vector<PageEntriesV3> PageDirectory::gc()
 {
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
-    std::vector<PageEntriesV3> all_del_entries;
 
     done_anything |= wal->compactLogs();
 
@@ -585,6 +589,7 @@ std::vector<PageEntriesV3> PageDirectory::gc()
         }
     }
 
+    std::vector<PageEntriesV3> all_del_entries;
     {
         std::unique_lock write_lock(table_rw_mutex);
         for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)

@@ -15,7 +15,7 @@ using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RegionTaskLock;
-class RegionManager;
+struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
 namespace PS

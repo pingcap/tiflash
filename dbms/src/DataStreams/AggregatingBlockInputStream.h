@@ -17,6 +17,8 @@ namespace DB
   */
 class AggregatingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "Aggregating";
+
 public:
     /** keys are taken from the GROUP BY part of the query
       * Aggregate functions are searched everywhere in the expression.
@@ -28,7 +30,7 @@ public:
         const FileProviderPtr & file_provider_,
         bool final_,
         const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, name))
+        : log(getMPPTaskLog(log_, NAME))
         , params(params_)
         , aggregator(params, log)
         , file_provider{file_provider_}
@@ -37,9 +39,7 @@ public:
         children.push_back(input);
     }
 
-    static constexpr auto name = "Aggregating";
-
-    String getName() const override { return name; }
+    String getName() const override { return NAME; }
 
     Block getHeader() const override;
 

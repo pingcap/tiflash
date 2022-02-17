@@ -37,6 +37,7 @@ add_library (common ${SPLIT_SHARED}
     src/crc64_avx512.cpp
     src/crc64.cpp
     src/simd.cpp
+    src/detect_features.cpp
 
     include/common/types.h
     include/common/DateLUT.h
@@ -63,6 +64,7 @@ add_library (common ${SPLIT_SHARED}
     include/common/crc64_table.h
     include/common/crc64_fast.h
     include/common/crc64.h
+    include/common/detect_features.h
 
     include/ext/bit_cast.h
     include/ext/collection_cast.h
@@ -122,6 +124,7 @@ target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 target_link_libraries (
     common
+    PUBLIC
     pocoext
     ${CITYHASH_LIBRARIES}
     ${CCTZ_LIBRARY}
@@ -132,6 +135,7 @@ target_link_libraries (
     ${GLIBC_COMPATIBILITY_LIBRARIES}
     ${MEMCPY_LIBRARIES}
     fmt
+    cpu_features
 )
 
 if (RT_LIBRARY)

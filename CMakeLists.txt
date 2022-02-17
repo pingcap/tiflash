@@ -4,6 +4,7 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+option(TIFLASH_ENABLE_RUNTIME_RPATH "Add $ORIGIN/ to tiflash installation rpath" OFF)
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
 if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
@@ -301,7 +302,6 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
@@ -327,6 +327,7 @@ include (cmake/find_protobuf.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
+include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_tiflash_proxy.cmake)
 include (cmake/find_xxhash.cmake)
@@ -347,9 +348,6 @@ include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
-if (ENABLE_MYSQL_STORAGE)
-    include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
-endif()
 
 include (cmake/print_flags.cmake)
 
