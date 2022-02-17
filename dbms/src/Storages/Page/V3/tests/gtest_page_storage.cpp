@@ -235,9 +235,9 @@ TEST_F(PageStorageTest, WriteReadOnSamePageId)
         }
     }
 
-    for (size_t i = 0; i < buf_sz; ++i)
+    for (char & i : c_buff)
     {
-        c_buff[i] = 0x1;
+        i = 0x1;
     }
 
     {
@@ -324,27 +324,6 @@ try
 CATCH
 
 TEST_F(PageStorageTest, DeadLockInMVCC)
-{
-    WriteBatch batch;
-    {
-        batch.putExternal(0, 0);
-        batch.putRefPage(1, 0);
-        batch.putExternal(1024, 0);
-        page_storage->write(std::move(batch));
-    }
-
-    auto snapshot = page_storage->getSnapshot();
-
-    {
-        WriteBatch batch;
-        batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
-        batch.delPage(1); // free ref 1 -> 0
-        batch.delPage(1024); // free normal page 1024
-        page_storage->write(std::move(batch));
-    }
-}
-
-TEST_F(PageStorageTest, WriteReadGcExternalPage)
 try
 {
     WriteBatch batch;
@@ -355,26 +334,6 @@ try
         page_storage->write(std::move(batch));
     }
 
-    size_t times_remover_called = 0;
-
-    PageStorage::ExternalPagesScanner scanner = []() -> PageStorage::PathAndIdsVec {
-        return {};
-    };
-    PageStorage::ExternalPagesRemover remover
-        = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
-        times_remover_called += 1;
-        // FIXME: the number of normal_page_id
-        // ASSERT_EQ(normal_page_ids.size(), 2UL);
-        EXPECT_GT(normal_page_ids.count(0), 0UL);
-        EXPECT_GT(normal_page_ids.count(1024), 0UL);
-    };
-    page_storage->registerExternalPagesCallbacks(scanner, remover);
-    {
-        SCOPED_TRACE("fist gc");
-        page_storage->gc();
-        EXPECT_EQ(times_remover_called, 1UL);
-    }
-
     auto snapshot = page_storage->getSnapshot();
 
     {
@@ -383,36 +342,6 @@ try
         batch.delPage(1); // free ref 1 -> 0
         batch.delPage(1024); // free normal page 1024
         page_storage->write(std::move(batch));
-    }
-
-    {
-        SCOPED_TRACE("gc with snapshot");
-        page_storage->gc();
-        EXPECT_EQ(times_remover_called, 2UL);
-    }
-
-    {
-        DB::Page page0 = page_storage->read(0);
-        ASSERT_EQ(page0.data.size(), 0UL);
-        ASSERT_EQ(page0.page_id, 0UL);
-
-        DB::Page page2 = page_storage->read(2);
-        ASSERT_EQ(page2.data.size(), 0UL);
-        ASSERT_EQ(page2.page_id, 2UL);
-    }
-
-    snapshot.reset();
-    remover = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
-        times_remover_called += 1;
-        // FIXME: the number of normal_page_id
-        // ASSERT_EQ(normal_page_ids.size(), 1);
-        EXPECT_GT(normal_page_ids.count(0), 0);
-    };
-    page_storage->registerExternalPagesCallbacks(scanner, remover);
-    {
-        SCOPED_TRACE("gc with snapshot released");
-        page_storage->gc();
-        EXPECT_EQ(times_remover_called, 3UL);
     }
 }
 CATCH
@@ -469,7 +398,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -486,7 +415,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -544,7 +473,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -561,7 +490,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -574,9 +503,7 @@ CATCH
 class PageStorageWith2PagesTest : public PageStorageTest
 {
 public:
-    PageStorageWith2PagesTest()
-        : PageStorageTest()
-    {}
+    PageStorageWith2PagesTest() = default;
 
 protected:
     void SetUp() override

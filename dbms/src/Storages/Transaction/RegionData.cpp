@@ -248,16 +248,4 @@ RegionData & RegionData::operator=(RegionData && rhs)
     return *this;
 }
 
-
-UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it)
-{
-    return RegionWriteCFDataTrait::getWriteType(write_it->second);
-}
-
-const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFData * write)
-{
-    auto offset = reinterpret_cast<size_t>(&(reinterpret_cast<RegionData *>(0)->write_cf));
-    RegionData * data_ptr = reinterpret_cast<RegionData *>(reinterpret_cast<char *>(write) - offset);
-    return data_ptr->defaultCF().getData();
-}
 } // namespace DB

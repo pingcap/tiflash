@@ -81,7 +81,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 edit.ref(write.page_id, write.ori_page_id);
                 break;
             }
-            case WriteBatch::WriteType::PUT:
+            case WriteBatch::WriteType::PUT_EXTERNAL:
             { // Only putExternal won't have data.
                 PageEntryV3 entry;
                 entry.tag = write.tag;
@@ -90,7 +90,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 break;
             }
             default:
-                throw Exception("write batch have a invalid total size.",
+                throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -166,8 +166,13 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     if (buffer_pos != buffer + all_page_data_size)
     {
         removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        throw Exception("write batch have a invalid total size, or something wrong in parse write batch.",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format(
+                "write batch have a invalid total size, or something wrong in parse write batch "
+                "[expect_offset={}] [actual_offset={}]",
+                all_page_data_size,
+                (buffer_pos - buffer)),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     try
@@ -695,6 +700,7 @@ void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
 {
     for (const auto & [page_id, versioned_entry] : entries.table_directory)
     {
+        (void)page_id;
         const auto & [ver, entry] = versioned_entry;
         (void)ver;
         (void)page_id;

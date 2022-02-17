@@ -109,7 +109,7 @@ public:
 
     bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
-    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
@@ -243,8 +243,8 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPagesScanner external_pages_scanner = nullptr;
-    ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::V2ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPageCallbacks::V2ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
 
