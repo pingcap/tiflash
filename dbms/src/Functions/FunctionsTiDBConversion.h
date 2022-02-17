@@ -59,6 +59,8 @@ enum CastError
     OVERFLOW_ERR,
 };
 
+constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+
 /// cast int/real/decimal/time as string
 template <typename FromDataType, bool return_nullable>
 struct TiDBConvertToString
@@ -847,9 +849,9 @@ struct TiDBConvertToDecimal
             + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
+            Int128 value = value_without_fsp * pow10[fsp] + date_time.micro_second;
             Decimal128 decimal(value);
-            return toTiDBDecimal<Decimal128, U>(decimal, 6, max_value, scale, scale_mul, context);
+            return toTiDBDecimal<Decimal128, U>(decimal, fsp, max_value, scale, scale_mul, context);
         }
         else
         {
@@ -1561,7 +1563,6 @@ struct TiDBConvertToDuration
             block.getByPosition(result).column = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
     }
 
-    constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
     static Int64 round(Int64 x, int fsp)
     {
         Int64 scale = pow10[fsp];
