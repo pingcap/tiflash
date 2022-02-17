@@ -11,6 +11,8 @@ namespace DB
 {
 void PhysicalFilter::transform(DAGPipeline & pipeline, const Context & context, size_t)
 {
+    children(0)->transform(pipeline, context, max_streams);
+
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, logger); });
     recordProfileStreams(pipeline, *context.getDAGContext());

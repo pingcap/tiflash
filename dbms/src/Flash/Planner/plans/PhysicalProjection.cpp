@@ -10,6 +10,8 @@ namespace DB
 {
 void PhysicalProjection::transform(DAGPipeline & pipeline, const Context & context, size_t)
 {
+    children(0)->transform(pipeline, context, max_streams);
+
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project_actions, logger); });
     recordProfileStreams(pipeline, *context.getDAGContext());

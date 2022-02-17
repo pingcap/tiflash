@@ -12,6 +12,8 @@ namespace DB
 {
 void PhysicalTopN::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
+    children(0)->transform(pipeline, context, max_streams);
+
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
     const Settings & settings = context.getSettingsRef();
 

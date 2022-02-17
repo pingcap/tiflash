@@ -13,6 +13,8 @@ namespace DB
 {
 void PhysicalAggregation::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
+    children(0)->transform(pipeline, context, max_streams);
+
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, before_agg_actions, logger); });
@@ -97,7 +99,18 @@ bool PhysicalAggregation::finalize(const Names & parent_require)
     checkSchemaContainsParentRequire(schema, parent_require);
 
     cast_after_agg->finalize(schemaToNames(schema));
-    before_agg_actions->finalize(cast_after_agg->getRequiredColumns());
+
+    Names before_agg_output;
+    for (const auto & aggregate_description : aggregate_descriptions)
+    {
+        for (const auto & argument_name : aggregate_description.argument_names)
+            before_agg_output.push_back(argument_name);
+    }
+    for (const auto & aggregation_key : aggregation_keys)
+    {
+        before_agg_output.push_back(aggregation_key);
+    }
+    before_agg_actions->finalize(before_agg_output);
 
     if (child->finalize(before_agg_actions->getRequiredColumns()))
         prependProjectInputIfNeed(before_agg_actions, child->getSampleBlock().columns());

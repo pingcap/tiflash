@@ -1,14 +1,25 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Planner/toPhysicalPlan.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
-ExpressionActionsPtr ToPhysicalPlanBuilder::newActionsForNewPlan()
+namespace
+{
+bool isFinalAgg(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
+        return true;
+    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
+}
+} // namespace
+
+ExpressionActionsPtr PhysicalPlanBuilder::newActionsForNewPlan()
 {
     assert(!schema.empty());
     assert(cur_plan);
@@ -17,13 +28,74 @@ ExpressionActionsPtr ToPhysicalPlanBuilder::newActionsForNewPlan()
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
 }
 
-void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tipb::Aggregation & aggregation)
+ExpressionActionsPtr PhysicalPlanBuilder::newActionsFromSchema()
+{
+    NamesAndTypesList actions_input_column;
+    std::unordered_set<String> column_name_set;
+    for (const auto & col : schema)
+    {
+        if (column_name_set.find(col.name) == column_name_set.end())
+        {
+            actions_input_column.emplace_back(col.name, col.type);
+            column_name_set.emplace(col.name);
+        }
+    }
+    return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
+}
+
+void PhysicalPlanBuilder::buildAggregation(const String & executor_id, const tipb::Aggregation & aggregation)
 {
     assert(!schema.empty());
     assert(cur_plan);
+
+    /// set default value to true to make it compatible with old version of TiDB since before this
+    /// change, all the aggregation in TiFlash is treated as final aggregation
+    bool is_final_agg = true;
+    if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
+        is_final_agg = false;
+    for (int i = 1; i < aggregation.agg_func_size(); i++)
+    {
+        if (is_final_agg != isFinalAgg(aggregation.agg_func(i)))
+            throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
+    }
+    // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
+    //  aggregation if the stage is partial
+    bool group_by_collation_sensitive =
+        /// collation sensitive group by is slower than normal group by, use normal group by by default
+        context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
+
+    if (aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0)
+    {
+        //should not reach here
+        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
+    }
+
+    DAGExpressionAnalyzer analyzer{schema, context};
+
+    ExpressionActionsPtr before_agg_actions = newActionsForNewPlan();
+    NamesAndTypes aggregated_columns;
+    AggregateDescriptions aggregate_descriptions;
+    analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
+
+    Names aggregation_keys;
+    TiDB::TiDBCollators collators;
+    std::unordered_set<String> agg_key_set;
+    for (const tipb::Expr & expr : aggregation.group_by())
+        analyzer.buildAggGroupBy(expr, before_agg_actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
+
+    schema = std::move(aggregated_columns);
+
+    auto cast_after_agg_actions = newActionsFromSchema();
+    analyzer.source_columns = schema;
+    analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
+    schema = analyzer.getCurrentInputColumns();
+
+    auto agg_plan = std::make_shared<PhysicalAggregation>(executor_id, schema, before_agg_actions, aggregation_keys, collators, aggregate_descriptions, cast_after_agg_actions);
+    agg_plan->appendChild(cur_plan);
+    cur_plan = agg_plan;
 }
 
-void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tipb::Selection & selection)
+void PhysicalPlanBuilder::buildFilter(const String & executor_id, const tipb::Selection & selection)
 {
     assert(!schema.empty());
     assert(cur_plan);
@@ -32,37 +104,17 @@ void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tip
 
     DAGExpressionAnalyzer analyzer{schema, context};
 
-    String filter_column_name;
-    if (selection.conditions_size() == 1)
-    {
-        filter_column_name = analyzer.getActions(selection.conditions(0), actions, true);
-        if (isColumnExpr(selection.conditions(0))
-            && (!exprHasValidFieldType(selection.conditions(0))
-                /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                || DAGExpressionAnalyzerHelper::isUInt8Type(getDataTypeByFieldTypeForComputingLayer(selection.conditions(0).field_type()))))
-        {
-            /// FilterBlockInputStream will CHANGE the filter column inplace, so
-            /// filter column should never be a columnRef in DAG request, otherwise
-            /// for queries like select c1 from t where c1 will got wrong result
-            /// as after FilterBlockInputStream, c1 will become a const column of 1
-            filter_column_name = analyzer.convertToUInt8(actions, filter_column_name);
-        }
-    }
-    else
-    {
-        Names arg_names;
-        for (const auto & condition : selection.conditions())
-            arg_names.push_back(analyzer.getActions(condition, actions, true));
-        // connect all the conditions by logical and
-        filter_column_name = analyzer.applyFunction("and", arg_names, actions, nullptr);
-    }
+    std::vector<const tipb::Expr *> conditions;
+    for (const auto & c : selection.conditions())
+        conditions.push_back(&c);
+    String filter_column_name = analyzer.buildFilterColumn(actions, conditions);
 
     auto filter_plan = std::make_shared<PhysicalFilter>(executor_id, schema, filter_column_name, actions);
     filter_plan->appendChild(cur_plan);
     cur_plan = filter_plan;
 }
 
-void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tipb::Limit & limit)
+void PhysicalPlanBuilder::buildLimit(const String & executor_id, const tipb::Limit & limit)
 {
     assert(!schema.empty());
     assert(cur_plan);
@@ -72,7 +124,7 @@ void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tip
     cur_plan = limit_plan;
 }
 
-void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tipb::TopN & top_n)
+void PhysicalPlanBuilder::buildTopN(const String & executor_id, const tipb::TopN & top_n)
 {
     assert(!schema.empty());
     assert(cur_plan);
@@ -81,24 +133,16 @@ void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const tip
     {
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
-    std::vector<NameAndTypePair> order_columns;
-    order_columns.reserve(top_n.order_by_size());
 
     auto actions = newActionsForNewPlan();
     DAGExpressionAnalyzer analyzer{schema, context};
-
-    for (const tipb::ByItem & by_item : top_n.order_by())
-    {
-        String name = analyzer.getActions(by_item.expr(), actions);
-        auto type = actions->getSampleBlock().getByName(name).type;
-        order_columns.emplace_back(name, type);
-    }
+    auto order_columns = analyzer.buildOrderColumns(actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
     cur_plan = std::make_shared<PhysicalTopN>(executor_id, schema, order_descr, actions, top_n.limit());
 }
 
-void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block)
+void PhysicalPlanBuilder::buildSource(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block)
 {
     assert(!cur_plan);
     assert(schema.empty());
@@ -107,32 +151,24 @@ void ToPhysicalPlanBuilder::toPhysicalPlan(const String & executor_id, const Nam
     cur_plan = std::make_shared<PhysicalSource>(executor_id, source_schema, source_sample_block);
 }
 
-void ToPhysicalPlanBuilder::appendNonRootFinalProjection(const String & column_prefix)
+void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_prefix)
 {
     assert(!schema.empty());
     assert(cur_plan);
 
-    NamesAndTypes new_schema;
-    NamesWithAliases final_project_aliases;
-    UniqueNameGenerator unique_name_generator;
-    for (const auto & column : schema)
-    {
-        auto new_name = unique_name_generator.toUniqueName(column_prefix + column.name);
-        final_project_aliases.emplace_back(column.name, new_name);
-        new_schema.emplace_back(new_name, column.type);
-    }
-
+    DAGExpressionAnalyzer analyzer{schema, context};
+    auto final_project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
     auto actions = newActionsForNewPlan();
     actions->add(ExpressionAction::project(final_project_aliases));
 
-    schema = std::move(new_schema);
+    schema = analyzer.getCurrentInputColumns();
     auto non_root_final_projection_plan = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, actions);
     non_root_final_projection_plan->appendChild(cur_plan);
     cur_plan = non_root_final_projection_plan;
     cur_plan->disableRecordProfileStreams();
 }
 
-void ToPhysicalPlanBuilder::appendRootFinalProjection(
+void PhysicalPlanBuilder::buildRootFinalProjection(
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
@@ -145,100 +181,20 @@ void ToPhysicalPlanBuilder::appendRootFinalProjection(
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     auto actions = newActionsForNewPlan();
+    DAGExpressionAnalyzer analyzer{schema, context};
 
-    NamesWithAliases final_project_aliases;
-    UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
-    /// TiFlash will append extra type cast if needed.
-    bool need_append_type_cast = false;
-    BoolVec need_append_type_cast_vec;
-    /// we need to append type cast for root block if necessary
-    for (UInt32 i : output_offsets)
+    auto [need_append_type_cast, need_append_type_cast_vec] = analyzer.checkIfCastIsRequired(require_schema, output_offsets);
+
+    if (need_append_timezone_cast || need_append_type_cast)
     {
-        const auto & actual_type = schema[i].type;
-        auto expected_type = getDataTypeByFieldTypeForComputingLayer(require_schema[i]);
-        if (actual_type->getName() != expected_type->getName())
-        {
-            need_append_type_cast = true;
-            need_append_type_cast_vec.push_back(true);
-        }
-        else
-        {
-            need_append_type_cast_vec.push_back(false);
-        }
+        analyzer.appendCastForRootFinalProjection(actions, require_schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
     }
 
-    NamesAndTypes new_schema;
-    if (!need_append_timezone_cast && !need_append_type_cast)
-    {
-        for (auto i : output_offsets)
-        {
-            auto new_name = unique_name_generator.toUniqueName(column_prefix + schema[i].name);
-            final_project_aliases.emplace_back(schema[i].name, new_name);
-            new_schema.emplace_back(new_name, schema[i].type);
-        }
-    }
-    else
-    {
-        /// for all the columns that need to be returned, if the type is timestamp, then convert
-        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
-        DAGExpressionAnalyzer analyzer{schema, context};
-
-        tipb::Expr tz_expr = DAGExpressionAnalyzerHelper::constructTZExpr(context.getTimezoneInfo());
-        String tz_col;
-        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-        std::vector<Int32> casted(require_schema.size(), 0);
-        std::unordered_map<String, size_t> casted_index_map;
-
-        for (size_t index = 0; index < output_offsets.size(); ++index)
-        {
-            UInt32 i = output_offsets[index];
-            if ((need_append_timezone_cast && require_schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
-            {
-                const auto & it = casted_index_map.find(schema[i].name);
-                if (it == casted_index_map.end())
-                {
-                    /// first add timestamp cast
-                    String updated_name = schema[i].name;
-                    auto updated_data_type = schema[i].type;
-                    if (need_append_timezone_cast && require_schema[i].tp() == TiDB::TypeTimestamp)
-                    {
-                        if (tz_col.length() == 0)
-                            tz_col = analyzer.getActions(tz_expr, actions);
-                        updated_name = analyzer.appendTimeZoneCast(tz_col, schema[i].name, tz_cast_func_name, actions);
-                    }
-                    /// then add type cast
-                    if (need_append_type_cast_vec[index])
-                    {
-                        updated_data_type = getDataTypeByFieldTypeForComputingLayer(require_schema[i]);
-                        updated_name = analyzer.appendCast(updated_data_type, actions, updated_name);
-                    }
-                    auto new_name = unique_name_generator.toUniqueName(column_prefix + updated_name);
-                    final_project_aliases.emplace_back(updated_name, new_name);
-                    casted_index_map[schema[i].name] = index;
-                    new_schema.emplace_back(new_name, updated_data_type);
-                }
-                else
-                {
-                    auto has_casted_index = it->second;
-                    auto new_name = unique_name_generator.toUniqueName(column_prefix + final_project_aliases[has_casted_index].first);
-                    final_project_aliases.emplace_back(final_project_aliases[has_casted_index].first, new_name);
-                    new_schema.emplace_back(new_name, new_schema[has_casted_index].type);
-                }
-            }
-            else
-            {
-                auto new_name = unique_name_generator.toUniqueName(column_prefix + schema[i].name);
-                final_project_aliases.emplace_back(schema[i].name, new_name);
-                new_schema.emplace_back(new_name, schema[i].type);
-            }
-        }
-    }
-
+    NamesWithAliases final_project_aliases = analyzer.genRootFinalProjectAliases(column_prefix, output_offsets);
     actions->add(ExpressionAction::project(final_project_aliases));
 
-    schema = std::move(new_schema);
+    schema = analyzer.getCurrentInputColumns();
     auto root_final_projection_plan = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions);
     root_final_projection_plan->appendChild(cur_plan);
     cur_plan = root_final_projection_plan;

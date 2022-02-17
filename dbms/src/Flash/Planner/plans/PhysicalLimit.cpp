@@ -10,6 +10,8 @@ namespace DB
 {
 void PhysicalLimit::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
+    children(0)->transform(pipeline, context, max_streams);
+
     const LogWithPrefixPtr & logger = context.getDAGContext()->log;
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, logger, false); });
     if (pipeline.hasMoreThanOneStream())

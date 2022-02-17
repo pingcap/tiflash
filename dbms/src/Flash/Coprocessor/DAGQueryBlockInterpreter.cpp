@@ -25,12 +25,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Planner/plans/PhysicalAggregation.h>
-#include <Flash/Planner/plans/PhysicalFilter.h>
-#include <Flash/Planner/plans/PhysicalLimit.h>
-#include <Flash/Planner/plans/PhysicalProjection.h>
-#include <Flash/Planner/plans/PhysicalSource.h>
-#include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/toPhysicalPlan.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -107,127 +102,55 @@ bool isFinalAgg(const tipb::Expr & expr)
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
-AnalysisResult analyzeExpressions(
+PhysicalPlan analysePhysicalPlan(
     Context & context,
-    DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     bool keep_session_timezone_info,
-    NamesWithAliases & final_project,
     const Block & source_sample_block)
 {
-    PhysicalPlanPtr plan = std::make_shared<PhysicalSource>(query_block.source_name, analyzer.getCurrentInputColumns(), source_sample_block);
+    PhysicalPlanBuilder builder{context};
+    builder.buildSource(query_block.source_name, analyzer.getCurrentInputColumns(), source_sample_block);
 
-    AnalysisResult res;
-    ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
     if (query_block.selection && query_block.source->tp() != tipb::ExecType::TypeTableScan)
     {
-        std::vector<const tipb::Expr *> where_conditions;
-        for (const auto & c : query_block.selection->selection().conditions())
-            where_conditions.push_back(&c);
-        res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
-        res.before_where = chain.getLastActions();
-        chain.addStep();
-
-        auto filter_plan = std::make_shared<PhysicalFilter>(query_block.selection_name, analyzer.getCurrentInputColumns(), res.filter_column_name, res.before_where);
-        filter_plan->appendChild(plan);
-        plan = filter_plan;
+        builder.buildFilter(query_block.selection_name, query_block.selection->selection());
     }
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        res.is_final_agg = true;
-        const auto & aggregation = query_block.aggregation->aggregation();
-        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
-            res.is_final_agg = false;
-        for (int i = 1; i < aggregation.agg_func_size(); i++)
-        {
-            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
-                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-        }
-        // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
-        //  aggregation if the stage is partial
-        bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower than normal group by, use normal group by by default
-            context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
-
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
-            chain,
-            query_block.aggregation->aggregation(),
-            group_by_collation_sensitive);
-
-        auto agg_plan = std::make_shared<PhysicalAggregation>(
-            query_block.aggregation_name,
-            analyzer.getCurrentInputColumns(),
-            res.before_aggregation,
-            res.aggregation_keys,
-            res.aggregation_collators,
-            res.aggregate_descriptions,
-            chain.getLastActions());
-        agg_plan->appendChild(plan);
-        plan = agg_plan;
+        builder.buildAggregation(query_block.aggregation_name, query_block.aggregation->aggregation());
 
         if (query_block.having != nullptr)
         {
-            std::vector<const tipb::Expr *> having_conditions;
-            for (const auto & c : query_block.having->selection().conditions())
-                having_conditions.push_back(&c);
-            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
-            res.before_having = chain.getLastActions();
-            chain.addStep();
-
-            auto having_plan = std::make_shared<PhysicalFilter>(query_block.having_name, analyzer.getCurrentInputColumns(), res.having_column_name, res.before_having);
-            having_plan->appendChild(plan);
-            plan = having_plan;
+            builder.buildFilter(query_block.having_name, query_block.having->selection());
         }
     }
     // Or TopN, not both.
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
-        res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
-
-        SortDescription order_descr = getSortDescription(res.order_columns, query_block.limit_or_topn->topn().order_by());
-        auto top_n_plan = std::make_shared<PhysicalTopN>(
-            query_block.limit_or_topn_name,
-            analyzer.getCurrentInputColumns(),
-            order_descr,
-            chain.getLastActions(),
-            query_block.limit_or_topn->topn().limit());
-        top_n_plan->appendChild(plan);
-        plan = top_n_plan;
+        builder.buildTopN(query_block.limit_or_topn_name, query_block.limit_or_topn->topn());
     }
 
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeLimit)
     {
-        auto limit_plan = std::make_shared<PhysicalLimit>(query_block.limit_or_topn_name, analyzer.getCurrentInputColumns(), query_block.limit_or_topn->limit().limit());
-        limit_plan->appendChild(plan);
-        plan = limit_plan;
+        builder.buildLimit(query_block.limit_or_topn_name, query_block.limit_or_topn->limit());
     }
 
-    // Append final project results if needed.
-    final_project = query_block.isRootQueryBlock()
-        ? analyzer.appendFinalProjectForRootQueryBlock(
-            chain,
+    if (query_block.isRootQueryBlock())
+    {
+        builder.buildRootFinalProjection(
             query_block.output_field_types,
             query_block.output_offsets,
             query_block.qb_column_prefix,
-            keep_session_timezone_info)
-        : analyzer.appendFinalProjectForNonRootQueryBlock(
-            chain,
-            query_block.qb_column_prefix);
+            keep_session_timezone_info);
+    }
+    else
+    {
+        builder.buildNonRootFinalProjection(column_prefix);
+    }
 
-    auto project_plan = std::make_shared<PhysicalProjection>(query_block.source_name, analyzer.getCurrentInputColumns(), chain.getLastActions());
-    project_plan->appendChild(plan);
-    plan = project_plan;
-
-    res.before_order_and_select = chain.getLastActions();
-
-    chain.finalize();
-    chain.clear();
-    //todo need call prependProjectInput??
-    return res;
+    return builder.getRes();
 }
 
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
@@ -797,140 +720,6 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
-void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
-{
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, taskLogger()); });
-}
-
-void DAGQueryBlockInterpreter::executeAggregation(
-    DAGPipeline & pipeline,
-    const ExpressionActionsPtr & expression_actions_ptr,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg)
-{
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, taskLogger()); });
-
-    Block header = pipeline.firstStream()->getHeader();
-    ColumnNumbers keys;
-    for (const auto & name : key_names)
-    {
-        keys.push_back(header.getPositionByName(name));
-    }
-    for (auto & descr : aggregate_descriptions)
-    {
-        if (descr.arguments.empty())
-        {
-            for (const auto & name : descr.argument_names)
-            {
-                descr.arguments.push_back(header.getPositionByName(name));
-            }
-        }
-    }
-
-    const Settings & settings = context.getSettingsRef();
-
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
-    bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
-
-    Aggregator::Params params(
-        header,
-        keys,
-        aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
-        !is_final_agg,
-        context.getTemporaryPath(),
-        has_collator ? collators : TiDB::dummy_collators);
-
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1)
-    {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
-            pipeline.streams,
-            stream_with_non_joined_data,
-            params,
-            context.getFileProvider(),
-            true,
-            max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            taskLogger());
-        pipeline.streams.resize(1);
-        // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-        restorePipelineConcurrency(pipeline);
-    }
-    else
-    {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
-        if (stream_with_non_joined_data)
-            inputs.push_back(stream_with_non_joined_data);
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, taskLogger()),
-            params,
-            context.getFileProvider(),
-            true,
-            taskLogger());
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-    }
-    // add cast
-}
-
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
-{
-    if (!expressionActionsPtr->getActions().empty())
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, taskLogger()); });
-    }
-}
-
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
-{
-    SortDescription order_descr = getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by());
-    const Settings & settings = context.getSettingsRef();
-    Int64 limit = query_block.limit_or_topn->topn().limit();
-
-    pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
-    });
-
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, taskLogger());
-
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        taskLogger());
-}
-
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
     auto & profile_streams = dagContext().getProfileStreamsMap()[key];
@@ -1063,65 +852,25 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     assert(pipeline.hasMoreThanOneStream());
-    auto res = analyzeExpressions(
+    auto physical_plan = analysePhysicalPlan(
         context,
-        *analyzer,
         query_block,
         keep_session_timezone_info,
-        final_project,
         pipeline.firstStream()->getHeader());
 
-    if (res.before_where)
-    {
-        // execute where
-        executeWhere(pipeline, res.before_where, res.filter_column_name);
-        recordProfileStreams(pipeline, query_block.selection_name);
-    }
+    physical_plan.finalize();
 
     // this log measures the concurrent degree in this mpp task
     LOG_FMT_DEBUG(
         log,
-        "execution stream size for query block(before aggregation) {} is {}",
+        "execution stream size for query block(source) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
     dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
 
-    if (res.before_aggregation)
-    {
-        // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
-    }
+    physical_plan.transform(pipeline, context, max_streams)
 
-    if (res.before_having)
-    {
-        // execute having
-        executeWhere(pipeline, res.before_having, res.having_column_name);
-        recordProfileStreams(pipeline, query_block.having_name);
-    }
-
-    if (res.before_order_and_select)
-    {
-        executeExpression(pipeline, res.before_order_and_select);
-    }
-
-    if (!res.order_columns.empty())
-    {
-        // execute topN
-        executeOrder(pipeline, res.order_columns);
-        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
-    }
-
-    // execute final project action
-    executeProject(pipeline, final_project);
-
-    // execute limit
-    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
-    {
-        executeLimit(pipeline);
-        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
-    }
-
-    restorePipelineConcurrency(pipeline);
+        restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
     if (query_block.exchange_sender)
@@ -1137,21 +886,6 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
         return;
     ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, taskLogger()); });
-}
-
-void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
-{
-    size_t limit = 0;
-    if (query_block.limit_or_topn->tp() == tipb::TypeLimit)
-        limit = query_block.limit_or_topn->limit().limit();
-    else
-        limit = query_block.limit_or_topn->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, taskLogger(), false); });
-    if (pipeline.hasMoreThanOneStream())
-    {
-        executeUnion(pipeline, max_streams, taskLogger());
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, taskLogger(), false); });
-    }
 }
 
 void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
