@@ -3,11 +3,11 @@
 
 namespace DB
 {
-MinTSOScheduler::MinTSOScheduler(MPPTaskManagerPtr task_manager_)
+MinTSOScheduler::MinTSOScheduler(MPPTaskManagerPtr task_manager_, UInt64 soft_limit, UInt64 hard_limit)
     : task_manager(task_manager_)
     , min_tso(0)
-    , thread_soft_limit(5000)
-    , thread_hard_limit(8000)
+    , thread_soft_limit(soft_limit)
+    , thread_hard_limit(hard_limit)
     , used_threads(0)
     , default_threads(100)
     , log(&Poco::Logger::get("MinTSOScheduler"))
@@ -126,7 +126,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
             {
                 min_tso = current_query_id;
             }
-            for (const auto & task_it : query_task_set->task_map)
+            for (const auto & task_it : query_task_set->task_map) /// a task may be scheduled many times
             {
                 task_it.second->scheduleThisTask();
             }
@@ -141,4 +141,5 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
         }
     }
 }
+
 } // namespace DB

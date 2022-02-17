@@ -9,7 +9,7 @@ namespace DB
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
-    MinTSOScheduler(MPPTaskManagerPtr);
+    MinTSOScheduler(MPPTaskManagerPtr task_manager_, UInt64 soft_limit, UInt64 hard_limit);
     ~MinTSOScheduler() = default;
     bool putWaitingQuery(MPPTaskPtr);
     void deleteAndScheduleQueries(UInt64);
