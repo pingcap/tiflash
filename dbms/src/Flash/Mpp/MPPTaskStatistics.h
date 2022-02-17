@@ -70,6 +70,5 @@ private:
     // resource
     Int64 working_time = 0;
     Int64 memory_peak = 0;
-
 };
 } // namespace DB
