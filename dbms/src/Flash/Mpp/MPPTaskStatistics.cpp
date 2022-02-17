@@ -152,7 +152,7 @@ int MPPTaskStatistics::getRemoteTunnelCnt() const
 
 void MPPTaskStatistics::incRemoteTunnelCnt()
 {
-    remote_tunnel_cnt++;
+    ++remote_tunnel_cnt;
 }
 
 } // namespace DB
