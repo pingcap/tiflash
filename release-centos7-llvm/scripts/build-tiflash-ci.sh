@@ -102,16 +102,19 @@ mkdir -p ${SRCPATH}/contrib/tiflash-proxy/target/release
 
 cd ${SRCPATH}/contrib/tiflash-proxy
 proxy_git_hash=$(git log -1 --format="%H")
-PROXY_CI_CACHE_PATH="tiflash/ci-cache/tmp/pr-build"
 curl -o "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" \
-  http://fileserver.pingcap.net/download/builds/pingcap/${PROXY_CI_CACHE_PATH}/${proxy_git_hash}/libtiflash_proxy.so
+  http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}-llvm/libtiflash_proxy.so
 proxy_size=$(ls -l "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
 
 BUILD_TIFLASH_PROXY=false
 
 if [[ ${proxy_size} -lt ${min_size} ]]; then
-  exit -1
+  BUILD_TIFLASH_PROXY=true
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=""
+  echo "need to build libtiflash_proxy.so"
+  export PATH=$PATH:$HOME/.cargo/bin
+  rm -f target/release/libtiflash_proxy.so
 else
   CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy"
   chmod 0731 "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so"
