@@ -38,8 +38,6 @@ public:
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
-        /// Note: the thread count of [parallel_merge_data->thread_pool] and [] can't be estimated, since they are undefined unless some conditions are met at runtime.
-        /// We can see them as "extra soft threads", and the thread count of them is bounded. Since they will not exceed other threads created by that query.
         cnt += processor.getMaxThreads();
     }
 
