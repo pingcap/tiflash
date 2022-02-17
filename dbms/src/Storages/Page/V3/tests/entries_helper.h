@@ -21,7 +21,6 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3::tests
 {
-
 inline String toString(const PageIDAndEntriesV3 & entries)
 {
     FmtBuffer buf;

@@ -103,7 +103,7 @@ private:
     {                                                   \
         PageEntriesEdit edit;                           \
         edit.appendRecord(PageEntriesEdit::EditRecord{  \
-            .type = WriteBatch::WriteType::PUT,         \
+            .type = EditRecordType::PUT,                \
             .page_id = (PAGE_ID),                       \
             .ori_page_id = 0,                           \
             .version = PageVersionType((VERSION)),      \
@@ -115,7 +115,7 @@ private:
     {                                                  \
         PageEntriesEdit edit;                          \
         edit.appendRecord(PageEntriesEdit::EditRecord{ \
-            .type = WriteBatch::WriteType::DEL,        \
+            .type = EditRecordType::DEL,               \
             .page_id = (PAGE_ID),                      \
             .ori_page_id = 0,                          \
             .version = PageVersionType((VERSION)),     \

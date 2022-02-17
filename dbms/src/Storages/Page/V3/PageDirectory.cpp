@@ -147,9 +147,9 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 
         switch (record.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
         {
             // Insert or replace with latest entry
             if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
@@ -168,7 +168,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             // Remove the entry if the version of del is newer
             if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
@@ -428,18 +428,18 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         const auto & r = records[idx];
         switch (r.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case EditRecordType::PUT_EXTERNAL:
         {
             throw Exception("Not implemented");
         }
-        case WriteBatch::WriteType::PUT:
+        case EditRecordType::PUT:
             [[fallthrough]];
-        case WriteBatch::WriteType::UPSERT:
+        case EditRecordType::UPSERT:
         {
             updating_pages[idx]->createNewVersion(last_sequence + 1, createRecyclableEntry(r.entry));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case EditRecordType::REF:
         {
             // We can't handle `REF` before other writes, because `PUT` and `REF`
             // maybe in the same WriteBatch.
@@ -470,7 +470,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case EditRecordType::DEL:
         {
             updating_pages[idx]->createDelete(last_sequence + 1);
             break;

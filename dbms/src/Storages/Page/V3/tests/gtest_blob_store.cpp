@@ -59,7 +59,7 @@ try
     {
         PageEntriesEdit edit;
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 1,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -71,7 +71,7 @@ try
                 .checksum = 0x4567,
             }});
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 2,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -83,7 +83,7 @@ try
                 .checksum = 0x4567,
             }});
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 3,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -308,7 +308,7 @@ try
     {
         PageEntriesEdit edit;
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 1,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -320,7 +320,7 @@ try
                 .checksum = 0x4567,
             }});
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 2,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -332,7 +332,7 @@ try
                 .checksum = 0x4567,
             }});
         edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
+            .type = EditRecordType::PUT,
             .page_id = 3,
             .ori_page_id = 0,
             .version = PageVersionType(678),
@@ -386,7 +386,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     size_t index = 0;
     for (const auto & record : edit.getRecords())
     {
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -478,7 +478,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     size_t index = 0;
     for (const auto & record : edit.getRecords())
     {
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -536,14 +536,14 @@ try
         auto records = edit.getRecords();
         auto record = records[0];
 
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
@@ -563,16 +563,16 @@ try
         auto records = edit.getRecords();
         auto record = records[0];
 
-        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.type, EditRecordType::REF);
         ASSERT_EQ(record.page_id, page_id + 1);
         ASSERT_EQ(record.ori_page_id, page_id);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id, page_id + 1);
 
         record = records[2];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id, page_id);
     }
 
@@ -594,19 +594,19 @@ try
         auto records = edit.getRecords();
 
         auto record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id, page_id);
         ASSERT_EQ(record.entry.offset, buff_size * 2);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.type, EditRecordType::REF);
         ASSERT_EQ(record.page_id, page_id + 1);
         ASSERT_EQ(record.ori_page_id, page_id);
 
         record = records[2];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id, page_id);
     }
 }
@@ -659,7 +659,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         auto records = edit.getRecords();
         auto record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id, 50);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
@@ -672,7 +672,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         records = edit.getRecords();
         record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id, 51);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
