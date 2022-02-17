@@ -206,13 +206,15 @@ public:
 // User should call `gc` periodic to remove outdated version
 // of entries in order to keep the memory consumption as well
 // as the restoring time in a reasonable level.
+class PageDirectory;
+using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
     PageDirectory();
     PageDirectory(UInt64 init_seq, WALStorePtr && wal);
 
-    static PageDirectory create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal);
+    static PageDirectoryPtr create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal);
 
     PageDirectorySnapshotPtr createSnapshot() const;
 
@@ -246,25 +248,9 @@ public:
     // No copying
     PageDirectory(const PageDirectory &) = delete;
     PageDirectory & operator=(const PageDirectory &) = delete;
-    // Only moving
-    PageDirectory(PageDirectory && rhs) noexcept
-    {
-        *this = std::move(rhs);
-    }
-    PageDirectory & operator=(PageDirectory && rhs) noexcept
-    {
-        if (this != &rhs)
-        {
-            // Note: Not making it thread safe for moving, don't
-            // care about `table_rw_mutex` and `snapshots_mutex`
-            sequence.store(rhs.sequence.load());
-            mvcc_table_directory = std::move(rhs.mvcc_table_directory);
-            snapshots = std::move(rhs.snapshots);
-            wal = std::move(rhs.wal);
-            log = std::move(rhs.log);
-        }
-        return *this;
-    }
+    // No moving
+    PageDirectory(PageDirectory && rhs) noexcept = delete;
+    PageDirectory & operator=(PageDirectory && rhs) noexcept = delete;
 
 private:
     inline std::shared_ptr<PageEntryV3> createRecyclableEntry(const PageEntryV3 & entry)

@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/LogWithPrefix.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
@@ -18,6 +19,7 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -85,12 +87,12 @@ public:
             logger);
     }
 
-protected:
-    CollapsingPageDirectory dir;
-
 private:
     ReportCollector reporter;
+
+protected:
     Poco::Logger * logger;
+    CollapsingPageDirectory dir;
 };
 
 #define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID) \
@@ -122,6 +124,17 @@ private:
             .entry = {}});                             \
         dir.apply(std::move(edit));                    \
     }
+#define INSERT_REF(REF_ID, ORI_ID, VERSION)            \
+    {                                                  \
+        PageEntriesEdit edit;                          \
+        edit.appendRecord(PageEntriesEdit::EditRecord{ \
+            .type = EditRecordType::REF,               \
+            .page_id = (REF_ID),                       \
+            .ori_page_id = (ORI_ID),                   \
+            .version = PageVersionType((VERSION)),     \
+            .entry = {}});                             \
+        dir.apply(std::move(edit));                    \
+    }
 
 TEST_F(CollapsingPageDirectoryTest, CollapseFromDifferentEdits)
 try
@@ -149,25 +162,30 @@ try
     INSERT_DELETE(page_4, 90); // <90,0> is applied after version <92,0>
 
     // Should collapsed to the latest version
-    const auto [ver1, entry1] = dir.table_directory.find(page_1)->second;
-    EXPECT_TRUE(isSameEntry(entry1, entry_v4));
-    EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
+    auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
+        SCOPED_TRACE(scope);
+        const auto [ver1, entry1] = d.table_directory.find(page_1)->second;
+        EXPECT_TRUE(isSameEntry(entry1, entry_v4));
+        EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
 
-    const auto [ver2, entry2] = dir.table_directory.find(page_2)->second;
-    EXPECT_TRUE(isSameEntry(entry2, entry_v88));
-    EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
+        const auto [ver2, entry2] = d.table_directory.find(page_2)->second;
+        EXPECT_TRUE(isSameEntry(entry2, entry_v88));
+        EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
 
-    EXPECT_EQ(dir.table_directory.find(page_3), dir.table_directory.end());
+        EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
 
-    const auto [ver4, entry4] = dir.table_directory.find(page_4)->second;
-    EXPECT_TRUE(isSameEntry(entry4, entry_v92));
-    EXPECT_EQ(ver4, PageVersionType(92, 0)) << fmt::format("{}", ver4);
+        const auto [ver4, entry4] = d.table_directory.find(page_4)->second;
+        EXPECT_TRUE(isSameEntry(entry4, entry_v92));
+        EXPECT_EQ(ver4, PageVersionType(92, 0)) << fmt::format("{}", ver4);
 
-    // Check the max applied version
-    EXPECT_EQ(dir.max_applied_ver, PageVersionType(92, 0));
+        // Check the max applied version
+        EXPECT_EQ(d.max_applied_ver, PageVersionType(92, 0));
+    };
+    checker(dir, "before restore");
 
     // Dump to a log file and get a reader from that file to verify.
     // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=92)
+    CollapsingPageDirectory another_dir;
     auto reader = dumpAndGetReader();
     size_t num_edits_read = 0;
     while (true)
@@ -197,8 +215,97 @@ try
                 EXPECT_TRUE(isSameEntry(iter->entry, entry_v92));
             }
         }
+        another_dir.apply(std::move(edit));
     }
     EXPECT_EQ(num_edits_read, 1);
+
+    //
+    checker(dir, "after restore");
+}
+CATCH
+
+TEST_F(CollapsingPageDirectoryTest, CollapseRef)
+try
+{
+    // put
+    PageId page_1 = 1;
+    INSERT_ENTRY(page_1, 4);
+
+    // put, ref, del
+    PageId page_2 = 2;
+    PageId page_4 = 4; // ref 4 -> 2
+    INSERT_ENTRY(page_2, 88);
+    INSERT_REF(page_4, page_2, 89);
+
+    // put & del
+    PageId page_3 = 3;
+    INSERT_ENTRY(page_3, 90);
+    INSERT_DELETE(page_3, 91);
+
+    // Should collapsed to the latest version
+    auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
+        SCOPED_TRACE(scope);
+        const auto [ver1, entry1] = d.table_directory.find(page_1)->second;
+        EXPECT_TRUE(isSameEntry(entry1, entry_v4));
+        EXPECT_EQ(ver1, PageVersionType(4, 0)) << fmt::format("{}", ver1);
+
+        const auto [ver2, entry2] = d.table_directory.find(page_2)->second;
+        EXPECT_TRUE(isSameEntry(entry2, entry_v88));
+        EXPECT_EQ(ver2, PageVersionType(88, 0)) << fmt::format("{}", ver2);
+
+        EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
+
+        // 4 is a entry copy of 2
+        const auto [ver4, entry4] = d.table_directory.find(page_4)->second;
+        EXPECT_TRUE(isSameEntry(entry4, entry_v88));
+        EXPECT_EQ(ver4, PageVersionType(89, 0)) << fmt::format("{}", ver2);
+
+        // Check the max applied version
+        EXPECT_EQ(d.max_applied_ver, PageVersionType(91, 0));
+    };
+    checker(dir, "before restore");
+
+    // Dump to a log file and get a reader from that file to verify.
+    // Should collapsed to page 1(ver=4), page 2(ver=88), page 4(ver=89),
+    CollapsingPageDirectory another_dir;
+    auto reader = dumpAndGetReader();
+    size_t num_edits_read = 0;
+    while (true)
+    {
+        auto [ok, record] = reader->readRecord();
+        if (!ok)
+            break;
+        ++num_edits_read;
+
+        auto edit = ser::deserializeFrom(record);
+        EXPECT_EQ(edit.size(), 3);
+        for (auto iter = edit.getRecords().begin(); iter != edit.getRecords().end(); ++iter)
+        {
+            if (iter->page_id == 1)
+            {
+                EXPECT_EQ(iter->type, EditRecordType::PUT);
+                EXPECT_EQ(iter->version, PageVersionType(4));
+                EXPECT_TRUE(isSameEntry(iter->entry, entry_v4));
+            }
+            else if (iter->page_id == 2)
+            {
+                EXPECT_EQ(iter->type, EditRecordType::PUT);
+                EXPECT_EQ(iter->version, PageVersionType(88));
+                EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+            }
+            else if (iter->page_id == 4)
+            {
+                EXPECT_EQ(iter->type, EditRecordType::PUT);
+                EXPECT_EQ(iter->version, PageVersionType(89));
+                EXPECT_TRUE(isSameEntry(iter->entry, entry_v88));
+            }
+        }
+        another_dir.apply(std::move(edit)); // apply to `another_dir`
+    }
+    EXPECT_EQ(num_edits_read, 1);
+
+    //
+    checker(dir, "after restore");
 }
 CATCH
 

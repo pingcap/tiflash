@@ -67,7 +67,7 @@ private:
 #endif
     LogWithPrefixPtr log;
 
-    PageDirectory page_directory;
+    PageDirectoryPtr page_directory;
 
     BlobStore::Config blob_config;
 

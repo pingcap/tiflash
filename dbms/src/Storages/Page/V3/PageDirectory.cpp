@@ -182,9 +182,27 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             }
             break;
         }
+        case EditRecordType::REF:
+        {
+            bool create_ref_entry_done = [&record, this]() -> bool {
+                auto iter = table_directory.find(record.ori_page_id);
+                if (iter == table_directory.end())
+                    return false;
+                if (record.version < iter->second.first || record.version == iter->second.first)
+                {
+                    // put after ref, must be sth wrong!!!
+                    // LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
+                    return false;
+                }
+                // Copy the entry
+                table_directory[record.page_id] = std::make_pair(record.version, table_directory[record.ori_page_id].second);
+                return true;
+            }();
+            if (create_ref_entry_done)
+                break;
+        }
         default:
         {
-            // REF is converted into `PUT` in serialized edit, so it should not run into here.
             throw Exception(fmt::format("Unknown write type: {}", record.type));
         }
         }
@@ -221,20 +239,20 @@ PageDirectory::PageDirectory(UInt64 init_seq, WALStorePtr && wal_)
 {
 }
 
-PageDirectory PageDirectory::create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal)
+PageDirectoryPtr PageDirectory::create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal)
 {
     // Reset the `sequence` to the maximum of persisted.
-    PageDirectory dir(
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(
         /*init_seq=*/collapsing_directory.max_applied_ver.sequence,
         std::move(wal));
     for (const auto & [page_id, versioned_entry] : collapsing_directory.table_directory)
     {
         const auto & version = versioned_entry.first;
         const auto & entry = versioned_entry.second;
-        auto [iter, created] = dir.mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
+        auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
             iter->second = std::make_shared<VersionedPageEntries>();
-        iter->second->createNewVersion(version.sequence, version.epoch, dir.createRecyclableEntry(entry));
+        iter->second->createNewVersion(version.sequence, version.epoch, dir->createRecyclableEntry(entry));
     }
     return dir;
 }

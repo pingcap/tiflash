@@ -53,7 +53,7 @@ void PageStorageImpl::drop()
 
 PageId PageStorageImpl::getMaxId()
 {
-    return page_directory.getMaxId();
+    return page_directory->getMaxId();
 }
 
 PageId PageStorageImpl::getNormalPageId(PageId /*page_id*/, SnapshotPtr /*snapshot*/)
@@ -63,12 +63,12 @@ PageId PageStorageImpl::getNormalPageId(PageId /*page_id*/, SnapshotPtr /*snapsh
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
 {
-    return page_directory.createSnapshot();
+    return page_directory->createSnapshot();
 }
 
 std::tuple<size_t, double, unsigned> PageStorageImpl::getSnapshotsStat() const
 {
-    return page_directory.getSnapshotsStat();
+    return page_directory->getSnapshotsStat();
 }
 
 void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -78,7 +78,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
 
     // Persist Page data to BlobStore
     auto edit = blob_store.write(write_batch, write_limiter);
-    page_directory.apply(std::move(edit));
+    page_directory->apply(std::move(edit));
 }
 
 DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
@@ -90,7 +90,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
 
     try
     {
-        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        const auto & [id, entry] = page_directory->get(page_id, snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
@@ -117,7 +117,7 @@ DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limit
         snapshot = this->getSnapshot();
     }
 
-    auto page_entry = page_directory.get(page_id, snapshot);
+    auto page_entry = page_directory->get(page_id, snapshot);
     return blob_store.read(page_entry, read_limiter);
 }
 
@@ -128,7 +128,7 @@ PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLi
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory.get(page_ids, snapshot);
+    auto page_entries = page_directory->get(page_ids, snapshot);
     return blob_store.read(page_entries, read_limiter);
 }
 
@@ -139,7 +139,7 @@ void PageStorageImpl::read(const std::vector<PageId> & page_ids, const PageHandl
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory.get(page_ids, snapshot);
+    auto page_entries = page_directory->get(page_ids, snapshot);
     blob_store.read(page_entries, handler, read_limiter);
 }
 
@@ -153,7 +153,7 @@ PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, c
     BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        const auto & [id, entry] = page_directory->get(page_id, snapshot);
         (void)id;
         auto info = BlobStore::FieldReadInfo(page_id, entry, field_indices);
         read_infos.emplace_back(info);
@@ -170,10 +170,10 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
-    const auto & page_ids = page_directory.getAllPageIds();
+    const auto & page_ids = page_directory->getAllPageIds();
     for (const auto & valid_page : page_ids)
     {
-        const auto & page_entries = page_directory.get(valid_page, snapshot);
+        const auto & page_entries = page_directory->get(valid_page, snapshot);
         acceptor(blob_store.read(page_entries));
     }
 }
@@ -192,7 +192,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    const auto & del_entries = page_directory.gc();
+    const auto & del_entries = page_directory->gc();
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -211,7 +211,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // 4. Filter out entries in MVCC by BlobId.
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
-    auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_need_gc);
+    auto [blob_gc_info, total_page_size] = page_directory->getEntriesByBlobIds(blob_need_gc);
 
     if (blob_gc_info.empty())
     {
@@ -234,7 +234,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr);
+    const auto & page_ids = page_directory->gcApply(std::move(gc_edit), external_pages_remover != nullptr);
 
     (void)page_ids;
 

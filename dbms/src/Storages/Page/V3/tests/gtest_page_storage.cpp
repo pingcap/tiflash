@@ -730,6 +730,9 @@ try
 }
 CATCH
 
+TEST_F(PageStorageWith2PagesTest, RestoreWithRefThenGC)
+{
+}
 
 } // namespace PS::V3::tests
 } // namespace DB
