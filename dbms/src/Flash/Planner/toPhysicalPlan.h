@@ -4,13 +4,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Planner/PhysicalPlan.h>
-#include <Flash/Planner/plans/PhysicalAggregation.h>
-#include <Flash/Planner/plans/PhysicalFilter.h>
-#include <Flash/Planner/plans/PhysicalLimit.h>
-#include <Flash/Planner/plans/PhysicalProjection.h>
-#include <Flash/Planner/plans/PhysicalSource.h>
-#include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalPlan.h>
 #include <Flash/Planner/toPhysicalPlan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -31,6 +25,7 @@ public:
     void buildFilter(const String & executor_id, const tipb::Selection & selection);
     void buildLimit(const String & executor_id, const tipb::Limit & limit);
     void buildTopN(const String & executor_id, const tipb::TopN & top_n);
+    void buildExchangeSender(const String & executor_id, const tipb::ExchangeSender & exchange_sender);
     void buildSource(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block);
 
     void buildNonRootFinalProjection(const String & column_prefix);

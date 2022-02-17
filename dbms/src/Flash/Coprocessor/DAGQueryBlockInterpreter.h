@@ -64,7 +64,6 @@ private:
         String & filter_column_for_other_condition,
         String & filter_column_for_other_eq_condition);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
-    void handleExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 

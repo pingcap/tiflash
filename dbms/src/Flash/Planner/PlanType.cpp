@@ -19,6 +19,8 @@ String toString(const PlanType & plan_type)
         return "Projection";
     case Source:
         return "Source";
+    case ExchangeSender:
+        return "ExchangeSender";
     default:
         throw Exception("Unknown PlanType");
     }

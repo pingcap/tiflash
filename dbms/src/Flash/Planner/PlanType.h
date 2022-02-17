@@ -12,6 +12,7 @@ enum PlanType
     TopN,
     Projection,
     Source,
+    ExchangeSender,
 };
 
 String toString(const PlanType & plan_type);

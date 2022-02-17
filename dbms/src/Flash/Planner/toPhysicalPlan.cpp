@@ -2,6 +2,13 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalProjection.h>
+#include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Planner/toPhysicalPlan.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -139,7 +146,49 @@ void PhysicalPlanBuilder::buildTopN(const String & executor_id, const tipb::TopN
     auto order_columns = analyzer.buildOrderColumns(actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
-    cur_plan = std::make_shared<PhysicalTopN>(executor_id, schema, order_descr, actions, top_n.limit());
+    auto top_n_plan = std::make_shared<PhysicalTopN>(executor_id, schema, order_descr, actions, top_n.limit());
+    top_n_plan->appendChild(cur_plan);
+    cur_plan = top_n_plan;
+}
+
+void PhysicalPlanBuilder::buildExchangeSender(const String & executor_id, const tipb::ExchangeSender & exchange_sender)
+{
+    assert(!schema.empty());
+    assert(cur_plan);
+
+    /// only run in MPP
+    assert(dagContext().isMPPTask());
+    /// get partition column ids
+    const auto & part_keys = exchange_sender.partition_keys();
+    std::vector<Int64> partition_col_id;
+    TiDB::TiDBCollators collators;
+    /// in case TiDB is an old version, it has no collation info
+    bool has_collator_info = exchange_sender.types_size() != 0;
+    if (has_collator_info && part_keys.size() != exchange_sender.types_size())
+    {
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
+            Errors::Coprocessor::BadRequest);
+    }
+    for (int i = 0; i < part_keys.size(); ++i)
+    {
+        const auto & expr = part_keys[i];
+        assert(isColumnExpr(expr));
+        auto column_index = decodeDAGInt64(expr.val());
+        partition_col_id.emplace_back(column_index);
+        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
+    }
+
+    auto exchange_sender_plan = std::make_shared<PhysicalExchangeSender>(executor_id, schema, partition_col_id, collators, exchange_sender.tp());
+    exchange_sender_plan->appendChild(cur_plan);
+    cur_plan = exchange_sender_plan;
 }
 
 void PhysicalPlanBuilder::buildSource(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block)
@@ -162,6 +211,7 @@ void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_pref
     actions->add(ExpressionAction::project(final_project_aliases));
 
     schema = analyzer.getCurrentInputColumns();
+
     auto non_root_final_projection_plan = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, actions);
     non_root_final_projection_plan->appendChild(cur_plan);
     cur_plan = non_root_final_projection_plan;
@@ -195,6 +245,7 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     actions->add(ExpressionAction::project(final_project_aliases));
 
     schema = analyzer.getCurrentInputColumns();
+
     auto root_final_projection_plan = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions);
     root_final_projection_plan->appendChild(cur_plan);
     cur_plan = root_final_projection_plan;
