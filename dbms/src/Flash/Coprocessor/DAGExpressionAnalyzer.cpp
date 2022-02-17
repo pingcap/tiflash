@@ -237,7 +237,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
 }
 
 void DAGExpressionAnalyzer::buildAggGroupBy(
-    const tipb::Expr & expr,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
     ExpressionActionsPtr & actions,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
@@ -246,74 +246,98 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
-    String name = getActions(expr, actions);
-    bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
-    if (!duplicated_key)
+    for (const tipb::Expr & expr : aggregation.group_by())
     {
-        /// note this assume that column with the same name has the same collator
-        /// need double check this assumption when we support agg with collation
-        aggregation_keys.push_back(name);
-        agg_key_set.emplace(name);
-    }
-    /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
-    /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
-    /// the final stage of the aggregation, even if TiFlash do the aggregation without collation
-    /// info, the correctness of the query result is guaranteed by TiDB itself, so add a flag to
-    /// let TiDB/TiFlash to decide whether aggregate the data with collation info or not
-    if (group_by_collation_sensitive)
-    {
-        auto type = actions->getSampleBlock().getByName(name).type;
-        TiDB::TiDBCollatorPtr collator = nullptr;
-        if (removeNullable(type)->isString())
-            collator = getCollatorFromExpr(expr);
+        String name = getActions(expr, actions);
+        bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
         if (!duplicated_key)
-            collators.push_back(collator);
-        if (collator != nullptr)
         {
-            /// if the column is a string with collation info, the `sort_key` of the column is used during
-            /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
-            /// extra aggregation function any(group_by_column) here as the output of the group by column
-            const String & agg_func_name = "any";
-            AggregateDescription aggregate;
-            TiDB::TiDBCollators arg_collators;
-            arg_collators.push_back(collator);
-
-            DataTypes types(1);
-            aggregate.argument_names.resize(1);
-            types[0] = type;
-            aggregate.argument_names[0] = name;
-
-            String func_string = DAGExpressionAnalyzerHelper::genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-            bool duplicate = false;
-            for (const auto & pre_agg : aggregate_descriptions)
+            /// note this assume that column with the same name has the same collator
+            /// need double check this assumption when we support agg with collation
+            aggregation_keys.push_back(name);
+            agg_key_set.emplace(name);
+        }
+        /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
+        /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
+        /// the final stage of the aggregation, even if TiFlash do the aggregation without collation
+        /// info, the correctness of the query result is guaranteed by TiDB itself, so add a flag to
+        /// let TiDB/TiFlash to decide whether aggregate the data with collation info or not
+        if (group_by_collation_sensitive)
+        {
+            auto type = actions->getSampleBlock().getByName(name).type;
+            TiDB::TiDBCollatorPtr collator = nullptr;
+            if (removeNullable(type)->isString())
+                collator = getCollatorFromExpr(expr);
+            if (!duplicated_key)
+                collators.push_back(collator);
+            if (collator != nullptr)
             {
-                if (pre_agg.column_name == func_string)
+                /// if the column is a string with collation info, the `sort_key` of the column is used during
+                /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
+                /// extra aggregation function any(group_by_column) here as the output of the group by column
+                const String & agg_func_name = "any";
+                AggregateDescription aggregate;
+                TiDB::TiDBCollators arg_collators;
+                arg_collators.push_back(collator);
+
+                DataTypes types(1);
+                aggregate.argument_names.resize(1);
+                types[0] = type;
+                aggregate.argument_names[0] = name;
+
+                String func_string = DAGExpressionAnalyzerHelper::genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
+                bool duplicate = false;
+                for (const auto & pre_agg : aggregate_descriptions)
                 {
-                    aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
-                    duplicate = true;
-                    break;
+                    if (pre_agg.column_name == func_string)
+                    {
+                        aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+                        duplicate = true;
+                        break;
+                    }
                 }
+                if (duplicate)
+                    return;
+                aggregate.column_name = func_string;
+                aggregate.parameters = Array();
+                aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
+                aggregate.function->setCollators(arg_collators);
+                aggregate_descriptions.push_back(aggregate);
+                DataTypePtr result_type = aggregate.function->getReturnType();
+                // this is a temp result since implicit cast maybe added on these aggregated_columns
+                aggregated_columns.emplace_back(func_string, result_type);
             }
-            if (duplicate)
-                return;
-            aggregate.column_name = func_string;
-            aggregate.parameters = Array();
-            aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
-            aggregate.function->setCollators(arg_collators);
-            aggregate_descriptions.push_back(aggregate);
-            DataTypePtr result_type = aggregate.function->getReturnType();
-            // this is a temp result since implicit cast maybe added on these aggregated_columns
-            aggregated_columns.emplace_back(func_string, result_type);
+            else
+            {
+                aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+            }
         }
         else
         {
+            // this is a temp result since implicit cast maybe added on these aggregated_columns
             aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
-    else
+}
+
+void DAGExpressionAnalyzer::buildAggFuncs(
+    const tipb::Aggregation & aggregation,
+    ExpressionActionsPtr & actions,
+    AggregateDescriptions & aggregate_descriptions,
+    NamesAndTypes & aggregated_columns)
+{
+    for (const tipb::Expr & expr : aggregation.agg_func())
     {
-        // this is a temp result since implicit cast maybe added on these aggregated_columns
-        aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+        if (expr.tp() == tipb::ExprType::GroupConcat)
+        {
+            buildGroupConcat(expr, actions, getAggFuncName(expr, aggregation, settings), aggregate_descriptions, aggregated_columns, aggregation.group_by().empty());
+        }
+        else
+        {
+            /// if there is group by clause, there is no need to consider the empty input case
+            bool empty_input_as_null = aggregation.group_by().empty();
+            buildCommonAggFunc(expr, actions, getAggFuncName(expr, aggregation, settings), aggregate_descriptions, aggregated_columns, empty_input_as_null);
+        }
     }
 }
 
@@ -334,19 +358,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     ExpressionActionsChain::Step & step = chain.steps.back();
 
     AggregateDescriptions aggregate_descriptions;
-    for (const tipb::Expr & expr : agg.agg_func())
-    {
-        if (expr.tp() == tipb::ExprType::GroupConcat)
-        {
-            buildGroupConcat(expr, step.actions, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, agg.group_by().empty());
-        }
-        else
-        {
-            /// if there is group by clause, there is no need to consider the empty input case
-            bool empty_input_as_null = agg.group_by().empty();
-            buildCommonAggFunc(expr, step.actions, getAggFuncName(expr, agg, settings), aggregate_descriptions, aggregated_columns, empty_input_as_null);
-        }
-    }
+    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     for (const auto & aggregate_description : aggregate_descriptions)
     {
         for (const auto & argument_name : aggregate_description.argument_names)
@@ -356,8 +368,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
-    for (const tipb::Expr & expr : agg.group_by())
-        buildAggGroupBy(expr, step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
+    buildAggGroupBy(agg.group_by(), step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
     for (const auto & aggregation_key : aggregation_keys)
         step.required_output.push_back(aggregation_key);
 

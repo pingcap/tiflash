@@ -141,8 +141,14 @@ private:
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
 
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
     void buildAggGroupBy(
-        const tipb::Expr & expr,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
         ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
