@@ -1,11 +1,10 @@
 #include <Common/LogWithPrefix.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Planner/FinalizeHelper.h>
-#include <Flash/Planner/plans/PhysicalExchangeSender.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -15,7 +14,7 @@ void PhysicalExchangeSender::transform(DAGPipeline & pipeline, const Context & c
     children(0)->transform(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-    const LogWithPrefixPtr & logger = dag_context->log;
+    const LogWithPrefixPtr & logger = dag_context.log;
     restoreConcurrency(pipeline, dag_context.final_concurrency, logger);
 
     /// only run in MPP
@@ -32,7 +31,7 @@ void PhysicalExchangeSender::transform(DAGPipeline & pipeline, const Context & c
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dag_context);
-        stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), logger);
+        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), logger);
     });
     recordProfileStreams(pipeline, dag_context);
 }

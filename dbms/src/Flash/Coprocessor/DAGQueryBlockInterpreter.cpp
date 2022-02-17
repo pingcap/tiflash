@@ -1,6 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
@@ -85,15 +85,6 @@ bool addExtraCastsAfterTs(
     if (!has_need_cast_column)
         return false;
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
-}
-
-bool isFinalAgg(const tipb::Expr & expr)
-{
-    if (!expr.has_aggfuncmode())
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        return true;
-    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
 PhysicalPlanPtr analysePhysicalPlan(

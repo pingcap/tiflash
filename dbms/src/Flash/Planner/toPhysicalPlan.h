@@ -4,7 +4,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Planner/plans/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/toPhysicalPlan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>

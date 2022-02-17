@@ -1,5 +1,6 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
@@ -156,8 +157,6 @@ void PhysicalPlanBuilder::buildExchangeSender(const String & executor_id, const 
     assert(!schema.empty());
     assert(cur_plan);
 
-    /// only run in MPP
-    assert(dagContext().isMPPTask());
     /// get partition column ids
     const auto & part_keys = exchange_sender.partition_keys();
     std::vector<Int64> partition_col_id;
