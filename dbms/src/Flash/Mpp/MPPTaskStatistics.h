@@ -39,7 +39,6 @@ public:
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
-
 private:
     void recordInputBytes(DAGContext & dag_context);
 
