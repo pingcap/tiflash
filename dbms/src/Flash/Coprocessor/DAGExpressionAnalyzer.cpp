@@ -403,17 +403,14 @@ String DAGExpressionAnalyzer::applyFunction(
     return result_name;
 }
 
-String DAGExpressionAnalyzer::appendWhere(
-    ExpressionActionsChain & chain,
+String DAGExpressionAnalyzer::buildFilterColumn(
+    ExpressionActionsPtr & actions,
     const std::vector<const tipb::Expr *> & conditions)
 {
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
-
     String filter_column_name;
     if (conditions.size() == 1)
     {
-        filter_column_name = getActions(*conditions[0], last_step.actions, true);
+        filter_column_name = getActions(*conditions[0], actions, true);
         if (isColumnExpr(*conditions[0])
             && (!exprHasValidFieldType(*conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
@@ -423,18 +420,30 @@ String DAGExpressionAnalyzer::appendWhere(
             /// filter column should never be a columnRef in DAG request, otherwise
             /// for queries like select c1 from t where c1 will got wrong result
             /// as after FilterBlockInputStream, c1 will become a const column of 1
-            filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
+            filter_column_name = convertToUInt8(actions, filter_column_name);
         }
     }
     else
     {
         Names arg_names;
         for (const auto * condition : conditions)
-            arg_names.push_back(getActions(*condition, last_step.actions, true));
+            arg_names.push_back(getActions(*condition, actions, true));
         // connect all the conditions by logical and
-        filter_column_name = applyFunction("and", arg_names, last_step.actions, nullptr);
+        filter_column_name = applyFunction("and", arg_names, actions, nullptr);
     }
-    chain.steps.back().required_output.push_back(filter_column_name);
+    return filter_column_name;
+}
+
+String DAGExpressionAnalyzer::appendWhere(
+    ExpressionActionsChain & chain,
+    const std::vector<const tipb::Expr *> & conditions)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & last_step = chain.steps.back();
+
+    String filter_column_name = buildFilterColumn(last_step.actions, conditions);
+
+    last_step.required_output.push_back(filter_column_name);
     return filter_column_name;
 }
 
@@ -488,6 +497,21 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
+NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
+    ExpressionActionsPtr & actions,
+    const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by)
+{
+    NamesAndTypes order_columns;
+    order_columns.reserve(order_by.size());
+    for (const tipb::ByItem & by_item : order_by)
+    {
+        String name = getActions(by_item.expr(), actions);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
+    }
+    return order_columns;
+}
+
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
     const tipb::TopN & topN)
@@ -496,18 +520,15 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     {
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
-    std::vector<NameAndTypePair> order_columns;
-    order_columns.reserve(topN.order_by_size());
 
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (const tipb::ByItem & by_item : topN.order_by())
-    {
-        String name = getActions(by_item.expr(), step.actions);
-        auto type = step.actions->getSampleBlock().getByName(name).type;
-        order_columns.emplace_back(name, type);
-        step.required_output.push_back(name);
-    }
+    auto order_columns = buildOrderColumns(step.actions, topN.order_by());
+
+    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
+    for (const auto & order_column : order_columns)
+        step.required_output.push_back(order_column.name);
+
     return order_columns;
 }
 

@@ -37,8 +37,6 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
         lock_cf.insert(std::move(key), std::move(value));
         return;
     }
-    default:
-        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -69,8 +67,6 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
         return;
     }
-    default:
-        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
