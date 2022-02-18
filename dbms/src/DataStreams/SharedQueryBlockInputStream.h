@@ -71,7 +71,7 @@ public:
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
-        cnt++;
+        ++cnt;
     }
 
 protected:
