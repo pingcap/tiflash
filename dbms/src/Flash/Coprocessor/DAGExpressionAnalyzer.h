@@ -114,6 +114,10 @@ public:
         String & filter_column_name);
 
 private:
+    NamesAndTypes buildOrderColumns(
+        ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
+
     void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
@@ -171,6 +175,18 @@ private:
         ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
+
+    bool buildExtraCastsAfterTS(
+        ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
+    std::pair<bool, Names> buildJoinKey(
+        ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
 
     String applyFunction(
         const String & func_name,

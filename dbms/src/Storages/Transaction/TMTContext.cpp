@@ -160,6 +160,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
+    static constexpr const char * READ_INDEX_WORKER_TICK_MS = "flash.read_index_worker_tick_ms";
 
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
     getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
@@ -174,15 +175,17 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
             t;
         });
+        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, 10 /*10ms*/);
     }
     {
         LOG_FMT_INFO(
             &Poco::Logger::root(),
-            "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; ",
+            "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
             replicaReadMaxThread(),
             batchReadIndexTimeout(),
             waitIndexTimeout(),
-            waitRegionReadyTimeout());
+            waitRegionReadyTimeout(),
+            readIndexWorkerTick());
     }
 }
 
@@ -227,6 +230,11 @@ Int64 TMTContext::waitRegionReadyTimeout() const
 {
     return wait_region_ready_timeout_sec.load(std::memory_order_relaxed);
 }
+uint64_t TMTContext::readIndexWorkerTick() const
+{
+    return read_index_worker_tick_ms.load(std::memory_order_relaxed);
+}
+
 const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
 {
     static const std::string StoreStatusName[] = {
