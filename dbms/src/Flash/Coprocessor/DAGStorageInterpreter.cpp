@@ -149,16 +149,20 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     else
         learner_read_snapshot = doCopLearnerRead();
 
+    ManageableStoragePtr storage;
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
 
-    std::tie(required_columns, source_columns, is_need_add_cast_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
+    Names required_columns;
+    NamesAndTypes source_columns;
+    String handle_column_name;
+    std::tie(required_columns, source_columns, is_need_add_cast_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read, storage);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
 
     if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size);
+        doLocalRead(pipeline, settings.max_block_size, storage, required_columns);
 
     for (auto & region_info : dag_context.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
@@ -166,7 +170,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
 
     // Should build these vars under protect of `table_structure_lock`.
-    std::tie(dag_request, dag_schema) = buildRemoteTS();
+    std::tie(dag_request, dag_schema) = buildRemoteTS(storage, handle_column_name);
 }
 
 LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
@@ -238,7 +242,11 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
     }
 }
 
-void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block_size)
+void DAGStorageInterpreter::doLocalRead(
+    DAGPipeline & pipeline,
+    size_t max_block_size,
+    const ManageableStoragePtr & storage,
+    const Names & required_columns)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     SelectQueryInfo query_info;
@@ -474,7 +482,9 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     }
 }
 
-std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGStorageInterpreter::getColumnsForTableScan(
+    Int64 max_columns_to_read,
+    const ManageableStoragePtr & storage)
 {
     // todo handle alias column
     if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
@@ -514,7 +524,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
     return {required_columns_, source_columns_, need_cast_column, handle_column_name_};
 }
 
-std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()
+std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS(
+    const ManageableStoragePtr & storage,
+    const String & handle_column_name)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     if (region_retry.empty())

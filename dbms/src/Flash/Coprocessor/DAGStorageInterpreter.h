@@ -64,13 +64,21 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
-    void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
+    void doLocalRead(
+        DAGPipeline & pipeline,
+        size_t max_block_size,
+        const ManageableStoragePtr & storage,
+        const Names & required_columns);
 
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> getColumnsForTableScan(Int64 max_columns_to_read);
+    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> getColumnsForTableScan(
+        Int64 max_columns_to_read,
+        const ManageableStoragePtr & storage);
 
-    std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> buildRemoteTS();
+    std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> buildRemoteTS(
+        const ManageableStoragePtr & storage,
+        const String & handle_column_name);
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
@@ -96,11 +104,6 @@ private:
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
-    Names required_columns;
-    NamesAndTypes source_columns;
-    String handle_column_name;
 };
 
 } // namespace DB
