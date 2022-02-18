@@ -403,14 +403,14 @@ void DAGExpressionAnalyzerHelper::buildAggFunction(
         }
     }
 
-    DataTypePtr result_type = aggregate.function->getReturnType();
-    // this is a temp result since implicit cast maybe added on these aggregated_columns
-    aggregated_columns.emplace_back(func_string, result_type);
-
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
+
+    DataTypePtr result_type = aggregate.function->getReturnType();
+    aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
+
     aggregate_descriptions.push_back(std::move(aggregate));
 }
 
