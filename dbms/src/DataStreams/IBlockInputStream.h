@@ -132,7 +132,7 @@ public:
                 return;
     }
 
-    void collectNewThreadCount(int & cnt)
+    virtual void collectNewThreadCount(int & cnt)
     {
         if (!collected)
         {

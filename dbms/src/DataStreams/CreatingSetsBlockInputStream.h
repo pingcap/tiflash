@@ -54,6 +54,26 @@ public:
         }
     }
 
+    virtual void collectNewThreadCount(int & cnt) override
+    {
+        int cnt_s1 = 0;
+        int cnt_s2 = 0;
+        if (!collected)
+        {
+            collected = true;
+            collectNewThreadCountOfThisLevel(cnt_s1);
+            for (int i = 0; i < static_cast<int>(children.size()) - 1; ++i)
+            {
+                auto & child = children[i];
+                if (child)
+                    child->collectNewThreadCount(cnt_s1);
+            }
+            children.back()->collectNewThreadCount(cnt_s2);
+        }
+
+        cnt += std::max(cnt_s1, cnt_s2);
+    }
+
 protected:
     Block readImpl() override;
     void readPrefixImpl() override;
