@@ -44,6 +44,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
+    , collected(false)
 {
     rpc_context->fillSchema(schema);
     setUpConnection();
