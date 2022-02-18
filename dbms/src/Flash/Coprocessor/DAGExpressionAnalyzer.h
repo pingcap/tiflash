@@ -176,6 +176,18 @@ private:
         const String & expr_name,
         bool force_uint8);
 
+    bool buildExtraCastsAfterTS(
+        ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
+    std::pair<bool, Names> buildJoinKey(
+        ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
+
     String applyFunction(
         const String & func_name,
         const Names & arg_names,
