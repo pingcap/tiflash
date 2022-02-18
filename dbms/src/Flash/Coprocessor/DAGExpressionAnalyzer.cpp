@@ -452,6 +452,21 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
+NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
+    ExpressionActionsPtr & actions,
+    const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by)
+{
+    NamesAndTypes order_columns;
+    order_columns.reserve(order_by.size());
+    for (const tipb::ByItem & by_item : order_by)
+    {
+        String name = getActions(by_item.expr(), actions);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
+    }
+    return order_columns;
+}
+
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
     const tipb::TopN & topN)
@@ -460,18 +475,15 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     {
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
-    std::vector<NameAndTypePair> order_columns;
-    order_columns.reserve(topN.order_by_size());
 
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (const tipb::ByItem & by_item : topN.order_by())
-    {
-        String name = getActions(by_item.expr(), step.actions);
-        auto type = step.actions->getSampleBlock().getByName(name).type;
-        order_columns.emplace_back(name, type);
-        step.required_output.push_back(name);
-    }
+    auto order_columns = buildOrderColumns(step.actions, topN.order_by());
+
+    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
+    for (const auto & order_column : order_columns)
+        step.required_output.push_back(order_column.name);
+
     return order_columns;
 }
 

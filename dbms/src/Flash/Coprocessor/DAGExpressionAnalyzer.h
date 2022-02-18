@@ -114,6 +114,10 @@ public:
         String & filter_column_name);
 
 private:
+    NamesAndTypes buildOrderColumns(
+        ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
+
     void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
