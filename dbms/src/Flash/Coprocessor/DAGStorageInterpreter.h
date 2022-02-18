@@ -33,15 +33,16 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const DAGQueryBlock & query_block_,
-        const tipb::TableScan & ts,
-        const std::vector<const tipb::Expr *> & conditions_,
+        const String & table_scan_executor_id_,
+        const tipb::TableScan & table_scan_,
         size_t max_streams_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
 
     void execute(DAGPipeline & pipeline);
+
+    void pushDownFilter(const String & filter_executor_id_, std::vector<const tipb::Expr *> conditions_);
 
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
@@ -74,11 +75,15 @@ private:
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const DAGQueryBlock & query_block;
+    String table_scan_executor_id;
     const tipb::TableScan & table_scan;
-    const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
     LogWithPrefixPtr log;
+
+    /// for pushed down filter
+    bool has_pushed_down_filter = false;
+    String filter_executor_id;
+    std::vector<const tipb::Expr *> conditions;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 

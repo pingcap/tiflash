@@ -13,7 +13,6 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -244,15 +243,16 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
     if (ts.next_read_engine() != tipb::EngineType::Local)
         throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
+    DAGStorageInterpreter storage_interpreter(context, query_block.source_name, ts, max_streams);
     // construct pushed down filter conditions.
     std::vector<const tipb::Expr *> conditions;
     if (query_block.selection)
     {
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
-    }
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
+        storage_interpreter.pushDownFilter(query_block.selection_name, conditions);
+    }
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
