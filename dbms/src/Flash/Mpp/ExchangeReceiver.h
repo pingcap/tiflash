@@ -96,7 +96,8 @@ public:
 
     void collectNewThreadCount(int & cnt)
     {
-        if (!collected) {
+        if (!collected)
+        {
             collected = true;
             cnt += computeNewThreadCount();
         }
