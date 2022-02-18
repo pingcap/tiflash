@@ -170,7 +170,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
     actions->add(ExpressionAction::addColumn(column));
     argument_names.push_back(column.name);
 
-    auto collator = getCollatorFromExpr(expr);
+    const auto * collator = getCollatorFromExpr(expr);
 
     String expr_name = analyzer->applyFunction(func_name, argument_names, actions, collator);
     if (set->remaining_exprs.empty())
@@ -405,14 +405,16 @@ void DAGExpressionAnalyzerHelper::buildAggFunction(
     }
     if (duplicate)
         return;
+
+    DataTypePtr result_type = aggregate.function->getReturnType();
+    // this is a temp result since implicit cast maybe added on these aggregated_columns
+    aggregated_columns.emplace_back(func_string, result_type);
+
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
     aggregate_descriptions.push_back(std::move(aggregate));
-    DataTypePtr result_type = aggregate.function->getReturnType();
-    // this is a temp result since implicit cast maybe added on these aggregated_columns
-    aggregated_columns.emplace_back(func_string, result_type);
 }
 
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
