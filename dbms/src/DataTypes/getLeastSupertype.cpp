@@ -15,6 +15,8 @@
 
 #include <unordered_set>
 
+#include "DataTypeMyDuration.h"
+
 
 namespace DB
 {

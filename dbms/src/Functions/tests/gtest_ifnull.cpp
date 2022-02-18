@@ -24,6 +24,16 @@ protected:
         auto not_null_column = executeFunction("assumeNotNull", first_column);
         return executeFunction("multiIf", is_null_column, second_column, not_null_column);
     }
+    DataTypePtr getReturnTypeForIfNull(const DataTypePtr & type_1, const DataTypePtr & type_2)
+    {
+        const static auto cond_type = std::make_shared<DataTypeUInt8>();
+        ColumnsWithTypeAndName input_columns{
+            {nullptr, cond_type, ""},
+            {nullptr, removeNullable(type_1), ""},
+            {nullptr, type_2, ""},
+        };
+        return getReturnTypeForFunction(context, "multiIf", input_columns);
+    }
     template <class IntegerType>
     ColumnWithTypeAndName createIntegerColumnInternal(const std::vector<Int64> & signed_input, const std::vector<UInt64> unsigned_input, const std::vector<Int32> & null_map)
     {
@@ -323,8 +333,127 @@ try
         createNullableColumn<MyDateTime>(std::make_tuple(6), datetime_data_fsp_6, null_map),
     };
     testIfNull(time_input, null_map);
-    InferredDataVector<MyDuration> duration_input{111111, 222222, 101010, 202020, 212121};
     /// case 6 test ifNullDuration
+    InferredDataVector<MyDuration> duration_data_fsp_0{
+        MyDuration(-1, 10, 10, 10, 0, 0).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 0, 0).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 0, 0).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 0, 0).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 0, 0).nanoSecond(),
+    };
+    InferredDataVector<MyDuration> duration_data_fsp_3{
+        MyDuration(-1, 10, 10, 10, 123000, 3).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 234000, 3).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 345000, 3).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 456000, 3).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 561000, 3).nanoSecond(),
+    };
+    InferredDataVector<MyDuration> duration_data_fsp_6{
+        MyDuration(-1, 10, 10, 10, 123456, 6).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 234561, 6).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 345612, 6).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 456123, 6).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 561234, 6).nanoSecond(),
+    };
+    ColumnsWithTypeAndName duration_input{
+        createColumn<MyDuration>(std::make_tuple(0), duration_data_fsp_0),
+        createNullableColumn<MyDuration>(std::make_tuple(0), duration_data_fsp_0, null_map),
+        createColumn<MyDuration>(std::make_tuple(3), duration_data_fsp_3),
+        createNullableColumn<MyDuration>(std::make_tuple(3), duration_data_fsp_3, null_map),
+        createColumn<MyDuration>(std::make_tuple(6), duration_data_fsp_6),
+        createNullableColumn<MyDuration>(std::make_tuple(6), duration_data_fsp_6, null_map),
+    };
+    /// DataTypeMyDuration is not supported yet
+    //testIfNull(duration_input, null_map);
+}
+CATCH
+TEST_F(TestIfNull, TestTypeInfer)
+try
+{
+    auto test_type = [&](const String & col_1_type_name, const String & col_2_type_name, const String & result_type_name) {
+        auto result_type = DataTypeFactory::instance().get(result_type_name);
+        auto col_1_type = DataTypeFactory::instance().get(col_1_type_name);
+        auto col_2_type = DataTypeFactory::instance().get(col_2_type_name);
+        ASSERT_TRUE(result_type->equals(*getReturnTypeForIfNull(col_1_type, col_2_type)));
+    };
+    /// test integer type Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64
+    test_type("Int8", "Int8", "Int8");
+    test_type("Int8", "Int16", "Int16");
+    test_type("Int8", "Int32", "Int32");
+    test_type("Int8", "Int64", "Int64");
+    test_type("Int8", "UInt8", "Int16");
+    test_type("Int8", "UInt16", "Int32");
+    test_type("Int8", "UInt32", "Int64");
+    test_type("Int8", "UInt64", "Decimal(20,0)");
+
+    test_type("UInt8", "Int8", "Int16");
+    test_type("UInt8", "Int16", "Int16");
+    test_type("UInt8", "Int32", "Int32");
+    test_type("UInt8", "Int64", "Int64");
+    test_type("UInt8", "UInt8", "UInt8");
+    test_type("UInt8", "UInt16", "UInt16");
+    test_type("UInt8", "UInt32", "UInt32");
+    test_type("UInt8", "UInt64", "UInt64");
+
+    test_type("Int16", "Int8", "Int16");
+    test_type("Int16", "Int16", "Int16");
+    test_type("Int16", "Int32", "Int32");
+    test_type("Int16", "Int64", "Int64");
+    test_type("Int16", "UInt8", "Int16");
+    test_type("Int16", "UInt16", "Int32");
+    test_type("Int16", "UInt32", "Int64");
+    test_type("Int16", "UInt64", "Decimal(20,0)");
+
+    test_type("UInt16", "Int8", "Int32");
+    test_type("UInt16", "Int16", "Int32");
+    test_type("UInt16", "Int32", "Int32");
+    test_type("UInt16", "Int64", "Int64");
+    test_type("UInt16", "UInt8", "UInt16");
+    test_type("UInt16", "UInt16", "UInt16");
+    test_type("UInt16", "UInt32", "UInt32");
+    test_type("UInt16", "UInt64", "UInt64");
+
+    test_type("Int32", "Int8", "Int32");
+    test_type("Int32", "Int16", "Int32");
+    test_type("Int32", "Int32", "Int32");
+    test_type("Int32", "Int64", "Int64");
+    test_type("Int32", "UInt8", "Int32");
+    test_type("Int32", "UInt16", "Int32");
+    test_type("Int32", "UInt32", "Int64");
+    test_type("Int32", "UInt64", "Decimal(20,0)");
+
+    test_type("UInt32", "Int8", "Int64");
+    test_type("UInt32", "Int16", "Int64");
+    test_type("UInt32", "Int32", "Int64");
+    test_type("UInt32", "Int64", "Int64");
+    test_type("UInt32", "UInt8", "UInt32");
+    test_type("UInt32", "UInt16", "UInt32");
+    test_type("UInt32", "UInt32", "UInt32");
+    test_type("UInt32", "UInt64", "UInt64");
+
+    test_type("Int64", "Int8", "Int64");
+    test_type("Int64", "Int16", "Int64");
+    test_type("Int64", "Int32", "Int64");
+    test_type("Int64", "Int64", "Int64");
+    test_type("Int64", "UInt8", "Int64");
+    test_type("Int64", "UInt16", "Int64");
+    test_type("Int64", "UInt32", "Int64");
+    test_type("Int64", "UInt64", "Decimal(20,0)");
+
+    test_type("UInt64", "Int8", "Decimal(20,0)");
+    test_type("UInt64", "Int16", "Decimal(20,0)");
+    test_type("UInt64", "Int32", "Decimal(20,0)");
+    test_type("UInt64", "Int64", "Decimal(20,0)");
+    test_type("UInt64", "UInt8", "UInt64");
+    test_type("UInt64", "UInt16", "UInt64");
+    test_type("UInt64", "UInt32", "UInt64");
+    test_type("UInt64", "UInt64", "UInt64");
+
+    /// test type infer for real
+    test_type("Float32", "Float32", "Float32");
+    test_type("Float32", "Float64", "Float64");
+    test_type("Float64", "Float32", "Float64");
+    test_type("Float64", "Float64", "Float64");
 }
 CATCH
 } // namespace tests

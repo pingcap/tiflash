@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -180,6 +181,12 @@ template <>
 struct InferredDataType<MyDateTime>
 {
     using Type = DataTypeMyDateTime;
+};
+
+template <>
+struct InferredDataType<MyDuration>
+{
+    using Type = DataTypeMyDuration;
 };
 
 template <typename T>
@@ -527,6 +534,12 @@ ColumnWithTypeAndName executeFunction(
     ColumnsWithTypeAndName vec({first_column, columns...});
     return executeFunction(context, func_name, vec);
 }
+
+DataTypePtr getReturnTypeForFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
