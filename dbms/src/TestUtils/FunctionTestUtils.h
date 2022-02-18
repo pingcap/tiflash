@@ -481,6 +481,13 @@ ColumnWithTypeAndName createConstColumn(
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr);
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns);
 
 template <typename... Args>
@@ -613,7 +620,10 @@ public:
         context.setDAGContext(dag_context_ptr.get());
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr);
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr)
+    {
+        return DB::tests::executeFunction(context, func_name, columns, collator);
+    }
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
@@ -622,7 +632,10 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns);
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    {
+        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns);
+    }
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
