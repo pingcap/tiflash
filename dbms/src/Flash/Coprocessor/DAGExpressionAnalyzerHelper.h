@@ -64,6 +64,15 @@ public:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
+    static void buildAggFunction(
+        const Names & arg_names,
+        const DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators,
+        const String & agg_func_name,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        bool empty_input_as_null);
+
     static String genFuncString(
         const String & func_name,
         const Names & argument_names,

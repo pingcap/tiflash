@@ -198,42 +198,22 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     NamesAndTypes & aggregated_columns,
     bool empty_input_as_null)
 {
-    AggregateDescription aggregate;
     auto child_size = expr.children_size();
-    DataTypes types(child_size);
-    TiDB::TiDBCollators arg_collators;
-    aggregate.argument_names.resize(child_size);
-    for (Int32 i = 0; i < child_size; i++)
+    Names arg_names(child_size);
+    DataTypes arg_types(child_size);
+    TiDB::TiDBCollators arg_collators(child_size);
+    for (Int32 i = 0; i < child_size; ++i)
     {
         String arg_name = getActions(expr.children(i), actions);
-        types[i] = actions->getSampleBlock().getByName(arg_name).type;
-        if (removeNullable(types[i])->isString())
-            arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+        arg_types[i] = actions->getSampleBlock().getByName(arg_name).type;
+        if (removeNullable(arg_types[i])->isString())
+            arg_collators[i] = getCollatorFromExpr(expr.children(i));
         else
-            arg_collators.push_back(nullptr);
-        aggregate.argument_names[i] = arg_name;
+            arg_collators[i] = nullptr;
+        arg_names[i] = arg_name;
     }
-    String func_string = DAGExpressionAnalyzerHelper::genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-    bool duplicate = false;
-    for (const auto & pre_agg : aggregate_descriptions)
-    {
-        if (pre_agg.column_name == func_string)
-        {
-            aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
-            duplicate = true;
-            break;
-        }
-    }
-    if (duplicate)
-        return;
-    aggregate.column_name = func_string;
-    aggregate.parameters = Array();
-    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, empty_input_as_null);
-    aggregate.function->setCollators(arg_collators);
-    aggregate_descriptions.push_back(aggregate);
-    DataTypePtr result_type = aggregate.function->getReturnType();
-    // this is a temp result since implicit cast maybe added on these aggregated_columns
-    aggregated_columns.emplace_back(func_string, result_type);
+
+    DAGExpressionAnalyzerHelper::buildAggFunction(arg_names, arg_types, arg_collators, agg_func_name, aggregate_descriptions, aggregated_columns, empty_input_as_null);
 }
 
 void DAGExpressionAnalyzer::buildAggGroupBy(
@@ -275,37 +255,8 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 /// if the column is a string with collation info, the `sort_key` of the column is used during
                 /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
                 /// extra aggregation function any(group_by_column) here as the output of the group by column
-                const String & agg_func_name = "any";
-                AggregateDescription aggregate;
-                TiDB::TiDBCollators arg_collators;
-                arg_collators.push_back(collator);
-
-                DataTypes types(1);
-                aggregate.argument_names.resize(1);
-                types[0] = type;
-                aggregate.argument_names[0] = name;
-
-                String func_string = DAGExpressionAnalyzerHelper::genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-                bool duplicate = false;
-                for (const auto & pre_agg : aggregate_descriptions)
-                {
-                    if (pre_agg.column_name == func_string)
-                    {
-                        aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
-                        duplicate = true;
-                        break;
-                    }
-                }
-                if (duplicate)
-                    return;
-                aggregate.column_name = func_string;
-                aggregate.parameters = Array();
-                aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
-                aggregate.function->setCollators(arg_collators);
-                aggregate_descriptions.push_back(aggregate);
-                DataTypePtr result_type = aggregate.function->getReturnType();
-                // this is a temp result since implicit cast maybe added on these aggregated_columns
-                aggregated_columns.emplace_back(func_string, result_type);
+                TiDB::TiDBCollators arg_collators{collator};
+                DAGExpressionAnalyzerHelper::buildAggFunction({name}, {type}, arg_collators, "any", aggregate_descriptions, aggregated_columns, false);
             }
             else
             {
@@ -358,17 +309,17 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     ExpressionActionsChain::Step & step = chain.steps.back();
 
     AggregateDescriptions aggregate_descriptions;
+    Names aggregation_keys;
+    TiDB::TiDBCollators collators;
+    std::unordered_set<String> agg_key_set;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
+    buildAggGroupBy(agg.group_by(), step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
+    // set required output for agg funcs's arguments and group by keys.
     for (const auto & aggregate_description : aggregate_descriptions)
     {
         for (const auto & argument_name : aggregate_description.argument_names)
             step.required_output.push_back(argument_name);
     }
-
-    Names aggregation_keys;
-    TiDB::TiDBCollators collators;
-    std::unordered_set<String> agg_key_set;
-    buildAggGroupBy(agg.group_by(), step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
     for (const auto & aggregation_key : aggregation_keys)
         step.required_output.push_back(aggregation_key);
 

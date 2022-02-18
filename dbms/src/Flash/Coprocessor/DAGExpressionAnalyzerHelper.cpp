@@ -378,6 +378,42 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
 }
 
+void DAGExpressionAnalyzerHelper::buildAggFunction(
+    const Names & arg_names,
+    const DataTypes & arg_types,
+    TiDB::TiDBCollators & arg_collators,
+    const String & agg_func_name,
+    AggregateDescriptions & aggregate_descriptions,
+    NamesAndTypes & aggregated_columns,
+    bool empty_input_as_null)
+{
+    assert(arg_names.size() == arg_collators.size() && arg_names.size() == arg_types.size());
+
+    AggregateDescription aggregate;
+    aggregate.argument_names = arg_names;
+    String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
+    bool duplicate = false;
+    for (const auto & pre_agg : aggregate_descriptions)
+    {
+        if (pre_agg.column_name == func_string)
+        {
+            aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+            duplicate = true;
+            break;
+        }
+    }
+    if (duplicate)
+        return;
+    aggregate.column_name = func_string;
+    aggregate.parameters = Array();
+    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
+    aggregate.function->setCollators(arg_collators);
+    aggregate_descriptions.push_back(std::move(aggregate));
+    DataTypePtr result_type = aggregate.function->getReturnType();
+    // this is a temp result since implicit cast maybe added on these aggregated_columns
+    aggregated_columns.emplace_back(func_string, result_type);
+}
+
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
     {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
      {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},
