@@ -2,10 +2,8 @@
 
 namespace DB
 {
-
 namespace tests
 {
-
 class TestFunctionTestUtils : public ::testing::Test
 {
 };
@@ -15,7 +13,7 @@ try
 {
     using DecimalField64 = DecimalField<Decimal64>;
 
-    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt), std::nullopt);
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt, 3, 0), std::nullopt);
     ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123", 3, 0), DecimalField64(123, 0));
 
     constexpr auto parse = parseDecimal<Decimal64>;

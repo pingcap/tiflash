@@ -105,7 +105,7 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     ExpressionActionsPtr & actions)
 {
     // rewrite IFNULL function with multiIf
-    // ifNull(arg1, arg2) -> if(isNull(arg1), arg2, arg1)
+    // ifNull(arg1, arg2) -> multiIf(isNull(arg1), arg2, arg1)
     const String & func_name = "multiIf";
     Names argument_names;
     if (expr.children_size() != 2)
@@ -114,11 +114,12 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     }
 
     String condition_arg_name = analyzer->getActions(expr.children(0), actions, false);
-    String else_arg_name = analyzer->getActions(expr.children(1), actions, false);
+    String tmp_else_arg_name = analyzer->getActions(expr.children(1), actions, false);
     String is_null_result = analyzer->applyFunction("isNull", {condition_arg_name}, actions, getCollatorFromExpr(expr));
+    String not_null_else_arg_name = analyzer->applyFunction("assumeNotNull", {tmp_else_arg_name}, actions, nullptr);
 
     argument_names.push_back(std::move(is_null_result));
-    argument_names.push_back(std::move(else_arg_name));
+    argument_names.push_back(std::move(not_null_else_arg_name));
     argument_names.push_back(std::move(condition_arg_name));
 
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
