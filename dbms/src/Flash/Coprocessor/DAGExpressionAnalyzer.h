@@ -28,6 +28,7 @@ enum class ExtraCastAfterTSMode
 };
 
 class DAGExpressionAnalyzerHelper;
+class PhysicalPlanBuilder;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
 class DAGExpressionAnalyzer : private boost::noncopyable
@@ -69,7 +70,7 @@ public:
 
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const String & column_prefix) const;
+        const String & column_prefix);
 
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
@@ -114,12 +115,18 @@ public:
         String & filter_column_name);
 
 private:
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
     NamesAndTypes buildOrderColumns(
         ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
     void appendCastAfterAgg(
-        ExpressionActionsChain & chain,
+        ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -131,7 +138,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -139,11 +146,21 @@ private:
 
     void buildCommonAggFunc(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
+
+    void buildAggGroupBy(
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
@@ -218,6 +235,35 @@ private:
         ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
 
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix);
+
+    NamesWithAliases genRootFinalProjectAliases(
+        const String & column_prefix,
+        const std::vector<Int32> & output_offsets);
+
+    void appendCastForRootFinalProjection(
+        ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        bool need_append_timezone_cast,
+        const BoolVec & need_append_type_cast_vec);
+
+    std::pair<bool, BoolVec> checkIfCastIsRequired(
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets) const;
+
+    std::pair<bool, Names> buildJoinKey(
+        ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
+
+    bool buildExtraCastsAfterTS(
+        ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
@@ -225,6 +271,7 @@ private:
     Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
+    friend class PhysicalPlanBuilder;
 };
 
 } // namespace DB
