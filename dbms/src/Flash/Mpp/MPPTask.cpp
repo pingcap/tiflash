@@ -237,10 +237,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
-        if (!is_local)
-        {
-            remote_tunnel_cnt++;
-        }
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -302,7 +298,7 @@ void MPPTask::runImpl()
         preprocess();
 
         int new_thd_cnt = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, remote_tunnel_cnt, dag_context->getNewThreadCountOfExchangeReceiver());
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -426,10 +422,9 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    // Estimated count of new threads from InputStreams, remote MppTunnels and ExchangeReceivers.
+    // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
     return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
-        + remote_tunnel_cnt
-        + dag_context->getNewThreadCountOfExchangeReceiver();
+        + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 
 } // namespace DB

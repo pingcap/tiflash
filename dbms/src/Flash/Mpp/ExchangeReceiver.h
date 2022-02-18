@@ -94,6 +94,19 @@ public:
 
     int computeNewThreadCount() const { return getSourceNum(); }
 
+    void collectNewThreadCount(int & cnt)
+    {
+        if (!collected) {
+            collected = true;
+            cnt += computeNewThreadCount();
+        }
+    }
+
+    void resetNewThreadCountCompute()
+    {
+        collected = false;
+    }
+
 private:
     using Request = typename RPCContext::Request;
 
@@ -134,6 +147,8 @@ private:
     String err_msg;
 
     LogWithPrefixPtr exc_log;
+
+    bool collected = false;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

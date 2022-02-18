@@ -148,7 +148,7 @@ public:
 
     virtual void collectNewThreadCountOfThisLevel(int &) {}
 
-    void resetNewThreadCountCompute()
+    virtual void resetNewThreadCountCompute()
     {
         if (collected)
         {

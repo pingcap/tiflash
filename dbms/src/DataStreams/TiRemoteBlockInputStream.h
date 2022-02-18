@@ -209,6 +209,20 @@ public:
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        remote_reader->collectNewThreadCount(cnt);
+    }
+
+    virtual void resetNewThreadCountCompute() override
+    {
+        if (collected)
+        {
+            collected = false;
+            remote_reader->resetNewThreadCountCompute();
+        }
+    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
