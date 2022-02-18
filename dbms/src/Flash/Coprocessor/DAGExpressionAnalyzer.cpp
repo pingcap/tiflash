@@ -265,7 +265,6 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
         }
         else
         {
-            // this is a temp result since implicit cast maybe added on these aggregated_columns
             aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
