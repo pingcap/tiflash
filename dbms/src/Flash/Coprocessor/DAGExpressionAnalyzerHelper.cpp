@@ -393,18 +393,15 @@ void DAGExpressionAnalyzerHelper::buildAggFunction(
     AggregateDescription aggregate;
     aggregate.argument_names = arg_names;
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-    bool duplicate = false;
     for (const auto & pre_agg : aggregate_descriptions)
     {
+        // agg function duplicate, don't need to build again.
         if (pre_agg.column_name == func_string)
         {
             aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
-            duplicate = true;
-            break;
+            return;
         }
     }
-    if (duplicate)
-        return;
 
     DataTypePtr result_type = aggregate.function->getReturnType();
     // this is a temp result since implicit cast maybe added on these aggregated_columns
