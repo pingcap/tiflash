@@ -1,3 +1,4 @@
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <DataTypes/DataTypeNullable.h>
