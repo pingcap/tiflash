@@ -296,6 +296,9 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
+
+        int new_thd_cnt = estimateCountOfNewThreads();
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -415,6 +418,13 @@ void MPPTask::cancel(const String & reason)
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 {
     return status.compare_exchange_strong(from, to);
+}
+
+int MPPTask::estimateCountOfNewThreads()
+{
+    // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
+    return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
+        + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 
 } // namespace DB
