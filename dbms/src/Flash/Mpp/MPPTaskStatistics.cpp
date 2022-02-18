@@ -144,6 +144,4 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
         }
     }
 }
-
-
 } // namespace DB
