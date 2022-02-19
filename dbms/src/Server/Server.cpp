@@ -488,13 +488,17 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq, int buf_size)
+void HandleRpcs(grpc::ServerCompletionQueue * cq,  grpc::ServerCompletionQueue * notify_cq, bool poll_which_cq)
 {
     // Spawn a new CallData instance to serve new clients.
-    for (int i = 0; i < buf_size; i++)
-        new CallData(service_, cq);
+    // for (int i = 0; i < buf_size; i++)
+        // new CallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
+     grpc::ServerCompletionQueue * curcq = cq;
+    if (poll_which_cq) {
+        curcq = notify_cq;
+    }
     while (true)
     {
         // Block waiting to read the next event from the completion queue. The
@@ -502,7 +506,7 @@ void HandleRpcs(FlashService * service_, grpc::ServerCompletionQueue * cq, int b
         // memory address of a CallData instance.
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
-        if (!cq->Next(&tag, &ok))
+        if (!curcq->Next(&tag, &ok))
         {
             LOG_ERROR(grpc_log, "CQ is fully drained and shut down");
             break;
@@ -557,6 +561,7 @@ public:
         for (int i = 0; i < (int)server.context().getSettingsRef().async_cqs; i++)
         {
             cqs_.emplace_back(builder.AddCompletionQueue());
+            notify_cqs_.emplace_back(builder.AddCompletionQueue());
         }
         flash_grpc_server
             = builder.BuildAndStart();
@@ -564,8 +569,15 @@ public:
         Debug::setServiceAddr(raft_config.flash_server_addr);
         int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
         int ppc = server.context().getSettingsRef().async_pollers_per_cq;
-        for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
-            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
+        // for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
+            // thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
+        for (int i = 0; i < (int)(cqs_.size()*ppc); i++)
+        {
+            for (int j = 0; j < buf_size; j++)
+                new CallData(flash_service.get(), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
+            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), false); });
+            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), true); });
+        }
     }
 
     ~FlashGrpcServerHolder()
@@ -595,7 +607,7 @@ private:
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    std::vector<std::unique_ptr<grpc_impl::ServerCompletionQueue>> cqs_;
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_, notify_cqs_;
     std::shared_ptr<ThreadManager> thread_manager = DB::newThreadManager();
 };
 

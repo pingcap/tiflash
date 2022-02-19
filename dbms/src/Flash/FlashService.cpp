@@ -512,9 +512,10 @@ std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
     return "";
 }
 
-CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq)
+CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
     : service_(service)
     , cq_(cq)
+    , notify_cq_(notify_cq)
     , responder_(&ctx_)
     , state_(CREATE)
     , send_queue_(nullptr)
@@ -643,7 +644,7 @@ void CallData::Proceed()
         // the tag uniquely identifying the request (so that different CallData
         // instances can serve different requests concurrently), in this case
         // the memory address of this CallData instance.
-        service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, cq_, this);
+        service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
     }
     else if (state_ == PROCESS)
     {
@@ -652,7 +653,7 @@ void CallData::Proceed()
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
-        new CallData(service_, cq_);
+        new CallData(service_, cq_, notify_cq_);
         {
             std::unique_lock lk(mu);
             notifyReady();

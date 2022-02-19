@@ -101,7 +101,7 @@ public:
     // Take in the "service" instance (in this case representing an asynchronous
     // server) and the completion queue "cq" used for asynchronous communication
     // with the gRPC runtime.
-    CallData(FlashService * service, grpc::ServerCompletionQueue * cq);
+    CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
     void Pending();
 
@@ -132,7 +132,7 @@ public:
     FlashService * service_;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    grpc::ServerCompletionQueue * cq_;
+    grpc::ServerCompletionQueue * cq_, *notify_cq_;
     // Context for the rpc, allowing to tweak aspects of it such as the use
     // of compression, authentication, as well as to send metadata back to the
     // client.
