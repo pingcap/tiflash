@@ -61,7 +61,7 @@ MakeRegionQueryInfos(
         if (r.key_ranges.empty())
         {
             throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(r.region_id),
+                fmt::format("Income key ranges is empty for region: {}", r.region_id),
                 Errors::Coprocessor::BadRequest);
         }
         if (region_force_retry.count(id))
@@ -94,14 +94,16 @@ MakeRegionQueryInfos(
                 if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
                 {
                     throw TiFlashException(
-                        "Income key ranges is illegal for region: " + std::to_string(r.region_id)
-                            + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
-                            + std::to_string(table_id),
+                        fmt::format(
+                            "Income key ranges is illegal for region: {}, table id in key range is {}, table id in region is {}",
+                            r.region_id,
+                            table_id_in_range,
+                            table_id),
                         Errors::Coprocessor::BadRequest);
                 }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
-                        "Income key ranges is illegal for region: " + std::to_string(r.region_id),
+                        fmt::format("Income key ranges is illegal for region: {}", r.region_id),
                         Errors::Coprocessor::BadRequest);
             }
             info.required_handle_ranges = r.key_ranges;
@@ -238,7 +240,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (DB::Exception & e)
         {
-            e.addMessage("(while doing learner read for table, table_id: " + DB::toString(table_id) + ")");
+            e.addMessage(fmt::format("(while doing learner read for table, table_id: {})", table_id));
             throw;
         }
     }
@@ -362,16 +364,14 @@ void DAGStorageInterpreter::doLocalRead(
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                             + "`, table_id: " + DB::toString(table_id) + ")");
+                e.addMessage(fmt::format("(while creating InputStreams from storage `{}`.`{}`, table_id: {})", storage->getDatabaseName(), storage->getTableName(), table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                         + "`, table_id: " + DB::toString(table_id) + ")");
+            e.addMessage(fmt::format("(while creating InputStreams from storage `{}`.`{}`, table_id: {})", storage->getDatabaseName(), storage->getTableName(), table_id));
             throw;
         }
     }
@@ -385,7 +385,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         auto storage = tmt.getStorages().get(table_id);
         if (!storage)
         {
-            throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+            throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
         }
         return {storage, storage->lockStructureForShare(context.getCurrentQueryId())};
     }
@@ -401,16 +401,16 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         if (!storage)
         {
             if (schema_synced)
-                throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
             else
                 return {nullptr, TableStructureLockHolder{}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
         }
 
         if (storage->engineType() != ::TiDB::StorageEngine::TMT && storage->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw TiFlashException("Specifying schema_version for non-managed storage: " + storage->getName()
-                                       + ", table: " + storage->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
-                                   Errors::Coprocessor::Internal);
+            throw TiFlashException(
+                fmt::format("Specifying schema_version for non-managed storage: {}, table: {}, id: {} is not allowed", storage->getName(), storage->getTableName(), table_id),
+                Errors::Coprocessor::Internal);
         }
 
         auto lock = storage->lockStructureForShare(context.getCurrentQueryId());
@@ -424,9 +424,9 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         auto storage_schema_version = storage->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
-            throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
-                                       + " newer than query schema version " + std::to_string(query_schema_version),
-                                   Errors::Table::SchemaVersionError);
+            throw TiFlashException(
+                fmt::format("Table {} schema version {} newer than query schema version {}", table_id, storage_schema_version, query_schema_version),
+                Errors::Table::SchemaVersionError);
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -494,10 +494,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
     // todo handle alias column
     if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
     {
-        throw TiFlashException("Limit for number of columns to read exceeded. "
-                               "Requested: "
-                                   + toString(table_scan.columns().size()) + ", maximum: " + toString(max_columns_to_read),
-                               Errors::BroadcastJoin::TooManyColumns);
+        throw TiFlashException(
+            fmt::format("Limit for number of columns to read exceeded. Requested: {}, maximum: {}", table_scan.columns().size(), max_columns_to_read),
+            Errors::BroadcastJoin::TooManyColumns);
     }
 
     Names required_columns;
