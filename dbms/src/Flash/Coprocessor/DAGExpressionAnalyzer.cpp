@@ -41,16 +41,14 @@ namespace
 {
 bool isUInt8Type(const DataTypePtr & type)
 {
-    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
-    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
+    return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
 }
 
 tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
 {
-    if (dag_timezone_info.is_name_based)
-        return constructStringLiteralTiExpr(dag_timezone_info.timezone_name);
-    else
-        return constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
+    return dag_timezone_info.is_name_based
+        ? constructStringLiteralTiExpr(dag_timezone_info.timezone_name)
+        : constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
 }
 
 String getAggFuncName(
