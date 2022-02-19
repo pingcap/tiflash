@@ -138,8 +138,10 @@ DAGStorageInterpreter::DAGStorageInterpreter(
 {
 }
 
-void DAGStorageInterpreter::pushDownFilter(const String & filter_executor_id_, std::vector<const tipb::Expr *> conditions_)
+void DAGStorageInterpreter::pushDownFilter(const String & filter_executor_id_, const std::vector<const tipb::Expr *> & conditions_)
 {
+    if (executed)
+        throw TiFlashException("`pushDownFilter` should be called before `execute`", Errors::Coprocessor::Internal);
     has_pushed_down_filter = true;
     filter_executor_id = filter_executor_id_;
     conditions = conditions_;
@@ -147,11 +149,12 @@ void DAGStorageInterpreter::pushDownFilter(const String & filter_executor_id_, s
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
+    if (executed)
+        throw TiFlashException("DAGStorageInterpreter has called `execute`, shouldn't call again.", Errors::Coprocessor::Internal);
+    executed = true;
+
     const DAGContext & dag_context = *context.getDAGContext();
-    if (dag_context.isBatchCop() || dag_context.isMPPTask())
-        learner_read_snapshot = doBatchCopLearnerRead();
-    else
-        learner_read_snapshot = doCopLearnerRead();
+    LearnerReadSnapshot learner_read_snapshot = (dag_context.isBatchCop() || dag_context.isMPPTask()) ? doBatchCopLearnerRead() : doCopLearnerRead();
 
     ManageableStoragePtr storage;
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
@@ -166,7 +169,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
 
     if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size, storage, required_columns);
+        doLocalRead(pipeline, settings.max_block_size, storage, required_columns, learner_read_snapshot);
 
     for (const auto & region_info : dag_context.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
@@ -250,7 +253,8 @@ void DAGStorageInterpreter::doLocalRead(
     DAGPipeline & pipeline,
     size_t max_block_size,
     const ManageableStoragePtr & storage,
-    const Names & required_columns)
+    const Names & required_columns,
+    const LearnerReadSnapshot & learner_read_snapshot)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     SelectQueryInfo query_info;

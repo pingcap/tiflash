@@ -42,7 +42,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    void pushDownFilter(const String & filter_executor_id_, std::vector<const tipb::Expr *> conditions_);
+    void pushDownFilter(const String & filter_executor_id_, const std::vector<const tipb::Expr *> & conditions_);
 
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
@@ -88,22 +88,20 @@ private:
     size_t max_streams;
     LogWithPrefixPtr log;
 
+    bool executed = false;
+
     /// for pushed down filter
     bool has_pushed_down_filter = false;
     String filter_executor_id;
     std::vector<const tipb::Expr *> conditions;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
-
     TableID table_id;
     const Settings & settings;
     TMTContext & tmt;
 
     /// Intermediate variables shared by multiple member functions
-
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
-    // We need to validate regions snapshot after getting streams from storage.
-    LearnerReadSnapshot learner_read_snapshot;
 };
 
 } // namespace DB
