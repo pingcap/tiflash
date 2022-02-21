@@ -15,7 +15,6 @@
 
 #include <unordered_set>
 
-
 namespace DB
 {
 namespace ErrorCodes
