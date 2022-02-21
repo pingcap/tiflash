@@ -30,8 +30,7 @@ extern const int NOT_IMPLEMENTED;
 constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService(IServer & server_)
-    :
-    calldata_to_reg_queue(1000)
+    : calldata_to_reg_queue(1000)
     , server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
@@ -61,10 +60,20 @@ FlashService::FlashService(IServer & server_)
     std::shared_ptr<ThreadManager> thd_manager = newThreadManager();
     thd_manager->scheduleThenDetach(false, "calldata_reg", [this] {
         CallDataReg reg;
-        while(calldata_to_reg_queue.pop(reg)) {
+        while (calldata_to_reg_queue.pop(reg))
+        {
             new CallData(reg.service, reg.cq, reg.notify_cq);
         }
     });
+    for(int i = 0;i<tunnel_sender_cap;i++) {
+        thd_manager->scheduleThenDetach(false, "rpc_exec", [this] {
+            CallData * calldata;
+            while(establish4async_queue.pop(calldata)) {
+                calldata->AsyncRpcInitOp();
+//                EstablishMPPConnection4Async(params.grpc_context, params.request, params.calldata);
+            }
+        });
+    }
     for (int i = 0; i < tunnel_sender_cap; i++)
     {
         tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
@@ -77,7 +86,6 @@ FlashService::FlashService(IServer & server_)
             }
         });
     }
-
 }
 
 void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel> & mpptunnel, bool needlock)
@@ -507,6 +515,26 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
     return true;
 }
 
+void CallData::AsyncRpcInitOp()
+{
+    std::exception_ptr eptr = nullptr;
+    try
+    {
+        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
+    }
+    catch (...)
+    {
+        eptr = std::current_exception();
+    }
+    if (eptr)
+    {
+        state_ = FINISH;
+        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), DeriveErrWhat(eptr));
+        responder_.Finish(status, this);
+        return;
+    }
+}
+
 void CallData::Pending()
 {
     state_ = PENDING;
@@ -588,7 +616,6 @@ void CallData::Proceed()
     }
     else if (state_ == PROCESS)
     {
-        act_rpcs++;
         state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
@@ -598,32 +625,8 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             notifyReady();
         }
-        std::exception_ptr eptr = nullptr;
-        try
-        {
-//            if (!
-            service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
-//                )
-//            {
-//                state_ = FINISH;
-//                service_->current_active_establish_thds--;
-//                service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-//                act_rpcs--;
-//                delete this;
-//                return;
-//            }
-        }
-        catch (...)
-        {
-            eptr = std::current_exception();
-        }
-        if (eptr)
-        {
-            state_ = FINISH;
-            grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), DeriveErrWhat(eptr));
-            responder_.Finish(status, this);
-            return;
-        }
+
+        service_->establish4async_queue.push(this);
     }
     else if (state_ == PENDING)
     {
