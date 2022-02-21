@@ -38,7 +38,7 @@ if [[ "${BUILD_UPDATE_DEBUG_CI_CCACHE}" != "false" ]]; then
   echo "====== begin to build & upload ccache for ci debug build ======"
   UPDATE_CCACHE=true BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=Debug sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-prepare.sh
   BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=Debug NPROC=${NPROC} INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-build.sh
-  BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=Debug INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-finish.sh
+  UPDATE_CCACHE=true BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=Debug INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-finish.sh
   echo "======  finish build & upload ccache for ci debug build  ======"
 fi
 
