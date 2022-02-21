@@ -88,8 +88,6 @@ public:
     std::vector<std::shared_ptr<MPMCQueue<CallData *>>> calldata_proc_queues;
     std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
     std::atomic<long long> tunnel_send_idx{0}, rpc_exe_idx{0};
-    const int tunnel_sender_cap = 40;
-    const int rpc_exe_cap = 200;
 
 private:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;

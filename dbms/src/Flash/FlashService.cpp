@@ -20,6 +20,9 @@
 
 std::atomic<int> act_rpcs{0};
 
+const int tunnel_sender_cap = 40;
+const int rpc_exe_cap = 200;
+
 namespace DB
 {
 namespace ErrorCodes
@@ -105,9 +108,9 @@ FlashService::FlashService(IServer & server_)
 void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel> & mpptunnel, bool needlock)
 {
     int idx = srv->tunnel_send_idx++;
-    idx = idx % srv->tunnel_sender_cap;
+    idx = idx % tunnel_sender_cap;
     if (idx < 0)
-        idx += srv->tunnel_sender_cap;
+        idx += tunnel_sender_cap;
     std::shared_ptr<MppTunnelWriteOp> obj = std::make_shared<MppTunnelWriteOp>(mpptunnel, needlock);
     srv->tunnel_send_op_queues[idx]->push(obj);
 }
@@ -115,9 +118,9 @@ void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel>
 void SubmitCalldataProcTask(FlashService * srv, CallData *cd)
 {
     int idx = srv->rpc_exe_idx++;
-    idx = idx % srv->rpc_exe_cap;
+    idx = idx % rpc_exe_cap;
     if (idx < 0)
-        idx += srv->rpc_exe_cap;
+        idx += rpc_exe_cap;
     srv->calldata_proc_queues[idx]->push(cd);
 }
 
