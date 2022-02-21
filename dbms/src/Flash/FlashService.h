@@ -85,10 +85,11 @@ public:
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
     MPMCQueue<CallDataReg> calldata_to_reg_queue;
-    MPMCQueue<CallData *> establish4async_queue;
+    std::vector<std::shared_ptr<MPMCQueue<CallData *>>> calldata_proc_queues;
     std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
-    std::atomic<long long> tunnel_send_idx{0};
+    std::atomic<long long> tunnel_send_idx{0}, rpc_exe_idx{0};
     const int tunnel_sender_cap = 40;
+    const int rpc_exe_cap = 200;
 
 private:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
@@ -150,6 +151,8 @@ public:
     void WriteErr(const mpp::MPPDataPacket & packet);
 
     void Proceed();
+
+    void Proceed0();
 
     void AsyncRpcInitOp();
 

@@ -65,12 +65,26 @@ FlashService::FlashService(IServer & server_)
             new CallData(reg.service, reg.cq, reg.notify_cq);
         }
     });
-    for(int i = 0;i<tunnel_sender_cap;i++) {
-        thd_manager->scheduleThenDetach(false, "rpc_exec", [this] {
+    //    for (int i = 0; i < tunnel_sender_cap; i++)
+    //    {
+    //        thd_manager->scheduleThenDetach(false, "rpc_exec", [this] {
+    //            CallData * calldata;
+    //            while (establish4async_queue.pop(calldata))
+    //            {
+    //                calldata->AsyncRpcInitOp();
+    //                //                EstablishMPPConnection4Async(params.grpc_context, params.request, params.calldata);
+    //            }
+    //        });
+    //    }
+    for (int i = 0; i < rpc_exe_cap; i++)
+    {
+        calldata_proc_queues.emplace_back(std::make_shared<MPMCQueue<CallData *>>(100));
+        auto queue = calldata_proc_queues.back();
+        thd_manager->scheduleThenDetach(false, "rpc_exec", [queue] {
             CallData * calldata;
-            while(establish4async_queue.pop(calldata)) {
-                calldata->AsyncRpcInitOp();
-//                EstablishMPPConnection4Async(params.grpc_context, params.request, params.calldata);
+            while (queue->pop(calldata))
+            {
+                calldata->Proceed0();
             }
         });
     }
@@ -96,6 +110,15 @@ void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel>
         idx += srv->tunnel_sender_cap;
     std::shared_ptr<MppTunnelWriteOp> obj = std::make_shared<MppTunnelWriteOp>(mpptunnel, needlock);
     srv->tunnel_send_op_queues[idx]->push(obj);
+}
+
+void SubmitCalldataProcTask(FlashService * srv, CallData *cd)
+{
+    int idx = srv->rpc_exe_idx++;
+    idx = idx % srv->rpc_exe_cap;
+    if (idx < 0)
+        idx += srv->rpc_exe_cap;
+    srv->calldata_proc_queues[idx]->push(cd);
 }
 
 FlashService::~FlashService()
@@ -614,7 +637,20 @@ void CallData::Proceed()
         // the memory address of this CallData instance.
         service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
     }
-    else if (state_ == PROCESS)
+    else if (state_ == PENDING)
+    {
+        return;
+    }
+    else
+    {
+        SubmitCalldataProcTask(service_, this);
+    }
+}
+
+
+void CallData::Proceed0()
+{
+    if (state_ == PROCESS)
     {
         state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
@@ -625,12 +661,8 @@ void CallData::Proceed()
             std::unique_lock lk(mu);
             notifyReady();
         }
-
-        service_->establish4async_queue.push(this);
-    }
-    else if (state_ == PENDING)
-    {
-        return;
+        AsyncRpcInitOp();
+//        service_->establish4async_queue.push(this);
     }
     else if (state_ == JOIN)
     {
