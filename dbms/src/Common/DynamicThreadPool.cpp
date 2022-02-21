@@ -81,6 +81,7 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 std::atomic<int> cur_thread_num{0}, max_thread_num{0};
+std::atomic<long long> avg_thds_sum{0}, avg_thds_cnt{0};
 std::atomic<long> last_thd_ts{0};
 void DynamicThreadPool::fixedWork(size_t index)
 {
@@ -96,7 +97,9 @@ void DynamicThreadPool::fixedWork(size_t index)
         max_thread_num = std::max(cur_thread_num.load(), max_thread_num.load());
          if (last_thd_ts != now) {
             last_thd_ts = now;
-            std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
+            avg_thds_sum += cur_thread_num.load();
+            avg_thds_cnt++;
+            std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<" avg_thd: "<<(avg_thds_cnt? avg_thds_sum/avg_thds_cnt:0)<<std::endl;
         }
         task->execute();
         cur_thread_num--;
@@ -112,7 +115,9 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
     long long now = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)/1000/1000/1000;
     if (last_thd_ts != now) {
         last_thd_ts = now;
-        std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
+        avg_thds_sum += cur_thread_num.load();
+        avg_thds_cnt++;
+        std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<" avg_thd: "<<(avg_thds_cnt? avg_thds_sum/avg_thds_cnt:0)<<std::endl;
     }
     initial_task->execute();
     cur_thread_num--;
@@ -135,9 +140,11 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
         cur_thread_num++;
         max_thread_num = std::max(cur_thread_num.load(), max_thread_num.load());
         if (last_thd_ts != now) {
-        last_thd_ts = now;
-        std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
-    }
+            last_thd_ts = now;
+            avg_thds_sum += cur_thread_num.load();
+            avg_thds_cnt++;
+            std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<" avg_thd: "<<(avg_thds_cnt? avg_thds_sum/avg_thds_cnt:0)<<std::endl;
+        }
         node.task->execute();
         cur_thread_num--;
         node.task.reset();
