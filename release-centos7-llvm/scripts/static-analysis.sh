@@ -2,22 +2,6 @@
 
 ENABLE_CLANG_TIDY_CHECK=${ENABLE_CLANG_TIDY_CHECK:-true}
 
-if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
-  command -v clang-tidy >/dev/null 2>&1
-  if [[ $? != 0 ]]; then
-    curl -o "/usr/local/bin/clang-tidy" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-tidy-12
-    chmod +x "/usr/local/bin/clang-tidy"
-    # http://mirror.centos.org/centos/8-stream/AppStream/x86_64/os/Packages/clang-libs-12.0.0-1.module_el8.5.0+840+21214faf.x86_64.rpm
-    curl -o "/tmp/lib64-clang-12-include.tar.gz" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/lib64-clang-12-include.tar.gz
-    pushd /tmp
-    tar zxf lib64-clang-12-include.tar.gz
-    popd
-  else
-    echo "clang-tidy has been installed"
-  fi
-  clang-tidy --version
-fi
-
 set -ueox pipefail
 
 SCRIPTPATH="$(
@@ -52,5 +36,4 @@ if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
           --file_path=${BUILD_DIR}/compile_commands.json \
           --load_diff_files_from "/tmp/tiflash-diff-files.json"
   python3 ${SRCPATH}/release-centos7-llvm/scripts/run-clang-tidy.py -p ${BUILD_DIR} -j ${NPROC} --files ".*/tics/dbms/*"
-  export ENABLE_CLANG_TIDY_CHECK=false
 fi
