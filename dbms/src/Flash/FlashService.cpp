@@ -51,29 +51,32 @@ FlashService::FlashService(IServer & server_)
             while (!end_syn)
             {
                 // LOG_ERROR(log, "max active establish thds: " << max_active_establish_thds);
-                LOG_ERROR(log, "act_rpcq: "<< act_rpcs.load());
+                LOG_ERROR(log, "act_rpcq: " << act_rpcs.load());
                 usleep(1000000);
             }
             end_fin = true;
         });
     tunnel_senders = newThreadManager();
-    for(int i = 0; i < tunnel_sender_cap; i++)
+    for (int i = 0; i < tunnel_sender_cap; i++)
     {
         tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
         tunnel_senders->scheduleThenDetach(false, "tunnel_sender", [this, i] {
             auto queue = tunnel_send_op_queues[i];
             std::shared_ptr<MppTunnelWriteOp> obj;
-            while(queue->pop(obj)) {
+            while (queue->pop(obj))
+            {
                 obj->mpptunnel->sendOp(obj->need_lock);
             }
         });
     }
 }
 
-void SubmitTunnelSendOp(FlashService *srv, const std::shared_ptr<DB::MPPTunnel> &mpptunnel, bool needlock) {
+void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel> & mpptunnel, bool needlock)
+{
     int idx = srv->tunnel_send_idx++;
-    idx = idx%srv->tunnel_sender_cap;
-    if (idx < 0) idx += srv->tunnel_sender_cap;
+    idx = idx % srv->tunnel_sender_cap;
+    if (idx < 0)
+        idx += srv->tunnel_sender_cap;
     std::shared_ptr<MppTunnelWriteOp> obj = std::make_shared<MppTunnelWriteOp>(mpptunnel, needlock);
     srv->tunnel_send_op_queues[idx]->push(obj);
 }
@@ -81,12 +84,12 @@ void SubmitTunnelSendOp(FlashService *srv, const std::shared_ptr<DB::MPPTunnel> 
 FlashService::~FlashService()
 {
     end_syn = true;
-    for(auto &q: tunnel_send_op_queues) {
+    for (auto & q : tunnel_send_op_queues)
+    {
         q->finish();
     }
     while (!end_fin)
         usleep(100000);
-
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -221,7 +224,6 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     {
         LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!!  peer: " << grpc_context->peer() << " reqstr: " << request->DebugString());
         calldata->WriteDone(::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + grpc_context->peer()));
-        //        calldata->GoEnd();
         return true;
     }
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
@@ -230,7 +232,6 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     {
         calldata->WriteDone(grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
         return true;
-        //        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -274,82 +275,12 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
             }
         }
     }
-    //    Stopwatch stopwatch;
-    //std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
     tunnel->no_waiter = true;
     calldata->attachTunnel(tunnel);
     tunnel->connect(calldata);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
     return true;
-    //    tunnel->waitForFinish();
-    //    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
-    // TODO: Check if there are errors in task.
-    //    return;
-    //        grpc::Status::OK;
 }
-
-//::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
-//                                                    const ::mpp::EstablishMPPConnectionRequest * request,
-//                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
-//{
-//    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-//    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
-//    // We need to find it out and bind the grpc stream with it.
-//    LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
-//
-//    if (!security_config.checkGrpcContext(grpc_context))
-//    {
-//        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-//    }
-//    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
-//    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-//    Stopwatch watch;
-//    SCOPE_EXIT({
-//        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-//        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
-//        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
-//    });
-//
-//    auto [context, status] = createDBContext(grpc_context);
-//    if (!status.ok())
-//    {
-//        return status;
-//    }
-//
-//    auto & tmt_context = context->getTMTContext();
-//    auto task_manager = tmt_context.getMPPTaskManager();
-//    std::chrono::seconds timeout(10);
-//    std::string err_msg;
-//    MPPTunnelPtr tunnel = nullptr;
-//    {
-//        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-//        if (sender_task != nullptr)
-//        {
-//            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
-//        }
-//        if (tunnel == nullptr)
-//        {
-//            LOG_ERROR(log, err_msg);
-//            if (writer->Write(getPacketWithError(err_msg)))
-//            {
-//                return grpc::Status::OK;
-//            }
-//            else
-//            {
-//                LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
-//                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-//            }
-//        }
-//    }
-//    Stopwatch stopwatch;
-//    tunnel->connect(writer);
-//    LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
-//    tunnel->waitForFinish();
-//    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
-//    // TODO: Check if there are errors in task.
-//
-//    return grpc::Status::OK;
-//}
 
 ::grpc::Status FlashService::CancelMPPTask(
     ::grpc::ServerContext * grpc_context,
@@ -548,7 +479,12 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grp
     Proceed();
 }
 
-std::atomic<int> cd_token{0};
+void CallData::Reset()
+{
+    send_queue_ = nullptr;
+    state_ = PROCESS;
+    service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
+}
 
 bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
 {
@@ -565,9 +501,6 @@ bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
         }
     }
     SubmitTunnelSendOp(service_, mpptunnel_, p_lk == nullptr);
-//    std::string retstr = mpptunnel_->sendOp(p_lk == nullptr);
-//    if (trace)
-//        std::cerr << "mpptunnel_->sendOp(p_lk) result: " << retstr << std::endl;
     return true;
 }
 
@@ -583,8 +516,6 @@ void CallData::OnCancel()
 bool CallData::Write(const mpp::MPPDataPacket & packet, bool need_wait)
 {
     // The actual processing.
-    //        std::string prefix("Hello ");
-    //        reply_.set_message(prefix + request_.name());
     try
     {
         if (need_wait)
@@ -640,8 +571,6 @@ void CallData::notifyReady()
 
 void CallData::Proceed()
 {
-    service_->current_active_establish_thds++;
-    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
     if (state_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -656,12 +585,11 @@ void CallData::Proceed()
     }
     else if (state_ == PROCESS)
     {
-        act_rpcs++;
         state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
-        new CallData(service_, cq_, notify_cq_);
+//        new CallData(service_, cq_, notify_cq_);
         {
             std::unique_lock lk(mu);
             notifyReady();
@@ -698,29 +626,18 @@ void CallData::Proceed()
     else if (state_ == JOIN)
     {
         {
-            //TODO check mem order
             std::unique_lock lk(mu);
-            if (fail_token != -1)
-            {
-//                std::cerr << "calldata proceed, token: " << fail_token << " canop: "
-//                          << (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
-//                          << " sz:" << send_queue_->size() << " is_fin:" << send_queue_->isFinished() << std::endl;
-                fail_token = -1;
-            }
             if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
             {
                 ready = false;
                 lk.unlock();
                 SubmitTunnelSendOp(service_, mpptunnel_, true);
-//                mpptunnel_->sendOp();
             }
             else
             {
                 notifyReady();
             }
         }
-
-        //notify producer that it's ready
     }
     else if (state_ == ERR_HANDLE)
     {
@@ -731,15 +648,11 @@ void CallData::Proceed()
     else
     {
         GPR_ASSERT(state_ == FINISH);
+        Reset();
         // Once in the FINISH state, deallocate ourselves (CallData).
-        service_->current_active_establish_thds--;
-        service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-        act_rpcs--;
-        delete this;
+//        delete this;
         return;
     }
-    service_->current_active_establish_thds--;
-    service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
 }
 
 void CallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue)

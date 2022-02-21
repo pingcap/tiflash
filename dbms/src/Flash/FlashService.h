@@ -135,6 +135,8 @@ public:
 
     void Proceed();
 
+    void Reset();
+
     void notifyReady();
 
     std::mutex mu;
