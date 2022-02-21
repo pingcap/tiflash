@@ -117,13 +117,13 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(Poco::Logger * log_, BlobStore::Config config);
+        BlobStats(Poco::Logger * log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
         void restore(const CollapsingPageDirectory & entries);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &, bool check_exist = true);
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
@@ -151,11 +151,12 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
-        std::list<BlobStatPtr> getStats() const
+        std::map<String, std::list<BlobStatPtr>> getStats() const
         {
             auto guard = lock();
             return stats_map;
         }
+
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
@@ -165,15 +166,16 @@ public:
 
         BlobFileId roll_id = 1;
         std::list<BlobFileId> old_ids;
-        std::list<BlobStatPtr> stats_map;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
+        UInt16 stats_map_w_index = 0;
+
+        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
+    BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     void restore(const CollapsingPageDirectory & entries);
-
-    BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -228,15 +230,18 @@ private:
 
     String getBlobFilePath(BlobFileId blob_id);
 
+    std::pair<bool, PageFileIdAndLevel> getBlobFileByName(String blob_file_name);
+
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    constexpr static const char * blob_prefix_name = "/blobfile_";
+
     PSDiskDelegatorPtr delegator;
 
     FileProviderPtr file_provider;
-    String path{};
     Config config;
 
     Poco::Logger * log;
@@ -244,8 +249,6 @@ private:
     BlobStats blob_stats;
 
     DB::LRUCache<BlobFileId, BlobFile> cached_files;
-    // TBD: replace it with stat_maps
-    std::map<BlobFileId, int> blobfile_ids;
 };
 using BlobStorePtr = std::shared_ptr<BlobStore>;
 

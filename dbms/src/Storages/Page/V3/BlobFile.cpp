@@ -14,8 +14,7 @@ namespace PS::V3
 BlobFile::BlobFile(String path_,
                    BlobFileId blob_id_,
                    FileProviderPtr file_provider_,
-                   PSDiskDelegatorPtr delegator_,
-                   bool truncate_if_exists)
+                   PSDiskDelegatorPtr delegator_)
     : blob_id(blob_id_)
     , file_provider{file_provider_}
     , delegator(delegator_)
@@ -70,7 +69,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 #endif
     PageUtil::syncFile(wrfile);
 
-    if (delegator != nullptr && offset + size > file_size)
+    if (offset + size > file_size)
     {
         delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
                                        offset + size - file_size,
@@ -83,15 +82,13 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 void BlobFile::truncate(size_t size)
 {
     PageUtil::ftruncateFile(wrfile, size);
-    if (delegator != nullptr)
-    {
-        assert(size < file_size);
-        delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
-        file_size = size;
-    }
+
+    assert(size < file_size);
+
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
+    file_size = size;
 }
 
-// TBD : when blobfile del , call delegator method
 void BlobFile::remove()
 {
     if (!wrfile->isClosed())
@@ -103,6 +100,8 @@ void BlobFile::remove()
     {
         file_provider->deleteRegularFile(getPath(), getEncryptionPath());
     }
+
+    delegator->removePageFile(std::make_pair(blob_id, 0), file_size, false, false);
 }
 
 BlobFile::~BlobFile()

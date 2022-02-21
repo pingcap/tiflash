@@ -18,8 +18,7 @@ public:
     BlobFile(String path_,
              BlobFileId blob_id_,
              FileProviderPtr file_provider_,
-             PSDiskDelegatorPtr delegator_,
-             bool truncate_if_exists = true);
+             PSDiskDelegatorPtr delegator_);
 
     ~BlobFile();
 

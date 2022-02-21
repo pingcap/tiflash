@@ -1,14 +1,19 @@
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Poco/File.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <common/logger_useful.h>
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <mutex>
+
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
@@ -35,29 +40,44 @@ using ChecksumClass = Digest::CRC64;
   * BlobStore methods *
   *********************/
 
-BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobStore::Config config_)
-    : file_provider(file_provider_)
-    , path(path_)
-    , config(config_)
-    , log(&Poco::Logger::get("BlobStore"))
-    , blob_stats(log, config_)
-    , cached_files(config.cached_fd_size)
-{
-}
-
 BlobStore::BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
     : delegator(delegator_)
     , file_provider(file_provider_)
     , config(config_)
     , log(&Poco::Logger::get("BlobStore"))
-    , blob_stats(log, config_)
+    , blob_stats(log, delegator, config_)
     , cached_files(config.cached_fd_size)
 {
-
 }
 
 void BlobStore::restore(const CollapsingPageDirectory & entries)
 {
+    // We need register all Blob into delegator before we recover the entries.
+    Strings file_names;
+    for (const auto & p : delegator->listPaths())
+    {
+        Poco::File directory(p);
+        if (!directory.exists())
+        {
+            directory.createDirectories();
+            continue;
+        }
+
+        directory.list(file_names);
+
+        for (const auto & file_name : file_names)
+        {
+            const auto & [valid, id_lvl] = getBlobFileByName(file_name);
+            if (valid)
+            {
+                Poco::File blob_file_in_disk(file_name);
+                delegator->addPageFileUsedSize(id_lvl, blob_file_in_disk.getSize(), p, true);
+            }
+        }
+
+        file_names.clear();
+    }
+
     blob_stats.restore(entries);
 }
 
@@ -489,60 +509,64 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
 
-    for (const auto & stat : stats_list)
+    for (auto & [path, stats] : stats_list)
     {
-        if (stat->isReadOnly())
+        (void)path;
+        for (const auto & stat : stats)
         {
-            LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
-            continue;
-        }
+            if (stat->isReadOnly())
+            {
+                LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
+                continue;
+            }
 
-        auto lock = stat->lock();
-        auto right_margin = stat->smap->getRightMargin();
+            auto lock = stat->lock();
+            auto right_margin = stat->smap->getRightMargin();
 
-        // Avoid divide by zero
-        if (right_margin == 0)
-        {
-            LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
-            continue;
-        }
+            // Avoid divide by zero
+            if (right_margin == 0)
+            {
+                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
+                continue;
+            }
 
-        stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
+            stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
 
-        if (stat->sm_valid_rate > 1.0)
-        {
-            LOG_FMT_ERROR(
-                log,
-                "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
-                stat->sm_valid_rate,
-                stat->sm_total_size,
-                stat->sm_valid_size,
-                right_margin,
-                stat->id);
-            assert(false);
-            continue;
-        }
+            if (stat->sm_valid_rate > 1.0)
+            {
+                LOG_FMT_ERROR(
+                    log,
+                    "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
+                    stat->sm_valid_rate,
+                    stat->sm_total_size,
+                    stat->sm_valid_size,
+                    right_margin,
+                    stat->id);
+                assert(false);
+                continue;
+            }
 
-        // Check if GC is required
-        if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
-        {
-            LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
-            blob_need_gc.emplace_back(stat->id);
+            // Check if GC is required
+            if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
+            {
+                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+                blob_need_gc.emplace_back(stat->id);
 
-            // Change current stat to read only
-            stat->changeToReadOnly();
-        }
-        else
-        {
-            LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
-        }
+                // Change current stat to read only
+                stat->changeToReadOnly();
+            }
+            else
+            {
+                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+            }
 
-        if (right_margin != stat->sm_total_size)
-        {
-            auto blobfile = getBlobFile(stat->id);
-            LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
-            blobfile->truncate(right_margin);
-            stat->sm_total_size = right_margin;
+            if (right_margin != stat->sm_total_size)
+            {
+                auto blobfile = getBlobFile(stat->id);
+                LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
+                blobfile->truncate(right_margin);
+                stat->sm_total_size = right_margin;
+            }
         }
     }
 
@@ -684,37 +708,48 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 }
 
 
-String BlobStore::getBlobFilePath(BlobFileId blob_id) const
+String BlobStore::getBlobFilePath(BlobFileId blob_id)
 {
-    if (!path.empty())
-    {
-        return path + "/blobfile_" + DB::toString(blob_id);
-    }
-
     PageFileIdAndLevel id_lvl;
     id_lvl.first = blob_id;
     id_lvl.second = 0;
 
     String parent_path;
-
-    if (blobfile_ids.find(blob_id) == blobfile_ids.end())
-    {
-        blobfile_ids[blob_id] = 1;
-        parent_path = delegator->choosePath(id_lvl);
-    }
-    else
-    {
-        parent_path = delegator->getPageFilePath(id_lvl);
-    }
+    parent_path = delegator->choosePath(id_lvl);
 
     return parent_path + "/blobfile_" + DB::toString(blob_id);
 }
 
+std::pair<bool, PageFileIdAndLevel> BlobStore::getBlobFileByName(String blob_file_name)
+{
+    PageFileIdAndLevel id_lvl;
+
+    if (!startsWith(blob_file_name, blob_prefix_name))
+    {
+        LOG_FMT_INFO(log, "Not blob file, ignored: {}", blob_file_name);
+        return {false, id_lvl};
+    }
+
+    std::vector<std::string> ss;
+    boost::split(ss, blob_file_name, boost::is_any_of("_"));
+    if (ss.size() != 2)
+    {
+        LOG_FMT_INFO(log, "Unrecognized file, ignored: {}", blob_file_name);
+        return {false, id_lvl};
+    }
+
+    BlobFileId file_id = std::stoull(ss[1]);
+    id_lvl.first = file_id;
+    id_lvl.second = 0;
+
+    return {true, id_lvl};
+}
+
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
-    return cached_file.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                          return std::make_shared<BlobFile>(getBlobFilePath(blob_id), blob_id, file_provider, delegator);
-                      })
+    return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
+                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), blob_id, file_provider, delegator);
+                       })
         .first;
 }
 
@@ -722,9 +757,10 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
+BlobStore::BlobStats::BlobStats(Poco::Logger * log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
     : log(log_)
     , config(config_)
+    , delegator(delegator_)
 {
 }
 
@@ -741,12 +777,18 @@ void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
 
     BlobFileId max_restored_file_id = 0;
     std::set<BlobFileId> existing_file_ids;
-    for (const auto & stat : stats_map)
+
+    for (auto & [path, stats] : stats_map)
     {
-        stat->recalculateSpaceMap();
-        max_restored_file_id = std::max(stat->id, max_restored_file_id);
-        existing_file_ids.insert(stat->id);
+        (void)path;
+        for (const auto & stat : stats)
+        {
+            stat->recalculateSpaceMap();
+            max_restored_file_id = std::max(stat->id, max_restored_file_id);
+            existing_file_ids.insert(stat->id);
+        }
     }
+
     // restore `roll_id`
     roll_id = max_restored_file_id + 1;
     // restore `old_ids`
@@ -786,15 +828,22 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     return stat;
 }
 
-BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &, bool check_exist)
 {
-    for (auto & stat : stats_map)
+    if (check_exist)
     {
-        if (stat->id == blob_file_id)
+        for (auto & [path, stats] : stats_map)
         {
-            throw Exception(fmt::format("BlobStats won't create [blob_id={}] which is exist",
-                                        blob_file_id),
-                            ErrorCodes::LOGICAL_ERROR);
+            (void)path;
+            for (const auto & stat : stats)
+            {
+                if (stat->id == blob_file_id)
+                {
+                    throw Exception(fmt::format("BlobStats won't create [blob_id={}] which is exist",
+                                                blob_file_id),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
         }
     }
 
@@ -803,27 +852,40 @@ BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file
         blob_file_id,
         SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size));
     stat->sm_max_caps = config.file_limit_size;
-    stats_map.emplace_back(stat);
 
+    PageFileIdAndLevel id_lvl;
+    id_lvl.first = blob_file_id;
+    id_lvl.second = 0;
+
+    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
     return stat;
 }
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
     old_ids.emplace_back(stat->id);
-    stats_map.remove(stat);
+
+    PageFileIdAndLevel id_lvl;
+    id_lvl.first = stat->id;
+    id_lvl.second = 0;
+
+    stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
 }
 
 void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
 {
     BlobStatPtr stat = nullptr;
 
-    for (auto & stat_in_map : stats_map)
+    for (auto & [path, stats] : stats_map)
     {
-        if (stat_in_map->id == blob_file_id)
+        (void)path;
+        for (const auto & stat_in_map : stats)
         {
-            stat = stat_in_map;
-            break;
+            if (stat_in_map->id == blob_file_id)
+            {
+                stat = stat_in_map;
+                break;
+            }
         }
     }
 
@@ -867,17 +929,61 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         return std::make_pair(nullptr, chooseNewStat());
     }
 
-    for (const auto & stat : stats_map)
+    // If the stats_map size changes, or stats_map_w_index is out of range.
+    // Then make stats_map_w_index to 0.
+    if (stats_map_w_index >= stats_map.size())
     {
-        if (!stat->isReadOnly()
-            && stat->sm_max_caps >= buf_size
-            && stat->sm_total_size + buf_size < file_limit_size
-            && stat->sm_valid_rate < smallest_valid_rate)
+        stats_map_w_index = 0;
+    }
+
+    auto loop_w_index = stats_map_w_index;
+    bool first_loop = true;
+
+    while (true)
+    {
+        // All of BlobStat have been checked.
+        if (loop_w_index == stats_map_w_index)
         {
-            smallest_valid_rate = stat->sm_valid_size;
-            stat_ptr = stat;
+            if (!first_loop)
+            {
+                break;
+            }
+            first_loop = false;
+        }
+
+        auto it = stats_map.begin();
+        std::advance(it, loop_w_index);
+
+        for (const auto & stat : it->second)
+        {
+            if (!stat->isReadOnly()
+                && stat->sm_max_caps >= buf_size
+                && stat->sm_total_size + buf_size < file_limit_size
+                && stat->sm_valid_rate < smallest_valid_rate)
+            {
+                smallest_valid_rate = stat->sm_valid_size;
+                stat_ptr = stat;
+            }
+        }
+
+        // Already find the available BlobStat in current path.
+        if (stat_ptr != nullptr)
+        {
+            break;
+        }
+
+        // Find BlobStat in next path.
+        loop_w_index++;
+        if (loop_w_index >= stats_map.size())
+        {
+            loop_w_index = 0;
         }
     }
+
+    // Update stats_map_w_index.
+    // No need to consider that stats_map_w_index out of range.
+    // Because stats_map_w_index will be corrected in the next call.
+    stats_map_w_index = loop_w_index + 1;
 
     if (!stat_ptr)
     {
@@ -890,18 +996,23 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist)
 {
     auto guard = lock();
-    for (auto & stat : stats_map)
+    for (const auto & [path, stats] : stats_map)
     {
-        if (stat->id == file_id)
+        (void)path;
+        for (const auto & stat : stats)
         {
-            return stat;
+            if (stat->id == file_id)
+            {
+                return stat;
+            }
         }
     }
 
     if (restore_if_not_exist)
     {
         // Restore a stat without checking the roll_id
-        return createStatNotCheckingRoll(file_id, guard);
+        // No need check existed again.
+        return createStatNotCheckingRoll(file_id, guard, false);
     }
 
     throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
