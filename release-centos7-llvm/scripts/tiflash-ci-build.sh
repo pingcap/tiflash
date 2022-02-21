@@ -13,12 +13,16 @@ SRCPATH=${1:-$(
 
 echo "INSTALL_DIR=${INSTALL_DIR}"
 
-TIFLASH_PROXY_BIN_PATH=${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so
-rm -f ${TIFLASH_PROXY_BIN_PATH}
+TIFLASH_PROXY_SRC=${SRCPATH}/contrib/tiflash-proxy
+TIFLASH_PROXY_TAR_DIR=${TIFLASH_PROXY_SRC}/target/release
+TIFLASH_PROXY_BIN_PATH=${TIFLASH_PROXY_TAR_DIR}/libtiflash_proxy.so
+
+rm -rf ${TIFLASH_PROXY_TAR_DIR}
+mkdir -p ${TIFLASH_PROXY_TAR_DIR}
 
 if [[ -f /tmp/libtiflash_proxy.so ]]; then
   BUILD_TIFLASH_PROXY=false
-  CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${SRCPATH}/contrib/tiflash-proxy"
+  CMAKE_PREBUILT_LIBS_ROOT_ARG=-DPREBUILT_LIBS_ROOT="${TIFLASH_PROXY_SRC}"
   cp /tmp/libtiflash_proxy.so ${TIFLASH_PROXY_BIN_PATH}
 else
   BUILD_TIFLASH_PROXY=true
