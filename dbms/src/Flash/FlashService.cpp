@@ -56,14 +56,15 @@ FlashService::FlashService(IServer & server_)
             }
             end_fin = true;
         });
+    tunnel_senders = newThreadManager();
     for(int i = 0; i < tunnel_sender_cap; i++)
     {
-        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<MppTunnelWriteOp>>(100));
+        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
         tunnel_senders->scheduleThenDetach(false, "tunnel_sender", [this, i] {
-            auto &queue = tunnel_send_op_queues[i];
-            MppTunnelWriteOp obj;
+            auto queue = tunnel_send_op_queues[i];
+            std::shared_ptr<MppTunnelWriteOp> obj;
             while(queue->pop(obj)) {
-                obj.mpptunnel->sendOp(obj.need_lock);
+                obj->mpptunnel->sendOp(obj->need_lock);
             }
         });
     }
@@ -73,7 +74,7 @@ void SubmitTunnelSendOp(FlashService *srv, const std::shared_ptr<DB::MPPTunnel> 
     int idx = srv->tunnel_send_idx++;
     idx = idx%srv->tunnel_sender_cap;
     if (idx < 0) idx += srv->tunnel_sender_cap;
-    MppTunnelWriteOp obj(mpptunnel, needlock);
+    std::shared_ptr<MppTunnelWriteOp> obj = std::make_shared<MppTunnelWriteOp>(mpptunnel, needlock);
     srv->tunnel_send_op_queues[idx]->push(obj);
 }
 
@@ -549,7 +550,7 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grp
 
 std::atomic<int> cd_token{0};
 
-bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
+bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
 {
     // The actual processing.
     {

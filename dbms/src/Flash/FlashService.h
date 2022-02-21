@@ -77,7 +77,7 @@ public:
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
     std::shared_ptr<ThreadManager> tunnel_senders;
-    std::vector<std::shared_ptr<MPMCQueue<MppTunnelWriteOp>>> tunnel_send_op_queues;
+    std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
     std::atomic<long long> tunnel_send_idx{0};
     const int tunnel_sender_cap = 40;
 

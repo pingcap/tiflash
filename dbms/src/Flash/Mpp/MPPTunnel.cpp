@@ -215,7 +215,7 @@ std::string MPPTunnelBase<Writer>::sendOp(bool need_lock)
     }
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
-    consumerFinish(err_msg, p_lk == nullptr);
+    consumerFinish(err_msg, need_lock);
     if (no_waiter)
     {
         //        std::cerr<<"async mpptunnel end"<<std::endl;
