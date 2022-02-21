@@ -83,6 +83,6 @@ if [[ ${proxy_size} -lt ${min_size} ]]; then
   rm -rf ${TIFLASH_PROXY_BIN_PATH}
   echo "${proxy_git_hash}" >/tmp/build_tiflash_proxy_flag # use it as flag to upload binary
 else
-  rm /tmp/build_tiflash_proxy_flag
+  rm -rf /tmp/build_tiflash_proxy_flag
   chmod 0731 "${TIFLASH_PROXY_BIN_PATH}"
 fi
