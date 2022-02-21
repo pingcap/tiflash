@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 scriptpath="$(
     cd "$(dirname "$0")"
