@@ -1686,44 +1686,6 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({1024, -1024, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(38,20))")}));
-
-    // case5: cast(decimal(60, 0) as decimal(65, 30))
-    // from_prec(60) + to_scale(30) > 65, so we **CANNOT** skip check overflow.
-    to_prec = 65;
-    to_scale = 30;
-    DataTypePtr dec_ptr = makeDataType<Decimal256>();
-    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal256>(dec_ptr, to_prec, to_scale));
-
-    const Int256 v1 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale) + 1;
-    const Int256 v2 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale);
-    const Int256 v3 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale) - 1;
-    const Int256 v4 = std::numeric_limits<Int256>::max() - 1;
-    const Int256 max_value = DecimalMaxValue::get(to_prec);
-    const Int256 scale_mul = getScaleMultiplier<Int256>(to_scale);
-
-    // from_prec(60) + to_scale(30) > Int256::real_prec(77) - 1, so ScaleMulType should be **Int512**.
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal256>>(
-            std::make_tuple(to_prec, to_scale),
-            {DecimalField256(0, to_scale), DecimalField256(max_value, to_scale), DecimalField256(v2 * scale_mul, to_scale), DecimalField256(v3 * scale_mul, to_scale), DecimalField256(max_value, to_scale), {}}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Decimal256>>(std::make_tuple(60, 0), {DecimalField256(+0, 0), DecimalField256(v1, 0), DecimalField256(v2, 0), DecimalField256(v3, 0), DecimalField256(v4, 0), {}}),
-                         createCastTypeConstColumn("Nullable(Decimal(65,30))")}));
-
-    // Same with above, but is negative.
-    const Int256 vv1 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale) + 1;
-    const Int256 vv2 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale);
-    const Int256 vv3 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale) - 1;
-    const Int256 vv4 = std::numeric_limits<Int256>::min() + 1;
-    const Int256 min_value = -DecimalMaxValue::get(to_prec);
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal256>>(
-            std::make_tuple(to_prec, to_scale),
-            {DecimalField256(vv1 * scale_mul, to_scale), DecimalField256(vv2 * scale_mul, to_scale), DecimalField256(min_value, to_scale), DecimalField256(min_value, to_scale), {}}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Decimal256>>(std::make_tuple(60, 0), {DecimalField256(vv1, 0), DecimalField256(vv2, 0), DecimalField256(vv3, 0), DecimalField256(vv4, 0), {}}),
-                         createCastTypeConstColumn("Nullable(Decimal(65,30))")}));
 }
 CATCH
 
