@@ -27,6 +27,9 @@ BlobFile::BlobFile(String path_,
         getEncryptionPath(),
         false,
         /*create_new_encryption_info_*/ false);
+
+    Poco::File file_in_disk(getPath());
+    file_size = file_in_disk.getSize();
 }
 
 void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter)
@@ -82,8 +85,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 void BlobFile::truncate(size_t size)
 {
     PageUtil::ftruncateFile(wrfile, size);
-
-    assert(size < file_size);
+    assert(size <= file_size);
 
     delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
     file_size = size;
