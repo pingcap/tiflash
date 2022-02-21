@@ -20,7 +20,7 @@ NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
 ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
-  BUILD_BRANCH=${BUILD_BRANCH} sh ${SRCPATH}/release-centos7-llvm/scripts/build-tiflash-prepare.sh
+  BUILD_BRANCH=${BUILD_BRANCH} sh ${SRCPATH}/release-centos7-llvm/scripts/run-format-check.sh
 fi
 
 CI_CCACHE_USED_SRCPATH="/build/tics"
