@@ -175,7 +175,7 @@ void MPPTunnelBase<Writer>::sendLoop()
 }
 
 template <typename Writer>
-std::string MPPTunnelBase<Writer>::sendOp(std::unique_lock<std::mutex> *p_lk)
+std::string MPPTunnelBase<Writer>::sendOp(bool need_lock)
 {
     assert(!is_local);
     String err_msg;

@@ -19,6 +19,21 @@ class IServer;
 
 class CallData;
 
+class MPPTunnel;
+
+struct MppTunnelWriteOp
+{
+    MppTunnelWriteOp()
+        : need_lock(false)
+    {}
+    MppTunnelWriteOp(std::shared_ptr<DB::MPPTunnel> mpptunnel_,
+                     bool need_lock_)
+        : mpptunnel(mpptunnel_)
+        , need_lock(need_lock_)
+    {}
+    std::shared_ptr<DB::MPPTunnel> mpptunnel;
+    bool need_lock;
+};
 
 class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<tikvpb::Tikv::Service>
     , public std::enable_shared_from_this<FlashService>
@@ -61,6 +76,10 @@ public:
 
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
+    std::shared_ptr<ThreadManager> tunnel_senders;
+    std::vector<std::shared_ptr<MPMCQueue<MppTunnelWriteOp>>> tunnel_send_op_queues;
+    std::atomic<long long> tunnel_send_idx{0};
+    const int tunnel_sender_cap = 40;
 
 private:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
@@ -78,7 +97,6 @@ private:
     std::atomic<bool> end_syn = {false}, end_fin{false};
 };
 
-class MPPTunnel;
 
 class CallData
 {
@@ -126,13 +144,13 @@ public:
 
     void attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel);
 
-//private:
+    //private:
     // The means of communication with the gRPC runtime for an asynchronous
     // server.
     FlashService * service_;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    grpc::ServerCompletionQueue * cq_, *notify_cq_;
+    grpc::ServerCompletionQueue *cq_, *notify_cq_;
     // Context for the rpc, allowing to tweak aspects of it such as the use
     // of compression, authentication, as well as to send metadata back to the
     // client.

@@ -56,13 +56,36 @@ FlashService::FlashService(IServer & server_)
             }
             end_fin = true;
         });
+    for(int i = 0; i < tunnel_sender_cap; i++)
+    {
+        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<MppTunnelWriteOp>>(100));
+        tunnel_senders->scheduleThenDetach(false, "tunnel_sender", [this, i] {
+            auto &queue = tunnel_send_op_queues[i];
+            MppTunnelWriteOp obj;
+            while(queue->pop(obj)) {
+                obj.mpptunnel->sendOp(obj.need_lock);
+            }
+        });
+    }
+}
+
+void SubmitTunnelSendOp(FlashService *srv, const std::shared_ptr<DB::MPPTunnel> &mpptunnel, bool needlock) {
+    int idx = srv->tunnel_send_idx++;
+    idx = idx%srv->tunnel_sender_cap;
+    if (idx < 0) idx += srv->tunnel_sender_cap;
+    MppTunnelWriteOp obj(mpptunnel, needlock);
+    srv->tunnel_send_op_queues[idx]->push(obj);
 }
 
 FlashService::~FlashService()
 {
     end_syn = true;
+    for(auto &q: tunnel_send_op_queues) {
+        q->finish();
+    }
     while (!end_fin)
         usleep(100000);
+
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -529,38 +552,22 @@ std::atomic<int> cd_token{0};
 bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool trace)
 {
     // The actual processing.
-    //    try
-    //    {
     {
         std::unique_lock lk(mu);
         if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
         {
-//            if (trace)
-//                std::cerr << "CallData::TryWrite::ok, ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
             ready = false;
         }
         else
         {
-            if (trace)
-            {
-                fail_token = cd_token++;
-//                std::cerr << "CallData::TryWrite::fail!!! token: " << (fail_token.load()) << " ready:" << ready.load() << " sq_ptr:" << send_queue_ << " sz:" << send_queue_->size() << " fin:" << send_queue_->isFinished() << " mt_ptr:" << mpptunnel_ << std::endl;
-            }
             return false;
         }
-        //            cv.wait(lk, [&] { return ready.load(); });
     }
-    std::string retstr = mpptunnel_->sendOp(p_lk);
+    SubmitTunnelSendOp(service_, mpptunnel_, p_lk == nullptr);
+//    std::string retstr = mpptunnel_->sendOp(p_lk == nullptr);
 //    if (trace)
 //        std::cerr << "mpptunnel_->sendOp(p_lk) result: " << retstr << std::endl;
     return true;
-    //        responder_.Write(packet, this);
-    //        return 1;
-    //    }
-    //    catch (...)
-    //    {
-    //        return -1;
-    //    }
 }
 
 void CallData::Pending()
@@ -702,11 +709,9 @@ void CallData::Proceed()
             if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
             {
                 ready = false;
-                //                ready = true;
                 lk.unlock();
-                mpptunnel_->sendOp();
-                //                mpptunnel_->
-                //                send_queue->pop();
+                SubmitTunnelSendOp(service_, mpptunnel_, true);
+//                mpptunnel_->sendOp();
             }
             else
             {

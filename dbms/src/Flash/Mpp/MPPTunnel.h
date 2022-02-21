@@ -95,7 +95,7 @@ public:
 
     std::atomic<bool> no_waiter{false};
 
-    std::string sendOp(std::unique_lock<std::mutex> *p_lk = nullptr);
+    std::string sendOp(bool needlock = true);
 
 private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
