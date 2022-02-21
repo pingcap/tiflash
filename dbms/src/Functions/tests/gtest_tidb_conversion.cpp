@@ -1578,10 +1578,10 @@ TEST_F(TestTidbConversion, skipCheckOverflowMyDateTimeToDeciaml)
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 14, 0));
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_no_fsp, 14, 1));
 
-    // rule for fsp: 20 + scale_diff <= to_prec.
-    // 20 + (3-5+1) = 18
+    // rule for fsp: (14 + 5) + scale_diff <= to_prec.
+    // (14 + 5) + (3 - 5 + 1) = 18
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 19, 3));
-    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 18, 3));
+    ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 18, 3));
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDateTime>(datetime_ptr_fsp_5, 17, 3));
 }
 
@@ -1616,8 +1616,8 @@ TEST_F(TestTidbConversion, skipCheckOverflowOtherToDecimal)
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeMyDuration>(duration_ptr, 60, 1));
 }
 
-// check if template argument of ScaleMulType is correct or not.
-TEST_F(TestTidbConversion, checkScaleMulType)
+// check if template argument of CastInternalType is correct or not.
+TEST_F(TestTidbConversion, checkCastInternalType)
 try
 {
     // case1: cast(tinyint as decimal(7, 3))
@@ -1627,7 +1627,7 @@ try
     // from_prec(3) + to_scale(3) <= Decimal32::prec(9), so we **CAN** skip check overflow.
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
 
-    // from_prec(3) + to_scale(3) <= Int32::real_prec(10) - 1, so ScaleMulType should be **Int32**.
+    // from_prec(3) + to_scale(3) <= Int32::real_prec(10) - 1, so CastInternalType should be **Int32**.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
             std::make_tuple(to_prec, to_scale),
@@ -1642,7 +1642,7 @@ try
     // from_prec(3) + to_scale(7) > Decimal32::prec(9), so we **CANNOT** skip check overflow.
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
 
-    // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so ScaleMulType should be **Int64**.
+    // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so CastInternalType should be **Int64**.
     DAGContext * dag_context = context.getDAGContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
@@ -1663,7 +1663,7 @@ try
     DataTypePtr int64_ptr = std::make_shared<DataTypeInt64>();
     ASSERT_TRUE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, to_prec, to_scale));
 
-    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so ScaleMulType should be **Int256**.
+    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so CastInternalType should be **Int256**.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal256>>(
             std::make_tuple(to_prec, to_scale),
@@ -1678,7 +1678,7 @@ try
     to_scale = 20;
     ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeInt64>(int64_ptr, to_prec, to_scale));
 
-    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so ScaleMulType should be **Int256**.
+    // from_prec(19) + to_scale(20) > Int128::real_prec(39) - 1, so CastInternalType should be **Int256**.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal128>>(
             std::make_tuple(to_prec, to_scale),
@@ -1686,6 +1686,44 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({1024, -1024, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(38,20))")}));
+
+    // case5: cast(decimal(60, 0) as decimal(65, 30))
+    // from_prec(60) + to_scale(30) > 65, so we **CANNOT** skip check overflow.
+    to_prec = 65;
+    to_scale = 30;
+    DataTypePtr dec_ptr = makeDataType<Decimal256>();
+    ASSERT_FALSE(FunctionTiDBCast::canSkipCheckOverflowForDecimal<DataTypeDecimal256>(dec_ptr, to_prec, to_scale));
+
+    const Int256 v1 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale) + 1;
+    const Int256 v2 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale);
+    const Int256 v3 = std::numeric_limits<Int256>::max() / getScaleMultipiler<Int256>(to_scale) - 1;
+    const Int256 v4 = std::numeric_limits<Int256>::max() - 1;
+    const Int256 max_value = DecimalMaxValue::get(to_prec);
+    const Int256 scale_mul = getScaleMultiplier<Int256>(to_scale);
+
+    // from_prec(60) + to_scale(30) > Int256::real_prec(77) - 1, so ScaleMulType should be **Int512**.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal256>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField256(0, to_scale), DecimalField256(max_value, to_scale), DecimalField256(v2 * scale_mul, to_scale), DecimalField256(v3 * scale_mul, to_scale), DecimalField256(max_value, to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Decimal256>>(std::make_tuple(60, 0), {DecimalField256(+0, 0), DecimalField256(v1, 0), DecimalField256(v2, 0), DecimalField256(v3, 0), DecimalField256(v4, 0), {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(65,30))")}));
+
+    // Same with above, but is negative.
+    const Int256 vv1 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale) + 1;
+    const Int256 vv2 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale);
+    const Int256 vv3 = std::numeric_limits<Int256>::min() / getScaleMultipiler<Int256>(to_scale) - 1;
+    const Int256 vv4 = std::numeric_limits<Int256>::min() + 1;
+    const Int256 min_value = -DecimalMaxValue::get(to_prec);
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal256>>(
+            std::make_tuple(to_prec, to_scale),
+            {DecimalField256(vv1 * scale_mul, to_scale), DecimalField256(vv2 * scale_mul, to_scale), DecimalField256(min_value, to_scale), DecimalField256(min_value, to_scale), {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Decimal256>>(std::make_tuple(60, 0), {DecimalField256(vv1, 0), DecimalField256(vv2, 0), DecimalField256(vv3, 0), DecimalField256(vv4, 0), {}}),
+                         createCastTypeConstColumn("Nullable(Decimal(65,30))")}));
 }
 CATCH
 

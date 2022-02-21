@@ -1861,7 +1861,7 @@ private:
             const auto fsp = datetime_type->getFraction();
             if (fsp > 0)
             {
-                return get_from_scaled_prec_for_decimal(20, fsp, to_decimal_scale, zero_scale_diff);
+                return get_from_scaled_prec_for_decimal(14 + fsp, fsp, to_decimal_scale, zero_scale_diff);
             }
             else
             {
