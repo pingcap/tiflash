@@ -479,13 +479,6 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grp
     Proceed();
 }
 
-void CallData::Reset()
-{
-    send_queue_ = nullptr;
-    state_ = PROCESS;
-    service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
-}
-
 bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
 {
     // The actual processing.
@@ -585,11 +578,12 @@ void CallData::Proceed()
     }
     else if (state_ == PROCESS)
     {
+        act_rpcs++;
         state_ = JOIN;
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
-//        new CallData(service_, cq_, notify_cq_);
+        new CallData(service_, cq_, notify_cq_);
         {
             std::unique_lock lk(mu);
             notifyReady();
@@ -648,9 +642,8 @@ void CallData::Proceed()
     else
     {
         GPR_ASSERT(state_ == FINISH);
-        Reset();
         // Once in the FINISH state, deallocate ourselves (CallData).
-//        delete this;
+        delete this;
         return;
     }
 }
