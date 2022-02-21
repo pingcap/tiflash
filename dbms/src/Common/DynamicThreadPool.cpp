@@ -1,4 +1,5 @@
 #include <Common/DynamicThreadPool.h>
+#include <Common/Stopwatch.h>
 
 namespace DB
 {
@@ -79,7 +80,8 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     t.detach();
 }
-
+std::atomic<int> cur_thread_num{0}, max_thread_num{0};
+std::atomic<long> last_thd_ts{0};
 void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
@@ -89,7 +91,15 @@ void DynamicThreadPool::fixedWork(size_t index)
         queue->pop(task);
         if (!task)
             break;
+        long long now = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)/1000/1000/1000;
+        cur_thread_num++;
+        max_thread_num = std::max(cur_thread_num.load(), max_thread_num.load());
+         if (last_thd_ts != now) {
+            last_thd_ts = now;
+            std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
+        }
         task->execute();
+        cur_thread_num--;
 
         idle_fixed_queues.push(queue);
     }
@@ -97,8 +107,15 @@ void DynamicThreadPool::fixedWork(size_t index)
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
+    cur_thread_num++;
+    max_thread_num = std::max(cur_thread_num.load(), max_thread_num.load());
+    long long now = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)/1000/1000/1000;
+    if (last_thd_ts != now) {
+        last_thd_ts = now;
+        std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
+    }
     initial_task->execute();
-
+    cur_thread_num--;
     DynamicNode node;
     while (true)
     {
@@ -114,7 +131,15 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
+        long long now = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)/1000/1000/1000;
+        cur_thread_num++;
+        max_thread_num = std::max(cur_thread_num.load(), max_thread_num.load());
+        if (last_thd_ts != now) {
+        last_thd_ts = now;
+        std::cerr<<"max_thd: "<<max_thread_num.load()<<" cur_thd: "<<cur_thread_num.load()<<std::endl;
+    }
         node.task->execute();
+        cur_thread_num--;
         node.task.reset();
     }
     alive_dynamic_threads.fetch_sub(1);
