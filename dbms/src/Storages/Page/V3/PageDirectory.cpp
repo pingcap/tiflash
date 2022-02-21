@@ -173,10 +173,10 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
         {
             // Insert or replace with latest entry
             PageId raw_id = getOriId(record.page_id);
-            if (auto iter = table_directory.find(raw_id); iter == table_directory.end())
+            if (auto iter = entries_directory.find(raw_id); iter == entries_directory.end())
             {
                 // create the entry
-                table_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
+                entries_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
                 id_mapping[record.page_id] = std::make_pair(record.version, raw_id);
             }
             else
@@ -197,7 +197,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
         {
             // Remove the entry if the version of del is newer
             PageId raw_id = getOriId(record.page_id);
-            if (auto iter = table_directory.find(raw_id); iter != table_directory.end())
+            if (auto iter = entries_directory.find(raw_id); iter != entries_directory.end())
             {
                 auto & entry = iter->second;
                 if (entry.ver < record.version)
@@ -206,7 +206,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
                     id_mapping.erase(record.page_id);
                     if (entry.ref_count == 0)
                     {
-                        table_directory.erase(iter);
+                        entries_directory.erase(iter);
                     }
                 }
             }
@@ -217,8 +217,8 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             LOG_FMT_INFO(&Poco::Logger::get("CollapsingPageDirectory"), "adding ref from {} to {}", record.page_id, record.ori_page_id);
             bool create_ref_entry_done = [&record, this]() -> bool {
                 PageId raw_id = getOriId(record.ori_page_id);
-                auto iter_to_ori = table_directory.find(raw_id);
-                if (iter_to_ori == table_directory.end())
+                auto iter_to_ori = entries_directory.find(raw_id);
+                if (iter_to_ori == entries_directory.end())
                     return false;
                 auto & existing_entry = iter_to_ori->second;
                 if (record.version < existing_entry.ver)
@@ -238,7 +238,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             // LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
         }
         case EditRecordType::COLLAPSED_ENTRY:
-            table_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
+            entries_directory[record.page_id] = CollapsedVersionEntry(record.version, record.entry);
             break;
         case EditRecordType::COLLAPSED_MAPPING:
             id_mapping[record.page_id] = std::make_pair(record.version, record.ori_page_id);
@@ -254,7 +254,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
 void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
 {
     PageEntriesEdit edit;
-    for (const auto & [page_id, collapsed_version_entry] : table_directory)
+    for (const auto & [page_id, collapsed_version_entry] : entries_directory)
     {
         edit.collapsedEntry(page_id, collapsed_version_entry.ver, collapsed_version_entry.entry);
     }
@@ -289,7 +289,7 @@ PageDirectoryPtr PageDirectory::create(const CollapsingPageDirectory & collapsin
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(
         /*init_seq=*/collapsing_directory.max_applied_ver.sequence,
         std::move(wal));
-    for (const auto & [page_id, versioned_entry] : collapsing_directory.table_directory)
+    for (const auto & [page_id, versioned_entry] : collapsing_directory.entries_directory)
     {
         auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
         if (created)
@@ -316,7 +316,7 @@ PageDirectoryPtr PageDirectory::create(const CollapsingPageDirectory & collapsin
         ref_iter->second->createNewVersion(version.sequence, version.epoch, std::move(entry_ptr_copy)); // FIXME: version
         LOG_FMT_INFO(dir->log, "adding ref from {} to {}, ver: {}", mapping_iter.first, mapping_iter.second.second, version);
     }
-    for (const auto & iter : collapsing_directory.table_directory)
+    for (const auto & iter : collapsing_directory.entries_directory)
     {
         if (collapsing_directory.id_mapping.find(iter.first) == collapsing_directory.id_mapping.end())
         {

@@ -164,17 +164,17 @@ try
     // Should collapsed to the latest version
     auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
         SCOPED_TRACE(scope);
-        const auto ver1 = d.table_directory.find(page_1)->second;
+        const auto ver1 = d.entries_directory.find(page_1)->second;
         EXPECT_TRUE(isSameEntry(ver1.entry, entry_v4));
         EXPECT_EQ(ver1.ver, PageVersionType(4, 0)) << fmt::format("{}", ver1.ver);
 
-        const auto ver2 = d.table_directory.find(page_2)->second;
+        const auto ver2 = d.entries_directory.find(page_2)->second;
         EXPECT_TRUE(isSameEntry(ver2.entry, entry_v88));
         EXPECT_EQ(ver2.ver, PageVersionType(88, 0)) << fmt::format("{}", ver2.ver);
 
-        EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
+        EXPECT_EQ(d.entries_directory.find(page_3), d.entries_directory.end());
 
-        const auto ver4 = d.table_directory.find(page_4)->second;
+        const auto ver4 = d.entries_directory.find(page_4)->second;
         EXPECT_TRUE(isSameEntry(ver4.entry, entry_v92));
         EXPECT_EQ(ver4.ver, PageVersionType(92, 0)) << fmt::format("{}", ver4.ver);
 
@@ -287,15 +287,15 @@ try
     // Should collapsed to the latest version
     auto checker = [&](const CollapsingPageDirectory & d, const char * scope) -> void {
         SCOPED_TRACE(scope);
-        const auto ver1 = d.table_directory.find(page_1)->second;
+        const auto ver1 = d.entries_directory.find(page_1)->second;
         EXPECT_TRUE(isSameEntry(ver1.entry, entry_v4));
         EXPECT_EQ(ver1.ver, PageVersionType(4, 0)) << fmt::format("{}", ver1.ver);
 
-        const auto ver2 = d.table_directory.find(page_2)->second;
+        const auto ver2 = d.entries_directory.find(page_2)->second;
         EXPECT_TRUE(isSameEntry(ver2.entry, entry_v88));
         EXPECT_EQ(ver2.ver, PageVersionType(88, 0)) << fmt::format("{}", ver2.ver);
 
-        EXPECT_EQ(d.table_directory.find(page_3), d.table_directory.end());
+        EXPECT_EQ(d.entries_directory.find(page_3), d.entries_directory.end());
 
         // 4 is a ref to 2
         const auto ver4 = d.id_mapping.find(page_4)->second;

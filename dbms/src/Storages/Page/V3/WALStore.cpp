@@ -161,7 +161,7 @@ bool WALStore::compactLogs()
     if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
         return false;
 
-    CollapsingPageDirectory collapsing_directory;
+    CollapsingPageDirectory collapsed_state;
     auto reader = WALStoreReader::create(provider, compact_log_files);
     while (reader->remained())
     {
@@ -173,16 +173,16 @@ bool WALStore::compactLogs()
             // else it just run to the end of file.
             break;
         }
-        collapsing_directory.apply(std::move(edit));
+        collapsed_state.apply(std::move(edit));
     }
 
     {
         const auto log_num = reader->logNum();
         // Create a temporary file for compacting log files.
         auto [compact_log, log_filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 1}, logger, /*manual_flush*/ true);
-        collapsing_directory.dumpTo(compact_log);
+        collapsed_state.dumpTo(compact_log);
         compact_log->flush();
-        compact_log.reset(); // close fd explictly before renaming file.
+        compact_log.reset(); // close fd explicitly before renaming file.
 
         // Rename it to be a normal log file.
         const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);

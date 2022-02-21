@@ -698,7 +698,7 @@ BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
 
 void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
 {
-    for (const auto & [page_id, ver_entry] : entries.table_directory)
+    for (const auto & [page_id, ver_entry] : entries.entries_directory)
     {
         (void)page_id;
         auto stat = blobIdToStat(ver_entry.entry.file_id, /*restore_if_not_exist=*/true);

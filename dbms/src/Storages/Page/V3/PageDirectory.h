@@ -205,9 +205,9 @@ public:
             , ref_count(1)
         {}
     };
-    using CollapsingMapType = std::unordered_map<PageId, CollapsedVersionEntry>;
     std::unordered_map<PageId, std::pair<PageVersionType, PageId>> id_mapping;
-    CollapsingMapType table_directory;
+    using CollapsingMapType = std::unordered_map<PageId, CollapsedVersionEntry>;
+    CollapsingMapType entries_directory;
 
     PageId max_applied_page_id = 0;
     PageVersionType max_applied_ver;

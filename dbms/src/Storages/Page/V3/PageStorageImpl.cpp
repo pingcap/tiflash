@@ -30,9 +30,9 @@ PageStorageImpl::~PageStorageImpl() = default;
 void PageStorageImpl::restore()
 {
     // TODO: Speedup restoring
-    CollapsingPageDirectory collapsing_directory;
-    auto callback = [&collapsing_directory](PageEntriesEdit && edit) {
-        collapsing_directory.apply(std::move(edit));
+    CollapsingPageDirectory collapsed_state;
+    auto callback = [&collapsed_state](PageEntriesEdit && edit) {
+        collapsed_state.apply(std::move(edit));
     };
     // Restore `collapsing_directory` from disk
     auto wal = WALStore::create(callback, file_provider, delegator, /*write_limiter*/ nullptr);
@@ -40,10 +40,10 @@ void PageStorageImpl::restore()
 
     // TODO: Now `PageDirectory::create` and `BlobStore::restore` iterate all entries in `collapsing_directory`,
     // find a better way may reduce the cost of iterating.
-    page_directory = PageDirectory::create(collapsing_directory, std::move(wal));
+    page_directory = PageDirectory::create(collapsed_state, std::move(wal));
 
     // restore BlobStore
-    blob_store.restore(collapsing_directory);
+    blob_store.restore(collapsed_state);
 }
 
 void PageStorageImpl::drop()
