@@ -35,6 +35,8 @@ struct MppTunnelWriteOp
     bool need_lock;
 };
 
+class CallDataReg;
+
 class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<tikvpb::Tikv::Service>
     , public std::enable_shared_from_this<FlashService>
     , private boost::noncopyable
@@ -76,7 +78,7 @@ public:
 
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
-    std::shared_ptr<ThreadManager> tunnel_senders;
+    MPMCQueue<CallDataReg> calldata_to_reg_queue;
     std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
     std::atomic<long long> tunnel_send_idx{0};
     const int tunnel_sender_cap = 40;
@@ -95,6 +97,13 @@ private:
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
     std::atomic<bool> end_syn = {false}, end_fin{false};
+};
+
+struct CallDataReg
+{
+    FlashService * service;
+    grpc::ServerCompletionQueue * cq;
+    grpc::ServerCompletionQueue * notify_cq;
 };
 
 

@@ -30,7 +30,9 @@ extern const int NOT_IMPLEMENTED;
 constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService(IServer & server_)
-    : server(server_)
+    :
+    calldata_to_reg_queue(1000)
+    , server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
 {
@@ -56,11 +58,17 @@ FlashService::FlashService(IServer & server_)
             }
             end_fin = true;
         });
-    tunnel_senders = newThreadManager();
+    std::shared_ptr<ThreadManager> thd_manager = newThreadManager();
+    thd_manager->scheduleThenDetach(false, "calldata_reg", [this] {
+        CallDataReg reg;
+        while(calldata_to_reg_queue.pop(reg)) {
+            new CallData(reg.service, reg.cq, reg.notify_cq);
+        }
+    });
     for (int i = 0; i < tunnel_sender_cap; i++)
     {
         tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
-        tunnel_senders->scheduleThenDetach(false, "tunnel_sender", [this, i] {
+        thd_manager->scheduleThenDetach(false, "tunnel_sender", [this, i] {
             auto queue = tunnel_send_op_queues[i];
             std::shared_ptr<MppTunnelWriteOp> obj;
             while (queue->pop(obj))
@@ -69,6 +77,7 @@ FlashService::FlashService(IServer & server_)
             }
         });
     }
+
 }
 
 void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel> & mpptunnel, bool needlock)
@@ -88,6 +97,7 @@ FlashService::~FlashService()
     {
         q->finish();
     }
+    calldata_to_reg_queue.finish();
     while (!end_fin)
         usleep(100000);
 }
@@ -583,7 +593,7 @@ void CallData::Proceed()
         // Spawn a new CallData instance to serve new clients while we process
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
-        new CallData(service_, cq_, notify_cq_);
+        service_->calldata_to_reg_queue.push(CallDataReg{service_, cq_, notify_cq_});
         {
             std::unique_lock lk(mu);
             notifyReady();
