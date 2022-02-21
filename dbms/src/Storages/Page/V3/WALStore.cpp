@@ -105,6 +105,8 @@ void WALStore::apply(const PageEntriesEdit & edit)
     }
 }
 
+UInt16 WALStore::wal_paths_index = 0;
+
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     PSDiskDelegatorPtr delegator,
     const FileProviderPtr & provider,
@@ -113,7 +115,26 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     Poco::Logger * logger,
     bool manual_flush)
 {
-    const auto path = delegator->defaultPath(); // TODO: multi-path
+    String path;
+
+    if (delegator->numPaths() == 1)
+    {
+        path = delegator->defaultPath();
+    }
+    else
+    {
+        const auto & paths = delegator->listPaths();
+
+        if (wal_paths_index >= paths.size())
+        {
+            wal_paths_index = 0;
+        }
+        path = paths[wal_paths_index];
+        wal_paths_index++;
+    }
+
+    path += wal_folder_prefix;
+
     LogFilename log_filename = LogFilename{
         (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,

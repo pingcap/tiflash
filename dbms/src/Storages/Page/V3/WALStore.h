@@ -68,6 +68,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
+    constexpr static const char * wal_folder_prefix = "/WAL";
     using ChecksumClass = Digest::CRC64;
 
     static WALStorePtr create(
@@ -104,6 +105,8 @@ private:
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;
+
+    static UInt16 wal_paths_index;
 };
 
 } // namespace PS::V3
