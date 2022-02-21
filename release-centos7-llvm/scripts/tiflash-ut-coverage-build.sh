@@ -38,7 +38,7 @@ cmake "${SRCPATH}" \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -GNinja
 
-ninja -j ${NPROC} gtests_dbms gtests_libcommon gtests_libdaemon
+ninja gtests_dbms gtests_libcommon gtests_libdaemon
 mv "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
 mv "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 mv "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
