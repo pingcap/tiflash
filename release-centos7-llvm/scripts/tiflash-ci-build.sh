@@ -62,7 +62,7 @@ cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
 
 ninja tiflash
 
-if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
+if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   ninja page_ctl
   ninja page_stress_testing
   # build gtest in `release-centos7/build/build-tiflash-ut-coverage.sh`

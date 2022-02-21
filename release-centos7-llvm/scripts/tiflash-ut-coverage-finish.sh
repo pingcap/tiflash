@@ -16,7 +16,7 @@ UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}-utcov-llvm.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
 
-if [[ ${UPDATE_CCACHE} == "true" ]]; then
+if [[ ${UPDATE_CCACHE} != "false" ]]; then
   cd ${SRCPATH}
   rm -rf ccache.tar
   tar -cf ccache.tar .ccache

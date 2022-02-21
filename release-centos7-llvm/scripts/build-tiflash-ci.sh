@@ -17,6 +17,7 @@ BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 BUILD_BRANCH=${BUILD_BRANCH:-master}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
+UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 
 ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
@@ -42,6 +43,6 @@ if [[ "${BUILD_UPDATE_DEBUG_CI_CCACHE}" != "false" ]]; then
   echo "======  finish build & upload ccache for ci debug build  ======"
 fi
 
-BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-prepare.sh
+UPDATE_CCACHE=${UPDATE_CCACHE} BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-prepare.sh
 BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} NPROC=${NPROC} INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-build.sh
-BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-finish.sh
+UPDATE_CCACHE=${UPDATE_CCACHE} BUILD_BRANCH=${BUILD_BRANCH} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} INSTALL_DIR=${INSTALL_DIR} sh ${CI_CCACHE_USED_SRCPATH}/release-centos7-llvm/scripts/tiflash-ci-finish.sh
