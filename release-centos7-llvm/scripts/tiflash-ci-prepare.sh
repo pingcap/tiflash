@@ -86,7 +86,3 @@ else
   rm /tmp/build_tiflash_proxy_flag
   chmod 0731 "${TIFLASH_PROXY_BIN_PATH}"
 fi
-
-if [[ ${UPDATE_CCACHE} != "false" ]]; then
-  touch /tmp/update_ccache
-fi

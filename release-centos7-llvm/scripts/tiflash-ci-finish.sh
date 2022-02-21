@@ -30,10 +30,9 @@ if [[ -f /tmp/build_tiflash_proxy_flag ]]; then
   rm -rf /tmp/build_tiflash_proxy_flag
 fi
 
-if [[ -f /tmp/update_ccache ]]; then
+if [[ ${UPDATE_CCACHE} != "false" ]]; then
   cd ${SRCPATH}
   rm -rf ccache.tar
   tar -cf ccache.tar .ccache
   curl -F builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}=@ccache.tar http://fileserver.pingcap.net/upload
-  rm -rf /tmp/update_ccache
 fi
