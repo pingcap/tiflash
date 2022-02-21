@@ -68,26 +68,26 @@ struct EntryOrDelete
 {
 public:
     explicit EntryOrDelete(bool del)
-        : entry_or_delete(std::nullopt)
+        : entry_or_delete(nullptr)
     {
         assert(del == true);
     }
     explicit EntryOrDelete(std::shared_ptr<PageEntryV3> && entry)
         : entry_or_delete(std::move(entry))
     {
-        assert(entry_or_delete.value() != nullptr);
+        assert(entry_or_delete != nullptr);
     }
 
-    inline bool isDelete() const { return !entry_or_delete.has_value(); }
+    inline bool isDelete() const { return entry_or_delete == nullptr; }
 
-    const std::shared_ptr<PageEntryV3> & entryPtr() const
+    inline const std::shared_ptr<PageEntryV3> & entryPtr() const
     {
-        assert(!isDelete());
-        return entry_or_delete.value();
+        assert(entry_or_delete != nullptr);
+        return entry_or_delete;
     }
 
 private:
-    std::optional<std::shared_ptr<PageEntryV3>> entry_or_delete;
+    std::shared_ptr<PageEntryV3> entry_or_delete;
 };
 
 using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
@@ -116,10 +116,10 @@ public:
 
     // Return the shared_ptr to the entry that is visible by `seq`.
     // If the entry is not visible (deleted or not exist for `seq`), then
-    // return `std::nullopt`.
-    std::optional<std::shared_ptr<PageEntryV3>> getEntry(UInt64 seq) const;
+    // return `nullptr`.
+    std::shared_ptr<PageEntryV3> getEntry(UInt64 seq) const;
 
-    std::optional<std::shared_ptr<PageEntryV3>> getEntryNotSafe(UInt64 seq) const;
+    std::shared_ptr<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
 
     std::shared_ptr<PageEntryV3> getLatestEntryNotSafe() const;
 

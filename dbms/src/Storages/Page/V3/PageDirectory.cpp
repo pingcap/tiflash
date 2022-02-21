@@ -47,7 +47,7 @@ namespace PS::V3
  * VersionedPageEntries methods *
  ********************************/
 
-std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntryNotSafe(UInt64 seq) const
+std::shared_ptr<PageEntryV3> VersionedPageEntries::getEntryNotSafe(UInt64 seq) const
 {
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
     if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
@@ -56,10 +56,10 @@ std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntryNotSaf
         if (!iter->second.isDelete())
             return iter->second.entryPtr();
     }
-    return std::nullopt;
+    return nullptr;
 }
 
-std::optional<std::shared_ptr<PageEntryV3>> VersionedPageEntries::getEntry(UInt64 seq) const
+std::shared_ptr<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     return getEntryNotSafe(seq);
@@ -405,9 +405,9 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
             throw Exception(fmt::format("Entry [id={}] not exist!", page_id), ErrorCodes::PS_ENTRY_NOT_EXISTS);
     }
 
-    if (auto entry = iter->second->getEntry(snap->sequence); entry)
+    if (auto entry = iter->second->getEntry(snap->sequence); entry != nullptr)
     {
-        return PageIDAndEntryV3(page_id, *entry.value());
+        return PageIDAndEntryV3(page_id, *entry);
     }
 
     throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
@@ -442,9 +442,9 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     for (size_t idx = 0; idx < page_ids.size(); ++idx)
     {
         const auto & iter = iters[idx];
-        if (auto entry = iter->second->getEntry(snap->sequence); entry)
+        if (auto entry = iter->second->getEntry(snap->sequence); entry != nullptr)
         {
-            id_entries.emplace_back(page_ids[idx], *entry.value());
+            id_entries.emplace_back(page_ids[idx], *entry);
         }
         else
             throw Exception(fmt::format("Entry [id={}] [seq={}] at [idx={}] not exist!", page_ids[idx], snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
@@ -549,10 +549,10 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             if (auto entry = (updating_locks.find(r.ori_page_id) != updating_locks.end()
                                   ? iter->second->getEntryNotSafe(last_sequence + 1)
                                   : iter->second->getEntry(last_sequence + 1));
-                entry)
+                entry != nullptr)
             {
                 // copy the entry shared ptr to be ref
-                std::shared_ptr<PageEntryV3> entry_ptr_copy = entry.value();
+                std::shared_ptr<PageEntryV3> entry_ptr_copy = entry;
                 updating_pages[idx]->createNewVersion(last_sequence + 1, std::move(entry_ptr_copy));
             }
             else

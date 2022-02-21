@@ -499,54 +499,54 @@ TEST_F(VersionedEntriesTest, InsertGet)
     INSERT_ENTRY(10);
 
     // Insert some entries with version
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_v2));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_v2));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_v2));
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_v2));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_v2));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v5));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v5));
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
     }
 
     // Insert some entries with version && gc epoch
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(5, 1);
     INSERT_GC_ENTRY(5, 2);
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_gc_v2_1));
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_gc_v5_2));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
     }
     for (UInt64 seq = 10; seq < 20; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
     }
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
     entries.createDelete(15);
-    ASSERT_FALSE(entries.getEntry(1).has_value());
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(2), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(3), entry_gc_v2_1));
-    ASSERT_TRUE(isSameEntry(**entries.getEntry(4), entry_gc_v2_1));
+    ASSERT_FALSE(entries.getEntry(1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(2), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(3), entry_gc_v2_1));
+    ASSERT_TRUE(isSameEntry(*entries.getEntry(4), entry_gc_v2_1));
     for (UInt64 seq = 5; seq < 10; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_gc_v5_2));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_gc_v5_2));
     }
     for (UInt64 seq = 10; seq < 15; ++seq)
     {
-        ASSERT_TRUE(isSameEntry(**entries.getEntry(seq), entry_v10));
+        ASSERT_TRUE(isSameEntry(*entries.getEntry(seq), entry_v10));
     }
     for (UInt64 seq = 15; seq < 20; ++seq)
     {
-        ASSERT_FALSE(entries.getEntry(seq).has_value());
+        ASSERT_FALSE(entries.getEntry(seq));
     }
 }
 
@@ -609,13 +609,13 @@ try
     INSERT_ENTRY(5);
 
     // Read with snapshot seq=2
-    ASSERT_TRUE(isSameEntry(entry_v2, **entries.getEntry(2)));
+    ASSERT_TRUE(isSameEntry(entry_v2, *entries.getEntry(2)));
 
     // Mock that gc applied and insert <2, 1>
     INSERT_GC_ENTRY(2, 1);
 
     // Now we should read the entry <2, 1> with seq=2
-    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, **entries.getEntry(2)));
+    ASSERT_TRUE(isSameEntry(entry_gc_v2_1, *entries.getEntry(2)));
 
     // <2,0> get removed
     auto removed_entries = gcAndGetRemovedEntries(2);
