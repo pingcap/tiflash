@@ -91,8 +91,8 @@ FlashService::FlashService(IServer & server_)
     for (int i = 0; i < tunnel_sender_cap; i++)
     {
         tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
-        thd_manager->scheduleThenDetach(false, "tunnel_sender", [this, i] {
-            auto queue = tunnel_send_op_queues[i];
+        auto queue = tunnel_send_op_queues[i];
+        thd_manager->scheduleThenDetach(false, "tunnel_sender", [this, queue] {
             std::shared_ptr<MppTunnelWriteOp> obj;
             while (queue->pop(obj))
             {
