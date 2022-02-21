@@ -152,6 +152,8 @@ public:
 
     void Proceed0();
 
+    void ContinueFromPending();
+
     void AsyncRpcInitOp();
 
     void notifyReady();
@@ -161,7 +163,7 @@ public:
 
     void attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue);
 
-    void attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel);
+    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> &mpptunnel);
 
     //private:
     // The means of communication with the gRPC runtime for an asynchronous

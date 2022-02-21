@@ -115,7 +115,7 @@ void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel>
     srv->tunnel_send_op_queues[idx]->push(obj);
 }
 
-void SubmitCalldataProcTask(FlashService * srv, CallData *cd)
+void SubmitCalldataProcTask(FlashService * srv, CallData * cd)
 {
     int idx = srv->rpc_exe_idx++;
     idx = idx % rpc_exe_cap;
@@ -523,6 +523,23 @@ CallData::CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grp
     Proceed();
 }
 
+//tunnel has been attached
+void CallData::ContinueFromPending()
+{
+    state_ = CallData::CallStatus::JOIN;
+    mpptunnel_->no_waiter = true;
+    //    attachTunnel(tunnel);
+    try
+    {
+        mpptunnel_->connect(this);
+    }
+    catch (...)
+    {
+        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
+        WriteDone(status, false);
+    }
+}
+
 bool CallData::TryWrite(std::unique_lock<std::mutex> * p_lk, bool /*trace*/)
 {
     // The actual processing.
@@ -640,10 +657,6 @@ void CallData::Proceed()
         // the memory address of this CallData instance.
         service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
     }
-    else if (state_ == PENDING)
-    {
-        return;
-    }
     else
     {
         SubmitCalldataProcTask(service_, this);
@@ -665,7 +678,11 @@ void CallData::Proceed0()
             notifyReady();
         }
         AsyncRpcInitOp();
-//        service_->establish4async_queue.push(this);
+        //        service_->establish4async_queue.push(this);
+    }
+    else if (state_ == PENDING)
+    {
+        ContinueFromPending();
     }
     else if (state_ == JOIN)
     {
@@ -703,7 +720,7 @@ void CallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send
     this->send_queue_ = send_queue;
 }
 
-void CallData::attachTunnel(std::shared_ptr<DB::MPPTunnel> mpptunnel)
+void CallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel)
 {
     this->mpptunnel_ = mpptunnel;
 }

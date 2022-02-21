@@ -325,18 +325,8 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
                 }
                 else
                 {
-                    calldata->state_ = CallData::CallStatus::JOIN;
-                    tunnel->no_waiter = true;
                     calldata->attachTunnel(tunnel);
-                    try
-                    {
-                        tunnel->connect(calldata);
-                    }
-                    catch (...)
-                    {
-                        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
-                        calldata->WriteDone(status, false);
-                    }
+                    calldata->Proceed();
                 }
             }
             tasks_map->erase(wait_task_it);
