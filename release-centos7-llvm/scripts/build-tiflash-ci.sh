@@ -11,17 +11,19 @@ SRCPATH=${1:-$(
   pwd -P
 )}
 
-ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
-if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
-  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from $(git merge-base origin/${BUILD_BRANCH} HEAD) --dump_diff_files_to "/tmp/tiflash-diff-files.json"
-fi
-
 INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7-llvm/tiflash"} # use original path
 
+BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 BUILD_BRANCH=${BUILD_BRANCH:-master}
-CI_CCACHE_USED_SRCPATH="/build/tics"
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
+
+ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
+if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
+  BUILD_BRANCH=${BUILD_BRANCH} sh ${SRCPATH}/release-centos7-llvm/scripts/build-tiflash-prepare.sh
+fi
+
+CI_CCACHE_USED_SRCPATH="/build/tics"
 
 if [[ ${CI_CCACHE_USED_SRCPATH} != ${SRCPATH} ]]; then
   rm -rf "${CI_CCACHE_USED_SRCPATH}"
