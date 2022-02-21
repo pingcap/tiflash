@@ -512,6 +512,14 @@ try
     test_type("MyDuration(6)", "MyDuration(0)", "MyDuration(6)");
     test_type("MyDuration(6)", "MyDuration(3)", "MyDuration(6)");
     test_type("MyDuration(6)", "MyDuration(6)", "MyDuration(6)");
+
+    /// test nullable related
+    test_type("Nullable(Int8)", "Nullable(Int8)", "Nullable(Int8)");
+    test_type("Nullable(Int8)", "Int8", "Int8");
+    /// the result type should be Int8, currently, we rewrite ifnull(c1, c2) => multiIf(isnull(c1), assumeNotNull(c1), c2)
+    /// so the return type is Nullable(Int8)
+    test_type("Int8", "Nullable(Int8)", "Nullable(Int8)");
+    test_type("Int8", "Int8", "Int8");
 }
 CATCH
 } // namespace tests

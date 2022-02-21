@@ -106,6 +106,7 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
 {
     // rewrite IFNULL function with multiIf
     // ifNull(arg1, arg2) -> multiIf(isNull(arg1), arg2, arg1)
+    // todo if arg1 is not nullable, then just return arg1 is ok
     const String & func_name = "multiIf";
     Names argument_names;
     if (expr.children_size() != 2)

@@ -49,8 +49,8 @@ void FunctionIsNull::executeImpl(Block & block, const ColumnNumbers & arguments,
     }
     else if (elem.column->onlyNull())
     {
-        /// Since no element is nullable, return a zero-constant column representing
-        /// a zero-filled null map.
+        /// Since all element is null, return a one-constant column representing
+        /// a one-filled null map.
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(1));
     }
     else
