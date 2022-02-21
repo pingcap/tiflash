@@ -171,7 +171,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
     actions->add(ExpressionAction::addColumn(column));
     argument_names.push_back(column.name);
 
-    auto collator = getCollatorFromExpr(expr);
+    auto * collator = getCollatorFromExpr(expr);
 
     String expr_name = analyzer->applyFunction(func_name, argument_names, actions, collator);
     if (set->remaining_exprs.empty())

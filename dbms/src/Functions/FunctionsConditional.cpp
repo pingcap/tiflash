@@ -231,7 +231,7 @@ String FunctionCaseWithExpression::getName() const
 
 DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
@@ -263,7 +263,7 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
 
 void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
