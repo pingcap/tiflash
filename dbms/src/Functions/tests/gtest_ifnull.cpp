@@ -283,12 +283,12 @@ try
     /// case 4 test ifNullDecimal
     std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
     ColumnsWithTypeAndName decimal_input{
-        createColumn<Decimal32>(std::make_tuple(4, 2), decimal_data),
-        createNullableColumn<Decimal32>(std::make_tuple(4, 2), decimal_data, null_map),
+        createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
+        createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
         createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
         createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
-        createColumn<Decimal128>(std::make_tuple(20, 3), decimal_data),
-        createNullableColumn<Decimal128>(std::make_tuple(20, 3), decimal_data, null_map),
+        createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
+        createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
         createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
         createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
     };
@@ -454,6 +454,64 @@ try
     test_type("Float32", "Float64", "Float64");
     test_type("Float64", "Float32", "Float64");
     test_type("Float64", "Float64", "Float64");
+
+    /// test type infer for string
+    test_type("String", "String", "String");
+
+    /// test type infer for decimal
+    test_type("Decimal(5,3)", "Decimal(5,3)", "Decimal(5,3)");
+    test_type("Decimal(5,3)", "Decimal(12,4)", "Decimal(12,4)");
+    test_type("Decimal(5,3)", "Decimal(20,2)", "Decimal(21,3)");
+    test_type("Decimal(5,3)", "Decimal(40,6)", "Decimal(40,6)");
+
+    test_type("Decimal(12,4)", "Decimal(5,3)", "Decimal(12,4)");
+    test_type("Decimal(12,4)", "Decimal(12,4)", "Decimal(12,4)");
+    test_type("Decimal(12,4)", "Decimal(20,2)", "Decimal(22,4)");
+    test_type("Decimal(12,4)", "Decimal(40,6)", "Decimal(40,6)");
+
+    test_type("Decimal(20,2)", "Decimal(5,3)", "Decimal(21,3)");
+    test_type("Decimal(20,2)", "Decimal(12,4)", "Decimal(22,4)");
+    test_type("Decimal(20,2)", "Decimal(20,2)", "Decimal(20,2)");
+    test_type("Decimal(20,2)", "Decimal(40,6)", "Decimal(40,6)");
+
+    test_type("Decimal(40,6)", "Decimal(5,3)", "Decimal(40,6)");
+    test_type("Decimal(40,6)", "Decimal(12,4)", "Decimal(40,6)");
+    test_type("Decimal(40,6)", "Decimal(20,2)", "Decimal(40,6)");
+    test_type("Decimal(40,6)", "Decimal(40,6)", "Decimal(40,6)");
+
+    /// test type infer for time
+    test_type("MyDate", "MyDate", "MyDate");
+    test_type("MyDate", "MyDateTime(0)", "MyDateTime(0)");
+    test_type("MyDate", "MyDateTime(3)", "MyDateTime(3)");
+    test_type("MyDate", "MyDateTime(6)", "MyDateTime(6)");
+
+    test_type("MyDateTime(0)", "MyDate", "MyDateTime(0)");
+    test_type("MyDateTime(0)", "MyDateTime(0)", "MyDateTime(0)");
+    test_type("MyDateTime(0)", "MyDateTime(3)", "MyDateTime(3)");
+    test_type("MyDateTime(0)", "MyDateTime(6)", "MyDateTime(6)");
+
+    test_type("MyDateTime(3)", "MyDate", "MyDateTime(3)");
+    test_type("MyDateTime(3)", "MyDateTime(0)", "MyDateTime(3)");
+    test_type("MyDateTime(3)", "MyDateTime(3)", "MyDateTime(3)");
+    test_type("MyDateTime(3)", "MyDateTime(6)", "MyDateTime(6)");
+
+    test_type("MyDateTime(6)", "MyDate", "MyDateTime(6)");
+    test_type("MyDateTime(6)", "MyDateTime(0)", "MyDateTime(6)");
+    test_type("MyDateTime(6)", "MyDateTime(3)", "MyDateTime(6)");
+    test_type("MyDateTime(6)", "MyDateTime(6)", "MyDateTime(6)");
+
+    /// test type infer for Duration
+    test_type("MyDuration(0)", "MyDuration(0)", "MyDuration(0)");
+    test_type("MyDuration(0)", "MyDuration(3)", "MyDuration(3)");
+    test_type("MyDuration(0)", "MyDuration(6)", "MyDuration(6)");
+
+    test_type("MyDuration(3)", "MyDuration(0)", "MyDuration(3)");
+    test_type("MyDuration(3)", "MyDuration(3)", "MyDuration(3)");
+    test_type("MyDuration(3)", "MyDuration(6)", "MyDuration(6)");
+
+    test_type("MyDuration(6)", "MyDuration(0)", "MyDuration(6)");
+    test_type("MyDuration(6)", "MyDuration(3)", "MyDuration(6)");
+    test_type("MyDuration(6)", "MyDuration(6)", "MyDuration(6)");
 }
 CATCH
 } // namespace tests
