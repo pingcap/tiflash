@@ -203,5 +203,5 @@ try
 }
 CATCH
 
-} // namespace
-} // namespace DB::tests
+} // namespace tests
+} // namespace DB
