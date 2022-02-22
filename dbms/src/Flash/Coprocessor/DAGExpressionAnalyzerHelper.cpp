@@ -157,7 +157,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
     if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
     {
         // Need cast left argument
-        key_name = analyzer->appendCast(resolved_type, actions, key_name);
+        key_name = analyzer->appendCast(resolved_type, actions, key_name, nullptr);
     }
     analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
@@ -335,7 +335,11 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
     Names argument_names;
     // We should convert arguments to UInt64.
     // See https://github.com/pingcap/tics/issues/1756
-    DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
+    DataTypePtr target_type = std::make_shared<DataTypeUInt64>();
+    tipb::FieldType field_type;
+    field_type.set_tp(TiDB::TypeLongLong);
+    field_type.set_flen(20);
+    field_type.set_decimal(0);
     const Block & sample_block = actions->getSampleBlock();
     for (const auto & child : expr.children())
     {
@@ -343,16 +347,18 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
         DataTypePtr orig_type = sample_block.getByName(name).type;
 
         // Bump argument type
-        if (!removeNullable(orig_type)->equals(*uint64_type))
+        if (!removeNullable(orig_type)->equals(*target_type))
         {
             if (orig_type->isNullable())
             {
-                name = analyzer->appendCast(makeNullable(uint64_type), actions, name);
+                target_type = makeNullable(target_type);
+                field_type.set_flag(TiDB::ColumnFlagUnsigned);
             }
             else
             {
-                name = analyzer->appendCast(uint64_type, actions, name);
+                field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
             }
+            name = analyzer->appendCast(target_type, actions, name, &field_type);
         }
         argument_names.push_back(name);
     }

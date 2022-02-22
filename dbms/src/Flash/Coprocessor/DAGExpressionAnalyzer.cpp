@@ -427,9 +427,10 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     {
         /// use tidb_cast to make it compatible with TiDB
         tipb::FieldType field_type;
-        // TODO: Use TypeDouble as return type, to be compatible with TiDB
         field_type.set_tp(TiDB::TypeDouble);
-        field_type.set_flen(-1);
+        field_type.set_flen(22);
+        field_type.set_decimal(-1);
+        field_type.set_flag(0);
         tipb::Expr type_expr = constructStringLiteralTiExpr("Nullable(Double)");
         auto type_expr_name = getActions(type_expr, actions);
         String num_col_name = DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
@@ -614,7 +615,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
         {
             /// need to convert to key type
-            key_name = appendCast(key_types[i], actions, key_name);
+            key_name = appendCast(key_types[i], actions, key_name, nullptr);
             has_actions = true;
         }
         if (!has_actions && (!left || is_right_out_join))
@@ -848,7 +849,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
                     /// then add type cast
                     if (need_append_type_cast_vec[index])
                     {
-                        updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name);
+                        updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name, &schema[i]);
                     }
                     final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
                     casted_name_map[current_columns[i].name] = updated_name;
@@ -910,14 +911,24 @@ void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const std:
     }
 }
 
-String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name)
+String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name, const tipb::FieldType * field_type)
 {
     // need to add cast function
     // first construct the second argument
+    const auto & from_type = actions->getSampleBlock().getByName(expr_name).type;
     tipb::Expr type_expr = constructStringLiteralTiExpr(target_type->getName());
     auto type_expr_name = getActions(type_expr, actions);
-    String cast_expr_name = applyFunction("CAST", {expr_name, type_expr_name}, actions, nullptr);
-    return cast_expr_name;
+    /// if the cast is supported by tidb_cast, then use tidb_cast otherwise use CAST
+    /// the final goal is to use tidb_cast for all cast
+    if (field_type != nullptr && FunctionTiDBCast::isSupportedCast(from_type, target_type))
+    {
+        return DAGExpressionAnalyzerHelper::buildCastFunctionInternal(this, {expr_name, type_expr_name}, false, *field_type, actions);
+    }
+    else
+    {
+        String cast_expr_name = applyFunction("CAST", {expr_name, type_expr_name}, actions, nullptr);
+        return cast_expr_name;
+    }
 }
 
 String DAGExpressionAnalyzer::appendCastIfNeeded(
@@ -936,7 +947,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         if (expected_type->getName() != actual_type->getName())
-            return appendCast(expected_type, actions, expr_name);
+            return appendCast(expected_type, actions, expr_name, &expr.field_type());
     }
     return expr_name;
 }

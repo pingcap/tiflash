@@ -154,7 +154,8 @@ private:
     String appendCast(
         const DataTypePtr & target_type,
         ExpressionActionsPtr & actions,
-        const String & expr_name);
+        const String & expr_name,
+        const tipb::FieldType * field_type);
 
     String appendCastIfNeeded(
         const tipb::Expr & expr,

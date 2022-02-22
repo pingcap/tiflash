@@ -1727,14 +1727,32 @@ public:
     const DataTypes & getArgumentTypes() const override { return argument_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
+    static bool isSupportedCast(const DataTypePtr & from_type, const DataTypePtr & to_type)
+    {
+        auto prepare_result = prepare(from_type, to_type);
+        return prepare_result.has_value();
+    }
+
     ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
-        return std::make_shared<ExecutableFunctionTiDBCast>(
-            prepare(getArgumentTypes()[0], getReturnType()),
-            name,
-            in_union,
-            tidb_tp,
-            context);
+        const auto & from_type = getArgumentTypes()[0];
+        const auto & to_type = getReturnType();
+        auto prepare_result = prepare(from_type, to_type);
+        if (prepare_result.has_value())
+        {
+            return std::make_shared<ExecutableFunctionTiDBCast>(
+                std::move(prepare_result.value()),
+                name,
+                in_union,
+                tidb_tp,
+                context);
+        }
+        else
+        {
+            throw Exception{
+                "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
+                ErrorCodes::CANNOT_CONVERT_TYPE};
+        }
     }
 
     String getName() const override { return name; }
@@ -1763,7 +1781,7 @@ private:
 
     /// createWrapper creates lambda functions that do the real type conversion job
     template <typename FromDataType, bool return_nullable>
-    WrapperType createWrapper(const DataTypePtr & to_type) const
+    static std::optional<WrapperType> createWrapper(const DataTypePtr & to_type)
     {
         /// cast as int
         if (checkDataType<DataTypeUInt64>(to_type.get()))
@@ -1899,7 +1917,7 @@ private:
             };
 
         // todo support convert to duration/json type
-        throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
+        return std::nullopt;
     }
 
     static WrapperType createIdentityWrapper(const DataTypePtr &)
@@ -1910,7 +1928,7 @@ private:
     }
 
     template <bool return_nullable>
-    WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    static std::optional<WrapperType> createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type)
     {
         if (isIdentityCast(from_type, to_type))
             return createIdentityWrapper(from_type);
@@ -1956,9 +1974,7 @@ private:
             return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
-        throw Exception{
-            "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
-            ErrorCodes::CANNOT_CONVERT_TYPE};
+        return std::nullopt;
     }
 
     static bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type)
@@ -1970,7 +1986,7 @@ private:
         return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
     }
 
-    WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    static std::optional<WrapperType> prepare(const DataTypePtr & from_type, const DataTypePtr & to_type)
     {
         if (from_type->onlyNull())
         {
@@ -1985,7 +2001,10 @@ private:
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
 
-        auto fn_convert = createWrapper(from_inner_type, to_inner_type, to_type->isNullable());
+        auto fn_convert_result = createWrapper(from_inner_type, to_inner_type, to_type->isNullable());
+        if (!fn_convert_result.has_value())
+            return fn_convert_result;
+        auto fn_convert = fn_convert_result.value();
         if (from_type->isNullable())
         {
             return [fn_convert, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
@@ -2064,7 +2083,7 @@ private:
         }
     }
 
-    WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable) const
+    static std::optional<WrapperType> createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable)
     {
         if (return_nullable)
             return createWrapper<true>(from_type, to_type);
