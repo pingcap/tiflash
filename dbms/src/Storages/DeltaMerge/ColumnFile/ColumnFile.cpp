@@ -3,6 +3,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
@@ -82,20 +83,20 @@ ColumnFileBig * ColumnFile::tryToBigFile()
     return !isBigFile() ? nullptr : static_cast<ColumnFileBig *>(this);
 }
 
-String columnFilesToString(const ColumnFiles & column_files)
+template <class T>
+String columnFilesToString(const T & column_files)
 {
     String column_files_info = "[";
     for (const auto & f : column_files)
     {
         if (f->isInMemoryFile())
-            column_files_info += "B_" + DB::toString(f->getRows());
+            column_files_info += "M_" + DB::toString(f->getRows()) + ",";
         else if (f->isTinyFile())
-            column_files_info += "B_" + DB::toString(f->getRows());
+            column_files_info += "T_" + DB::toString(f->getRows()) + ",";
         else if (f->isBigFile())
-            column_files_info += "F_" + DB::toString(f->getRows());
+            column_files_info += "F_" + DB::toString(f->getRows()) + ",";
         else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
-            column_files_info += "D_" + f_delete->getDeleteRange().toString();
-        column_files_info += (f->isSaved() ? "_S," : "_N,");
+            column_files_info += "D_" + f_delete->getDeleteRange().toString() + ",";
     }
 
     if (!column_files.empty())
@@ -103,6 +104,9 @@ String columnFilesToString(const ColumnFiles & column_files)
     column_files_info += "]";
     return column_files_info;
 }
+
+template String columnFilesToString<ColumnFiles>(const ColumnFiles & column_files);
+template String columnFilesToString<ColumnFilePersisteds>(const ColumnFilePersisteds & column_files);
 
 } // namespace DM
 } // namespace DB
