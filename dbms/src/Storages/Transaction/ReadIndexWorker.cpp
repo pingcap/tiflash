@@ -569,7 +569,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             waiting_tasks.size(),
             running_tasks.size());
 
-        if (history_success_tasks && history_success_tasks->first >= max_ts)
+        if (history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
 

@@ -344,6 +344,12 @@ void ReadIndexTest::testNormal()
             }
         }
         {
+            reqs = {make_read_index_reqs(0, 0)};
+            auto resps = manager->batchReadIndex(reqs);
+            ASSERT_EQ(resps[0].first.read_index(), 669); // tso 0 will not use history record
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+        }
+        {
             // smaller ts, use history success record.
             expect_cnt_use_history_tasks++;
             reqs = {make_read_index_reqs(0, 9)};
