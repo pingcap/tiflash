@@ -194,6 +194,7 @@ size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager
         worker->data_map.invoke([&](std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) {
             for (auto & x : d)
             {
+                auto _ = x.second->genLockGuard();
                 cnt_use_history_tasks += x.second->cnt_use_history_tasks;
             }
         });
