@@ -195,7 +195,7 @@ LearnerReadSnapshot doLearnerRead(
         batch_read_index_req.reserve(ori_batch_region_size);
 
         {
-            // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get latest index.
+            // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
             auto read_index_tso = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
 
             for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
