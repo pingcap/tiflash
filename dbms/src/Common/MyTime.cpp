@@ -538,7 +538,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-        if (!noAbsorb(seps) && !(tz_minute != "" && tz_sep == ""))
+        if (!no_absorb(seps) && !(tz_minute != "" && tz_sep == ""))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
