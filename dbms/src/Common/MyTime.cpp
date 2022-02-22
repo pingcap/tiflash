@@ -538,11 +538,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-<<<<<<< HEAD
         if (!noAbsorb(seps) && !(tz_minute != "" && tz_sep == ""))
-=======
-        if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -1341,22 +1337,13 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-<<<<<<< HEAD
     auto skipWhitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
-=======
-    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return checkIfEnd();
     };
-<<<<<<< HEAD
     auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
         if (skipWhitespaces() == ParseState::END_OF_FILE)
-=======
-    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
-        if (skip_whitespaces() == ParseState::END_OF_FILE)
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1454,22 +1441,13 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-<<<<<<< HEAD
     auto skipWhitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
-=======
-    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return checkIfEnd();
     };
-<<<<<<< HEAD
     auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
         if (skipWhitespaces() == ParseState::END_OF_FILE)
-=======
-    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
-        if (skip_whitespaces() == ParseState::END_OF_FILE)
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
