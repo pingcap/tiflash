@@ -65,11 +65,11 @@ FlashService::FlashService(IServer & server_)
                 long long cur_cd_proc_rt_cnt = cd_proc_rt_cnt, cur_cd_proc_rt_sum = cd_proc_rt_sum;
                 cd_proc_rt_sum -= cur_cd_proc_rt_sum;
                 cd_proc_rt_cnt -= cur_cd_proc_rt_cnt;
-                std::cerr << "cd_proc_rt_cnt: " << cur_cd_proc_rt_cnt
+                std::cerr << " cd_proc_rt_cnt: " << cur_cd_proc_rt_cnt
                           << " cd_proc_rt: " << (cur_cd_proc_rt_cnt ? cur_cd_proc_rt_sum / cur_cd_proc_rt_cnt : 0)
-                          << "reg_cnt: " << cur_reg_cnt
-                          << "cd_proc0_cnt: " << cur_cd_proc0_cnt
-                          << "sendop_cnt: " << cur_sendop_cnt
+                          << " reg_cnt: " << cur_reg_cnt
+                          << " cd_proc0_cnt: " << cur_cd_proc0_cnt
+                          << " sendop_cnt: " << cur_sendop_cnt
                           << std::endl;
                 usleep(1000000);
             }
