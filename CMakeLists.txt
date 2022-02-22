@@ -142,6 +142,22 @@ set (COMPILER_FLAGS                      "${COMPILER_FLAGS} ${CXX11_ABI_FLAGS}")
 
 string(REGEX MATCH "-?[0-9]+(.[0-9]+)?$" COMPILER_POSTFIX ${CMAKE_CXX_COMPILER})
 
+find_program (LLVM_OBJCOPY_PATH NAMES "llvm-objcopy${COMPILER_POSTFIX}" "llvm-objcopy")
+find_program (LLVM_AR_PATH NAMES "llvm-ar${COMPILER_POSTFIX}" "llvm-ar")
+find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib${COMPILER_POSTFIX}" "llvm-ranlib")
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_OBJCOPY_PATH)
+    set(CMAKE_OBJCOPY ${LLVM_OBJCOPY_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_OBJCOPY_PATH)
+    set(CMAKE_AR ${LLVM_AR_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_OBJCOPY_PATH)
+    set(CMAKE_RANLIB ${LLVM_RANLIB_PATH})
+endif()
+
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 

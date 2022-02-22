@@ -123,6 +123,7 @@ else ()
             COMPONENT tiflash-release
             DESTINATION "."
             POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*" ) # exclude libc dependencies
+    install (CODE "message(STATUS \"compressing tiflash debug sections\")\nexecute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)" COMPONENT tiflash-release)
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
