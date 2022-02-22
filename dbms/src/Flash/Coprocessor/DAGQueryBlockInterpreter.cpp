@@ -1134,6 +1134,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
+        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.has_having)
     {
