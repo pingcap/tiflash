@@ -115,6 +115,14 @@ else ()
     elseif (APPLE)
         set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
     endif ()
+    if (CMAKE_PREFIX_PATH)
+        set(TIFLASH_DEPENDENCY_DIR_HINT
+                "${CMAKE_PREFIX_PATH}/lib"
+                "${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/"
+                "${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+    else()
+        set(TIFLASH_DEPENDENCY_DIR_HINT "")
+    endif()
     install (TARGETS tiflash
             COMPONENT tiflash-release
             DESTINATION "."
@@ -122,7 +130,8 @@ else ()
     install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
             COMPONENT tiflash-release
             DESTINATION "."
-            POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*" ) # exclude libc dependencies
+            POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*" # exclude libc dependencies
+            DIRECTORIES ${TIFLASH_DEPENDENCY_DIR_HINT})
     install (CODE "message(STATUS \"compressing tiflash debug sections\")\nexecute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)" COMPONENT tiflash-release)
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
