@@ -172,10 +172,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-} // namespace tests
-} // namespace DB
-=======
 // for https://github.com/pingcap/tics/issues/4036
 TEST_F(TestTidbConversion, castStringAsDateTime)
 try
@@ -209,4 +205,3 @@ CATCH
 
 } // namespace
 } // namespace DB::tests
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
