@@ -2,17 +2,18 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 
 #include <unordered_set>
-
 
 namespace DB
 {
@@ -223,9 +224,39 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             if (have_date + have_datetime == type_ids.size())
                 return std::make_shared<DataTypeDateTime>();
             if (have_my_date + have_my_datetime == type_ids.size())
-                return std::make_shared<DataTypeMyDateTime>();
+            {
+                int fsp = 0;
+                for (const auto & type : types)
+                {
+                    const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(type.get());
+                    if (datetime_type)
+                        fsp = std::max(fsp, datetime_type->getFraction());
+                }
+                return std::make_shared<DataTypeMyDateTime>(fsp);
+            }
 
             throw Exception(getExceptionMessagePrefix(types) + " because some of them are Date/DateTime and some of them are not",
+                            ErrorCodes::NO_COMMON_TYPE);
+        }
+    }
+
+    /// For Duration, the common type is Duration with bigger fsp. No other types are compatible.
+    {
+        UInt32 have_duration = type_ids.count(TypeIndex::MyTime);
+
+        if (have_duration)
+        {
+            if (have_duration == type_ids.size())
+            {
+                int fsp = 0;
+                for (const auto & type : types)
+                {
+                    fsp = std::max(fsp, checkAndGetDataType<DataTypeMyDuration>(type.get())->getFsp());
+                }
+                return std::make_shared<DataTypeMyDuration>(fsp);
+            }
+
+            throw Exception(getExceptionMessagePrefix(types) + " because some of them are MyDuration and some of them are not",
                             ErrorCodes::NO_COMMON_TYPE);
         }
     }
@@ -260,36 +291,35 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                                 ErrorCodes::NO_COMMON_TYPE);
 
             UInt32 max_scale = 0;
+            UInt32 max_int_part = 0;
             for (const auto & type : types)
             {
-                UInt32 scale = getDecimalScale(*type, 0);
-                if (scale > max_scale)
-                    max_scale = scale;
+                if (IsDecimalDataType(type))
+                {
+                    UInt32 scale = getDecimalScale(*type, 0);
+                    UInt32 prec = getDecimalPrecision(*type, 0);
+                    if (scale > max_scale)
+                        max_scale = scale;
+                    if (prec - scale > max_int_part)
+                        max_int_part = prec - scale;
+                }
             }
+            max_int_part = std::max(max_int_part, leastDecimalPrecisionFor(max_int));
 
-            UInt32 min_precision = max_scale + leastDecimalPrecisionFor(max_int);
-
-            /// special cases Int32 -> Dec32, Int64 -> Dec64
-            if (max_scale == 0)
-            {
-                if (max_int == TypeIndex::Int32)
-                    min_precision = DataTypeDecimal<Decimal32>::maxPrecision();
-                else if (max_int == TypeIndex::Int64)
-                    min_precision = DataTypeDecimal<Decimal64>::maxPrecision();
-            }
+            UInt32 min_precision = max_scale + max_int_part;
 
             if (min_precision > DataTypeDecimal<Decimal256>::maxPrecision())
                 throw Exception(getExceptionMessagePrefix(types) + " because the least supertype is Decimal(" + toString(min_precision)
                                     + ',' + toString(max_scale) + ')',
                                 ErrorCodes::NO_COMMON_TYPE);
 
-            if (have_decimal256 || min_precision > DataTypeDecimal<Decimal128>::maxPrecision())
-                return std::make_shared<DataTypeDecimal<Decimal256>>(DataTypeDecimal<Decimal256>::maxPrecision(), max_scale);
-            if (have_decimal128 || min_precision > DataTypeDecimal<Decimal64>::maxPrecision())
-                return std::make_shared<DataTypeDecimal<Decimal128>>(DataTypeDecimal<Decimal128>::maxPrecision(), max_scale);
-            if (have_decimal64 || min_precision > DataTypeDecimal<Decimal32>::maxPrecision())
-                return std::make_shared<DataTypeDecimal<Decimal64>>(DataTypeDecimal<Decimal64>::maxPrecision(), max_scale);
-            return std::make_shared<DataTypeDecimal<Decimal32>>(DataTypeDecimal<Decimal32>::maxPrecision(), max_scale);
+            if (min_precision > DataTypeDecimal<Decimal128>::maxPrecision())
+                return std::make_shared<DataTypeDecimal<Decimal256>>(min_precision, max_scale);
+            if (min_precision > DataTypeDecimal<Decimal64>::maxPrecision())
+                return std::make_shared<DataTypeDecimal<Decimal128>>(min_precision, max_scale);
+            if (min_precision > DataTypeDecimal<Decimal32>::maxPrecision())
+                return std::make_shared<DataTypeDecimal<Decimal64>>(min_precision, max_scale);
+            return std::make_shared<DataTypeDecimal<Decimal32>>(min_precision, max_scale);
         }
     }
 

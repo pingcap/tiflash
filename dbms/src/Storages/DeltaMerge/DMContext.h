@@ -51,10 +51,10 @@ struct DMContext : private boost::noncopyable
     const size_t delta_cache_limit_rows;
     // The size threshold of cache in delta.
     const size_t delta_cache_limit_bytes;
-    // Determine whether a pack is small or not in rows.
-    const size_t delta_small_pack_rows;
-    // Determine whether a pack is small or not in bytes.
-    const size_t delta_small_pack_bytes;
+    // Determine whether a column file is small or not in rows.
+    const size_t delta_small_column_file_rows;
+    // Determine whether a column file is small or not in bytes.
+    const size_t delta_small_column_file_bytes;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
 
@@ -95,8 +95,8 @@ public:
         , delta_limit_bytes(settings.dt_segment_delta_limit_size)
         , delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows)
         , delta_cache_limit_bytes(settings.dt_segment_delta_cache_limit_size)
-        , delta_small_pack_rows(settings.dt_segment_delta_small_pack_rows)
-        , delta_small_pack_bytes(settings.dt_segment_delta_small_pack_size)
+        , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
+        , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
         , enable_logical_split(settings.dt_enable_logical_split)
         , read_delta_only(settings.dt_read_delta_only)
