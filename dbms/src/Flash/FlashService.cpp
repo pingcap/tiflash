@@ -19,6 +19,7 @@
 #include <ext/scope_guard.h>
 
 std::atomic<int> act_rpcs{0};
+std::atomic<long long> cd_proc_rt_cnt{0}, cd_proc_rt_sum{0}, reg_cnt{0}, cd_proc0_cnt{0}, sendop_cnt{0};
 
 const int tunnel_sender_cap = 40;
 const int rpc_exe_cap = 200;
@@ -55,7 +56,20 @@ FlashService::FlashService(IServer & server_)
             while (!end_syn)
             {
                 // LOG_ERROR(log, "max active establish thds: " << max_active_establish_thds);
-                LOG_ERROR(log, "act_rpcq: " << act_rpcs.load());
+                //                LOG_ERROR(log, "act_rpcq: " << act_rpcs.load()<<" ");
+                long long cur_reg_cnt = reg_cnt, cur_cd_proc0_cnt = cd_proc0_cnt, cur_sendop_cnt = sendop_cnt;
+                reg_cnt -= cur_reg_cnt;
+                cd_proc0_cnt -= cur_cd_proc0_cnt;
+                sendop_cnt -= cur_sendop_cnt;
+                long long cur_cd_proc_rt_cnt = cd_proc_rt_cnt, cur_cd_proc_rt_sum = cd_proc_rt_sum;
+                cd_proc_rt_sum -= cur_cd_proc_rt_sum;
+                cd_proc_rt_cnt -= cur_cd_proc_rt_cnt;
+                std::cerr << "cd_proc_rt_cnt: " << cur_cd_proc_rt_cnt
+                          << " cd_proc_rt: " << (cur_cd_proc_rt_cnt ? cur_cd_proc_rt_sum / cur_cd_proc_rt_cnt : 0)
+                          << "reg_cnt: " << cur_reg_cnt
+                          << "cd_proc0_cnt: " << cur_cd_proc0_cnt
+                          << "sendop_cnt: " << cur_sendop_cnt
+                          << std::endl;
                 usleep(1000000);
             }
             end_fin = true;
@@ -66,6 +80,7 @@ FlashService::FlashService(IServer & server_)
         while (calldata_to_reg_queue.pop(reg))
         {
             new CallData(reg.service, reg.cq, reg.notify_cq);
+            reg_cnt++;
         }
     });
     //    for (int i = 0; i < tunnel_sender_cap; i++)
@@ -88,6 +103,7 @@ FlashService::FlashService(IServer & server_)
             while (queue->pop(calldata))
             {
                 calldata->Proceed0();
+                cd_proc0_cnt++;
             }
         });
     }
@@ -100,6 +116,7 @@ FlashService::FlashService(IServer & server_)
             while (queue->pop(obj))
             {
                 obj->mpptunnel->sendOp(obj->need_lock);
+                sendop_cnt++;
             }
         });
     }
@@ -645,6 +662,7 @@ void CallData::notifyReady()
 
 void CallData::Proceed()
 {
+    long long st = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
     if (state_ == CREATE)
     {
         // Make this instance progress to the PROCESS state.
@@ -661,6 +679,8 @@ void CallData::Proceed()
     {
         SubmitCalldataProcTask(service_, this);
     }
+    cd_proc_rt_sum += StopWatchDetail::nanoseconds(CLOCK_MONOTONIC) - st;
+    cd_proc_rt_cnt++;
 }
 
 
