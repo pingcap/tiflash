@@ -145,7 +145,7 @@ public:
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, name))
         , total_rows(0)
     {
         // generate sample block
