@@ -130,13 +130,12 @@ else ()
                 POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*" # exclude libc dependencies
                 DIRECTORIES ${TIFLASH_DEPENDENCY_DIR_HINT})
 
-        install (CODE "message(STATUS \"compressing tiflash debug sections\")\nexecute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)" COMPONENT tiflash-release)
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     elseif(APPLE)
         set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
         install (TARGETS tiflash
                 COMPONENT tiflash-release
                 DESTINATION ".")
-
         # TODO: handle ENABLE_PROXY_RUNTIME_RELATIVE_PATH here
         # TODO: check if MacOS works
     endif ()
