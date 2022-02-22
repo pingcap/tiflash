@@ -194,6 +194,7 @@ size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager
         worker->data_map.invoke([&](std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) {
             for (auto & x : d)
             {
+                auto _ = x.second->genLockGuard();
                 cnt_use_history_tasks += x.second->cnt_use_history_tasks;
             }
         });
@@ -342,6 +343,12 @@ void ReadIndexTest::testNormal()
             {
                 r.second->updateCommitIndex(669);
             }
+        }
+        {
+            reqs = {make_read_index_reqs(0, 0)};
+            auto resps = manager->batchReadIndex(reqs);
+            ASSERT_EQ(resps[0].first.read_index(), 669); // tso 0 will not use history record
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
         {
             // smaller ts, use history success record.
