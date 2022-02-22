@@ -123,16 +123,22 @@ else ()
     else()
         set(TIFLASH_DEPENDENCY_DIR_HINT "")
     endif()
+
     install (TARGETS tiflash
             COMPONENT tiflash-release
             DESTINATION "."
             RUNTIME_DEPENDENCY_SET tiflash-release-dependency)
+
     install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
             COMPONENT tiflash-release
             DESTINATION "."
             POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*" # exclude libc dependencies
             DIRECTORIES ${TIFLASH_DEPENDENCY_DIR_HINT})
-    install (CODE "message(STATUS \"compressing tiflash debug sections\")\nexecute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)" COMPONENT tiflash-release)
+
+    if (ARCH_LINUX)
+        install (CODE "message(STATUS \"compressing tiflash debug sections\")\nexecute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)" COMPONENT tiflash-release)
+    endif ()
+
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
