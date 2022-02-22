@@ -674,12 +674,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
     const ExpressionActionsPtr & expr,
     Names & key_names,
     TiDB::TiDBCollators & collators,
-<<<<<<< HEAD
-    AggregateDescriptions & aggregates)
-=======
-    AggregateDescriptions & aggregate_descriptions,
+    AggregateDescriptions & aggregates,
     bool is_final_agg)
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log); });
 
@@ -1137,12 +1133,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-<<<<<<< HEAD
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-=======
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
     }
     if (res.has_having)
     {
