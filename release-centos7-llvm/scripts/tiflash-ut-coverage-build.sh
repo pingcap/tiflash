@@ -14,8 +14,10 @@ SRCPATH=${1:-$(
 CMAKE_BUILD_TYPE=Debug
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
-BUILD_DIR="/build/release-centos7-llvm/build-release"
-INSTALL_DIR="/build/release-centos7-llvm/tiflash"
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+
+BUILD_DIR=${BUILD_UT_DIR}
+INSTALL_DIR=${INSTALL_UT_DIR}
 
 rm -rf ${INSTALL_DIR}
 mkdir -p ${INSTALL_DIR}

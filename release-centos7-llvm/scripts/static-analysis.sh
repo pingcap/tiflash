@@ -13,9 +13,10 @@ SRCPATH=${1:-$(
   pwd -P
 )}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 
 if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
-  BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
+  BUILD_DIR="${SRCPATH}/${BUILD_DIR_SUFFIX}"
 
   cd ${BUILD_DIR}
   cmake "${SRCPATH}" \

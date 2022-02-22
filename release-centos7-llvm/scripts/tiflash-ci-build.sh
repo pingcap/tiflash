@@ -12,6 +12,7 @@ SRCPATH=${1:-$(
 )}
 
 echo "INSTALL_DIR=${INSTALL_DIR}"
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 
 TIFLASH_PROXY_SRC=${SRCPATH}/contrib/tiflash-proxy
 TIFLASH_PROXY_TAR_DIR=${TIFLASH_PROXY_SRC}/target/release
@@ -44,7 +45,7 @@ fi
 rm -rf "${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 
-BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
+BUILD_DIR="${SRCPATH}/${BUILD_DIR_SUFFIX}"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \

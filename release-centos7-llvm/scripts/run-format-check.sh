@@ -2,13 +2,13 @@
 
 set -ex
 
-scriptpath="$(
+SCRIPTPATH="$(
     cd "$(dirname "$0")"
     pwd -P
 )"
 
 SRCPATH=${1:-$(
-    cd $scriptpath/../..
+    cd ${SCRIPTPATH}/../..
     pwd -P
 )}
 

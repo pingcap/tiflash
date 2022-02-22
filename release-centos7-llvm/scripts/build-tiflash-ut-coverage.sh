@@ -15,7 +15,8 @@ BUILD_BRANCH=${BUILD_BRANCH:-master}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 
-CI_CCACHE_USED_SRCPATH="/build/tics"
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+
 if [[ ${CI_CCACHE_USED_SRCPATH} != ${SRCPATH} ]]; then
   rm -rf "${CI_CCACHE_USED_SRCPATH}"
   mkdir -p /build && cd /build

@@ -11,7 +11,9 @@ SRCPATH=${1:-$(
   pwd -P
 )}
 
-INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7-llvm/tiflash"} # use original path
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+
+INSTALL_DIR="${SRCPATH}/${INSTALL_DIR_SUFFIX}" # use original path
 
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
@@ -23,8 +25,6 @@ ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
   BUILD_BRANCH=${BUILD_BRANCH} sh ${SRCPATH}/release-centos7-llvm/scripts/run-format-check.sh
 fi
-
-CI_CCACHE_USED_SRCPATH="/build/tics"
 
 if [[ ${CI_CCACHE_USED_SRCPATH} != ${SRCPATH} ]]; then
   rm -rf "${CI_CCACHE_USED_SRCPATH}"
