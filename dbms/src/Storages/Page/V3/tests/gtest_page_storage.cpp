@@ -1,3 +1,4 @@
+#include <Encryption/RateLimiter.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -10,7 +11,9 @@
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 
 namespace DB
 {
@@ -90,6 +93,89 @@ try
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+}
+CATCH
+
+
+TEST_F(PageStorageTest, WriteReadWithIOLimiter)
+try
+{
+    PageId page_id = 50;
+    size_t wb_nums = 10;
+    size_t buff_size = 100ul * 1024;
+    const size_t rate_target = buff_size - 1;
+
+    char c_buff[wb_nums * buff_size];
+
+    WriteBatch wbs[wb_nums];
+    PageEntriesEdit edits[wb_nums];
+
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wbs[i].putPage(page_id + i, /* tag */ 0, buff, buff_size);
+    }
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+
+    AtomicStopwatch write_watch;
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        page_storage->write(std::move(wbs[i]), write_limiter);
+    }
+    auto write_elapsed = write_watch.elapsedSeconds();
+    auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
+
+    // make sure that 0.8 * rate_target <= actual_rate <= 1.25 * rate_target
+    EXPECT_GE(write_actual_rate / rate_target, 0.80);
+    EXPECT_LE(write_actual_rate / rate_target, 1.25);
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            page_storage->read(page_id + i, read_limiter, nullptr);
+        }
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_GE(read_actual_rate / rate_target, 0.80);
+        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        std::vector<PageId> page_ids;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            page_ids.emplace_back(page_id + i);
+        }
+
+        AtomicStopwatch read_watch;
+        page_storage->read(page_ids, read_limiter, nullptr);
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_GE(read_actual_rate / rate_target, 0.80);
+        EXPECT_LE(read_actual_rate / rate_target, 1.25);
     }
 }
 CATCH

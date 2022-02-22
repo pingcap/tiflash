@@ -1,3 +1,4 @@
+#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -8,6 +9,7 @@
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::PS::V3::tests
@@ -434,6 +436,119 @@ TEST_F(BlobStoreTest, testWriteRead)
         index++;
     }
     ASSERT_EQ(index, buff_nums);
+}
+
+TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+
+    PageId page_id = 50;
+    size_t wb_nums = 10;
+    size_t buff_size = 100ul * 1024;
+    const size_t rate_target = buff_size - 1;
+
+    auto blob_store = BlobStore(file_provider, path, config);
+    char c_buff[wb_nums * buff_size];
+
+    WriteBatch wbs[wb_nums];
+    PageEntriesEdit edits[wb_nums];
+
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wbs[i].putPage(page_id++, /* tag */ 0, buff, buff_size);
+    }
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        edits[i] = blob_store.write(wbs[i], write_limiter);
+    }
+    auto write_elapsed = write_watch.elapsedSeconds();
+    auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
+
+    // make sure that 0.8 * rate_target <= actual_rate <= 1.25 * rate_target
+    EXPECT_GE(write_actual_rate / rate_target, 0.80);
+    EXPECT_LE(write_actual_rate / rate_target, 1.25);
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+
+    char c_buff_read[wb_nums * buff_size];
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            for (const auto & record : edits[i].getRecords())
+            {
+                blob_store.read(record.entry.file_id,
+                                record.entry.offset,
+                                c_buff_read + i * buff_size,
+                                record.entry.size,
+                                read_limiter);
+            }
+        }
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_GE(read_actual_rate / rate_target, 0.80);
+        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+    }
+
+    PageIDAndEntriesV3 entries = {};
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (const auto & record : edits[i].getRecords())
+        {
+            entries.emplace_back(std::make_pair(record.page_id, record.entry));
+        }
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+
+        // Test `PageMap` read
+        blob_store.read(entries, read_limiter);
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_GE(read_actual_rate / rate_target, 0.80);
+        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+
+        // Test single `Page` read
+        for (auto & entry : entries)
+        {
+            blob_store.read(entry, read_limiter);
+        }
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_GE(read_actual_rate / rate_target, 0.80);
+        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+    }
 }
 
 TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
