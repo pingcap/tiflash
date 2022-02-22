@@ -23,6 +23,7 @@ std::atomic<long long> cd_proc_rt_cnt{0}, cd_proc_rt_sum{0}, reg_cnt{0}, cd_proc
 
 const int tunnel_sender_cap = 40;
 const int rpc_exe_cap = 200;
+const int rpc_reg_cap = 10;
 
 namespace DB
 {
@@ -75,14 +76,17 @@ FlashService::FlashService(IServer & server_)
             end_fin = true;
         });
     std::shared_ptr<ThreadManager> thd_manager = newThreadManager();
-    thd_manager->scheduleThenDetach(false, "calldata_reg", [this] {
-        CallDataReg reg;
-        while (calldata_to_reg_queue.pop(reg))
-        {
-            new CallData(reg.service, reg.cq, reg.notify_cq);
-            reg_cnt++;
-        }
-    });
+    for (int i = 0; i < rpc_reg_cap; i++)
+    {
+        thd_manager->scheduleThenDetach(false, "calldata_reg", [this] {
+            CallDataReg reg;
+            while (calldata_to_reg_queue.pop(reg))
+            {
+                new CallData(reg.service, reg.cq, reg.notify_cq);
+                reg_cnt++;
+            }
+        });
+    }
     //    for (int i = 0; i < tunnel_sender_cap; i++)
     //    {
     //        thd_manager->scheduleThenDetach(false, "rpc_exec", [this] {
