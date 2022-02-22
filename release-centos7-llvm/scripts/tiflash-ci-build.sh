@@ -53,19 +53,14 @@ cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
   -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
   -DUSE_CCACHE=${USE_CCACHE} \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON \
-  -DLINKER_NAME=lld \
-  -DUSE_LIBCXX=ON \
-  -DUSE_LLVM_LIBUNWIND=OFF \
-  -DUSE_LLVM_COMPILER_RT=OFF \
-  -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
   -DCMAKE_PREFIX_PATH="/usr/local" \
-  -DCMAKE_AR="/usr/local/bin/llvm-ar" \
   -DRUN_HAVE_STD_REGEX=0 \
-  -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
   -DUSE_INTERNAL_TIFLASH_PROXY=${BUILD_TIFLASH_PROXY} \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
   -GNinja
 
 ninja tiflash
+cmake -DCOMPONENT=tiflash-release -P cmake_install.cmake
 
 if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   ninja page_ctl
@@ -74,16 +69,6 @@ if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
 fi
 
 ccache -s
-
-source ${SCRIPTPATH}/utils/vendor_dependency.sh
-
-# Reduce binary size by compressing.
-llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
-
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++.so "${INSTALL_DIR}/"
-vendor_dependency "${INSTALL_DIR}/tiflash" libc++abi.so "${INSTALL_DIR}/"
-
-cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
 # unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH

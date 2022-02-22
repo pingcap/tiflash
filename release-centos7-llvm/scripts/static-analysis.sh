@@ -28,7 +28,6 @@ if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
     -DUSE_LIBCXX=ON \
     -DUSE_LLVM_LIBUNWIND=OFF \
     -DUSE_LLVM_COMPILER_RT=OFF \
-    -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
     -DRUN_HAVE_STD_REGEX=0 \
     -DCMAKE_AR="/usr/local/bin/llvm-ar" \
     -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
