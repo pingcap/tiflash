@@ -10,6 +10,8 @@ namespace DB
   */
 class LimitBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "Limit";
+
 public:
     /** If always_read_till_end = false (by default), then after reading enough data,
       *  returns an empty block, and this causes the query to be canceled.
@@ -23,7 +25,7 @@ public:
         const LogWithPrefixPtr & log_,
         bool always_read_till_end_ = false);
 
-    String getName() const override { return "Limit"; }
+    String getName() const override { return NAME; }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
