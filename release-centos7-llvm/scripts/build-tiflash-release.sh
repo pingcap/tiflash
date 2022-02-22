@@ -23,6 +23,8 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
+rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
+
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 

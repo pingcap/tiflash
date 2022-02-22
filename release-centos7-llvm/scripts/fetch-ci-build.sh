@@ -6,7 +6,12 @@ SCRIPTPATH="$(
   cd "$(dirname "$0")"
   pwd -P
 )"
-source ${SCRIPTPATH}/env.sh
+SRCPATH=${1:-$(
+  cd $SCRIPTPATH/../..
+  pwd -P
+)}
+
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 
 DOWNLOAD_TAR=${DOWNLOAD_TAR:-false}
 
