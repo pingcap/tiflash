@@ -123,12 +123,16 @@ else ()
         elseif(ARCH_AMD64)
             set(TIFLASH_ARCH_NAME "x86_64")
         endif()
+
         if (CMAKE_PREFIX_PATH)
             set(TIFLASH_DEPENDENCY_DIR_HINT
                     "${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/${TIFLASH_ARCH_NAME}-unknown-linux-gnu/;")
+            string (REPLACE ";" " " TIFLASH_DEPENDENCY_DIRECTORIES "${TIFLASH_DEPENDENCY_DIR_HINT}")
         else()
             set(TIFLASH_DEPENDENCY_DIR_HINT "")
+            set(TIFLASH_DEPENDENCY_DIRECTORIES "")
         endif()
+
         # set build rpaths, so that executables are be directly called in build tree (easy to debug)
         set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PROXY_LIBRARY_DIR};${TIFLASH_DEPENDENCY_DIR_HINT}")
         set_target_properties(tiflash PROPERTIES INSTALL_RPATH "$ORIGIN/")
@@ -139,7 +143,8 @@ else ()
         install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
                 COMPONENT tiflash-release
                 DESTINATION "."
-                POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*") # exclude libc dependencies
+                POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*"# exclude libc dependencies
+                DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
 
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     elseif(APPLE)
