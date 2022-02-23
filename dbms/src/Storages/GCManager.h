@@ -21,6 +21,8 @@ private:
 
     TableID next_table_id = InvalidTableID;
 
+    AtomicStopwatch gc_check_stop_watch;
+
     Poco::Logger * log;
 };
 } // namespace DB

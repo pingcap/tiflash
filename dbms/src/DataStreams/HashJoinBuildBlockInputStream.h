@@ -9,6 +9,8 @@ namespace DB
 {
 class HashJoinBuildBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "HashJoinBuildBlockInputStream";
+
 public:
     HashJoinBuildBlockInputStream(
         const BlockInputStreamPtr & input,
@@ -16,12 +18,12 @@ public:
         size_t stream_index_,
         const LogWithPrefixPtr & log_)
         : stream_index(stream_index_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
     {
         children.push_back(input);
         join = join_;
     }
-    String getName() const override { return "HashJoinBuildBlockInputStream"; }
+    String getName() const override { return NAME; }
     Block getHeader() const override { return children.back()->getHeader(); }
 
 protected:
