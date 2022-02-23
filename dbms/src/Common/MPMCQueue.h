@@ -121,14 +121,23 @@ public:
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
-    void finish()
+    bool finish()
     {
         std::unique_lock lock(mu);
         if (isNormal())
         {
             status = Status::FINISHED;
             notifyAll();
+            return true;
         }
+        else
+            return false;
+    }
+
+    bool isFinished()
+    {
+        std::unique_lock lock(mu);
+        return status == Status::FINISHED;
     }
 
     MPMCQueueStatus getStatus() const
