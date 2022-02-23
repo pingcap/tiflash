@@ -130,8 +130,8 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
         String error_msg = fmt::format(
-            "The array size of \"storage.main.dir\"[size={}] "
-            "is not equal to \"storage.main.capacity\"[size={}]. "
+            "The array size of \"storage.latest.dir\"[size={}] "
+            "is not equal to \"storage.latest.capacity\"[size={}]. "
             "Please check your configuration file.",
             latest_data_paths.size(),
             latest_capacity_quota.size());
@@ -309,8 +309,8 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
                 {
                     LOG_FMT_WARNING(
                         log,
-                        "Raft data candidate path: {}"
-                        ". The path is overwritten by deprecated configuration for backward compatibility.",
+                        "Raft data candidate path: {}. "
+                        "The path is overwritten by deprecated configuration for backward compatibility.",
                         kvstore_path);
                 }
             }

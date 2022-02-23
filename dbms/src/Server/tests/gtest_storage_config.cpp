@@ -269,6 +269,17 @@ path = "/data0/tiflash,/data1/tiflash"
 dir = [ "/data0/tiflash", "/data1/tiflash" ]
 capacity = [ 10737418240 ]
         )",
+        // case for the length of storage.latest.dir is not the same with storage.latest.capacity
+        R"(
+path = "/data0/tiflash,/data1/tiflash"
+[storage]
+[storage.main]
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
+capacity = [ 10737418240, 10737418240 ]
+[storage.latest]
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
+capacity = [ 10737418240 ]
+        )",
         // case for storage.main.dir is not an string array
         R"(
 [storage]
