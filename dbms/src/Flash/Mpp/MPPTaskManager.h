@@ -30,10 +30,12 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
 class MPPTaskManager : private boost::noncopyable
 {
     std::mutex pri_mu;
-    const int bucket_num = 10000;
-    std::mutex * mu_arr = new std::mutex[bucket_num];
-    MPPQueryMap * mpp_query_maps = new MPPQueryMap[bucket_num];
-    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>> * wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>>[bucket_num];
+//    const int bucket_num = 10000;
+//    std::mutex * mu_arr = new std::mutex[bucket_num];
+//    MPPQueryMap * mpp_query_maps = new MPPQueryMap[bucket_num];
+    MPPQueryMap mpp_query_map;
+    std::mutex mu;
+    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>> wait_map;
     std::priority_queue<std::pair<long, MPPTaskId>, std::vector<std::pair<long, MPPTaskId>>, auto (*)(const std::pair<long, MPPTaskId> &, const std::pair<long, MPPTaskId> &)->bool> wait_deadline_queue{
         [](const std::pair<long, MPPTaskId> & a, const std::pair<long, MPPTaskId> & b) -> bool {
             return a.first > b.first;
@@ -53,16 +55,11 @@ public:
     void BackgroundJob();
     void ClearTimeoutWaiter(const MPPTaskId & id);
 
-    template <class Mp, class Itr>
-    void notifyWaiters(Mp & wait_map, const Itr & wait_it, const MPPTaskId & id, std::function<void(EstablishCallData *)> job);
+    template <class Itr>
+    void notifyWaiters(const Itr & wait_it, const MPPTaskId & id, std::function<void(EstablishCallData *)> job);
 
-    template <class Mp, class Itr>
-    void notifyQueryWaiters(Mp & wait_map, const Itr & wait_it, std::function<void(const MPPTaskId & id, EstablishCallData *)> job);
-
-    inline int computeBucketId(UInt64 start_ts)
-    {
-        return start_ts % bucket_num;
-    }
+    template <class Itr>
+    void notifyQueryWaiters(const Itr & wait_it, std::function<void(const MPPTaskId & id, EstablishCallData *)> job);
 
     std::vector<UInt64> getCurrentQueries();
 
