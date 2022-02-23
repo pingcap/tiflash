@@ -9,10 +9,7 @@ option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with L
 
 if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
     # enable RPATHs to sysroot to make it easier for LLVM development
-    set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
-    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
     set(ENV{LD_LIBRARY_PATH} "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/;${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/;${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
