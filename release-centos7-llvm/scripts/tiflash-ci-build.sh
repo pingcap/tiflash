@@ -56,11 +56,10 @@ cmake "$SRCPATH" ${CMAKE_PREBUILT_LIBS_ROOT_ARG} \
   -DCMAKE_PREFIX_PATH="/usr/local" \
   -DRUN_HAVE_STD_REGEX=0 \
   -DUSE_INTERNAL_TIFLASH_PROXY=${BUILD_TIFLASH_PROXY} \
-  -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
   -GNinja
 
-ninja tiflash
-cmake -DCOMPONENT=tiflash-release -P cmake_install.cmake
+cmake --build . --target tiflash --parallel
+cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 
 if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   ninja page_ctl

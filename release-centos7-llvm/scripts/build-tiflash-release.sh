@@ -35,11 +35,10 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -Wno-dev \
       -DUSE_CCACHE=OFF \
       -DRUN_HAVE_STD_REGEX=0 \
-      -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
       -GNinja
 
-ninja tiflash
-cmake -DCOMPONENT=tiflash-release -P cmake_install.cmake
+cmake --build . --target tiflash --parallel
+cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 
 # unset LD_LIBRARY_PATH before test
 unset LD_LIBRARY_PATH

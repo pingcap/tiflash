@@ -16,11 +16,10 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -Wno-dev \
-      -DCMAKE_INSTALL_PREFIX="$install_dir" \
       -DNO_WERROR=ON
 
-make -j $NPROC tiflash
-cmake -DCOMPONENT=tiflash-release -P cmake_install.cmake
+cmake --build . --target tiflash --parallel $NPROC
+cmake --install . --component=tiflash-release --prefix="$install_dir"
 
 FILE="$install_dir/tiflash"
 otool -L "$FILE"
