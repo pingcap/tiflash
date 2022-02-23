@@ -275,7 +275,7 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     std::string err_msg;
     MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeoutAsync(request->sender_meta(), calldata, timeout, err_msg);
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg, calldata);
         if (sender_task != nullptr)
         {
             std::tie(tunnel, err_msg) = sender_task->getTunnel(request);

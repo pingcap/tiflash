@@ -77,9 +77,7 @@ public:
 
     void unregisterTask(MPPTask * task);
 
-    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
-
-    MPPTaskPtr findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, EstablishCallData * callData, std::chrono::seconds timeout, std::string & errMsg);
+    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg, EstablishCallData * async_calldata = nullptr);
 
     void cancelMPPQuery(UInt64 query_id, const String & reason);
 

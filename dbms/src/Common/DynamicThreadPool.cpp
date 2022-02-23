@@ -79,6 +79,7 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     t.detach();
 }
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
@@ -97,6 +98,7 @@ void DynamicThreadPool::fixedWork(size_t index)
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
     initial_task->execute();
+
     DynamicNode node;
     while (true)
     {
