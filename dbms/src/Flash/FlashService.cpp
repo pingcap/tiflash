@@ -125,7 +125,6 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
-    LOG_FMT_ERROR(log, "wwwoody! dispatch the task [{},{}]", request->meta().start_ts(), request->meta().task_id());
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -183,7 +182,8 @@ grpc::Status FlashService::Coprocessor(
     if (!security_config.checkGrpcContext(grpc_context))
     {
         auto status = grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-        if (calldata) {
+        if (calldata)
+        {
             calldata->WriteDone(status);
         }
         return status;
@@ -211,24 +211,18 @@ grpc::Status FlashService::Coprocessor(
     std::string err_msg;
     MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg, calldata);
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
         if (sender_task != nullptr)
         {
             std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
         }
         if (tunnel == nullptr)
         {
-            if (calldata) {
-                if (err_msg == "pending")
-                {
-                    return grpc::Status::OK;
-                }
-                else
-                {
-                    LOG_ERROR(log, err_msg);
-                    calldata->WriteErr(getPacketWithError(err_msg));
-                    return grpc::Status::OK;
-                }
+            if (calldata)
+            {
+                LOG_ERROR(log, err_msg);
+                calldata->WriteErr(getPacketWithError(err_msg));
+                return grpc::Status::OK;
             }
             if (sync_writer)
             {
@@ -246,14 +240,16 @@ grpc::Status FlashService::Coprocessor(
         }
     }
     Stopwatch stopwatch;
-    if (calldata) {
+    if (calldata)
+    {
         tunnel->is_async = true;
         calldata->attachTunnel(tunnel);
-//        calldata->attachQueue()
+        //        calldata->attachQueue()
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
-    if (sync_writer) {
+    if (sync_writer)
+    {
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
