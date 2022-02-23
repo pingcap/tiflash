@@ -1,0 +1,54 @@
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> create table if not exists test.t1(col_string char(32))
+mysql> create table if not exists test.t2(col_string char(32))
+
+mysql> insert into test.t1 values('0000-00-00'), ('0000-01-00'), ('2022-00-01'), ('0000-12-01'), ('20220221'), ('20220222'), ('20220223'), ('20220224'), ('20220225'), ('20220226'), ('20220227')
+mysql> insert into test.t2 values('0000-00-00'), ('0000-00-01'), ('0000-01-00'), ('2022-01-01'), ('20220221'), ('20220321'), ('20220421'), ('20220521'), ('20220621'), ('20220721'), ('20220821'), ('20220921'), ('20221021'), ('20221121'), ('20221221')
+
+mysql> alter table test.t1 set tiflash replica 1
+mysql> alter table test.t2 set tiflash replica 1
+
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> set tidb_enforce_mpp=1; select col_string, dayname(col_string) as dayname from test.t1;
++------------+-----------+
+| col_string | dayname   |
++------------+-----------+
+| 0000-00-00 | NULL      |
+| 0000-01-00 | NULL      |
+| 2022-00-01 | NULL      |
+| 0000-12-01 | Friday    |
+| 20220221   | Monday    |
+| 20220222   | Tuesday   |
+| 20220223   | Wednesday |
+| 20220224   | Thursday  |
+| 20220225   | Friday    |
+| 20220226   | Saturday  |
+| 20220227   | Sunday    |
++------------+-----------+
+
+mysql> set tidb_enforce_mpp=1; select col_string, monthname(col_string) as monthname from test.t2;
++------------+-----------+
+| col_string | monthname |
++------------+-----------+
+| 0000-00-00 | NULL      |
+| 0000-00-01 | NULL      |
+| 0000-01-00 | January   |
+| 2022-01-01 | January   |
+| 20220221   | February  |
+| 20220321   | March     |
+| 20220421   | April     |
+| 20220521   | May       |
+| 20220621   | June      |
+| 20220721   | July      |
+| 20220821   | August    |
+| 20220921   | September |
+| 20221021   | October   |
+| 20221121   | November  |
+| 20221221   | December  |
++------------+-----------+
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2

@@ -500,6 +500,22 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
+const String & MyTimeBase::weekDayName() const
+{
+    static const String invalid_weekday = "";
+    if (month == 0 || day == 0)
+        return invalid_weekday;
+    return weekday_names[weekDay()];
+}
+
+const String & MyTimeBase::monthName() const
+{
+    static const String invalid_month_name = "";
+    if (month <= 0 || month > 12)
+        return invalid_month_name;
+    return month_names[month - 1];
+}
+
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
     if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
@@ -936,7 +952,7 @@ std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt
 // the implementation is the same as TiDB
 int calcDayNum(int year, int month, int day)
 {
-    if (year == 0 || month == 0)
+    if (year == 0 && month == 0)
         return 0;
     int delsum = 365 * year + 31 * (month - 1) + day;
     if (month <= 2)

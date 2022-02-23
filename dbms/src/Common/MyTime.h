@@ -83,6 +83,9 @@ struct MyTimeBase
 
     // returns the week day of current date(0 as sunday)
     int weekDay() const;
+    // returns the week day name of current date, return empty string if invalid
+    const String & weekDayName() const;
+    const String & monthName() const;
     // the following methods are port from TiDB
     int yearDay() const;
 
