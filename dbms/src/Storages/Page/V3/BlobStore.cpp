@@ -509,7 +509,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
 
-    for (auto & [path, stats] : stats_list)
+    for (const auto & [path, stats] : stats_list)
     {
         (void)path;
         for (const auto & stat : stats)

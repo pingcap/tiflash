@@ -314,8 +314,11 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
             ratio.push_back(1.0 / paths.size());
         }
     }
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_real_distribution<double> dist(0, 1.0);
 
-    double rand_number = static_cast<double>(rand()) / RAND_MAX;
+    double rand_number = dist(mt);
     double ratio_sum = 0.0;
     for (size_t i = 0; i < ratio.size(); i++)
     {
