@@ -4,6 +4,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -104,6 +105,10 @@ public:
 
     void sendJob();
 
+    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> *getSendQueue() {
+        return &send_queue;
+    }
+
 private:
     void finishSendQueue();
 
@@ -165,10 +170,10 @@ private:
     const LogWithPrefixPtr log;
 };
 
-class MPPTunnel : public MPPTunnelBase<EstablishCallData>
+class MPPTunnel : public MPPTunnelBase<PacketWriter>
 {
 public:
-    using Base = MPPTunnelBase<EstablishCallData>;
+    using Base = MPPTunnelBase<PacketWriter>;
     using Base::Base;
 };
 

@@ -124,7 +124,7 @@ void EstablishCallData::ContinueFromPending(const std::shared_ptr<MPPTunnel> & t
         catch (...)
         {
             grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
-            WriteDone(status, false);
+            WriteDone(status);
         }
     }
 }
@@ -149,7 +149,7 @@ void EstablishCallData::AsyncRpcInitOp()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service_->EstablishMPPConnection4Async(&ctx_, &request_, this);
+        service_->EstablishMPPConnection0(&ctx_, &request_, nullptr, this);
     }
     catch (...)
     {
@@ -169,17 +169,11 @@ void EstablishCallData::Pending()
     state_ = PENDING;
 }
 
-bool EstablishCallData::Write(const mpp::MPPDataPacket & packet, bool need_wait)
+bool EstablishCallData::Write(const mpp::MPPDataPacket & packet)
 {
     // The actual processing.
     try
     {
-        if (need_wait)
-        {
-            std::unique_lock lk(mu);
-            cv.wait(lk, [&] { return ready.load(); });
-            ready = false;
-        }
         responder_.Write(packet, this);
         return true;
     }
@@ -199,17 +193,11 @@ void EstablishCallData::WriteErr(const mpp::MPPDataPacket & packet)
         status4err = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
 }
 
-void EstablishCallData::WriteDone(const ::grpc::Status & status, bool need_wait)
+void EstablishCallData::WriteDone(const ::grpc::Status & status)
 {
     // And we are done! Let the gRPC runtime know we've finished, using the
     // memory address of this instance as the uniquely identifying tag for
     // the event.
-    if (need_wait)
-    {
-        std::unique_lock lk(mu);
-        cv.wait(lk, [&] { return ready.load(); });
-        ready = false;
-    }
     state_ = FINISH;
     responder_.Finish(status, this);
 }
@@ -278,7 +266,7 @@ void EstablishCallData::Proceed0()
     else if (state_ == ERR_HANDLE)
     {
         state_ = FINISH;
-        WriteDone(status4err, false);
+        WriteDone(status4err);
     }
     else
     {
@@ -289,14 +277,10 @@ void EstablishCallData::Proceed0()
     }
 }
 
-void EstablishCallData::attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue)
-{
-    this->send_queue_ = send_queue;
-}
-
 void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel)
 {
     this->mpptunnel_ = mpptunnel;
+    this->send_queue_ = mpptunnel->getSendQueue();
 }
 
 } // namespace DB

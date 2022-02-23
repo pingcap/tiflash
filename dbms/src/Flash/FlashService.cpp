@@ -174,21 +174,23 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * calldata)
+::grpc::Status FlashService::EstablishMPPConnection0(::grpc::ServerContext * grpc_context,
+                                                     const ::mpp::EstablishMPPConnectionRequest * request,
+                                                     ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                     EstablishCallData * calldata)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    if (!request->has_sender_meta())
-    {
-        calldata->WriteDone(::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + grpc_context->peer()));
-        return true;
-    }
     LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
-        calldata->WriteDone(grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
-        return true;
+        auto status = grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+        if (calldata) {
+            calldata->WriteDone(status);
+        }
+        return status;
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -202,8 +204,9 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        calldata->WriteDone(status);
-        return true;
+        if (calldata)
+            calldata->WriteDone(status);
+        return status;
     }
 
     auto & tmt_context = context->getTMTContext();
@@ -219,24 +222,51 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
         }
         if (tunnel == nullptr)
         {
-            if (err_msg == "pending")
-            {
-                return true;
+            if (calldata) {
+                if (err_msg == "pending")
+                {
+                    return grpc::Status::OK;
+                }
+                else
+                {
+                    LOG_ERROR(log, err_msg);
+                    calldata->WriteErr(getPacketWithError(err_msg));
+                    return grpc::Status::OK;
+                }
             }
-            else
+            if (sync_writer)
             {
                 LOG_ERROR(log, err_msg);
-
-                calldata->WriteErr(getPacketWithError(err_msg));
-                return true;
+                if (sync_writer->Write(getPacketWithError(err_msg)))
+                {
+                    return grpc::Status::OK;
+                }
+                else
+                {
+                    LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
+                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                }
             }
         }
     }
-    tunnel->is_async = true;
-    calldata->attachTunnel(tunnel);
-    tunnel->connect(calldata);
-    LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
-    return true;
+    Stopwatch stopwatch;
+    if (calldata) {
+        tunnel->is_async = true;
+        calldata->attachTunnel(tunnel);
+//        calldata->attachQueue()
+        tunnel->connect(calldata);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
+    }
+    if (sync_writer) {
+        SyncPacketWriter writer(sync_writer);
+        tunnel->connect(&writer);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
+        tunnel->waitForFinish();
+    }
+
+    // TODO: Check if there are errors in task.
+
+    return grpc::Status::OK;
 }
 
 ::grpc::Status FlashService::CancelMPPTask(

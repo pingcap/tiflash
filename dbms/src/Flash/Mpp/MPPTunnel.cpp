@@ -139,7 +139,7 @@ void MPPTunnelBase<Writer>::sendJob()
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
-            if (!writer->Write(*res, !is_async))
+            if (!writer->Write(*res))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -168,7 +168,7 @@ void MPPTunnelBase<Writer>::sendJob()
     consumerFinish(err_msg);
     if (is_async)
     {
-        writer->WriteDone(grpc::Status::OK, false);
+        writer->WriteDone(grpc::Status::OK);
     }
 }
 
@@ -216,7 +216,6 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             if (is_async)
             {
                 writer = writer_;
-                writer->attachQueue(&send_queue);
             }
             else
             {
@@ -292,6 +291,6 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
-template class MPPTunnelBase<EstablishCallData>;
+template class MPPTunnelBase<PacketWriter>;
 
 } // namespace DB

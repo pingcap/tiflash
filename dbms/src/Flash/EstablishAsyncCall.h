@@ -4,6 +4,7 @@
 #include <Common/MPMCQueue.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/PacketWriter.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -44,7 +45,19 @@ public:
     std::shared_ptr<ThreadManager> thd_manager;
 };
 
-class EstablishCallData
+class SyncPacketWriter : public PacketWriter
+{
+public:
+    SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
+        : writer(writer)
+    {}
+
+    bool Write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
+
+    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
+};
+
+class EstablishCallData : public PacketWriter
 {
 public:
     // Take in the "service" instance (in this case representing an asynchronous
@@ -54,11 +67,11 @@ public:
 
     void Pending();
 
-    bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
+    bool Write(const mpp::MPPDataPacket & packet) override;
 
-    bool TryWrite();
+    bool TryWrite() override;
 
-    void WriteDone(const ::grpc::Status & status, bool need_wait = true);
+    void WriteDone(const ::grpc::Status & status) override;
 
     void WriteErr(const mpp::MPPDataPacket & packet);
 
@@ -66,18 +79,17 @@ public:
 
     void Proceed0();
 
-    ::mpp::EstablishMPPConnectionRequest *getRequest(){
+    ::mpp::EstablishMPPConnectionRequest * getRequest()
+    {
         return &request_;
     }
 
     std::mutex mu;
     std::condition_variable cv;
 
-    void attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue);
-
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
-    void ContinueFromPending(const std::shared_ptr<MPPTunnel> &tunnel, std::string &err_msg);
+    void ContinueFromPending(const std::shared_ptr<MPPTunnel> & tunnel, std::string & err_msg);
 
 private:
     void notifyReady();
