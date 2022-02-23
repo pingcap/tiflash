@@ -7,9 +7,10 @@ set(CMAKE_MACOSX_RPATH 1)
 
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
-if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
-    # enable RPATHs to sysroot to make it easier for LLVM development
-    set(ENV{LD_LIBRARY_PATH} "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+if(CMAKE_PREFIX_PATH)
+    # append paths for cmake to check libs
+    set(ENV{LD_LIBRARY_PATH}
+            "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
