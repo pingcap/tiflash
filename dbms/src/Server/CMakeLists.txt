@@ -127,7 +127,9 @@ else ()
         if (CMAKE_PREFIX_PATH)
             set(TIFLASH_DEPENDENCY_DIR_HINT
                     "${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/${TIFLASH_ARCH_NAME}-unknown-linux-gnu/;")
-            string (REPLACE ";" " " TIFLASH_DEPENDENCY_DIRECTORIES "${TIFLASH_DEPENDENCY_DIR_HINT}")
+            set(TIFLASH_DEPENDENCY_DIRECTORIES
+                    "${CMAKE_PREFIX_PATH}/lib"
+                    "${CMAKE_PREFIX_PATH}/lib/${TIFLASH_ARCH_NAME}-unknown-linux-gnu/")
         else()
             set(TIFLASH_DEPENDENCY_DIR_HINT "")
             set(TIFLASH_DEPENDENCY_DIRECTORIES "")
