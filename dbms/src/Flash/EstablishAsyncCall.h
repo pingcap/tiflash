@@ -62,7 +62,6 @@ private:
 
     // server.
     AsyncFlashService * service_;
-    //    CallExecPool * exec_pool;
 
     // The producer-consumer queue where for asynchronous server notifications.
     grpc::ServerCompletionQueue *cq_, *notify_cq_;

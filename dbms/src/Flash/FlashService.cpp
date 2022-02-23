@@ -243,7 +243,6 @@ grpc::Status FlashService::Coprocessor(
     {
         tunnel->is_async = true;
         calldata->attachTunnel(tunnel);
-        //        calldata->attachQueue()
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
