@@ -141,8 +141,7 @@ else ()
                 COMPONENT tiflash-release
                 DESTINATION "."
                 PRE_INCLUDE_REGEXES ".*proxy.*")
-        # TODO: handle ENABLE_PROXY_RUNTIME_RELATIVE_PATH here
-        # TODO: check if MacOS works
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_macos_post_install.cmake COMPONENT tiflash-release)
     endif ()
 
     target_link_libraries (tiflash clickhouse_common_io)
