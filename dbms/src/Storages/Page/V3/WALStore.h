@@ -68,7 +68,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    constexpr static const char * wal_folder_prefix = "/WAL";
+    constexpr static const char * wal_folder_prefix = "/wal";
     using ChecksumClass = Digest::CRC64;
 
     static WALStorePtr create(
