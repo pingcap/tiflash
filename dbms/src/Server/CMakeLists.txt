@@ -132,6 +132,13 @@ else ()
 
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     elseif(APPLE)
+        # set build rpaths, so that executables are be directly called in build tree (easy to debug)
+        if (USE_INTERNAL_TIFLASH_PROXY)
+            get_filename_component(TIFLASH_LIBRARY_DIR ${_TIFLASH_PROXY_LIBRARY} DIRECTORY)
+            set_target_properties(tiflash PROPERTIES BUILD_RPATH "${TIFLASH_LIBRARY_DIR}")
+        else()
+            set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PREBUILT_LIBS_ROOT}")
+        endif()
         set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
         install (TARGETS tiflash
                 COMPONENT tiflash-release
@@ -141,7 +148,6 @@ else ()
                 COMPONENT tiflash-release
                 DESTINATION "."
                 PRE_INCLUDE_REGEXES ".*proxy.*")
-        install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_macos_post_install.cmake COMPONENT tiflash-release)
     endif ()
 
     target_link_libraries (tiflash clickhouse_common_io)
