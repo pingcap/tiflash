@@ -105,6 +105,8 @@ public:
     void sendJob();
 
 private:
+    void finishSendQueue();
+
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void waitForConsumerFinish(bool allow_throw);

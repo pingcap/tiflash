@@ -43,17 +43,23 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
                 return;
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
-            bool fg = send_queue.finish();
-            if (fg && !is_local && is_async)
-            {
-                writer->TryWrite();
-            }
+            finishSendQueue();
         }
         waitForConsumerFinish(/*allow_throw=*/false);
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
+    }
+}
+
+template <typename Writer>
+void MPPTunnelBase<Writer>::finishSendQueue()
+{
+    bool fg = send_queue.finish(); //TODO fix all send_queue case
+    if (fg && !is_local && is_async)
+    {
+        writer->TryWrite();
     }
 }
 
@@ -81,11 +87,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                     tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
                 }
             }
-            bool fg = send_queue.finish(); //TODO fix all send_queue case
-            if (fg && !is_local && is_async)
-            {
-                writer->TryWrite();
-            }
+            finishSendQueue();
         }
         else
         {
@@ -116,12 +118,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 writer->TryWrite();
             if (close_after_write)
             {
-                bool fg = send_queue.finish();
-                //TODO check where double tryWrite correct
-                if (fg && !is_local && is_async)
-                {
-                    writer->TryWrite();
-                }
+                finishSendQueue();
                 LOG_TRACE(log, "finish write.");
             }
             return;
@@ -181,19 +178,13 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: " << is_local);
-    bool fg = false;
     {
         std::unique_lock lk(mu);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
-
-        fg = send_queue.finish();
-        if (fg && !is_local && is_async)
-        {
-            writer->TryWrite();
-        }
+        finishSendQueue();
     }
     waitForConsumerFinish(/*allow_throw=*/true);
 }

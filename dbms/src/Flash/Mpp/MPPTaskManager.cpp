@@ -13,9 +13,7 @@ namespace DB
 
 
 template <class Mp, class Itr>
-void MPPTaskManager::notifyQueryWaiters(Mp & wait_map,
-                                        const Itr & wait_it,
-                                        std::function<void(const MPPTaskId &, EstablishCallData *)> job)
+void MPPTaskManager::notifyQueryWaiters(Mp & wait_map, const Itr & wait_it, std::function<void(const MPPTaskId &, EstablishCallData *)> job)
 {
     if (wait_it != wait_map.end())
     {
@@ -33,10 +31,7 @@ void MPPTaskManager::notifyQueryWaiters(Mp & wait_map,
 }
 
 template <class Mp, class Itr>
-void MPPTaskManager::notifyWaiters(Mp & wait_map,
-                                   const Itr & wait_it,
-                                   const MPPTaskId & id,
-                                   std::function<void(EstablishCallData *)> job)
+void MPPTaskManager::notifyWaiters(Mp & wait_map, const Itr & wait_it, const MPPTaskId & id, std::function<void(EstablishCallData *)> job)
 {
     if (wait_it != wait_map.end())
     {

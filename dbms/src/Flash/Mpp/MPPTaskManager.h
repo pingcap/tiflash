@@ -54,17 +54,12 @@ public:
     void ClearTimeoutWaiter(const MPPTaskId & id);
 
     template <class Mp, class Itr>
-    void notifyWaiters(Mp & wait_map,
-                       const Itr & wait_it,
-                       const MPPTaskId & id,
-                       std::function<void(EstablishCallData *)> job);
+    void notifyWaiters(Mp & wait_map, const Itr & wait_it, const MPPTaskId & id, std::function<void(EstablishCallData *)> job);
 
     template <class Mp, class Itr>
-    void notifyQueryWaiters(Mp & wait_map,
-                            const Itr & wait_it,
-                            std::function<void(const MPPTaskId & id, EstablishCallData *)> job);
+    void notifyQueryWaiters(Mp & wait_map, const Itr & wait_it, std::function<void(const MPPTaskId & id, EstablishCallData *)> job);
 
-    int computeBucketId(UInt64 start_ts)
+    inline int computeBucketId(UInt64 start_ts)
     {
         return start_ts % bucket_num;
     }
