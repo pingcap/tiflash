@@ -6,7 +6,7 @@ macro(grep_gtest_sources BASE_DIR DST_VAR)
     file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
 endmacro()
 # attach all dm gtest sources
-grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
+grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
 add_executable(gtests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h)
 target_link_libraries(gtests_dm gtest_main dbms clickhouse_functions)
 add_check(gtests_dm)
@@ -42,6 +42,9 @@ target_link_libraries(dm_test_minmax_index dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_delta_index_manager EXCLUDE_FROM_ALL gtest_dm_delta_index_manager.cpp)
 target_link_libraries(dm_test_delta_index_manager dbms gtest_main clickhouse_functions)
+
+add_executable(dm_test_delta_value_space EXCLUDE_FROM_ALL gtest_dm_delta_value_space.cpp)
+target_link_libraries(dm_test_delta_value_space dbms gtest_main clickhouse_functions)
 
 add_subdirectory (bank EXCLUDE_FROM_ALL)
 

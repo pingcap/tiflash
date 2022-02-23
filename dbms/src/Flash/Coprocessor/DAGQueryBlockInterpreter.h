@@ -10,9 +10,13 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -31,8 +35,7 @@ public:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        std::vector<SubqueriesForSets> & subqueries_for_sets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
+        std::vector<SubqueriesForSets> & subqueries_for_sets_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -40,8 +43,10 @@ public:
 
 private:
     void executeImpl(DAGPipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
-    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeCastAfterTableScan(const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
+    void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
+    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
@@ -51,15 +56,8 @@ private:
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    void executeExchangeReceiver(DAGPipeline & pipeline);
-    void executeSourceProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
-    void executeExtraCastAndSelection(
-        DAGPipeline & pipeline,
-        const ExpressionActionsPtr & extra_cast,
-        const NamesWithAliases & project_after_ts_and_filter_for_remote_read,
-        const ExpressionActionsPtr & before_where,
-        const ExpressionActionsPtr & project_after_where,
-        const String & filter_column_name);
+    void handleExchangeReceiver(DAGPipeline & pipeline);
+    void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     ExpressionActionsPtr genJoinOtherConditionAction(
         const tipb::Join & join,
         std::vector<NameAndTypePair> & source_columns,
@@ -74,9 +72,10 @@ private:
         const ExpressionActionsPtr & expression_actions_ptr,
         Names & key_names,
         TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
-    void executeExchangeSender(DAGPipeline & pipeline);
+    void handleExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
@@ -107,10 +106,7 @@ private:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
-    std::vector<const tipb::Expr *> conditions;
     std::vector<SubqueriesForSets> & subqueries_for_sets;
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
-    std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
     LogWithPrefixPtr log;
 };

@@ -1,8 +1,7 @@
 #pragma once
 
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/Page/V1/PageStorage.h>
-#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
@@ -16,9 +15,20 @@ using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RegionTaskLock;
-class RegionManager;
+struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
+namespace PS
+{
+namespace V1
+{
+class PageStorage;
+}
+namespace V2
+{
+class PageStorage;
+}
+} // namespace PS
 
 class RegionPersister final : private boost::noncopyable
 {
@@ -28,7 +38,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, PS::V2::PageStorage::Config config = PS::V2::PageStorage::Config{});
+    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, PageStorage::Config config = PageStorage::Config{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;

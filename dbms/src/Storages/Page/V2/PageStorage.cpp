@@ -7,6 +7,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
@@ -198,7 +199,7 @@ void PageStorage::restore()
     /// Restore current version from both formal and legacy page files
 
     MetaMergingQueue merging_queue;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
               || page_file.getType() == PageFile::Type::Checkpoint))
@@ -286,7 +287,7 @@ void PageStorage::restore()
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_FMT_TRACE(log, "{} These file would be archive:", storage_name);
-        for (auto & pf : page_files_to_remove)
+        for (const auto & pf : page_files_to_remove)
             LOG_FMT_TRACE(log, "{} {}", storage_name, pf.toString());
 #else
         // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
@@ -748,34 +749,12 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
     }
 }
 
-void PageStorage::traversePageEntries( //
-    const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor,
-    SnapshotPtr snapshot)
+void PageStorage::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot();
-    }
-
-    // traverse over all Pages or RefPages
-    auto * concrete_snapshot = toConcreteSnapshot(snapshot);
-    auto valid_pages_ids = concrete_snapshot->version()->validPageIds();
-    for (auto page_id : valid_pages_ids)
-    {
-        const auto page_entry = concrete_snapshot->version()->find(page_id);
-        if (unlikely(!page_entry))
-            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries",
-                            ErrorCodes::LOGICAL_ERROR);
-        acceptor(page_id, *page_entry);
-    }
-}
-
-void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
-{
-    assert(scanner != nullptr);
-    assert(remover != nullptr);
-    external_pages_scanner = scanner;
-    external_pages_remover = remover;
+    assert(callbacks.v2_scanner != nullptr);
+    assert(callbacks.v2_remover != nullptr);
+    external_pages_scanner = callbacks.v2_scanner;
+    external_pages_remover = callbacks.v2_remover;
 }
 
 void PageStorage::drop()
@@ -916,7 +895,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
 
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
-    PathAndIdsVec external_pages;
+    ExternalPageCallbacks::PathAndIdsVec external_pages;
     if (external_pages_scanner)
     {
         external_pages = external_pages_scanner();
@@ -1079,8 +1058,9 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
         LegacyCompactor compactor(*this, write_limiter, read_limiter);
         PageFileSet page_files_to_archive;
+        auto files_to_compact = std::move(page_files);
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
-            = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
+            = compactor.tryCompact(std::move(files_to_compact), writing_files_snapshot);
         archivePageFiles(page_files_to_archive, true);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
@@ -1149,7 +1129,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
         if (!archive_dir.exists())
             archive_dir.createDirectory();
 
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             Poco::Path path(page_file.folderPath());
             auto dest = archive_path.toString() + "/" + path.getFileName();
@@ -1218,7 +1198,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet & page_files,
 {
     size_t num_data_removed = 0;
     size_t num_bytes_removed = 0;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
         if (page_id_and_lvl >= writing_file_id_level)
