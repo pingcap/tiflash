@@ -205,7 +205,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
                 if (record.version < iter->second.first || record.version == iter->second.first)
                 {
                     // put after ref, must be sth wrong!!!
-                    // LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with seq={}", record.page_id, record.ori_page_id, record.version.sequence);
+                    LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
                     return false;
                 }
                 // Copy the entry
@@ -217,7 +217,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             // Try to apply ref on external pages
             if (!external_directory.tryCreateRef(record.page_id, record.ori_page_id, record.version.sequence))
             {
-                // LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with seq={}", record.page_id, record.ori_page_id, record.version.sequence);
+                LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", record.page_id, record.ori_page_id, record.version.sequence);
             }
             break;
         }
@@ -233,7 +233,6 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
         }
         default:
         {
-            // REF is converted into `PUT` in serialized edit, so it should not run into here.
             throw Exception(fmt::format("Unknown write type: {}", record.type));
         }
         }
@@ -689,7 +688,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             // Try to apply ref on external pages
             if (!external_table_directory.tryCreateRef(r.page_id, r.ori_page_id, last_sequence + 1))
             {
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+                LOG_FMT_WARNING(log, "Trying to add ref to non-exist page [page_id={}] [ori_page_id={}] [seq={}]", r.page_id, r.ori_page_id, last_sequence + 1);
             }
             break;
         }
