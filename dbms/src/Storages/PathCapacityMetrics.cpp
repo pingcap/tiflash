@@ -150,7 +150,7 @@ FsStats PathCapacityMetrics::getFsStats()
         if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
             disk_stat.capacity_size = disk_capacity_size;
 
-        // Calutate single disk info
+        // Calculate single disk info
         const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
         disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
 
