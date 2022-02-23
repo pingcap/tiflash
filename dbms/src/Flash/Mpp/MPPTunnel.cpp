@@ -213,11 +213,8 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             assert(writer_ == nullptr);
         else
         {
-            if (is_async)
-            {
-                writer = writer_;
-            }
-            else
+            writer = writer_;
+            if (!is_async)
             {
                 // communicate send_thread through `consumer_state`
                 // NOTE: if the thread creation failed, `connected` will still be `false`.

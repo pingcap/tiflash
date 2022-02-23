@@ -184,7 +184,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         /// cancel task may take a long time, so first
         /// set a flag, so we can cancel task one by
         /// one without holding the lock
-        //        std::lock_guard<std::mutex> lock(mu);
         int bucket_id = query_id % bucket_num;
         std::unique_lock lk(mu_arr[bucket_id]);
         auto & mpp_query_map = mpp_query_maps[bucket_id];
@@ -223,7 +222,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         int bucket_id = query_id % bucket_num;
         std::unique_lock lk(mu_arr[bucket_id]);
         auto & mpp_query_map = mpp_query_maps[bucket_id];
-        //        std::lock_guard<std::mutex> lock(mu);
         /// just to double check the query still exists
         const auto & it = mpp_query_map.find(query_id);
         if (it != mpp_query_map.end())

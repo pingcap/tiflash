@@ -620,7 +620,7 @@ private:
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_, notify_cqs_;
-    std::shared_ptr<ThreadManager> thread_manager = DB::newThreadManager();
+    std::shared_ptr<ThreadManager> thread_manager;
 };
 
 class Server::TcpHttpServersHolder
