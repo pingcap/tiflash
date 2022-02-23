@@ -131,9 +131,7 @@ public:
             return true;
         }
         else
-        {
             return false;
-        }
     }
 
     bool isFinished()

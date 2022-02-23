@@ -64,7 +64,6 @@
 #include <limits>
 #include <memory>
 
-
 #include "Common/ThreadManager.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsPrometheus.h"
@@ -491,15 +490,16 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void HandleRpcs(grpc::ServerCompletionQueue * cq,  grpc::ServerCompletionQueue * notify_cq, bool poll_which_cq)
+void HandleRpcs(grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, bool poll_which_cq)
 {
     // Spawn a new EstablishCallData instance to serve new clients.
     // for (int i = 0; i < buf_size; i++)
-        // new EstablishCallData(service_, cq);
+    // new EstablishCallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
-     grpc::ServerCompletionQueue * curcq = cq;
-    if (poll_which_cq) {
+    grpc::ServerCompletionQueue * curcq = cq;
+    if (poll_which_cq)
+    {
         curcq = notify_cq;
     }
     while (true)
@@ -573,8 +573,8 @@ public:
         int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
         int ppc = server.context().getSettingsRef().async_pollers_per_cq;
         // for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
-            // thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
-        for (int i = 0; i < (int)(cqs_.size()*ppc); i++)
+        // thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
+        for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
         {
             for (int j = 0; j < buf_size; j++)
                 new EstablishCallData(flash_service.get(), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
@@ -591,9 +591,7 @@ public:
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown(deadline);
         for (int i = 0; i < (int)(cqs_.size()); i++)
-        {
             cqs_[i]->Shutdown();
-        }
         thread_manager->wait();
         flash_grpc_server->Wait();
         flash_grpc_server.reset();

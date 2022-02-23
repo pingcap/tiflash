@@ -25,26 +25,7 @@ class EstablishCallData;
 
 class MPPTunnel;
 
-struct MppTunnelWriteOp
-{
-    MppTunnelWriteOp()
-    //        : need_lock(false)
-    {}
-    MppTunnelWriteOp(std::shared_ptr<DB::MPPTunnel> mpptunnel_)
-        : mpptunnel(mpptunnel_)
-    //        , need_lock(need_lock_)
-    {}
-    std::shared_ptr<DB::MPPTunnel> mpptunnel;
-    //    bool need_lock;
-};
-
 struct CallDataReg;
-
-//struct EstablishRpcParam {
-//    ::grpc::ServerContext * grpc_context;
-//    const ::mpp::EstablishMPPConnectionRequest * request;
-//    EstablishCallData * calldata;
-//};
 
 class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<tikvpb::Tikv::Service>
     , public std::enable_shared_from_this<FlashService>
@@ -89,7 +70,7 @@ public:
     std::atomic<int> max_active_establish_thds{0};
     MPMCQueue<CallDataReg> calldata_to_reg_queue;
     std::vector<std::shared_ptr<MPMCQueue<EstablishCallData *>>> calldata_proc_queues;
-    std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
+    std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<DB::MPPTunnel>>>> tunnel_send_op_queues;
     std::atomic<long long> tunnel_send_idx{0}, rpc_exe_idx{0};
 
 private:

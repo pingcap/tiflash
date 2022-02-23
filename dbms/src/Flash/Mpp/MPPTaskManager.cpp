@@ -102,7 +102,6 @@ void MPPTaskManager::BackgroundJob()
             }
         }
         usleep(1000000);
-        LOG_ERROR(log, "act_tasks: " << act_tasks);
     }
     //TODO clear rest waiters
     end_fin = true;
@@ -285,8 +284,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 
 bool MPPTaskManager::registerTask(MPPTaskPtr task)
 {
-    act_tasks++;
-    //    std::unique_lock<std::mutex> lock(mu);
     int bucket_id = task->id.start_ts % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);
     auto & mpp_query_map = mpp_query_maps[bucket_id];
@@ -310,7 +307,6 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
     task->manager = this;
     cv.notify_all();
-    LOG_FMT_ERROR(log, "wwwoody! register the task done [{},{}]  has_waiter:{} ", task->id.start_ts, task->id.task_id, wait_it != wait_map.end() && wait_it->second->find(task->id) != wait_it->second->end());
     notifyWaiters(wait_map, wait_it, task->id, [this, task](EstablishCallData * calldata) {
         std::string err_msg;
         MPPTunnelPtr tunnel = nullptr;
@@ -331,7 +327,6 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
 {
-    act_tasks--;
     int bucket_id = task->id.start_ts % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);
     auto & mpp_query_map = mpp_query_maps[bucket_id];

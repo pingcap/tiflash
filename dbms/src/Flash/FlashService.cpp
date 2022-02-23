@@ -75,13 +75,13 @@ FlashService::FlashService(IServer & server_)
     }
     for (int i = 0; i < tunnel_sender_cap; i++)
     {
-        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>(100));
+        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<DB::MPPTunnel>>>(100));
         auto queue = tunnel_send_op_queues[i];
         thd_manager->scheduleThenDetach(false, "tunnel_sender", [queue] {
-            std::shared_ptr<MppTunnelWriteOp> obj;
+            std::shared_ptr<DB::MPPTunnel> obj;
             while (queue->pop(obj))
             {
-                obj->mpptunnel->sendJob();
+                obj->sendJob();
             }
         });
     }
@@ -93,8 +93,7 @@ void SubmitTunnelSendOp(FlashService * srv, const std::shared_ptr<DB::MPPTunnel>
     idx = idx % tunnel_sender_cap;
     if (idx < 0)
         idx += tunnel_sender_cap;
-    std::shared_ptr<MppTunnelWriteOp> obj = std::make_shared<MppTunnelWriteOp>(mpptunnel);
-    srv->tunnel_send_op_queues[idx]->push(obj);
+    srv->tunnel_send_op_queues[idx]->push(mpptunnel);
 }
 
 void SubmitCalldataProcTask(FlashService * srv, EstablishCallData * cd)
@@ -109,9 +108,9 @@ void SubmitCalldataProcTask(FlashService * srv, EstablishCallData * cd)
 FlashService::~FlashService()
 {
     for (auto & q : tunnel_send_op_queues)
-    {
         q->finish();
-    }
+    for (auto & q : calldata_proc_queues)
+        q->finish();
     calldata_to_reg_queue.finish();
 }
 
@@ -244,7 +243,6 @@ bool FlashService::EstablishMPPConnection4Async(::grpc::ServerContext * grpc_con
     // We need to find it out and bind the grpc stream with it.
     if (!request->has_sender_meta())
     {
-        LOG_ERROR(log, "woodywoody!!!!! malformed aync req!!!!!  peer: " << grpc_context->peer() << " reqstr: " << request->DebugString());
         calldata->WriteDone(::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + grpc_context->peer()));
         return true;
     }
@@ -670,8 +668,7 @@ void EstablishCallData::Proceed0()
     else if (state_ == ERR_HANDLE)
     {
         state_ = FINISH;
-        notifyReady();
-        WriteDone(status4err);
+        WriteDone(status4err, false);
     }
     else
     {
