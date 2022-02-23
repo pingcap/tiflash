@@ -542,7 +542,11 @@ public:
         }
 
         /// Init and register flash service.
-        flash_service = std::make_unique<FlashService>(server);
+        bool enable_async_server = server.context().getSettingsRef().enable_async_server;
+        if (enable_async_server)
+            flash_service = std::make_unique<AsyncFlashService>(server);
+        else
+            flash_service = std::make_unique<FlashService>(server);
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
@@ -561,25 +565,32 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         thread_manager = DB::newThreadManager();
-        for (int i = 0; i < (int)server.context().getSettingsRef().async_cqs; i++)
+
+        if (enable_async_server)
         {
-            cqs_.emplace_back(builder.AddCompletionQueue());
-            notify_cqs_.emplace_back(builder.AddCompletionQueue());
+            for (int i = 0; i < (int)server.context().getSettingsRef().async_cqs; i++)
+            {
+                cqs_.emplace_back(builder.AddCompletionQueue());
+                notify_cqs_.emplace_back(builder.AddCompletionQueue());
+            }
         }
         flash_grpc_server
             = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
-        int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
-        int ppc = server.context().getSettingsRef().async_pollers_per_cq;
-        // for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
-        // thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
-        for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
+        if (enable_async_server)
         {
-            for (int j = 0; j < buf_size; j++)
-                new EstablishCallData(flash_service.get(), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
-            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), false); });
-            thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), true); });
+            int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
+            int ppc = server.context().getSettingsRef().async_pollers_per_cq;
+            // for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
+            // thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc, buf_size] { HandleRpcs(flash_service.get(), cqs_[i / ppc].get(), buf_size); });
+            for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
+            {
+                for (int j = 0; j < buf_size; j++)
+                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), false); });
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), true); });
+            }
         }
     }
 

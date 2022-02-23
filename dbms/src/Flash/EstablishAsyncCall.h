@@ -22,11 +22,11 @@ namespace DB
 
 class EstablishCallData;
 class MPPTunnel;
-class FlashService;
+class AsyncFlashService;
 
 struct CallDataReg
 {
-    FlashService * service;
+    AsyncFlashService * service;
     grpc::ServerCompletionQueue * cq;
     grpc::ServerCompletionQueue * notify_cq;
 };
@@ -63,7 +63,7 @@ public:
     // Take in the "service" instance (in this case representing an asynchronous
     // server) and the completion queue "cq" used for asynchronous communication
     // with the gRPC runtime.
-    EstablishCallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
+    EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
     void Pending();
 
@@ -97,7 +97,7 @@ private:
     void AsyncRpcInitOp();
 
     // server.
-    FlashService * service_;
+    AsyncFlashService * service_;
     CallExecPool * exec_pool;
 
     // The producer-consumer queue where for asynchronous server notifications.

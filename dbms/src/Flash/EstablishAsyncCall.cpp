@@ -95,7 +95,7 @@ std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
     return "";
 }
 
-EstablishCallData::EstablishCallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
+EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
     : service_(service)
     , exec_pool(service->exec_pool.get())
     , cq_(cq)

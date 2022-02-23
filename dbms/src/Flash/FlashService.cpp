@@ -47,10 +47,6 @@ FlashService::FlashService(IServer & server_)
     exec_pool = std::make_unique<CallExecPool>();
 }
 
-FlashService::~FlashService()
-{
-}
-
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
     const coprocessor::Request * request,
