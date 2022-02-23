@@ -11,30 +11,63 @@
 namespace DB
 {
 
-void MPPTaskManager::ClearTimeoutWaiter(const MPPTaskId & id)
+
+template <class Mp, class Itr>
+void MPPTaskManager::notifyQueryWaiters(Mp & wait_map,
+                                        const Itr & wait_it,
+                                        UInt64 query_id,
+                                        std::function<void(const MPPTaskId &, CallData *)> job)
 {
-    int bucket_id = id.start_ts % bucket_num;
-    std::unique_lock lk(mu_arr[bucket_id]);
-    auto & wait_map = wait_maps[bucket_id];
-    const auto & wait_it = wait_map.find(id.start_ts);
+    if (wait_it != wait_map.end())
+    {
+        auto & tasks_map = wait_it->second;
+
+        for (auto & wait_task_it : *tasks_map)
+        {
+            for (auto & cd : wait_task_it.second)
+            {
+                job(wait_task_it.first, cd);
+            }
+        }
+        wait_map.erase(wait_it);
+    }
+}
+
+template <class Mp, class Itr>
+void MPPTaskManager::notifyWaiters(Mp & wait_map,
+                                   const Itr & wait_it,
+                                   const MPPTaskId & id,
+                                   std::function<void(CallData *)> job)
+{
     if (wait_it != wait_map.end())
     {
         auto & tasks_map = wait_it->second;
         const auto & wait_task_it = tasks_map->find(id);
         if (wait_task_it != tasks_map->end())
         {
-            auto err_msg = fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id); // TODO add timeout count
             for (auto & calldata : wait_task_it->second)
             {
-                calldata->WriteErr(getPacketWithError(err_msg));
+                job(calldata);
             }
-            tasks_map->erase(wait_task_it); //TODO need timeout more at small grain size(sender, receiver)
+            tasks_map->erase(wait_task_it);
             if (tasks_map->empty())
             {
                 wait_map.erase(wait_it);
             }
         }
     }
+}
+
+void MPPTaskManager::ClearTimeoutWaiter(const MPPTaskId & id)
+{
+    int bucket_id = id.start_ts % bucket_num;
+    std::unique_lock lk(mu_arr[bucket_id]);
+    auto & wait_map = wait_maps[bucket_id];
+    const auto & wait_it = wait_map.find(id.start_ts);
+    auto err_msg = fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id); // TODO add timeout count
+    notifyWaiters(wait_map, wait_it, id, [err_msg](CallData * calldata) {
+        calldata->WriteErr(getPacketWithError(err_msg));
+    });
 }
 
 void MPPTaskManager::BackgroundJob()
@@ -170,12 +203,6 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
         {
             (*wait_ptr)[id] = std::vector<CallData *>();
         }
-        //        else
-        //        {
-        //            errMsg = fmt::format("Another same task [{},{}] has been waiting. ", meta.start_ts(), meta.task_id());
-        //            LOG_ERROR(log, "wwwoody! " << errMsg);
-        //            return nullptr;
-        //        }
         (*wait_ptr)[id].emplace_back(callData);
         {
             std::unique_lock<std::mutex> lock(pri_mu);
@@ -214,24 +241,13 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         it->second.to_be_cancelled = true;
         task_set = it->second;
         cv.notify_all();
+
         auto & wait_map = wait_maps[bucket_id];
         const auto & wait_it = wait_map.find(query_id);
-
-        if (wait_it != wait_map.end())
-        {
-            auto & tasks_map = wait_it->second;
-
-            for (auto & wait_task_it : *tasks_map)
-            {
-                auto err_msg = fmt::format("Task [{},{}] has been cancelled.", wait_task_it.first.start_ts, wait_task_it.first.task_id);
-                for (auto & cd : wait_task_it.second)
-                {
-                    cd->WriteErr(getPacketWithError(err_msg));
-                }
-            }
-            //            tasks_map->clear();
-            wait_map.erase(wait_it);
-        }
+        notifyQueryWaiters(wait_map, wait_it, query_id, [](const MPPTaskId & id, CallData * cd) {
+            auto err_msg = fmt::format("Task [{},{}] has been cancelled.", id.start_ts, id.task_id);
+            cd->WriteErr(getPacketWithError(err_msg));
+        });
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
     FmtBuffer fmt_buf;
@@ -282,20 +298,10 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
         cv.notify_all();
-        if (wait_it != wait_map.end())
-        {
-            auto & tasks_map = wait_it->second;
-
-            for (auto & wait_task_it : *tasks_map)
-            {
-                auto err_msg = fmt::format("Task [{},{}] has been cancelled.", wait_task_it.first.start_ts, wait_task_it.first.task_id);
-                for (auto & cd : wait_task_it.second)
-                {
-                    cd->WriteErr(getPacketWithError(err_msg));
-                }
-            }
-            wait_map.erase(wait_it);
-        }
+        notifyQueryWaiters(wait_map, wait_it, task->id.start_ts, [](const MPPTaskId & id, CallData * cd) {
+            auto err_msg = fmt::format("Task [{},{}] has been cancelled.", id.start_ts, id.task_id);
+            cd->WriteErr(getPacketWithError(err_msg));
+        });
         return false;
     }
     if (it != mpp_query_map.end() && it->second.task_map.find(task->id) != it->second.task_map.end())
@@ -306,44 +312,27 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     task->manager = this;
     cv.notify_all();
     LOG_FMT_ERROR(log, "wwwoody! register the task done [{},{}]  has_waiter:{} ", task->id.start_ts, task->id.task_id, wait_it != wait_map.end() && wait_it->second->find(task->id) != wait_it->second->end());
-    if (wait_it != wait_map.end())
-    {
-        auto & tasks_map = wait_it->second;
-        const auto & wait_task_it = tasks_map->find(task->id);
-        if (wait_task_it != tasks_map->end())
+    notifyWaiters(wait_map, wait_it, task->id, [this, task](CallData * calldata) {
+        std::string err_msg;
+        MPPTunnelPtr tunnel = nullptr;
+        std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));
+        if (tunnel == nullptr)
         {
-            for (auto & calldata : wait_task_it->second)
-            {
-                //                CallData * calldata = wait_task_it->second;
-                std::string err_msg;
-                MPPTunnelPtr tunnel = nullptr;
-                std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));
-                if (tunnel == nullptr)
-                {
-                    LOG_ERROR(log, err_msg);
-                    calldata->WriteErr(getPacketWithError(err_msg));
-                }
-                else
-                {
-                    calldata->attachTunnel(tunnel);
-                    calldata->Proceed();
-                }
-            }
-            tasks_map->erase(wait_task_it);
-            if (tasks_map->empty())
-            {
-                wait_map.erase(wait_it);
-            }
-            //            wait_task_it->second->
+            LOG_ERROR(log, err_msg);
+            calldata->WriteErr(getPacketWithError(err_msg));
         }
-    }
+        else
+        {
+            calldata->attachTunnel(tunnel);
+            calldata->Proceed();
+        }
+    });
     return true;
 }
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
 {
     act_tasks--;
-    //    std::unique_lock<std::mutex> lock(mu);
     int bucket_id = task->id.start_ts % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);
     auto & mpp_query_map = mpp_query_maps[bucket_id];
@@ -369,12 +358,15 @@ MPPTaskManager::~MPPTaskManager()
 {
     end_syn = true;
     bk_thd->join();
+
+    delete[] mu_arr;
+    delete[] mpp_query_maps;
+    delete[] wait_maps;
 }
 
 std::vector<UInt64> MPPTaskManager::getCurrentQueries()
 {
     std::vector<UInt64> ret;
-    //    std::lock_guard<std::mutex> lock(mu);
     for (int bucket_id = 0; bucket_id < bucket_num; bucket_id++)
     {
         std::unique_lock lk(mu_arr[bucket_id]);
@@ -393,7 +385,6 @@ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
     int bucket_id = query_id % bucket_num;
     std::unique_lock lk(mu_arr[bucket_id]);
     auto & mpp_query_map = mpp_query_maps[bucket_id];
-    //    std::lock_guard<std::mutex> lock(mu);
     const auto & it = mpp_query_map.find(query_id);
     if (it == mpp_query_map.end() || it->second.to_be_cancelled)
         return ret;
@@ -404,7 +395,6 @@ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
 
 String MPPTaskManager::toString()
 {
-    //    std::lock_guard<std::mutex> lock(mu);
     String res("(");
     for (int bucket_id = 0; bucket_id < bucket_num; bucket_id++)
     {

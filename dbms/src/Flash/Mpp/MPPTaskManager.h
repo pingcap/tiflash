@@ -29,12 +29,11 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-//    std::mutex mu;
     std::mutex pri_mu;
     const int bucket_num = 10000;
-    std::mutex *mu_arr = new std::mutex[bucket_num]; //TODO delete these ptr when destruct
-    MPPQueryMap *mpp_query_maps = new MPPQueryMap[bucket_num];
-    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> *wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>>[bucket_num];
+    std::mutex * mu_arr = new std::mutex[bucket_num];
+    MPPQueryMap * mpp_query_maps = new MPPQueryMap[bucket_num];
+    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> * wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>>[bucket_num];
     std::priority_queue<std::pair<long, MPPTaskId>, std::vector<std::pair<long, MPPTaskId>>, auto (*)(const std::pair<long, MPPTaskId> &, const std::pair<long, MPPTaskId> &)->bool> wait_deadline_queue{
         [](const std::pair<long, MPPTaskId> & a, const std::pair<long, MPPTaskId> & b) -> bool {
             return a.first > b.first;
@@ -54,6 +53,23 @@ public:
 
     void BackgroundJob();
     void ClearTimeoutWaiter(const MPPTaskId & id);
+
+    template <class Mp, class Itr>
+    void notifyWaiters(Mp & wait_map,
+                       const Itr & wait_it,
+                       const MPPTaskId & id,
+                       std::function<void(CallData *)> job);
+
+    template <class Mp, class Itr>
+    void notifyQueryWaiters(Mp & wait_map,
+                            const Itr & wait_it,
+                            UInt64 query_id,
+                            std::function<void(const MPPTaskId & id, CallData *)> job);
+
+    int computeBucketId(UInt64 start_ts)
+    {
+        return start_ts % bucket_num;
+    }
 
     std::vector<UInt64> getCurrentQueries();
 
