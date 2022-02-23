@@ -265,16 +265,11 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     notifyWaiters(wait_map, wait_it, task->id, [this, task](EstablishCallData * calldata) {
         std::string err_msg;
         MPPTunnelPtr tunnel = nullptr;
-        std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));
-        if (tunnel == nullptr)
+        std::tie(tunnel, err_msg) = task->getTunnel(calldata->getRequest());
+        calldata->ContinueFromPending(tunnel, err_msg);
+        if (!err_msg.empty())
         {
             LOG_ERROR(log, err_msg);
-            calldata->WriteErr(getPacketWithError(err_msg));
-        }
-        else
-        {
-            calldata->attachTunnel(tunnel);
-            calldata->Proceed();
         }
     });
     return true;

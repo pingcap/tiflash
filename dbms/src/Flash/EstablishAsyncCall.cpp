@@ -1,6 +1,7 @@
 #include "EstablishAsyncCall.h"
 
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/Utils.h>
 
 
 namespace DB
@@ -107,26 +108,30 @@ EstablishCallData::EstablishCallData(FlashService * service, grpc::ServerComplet
     Proceed();
 }
 
-//tunnel has been attached
-void EstablishCallData::ContinueFromPending()
+void EstablishCallData::ContinueFromPending(const std::shared_ptr<MPPTunnel> & tunnel, std::string & err_msg)
 {
-    state_ = EstablishCallData::CallStatus::JOIN;
-    mpptunnel_->is_async = true;
-    //    attachTunnel(tunnel);
-    try
+    if (tunnel == nullptr)
+        WriteErr(getPacketWithError(err_msg));
+    else
     {
-        mpptunnel_->connect(this);
-    }
-    catch (...)
-    {
-        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
-        WriteDone(status, false);
+        attachTunnel(tunnel);
+        state_ = EstablishCallData::CallStatus::JOIN;
+        mpptunnel_->is_async = true;
+        try
+        {
+            mpptunnel_->connect(this);
+        }
+        catch (...)
+        {
+            grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
+            WriteDone(status, false);
+        }
     }
 }
 
 bool EstablishCallData::TryWrite()
 {
-    //check whether has valid msg to write
+    //check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
         if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
@@ -134,7 +139,7 @@ bool EstablishCallData::TryWrite()
         else
             return false;
     }
-    //has valid msg, submit write task
+    //there is a valid msg, submit write task
     exec_pool->SubmitTunnelSendOp(mpptunnel_);
     return true;
 }
@@ -253,7 +258,6 @@ void EstablishCallData::Proceed0()
     }
     else if (state_ == PENDING)
     {
-        ContinueFromPending();
     }
     else if (state_ == JOIN)
     {

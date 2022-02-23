@@ -12,6 +12,7 @@
 #endif
 #include <kvproto/tikvpb.grpc.pb.h>
 
+
 #pragma GCC diagnostic pop
 
 
@@ -65,6 +66,10 @@ public:
 
     void Proceed0();
 
+    ::mpp::EstablishMPPConnectionRequest *getRequest(){
+        return &request_;
+    }
+
     std::mutex mu;
     std::condition_variable cv;
 
@@ -72,12 +77,12 @@ public:
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
+    void ContinueFromPending(const std::shared_ptr<MPPTunnel> &tunnel, std::string &err_msg);
+
 private:
     void notifyReady();
 
     void AsyncRpcInitOp();
-
-    void ContinueFromPending();
 
     // server.
     FlashService * service_;
@@ -92,7 +97,6 @@ private:
 
     grpc::Status status4err;
 
-public:
     // What we get from the client.
     ::mpp::EstablishMPPConnectionRequest request_;
 
