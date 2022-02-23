@@ -4,9 +4,9 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
+
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/random.hpp>
-
 #include <random>
 #include <vector>
 
@@ -370,62 +370,62 @@ CAST_BENCHMARK(CastToDecimalBench, datetime_fsp5_to_decimal_10_8, from_col_datet
 CAST_BENCHMARK(CastToDecimalBench, datetime_fsp5_to_decimal_40_0, from_col_datetime_fsp5, dest_col_dec_40_0);
 CAST_BENCHMARK(CastToDecimalBench, datetime_fsp5_to_decimal_40_5, from_col_datetime_fsp5, dest_col_dec_40_5);
 
-#define STATIC_CAST_BENCHMARK(CLASS_NAME, FROM_TYPE, TO_TYPE) \
-BENCHMARK_DEFINE_F(CastToDecimalBench, Int##FROM_TYPE##_static_cast_Int##TO_TYPE) \
-(benchmark::State & state) \
-try \
-{ \
-    for (auto _ : state) \
-    { \
-        for (int i = 0; i < row_num; ++i) \
-        { \
-            dest_int##TO_TYPE##_vec[i] = static_cast<Int##TO_TYPE>(from_int##FROM_TYPE##_vec[i]); \
-        } \
-    } \
-} \
-CATCH \
-BENCHMARK_REGISTER_F(CastToDecimalBench, Int##FROM_TYPE##_static_cast_Int##TO_TYPE)->Iterations(1000);
+#define STATIC_CAST_BENCHMARK(CLASS_NAME, FROM_TYPE, TO_TYPE)                                         \
+    BENCHMARK_DEFINE_F(CastToDecimalBench, Int##FROM_TYPE##_static_cast_Int##TO_TYPE)                 \
+    (benchmark::State & state)                                                                        \
+    try                                                                                               \
+    {                                                                                                 \
+        for (auto _ : state)                                                                          \
+        {                                                                                             \
+            for (int i = 0; i < row_num; ++i)                                                         \
+            {                                                                                         \
+                dest_int##TO_TYPE##_vec[i] = static_cast<Int##TO_TYPE>(from_int##FROM_TYPE##_vec[i]); \
+            }                                                                                         \
+        }                                                                                             \
+    }                                                                                                 \
+    CATCH                                                                                             \
+    BENCHMARK_REGISTER_F(CastToDecimalBench, Int##FROM_TYPE##_static_cast_Int##TO_TYPE)->Iterations(1000);
 
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 64, 128);
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 64, 256);
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 128, 128);
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 128, 256);
 
-#define DIV_BENCHMARK(CLASS_NAME, TYPE) \
-BENCHMARK_DEFINE_F(CastToDecimalBench, div_##TYPE) \
-(benchmark::State & state) \
-try \
-{ \
-    for (auto _ : state) \
-    { \
-        for (int i = 0; i < row_num; ++i) \
-        { \
-            dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] / from_int##TYPE##_vec[0]; \
-        } \
-    } \
-} \
-CATCH \
-BENCHMARK_REGISTER_F(CastToDecimalBench, div_##TYPE)->Iterations(1000);
+#define DIV_BENCHMARK(CLASS_NAME, TYPE)                                                      \
+    BENCHMARK_DEFINE_F(CastToDecimalBench, div_##TYPE)                                       \
+    (benchmark::State & state)                                                               \
+    try                                                                                      \
+    {                                                                                        \
+        for (auto _ : state)                                                                 \
+        {                                                                                    \
+            for (int i = 0; i < row_num; ++i)                                                \
+            {                                                                                \
+                dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] / from_int##TYPE##_vec[0]; \
+            }                                                                                \
+        }                                                                                    \
+    }                                                                                        \
+    CATCH                                                                                    \
+    BENCHMARK_REGISTER_F(CastToDecimalBench, div_##TYPE)->Iterations(1000);
 
 DIV_BENCHMARK(CastToDecimalBench, 64);
 DIV_BENCHMARK(CastToDecimalBench, 128);
 DIV_BENCHMARK(CastToDecimalBench, 256);
 
-#define MUL_BENCHMARK(CLASS_NAME, TYPE) \
-BENCHMARK_DEFINE_F(CastToDecimalBench, mul_##TYPE) \
-(benchmark::State & state) \
-try \
-{ \
-    for (auto _ : state) \
-    { \
-        for (int i = 0; i < row_num; ++i) \
-        { \
-            dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] * from_int##TYPE##_vec[0]; \
-        } \
-    } \
-} \
-CATCH \
-BENCHMARK_REGISTER_F(CastToDecimalBench, mul_##TYPE)->Iterations(1000);
+#define MUL_BENCHMARK(CLASS_NAME, TYPE)                                                      \
+    BENCHMARK_DEFINE_F(CastToDecimalBench, mul_##TYPE)                                       \
+    (benchmark::State & state)                                                               \
+    try                                                                                      \
+    {                                                                                        \
+        for (auto _ : state)                                                                 \
+        {                                                                                    \
+            for (int i = 0; i < row_num; ++i)                                                \
+            {                                                                                \
+                dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] * from_int##TYPE##_vec[0]; \
+            }                                                                                \
+        }                                                                                    \
+    }                                                                                        \
+    CATCH                                                                                    \
+    BENCHMARK_REGISTER_F(CastToDecimalBench, mul_##TYPE)->Iterations(1000);
 
 MUL_BENCHMARK(CastToDecimalBench, 64);
 MUL_BENCHMARK(CastToDecimalBench, 128);
