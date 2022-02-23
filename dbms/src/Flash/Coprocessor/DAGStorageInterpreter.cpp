@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/SimpleRandomUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -11,8 +12,6 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-
-#include <random>
 
 namespace DB
 {
@@ -284,14 +283,12 @@ void DAGStorageInterpreter::doLocalRead(
 
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
-                std::random_device rd;
-                std::default_random_engine gen = std::default_random_engine(rd());
-                std::uniform_int_distribution<int> dis(0, 99);
+                thread_local SimpleRandom<int> simple_random(0, 99);
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
                 RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
-                    if (dis(gen) > 50)
+                    if (simple_random.rand() > 50)
                         region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);

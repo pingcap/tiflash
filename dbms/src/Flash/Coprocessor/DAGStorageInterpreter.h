@@ -68,7 +68,8 @@ private:
         DAGPipeline & pipeline,
         size_t max_block_size,
         const ManageableStoragePtr & storage,
-        const Names & required_columns);
+        const Names & required_columns,
+        const LearnerReadSnapshot & learner_read_snapshot);
 
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(Int64 query_schema_version);
 
