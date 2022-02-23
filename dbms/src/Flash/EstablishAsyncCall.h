@@ -1,49 +1,15 @@
 #pragma once
 
-
 #include <Common/MPMCQueue.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-#ifdef __clang__
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <kvproto/tikvpb.grpc.pb.h>
-
-
-#pragma GCC diagnostic pop
-
 
 namespace DB
 {
 
-class EstablishCallData;
 class MPPTunnel;
 class AsyncFlashService;
-
-struct CallDataReg
-{
-    AsyncFlashService * service;
-    grpc::ServerCompletionQueue * cq;
-    grpc::ServerCompletionQueue * notify_cq;
-};
-
-class CallExecPool
-{
-public:
-    CallExecPool();
-    ~CallExecPool();
-    void SubmitTunnelSendOp(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
-    void SubmitCalldataProcTask(EstablishCallData * cd);
-    MPMCQueue<CallDataReg> calldata_to_reg_queue;
-    std::vector<std::shared_ptr<MPMCQueue<EstablishCallData *>>> calldata_proc_queues;
-    std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<DB::MPPTunnel>>>> tunnel_send_op_queues;
-    std::atomic<long long> tunnel_send_idx{0}, rpc_exe_idx{0};
-    std::shared_ptr<ThreadManager> thd_manager;
-};
 
 class SyncPacketWriter : public PacketWriter
 {
@@ -77,8 +43,6 @@ public:
 
     void Proceed();
 
-    void Proceed0();
-
     ::mpp::EstablishMPPConnectionRequest * getRequest()
     {
         return &request_;
@@ -94,11 +58,11 @@ public:
 private:
     void notifyReady();
 
-    void AsyncRpcInitOp();
+    void rpcInitOp();
 
     // server.
     AsyncFlashService * service_;
-    CallExecPool * exec_pool;
+    //    CallExecPool * exec_pool;
 
     // The producer-consumer queue where for asynchronous server notifications.
     grpc::ServerCompletionQueue *cq_, *notify_cq_;

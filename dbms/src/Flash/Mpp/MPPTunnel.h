@@ -99,11 +99,11 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    void consumerFinish(const String & err_msg);
+    void consumerFinish(const String & err_msg, bool need_lock = true);
 
     std::atomic<bool> is_async{false};
 
-    void sendJob();
+    void sendJob(bool need_lock = true);
 
     MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> *getSendQueue() {
         return &send_queue;
@@ -137,6 +137,8 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
+
+    std::shared_ptr<ThreadManager> thd_manager;
 
     /// Consumer can be sendLoop or local receiver.
     class ConsumerState

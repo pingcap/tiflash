@@ -28,6 +28,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , thd_manager(newThreadManager())
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -51,6 +52,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
+    thd_manager->wait();
 }
 
 template <typename Writer>
@@ -129,7 +131,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::sendJob()
+void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
     assert(!is_local);
     String err_msg;
@@ -165,11 +167,9 @@ void MPPTunnelBase<Writer>::sendJob()
     }
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
-    consumerFinish(err_msg);
+    consumerFinish(err_msg, need_lock);
     if (is_async)
-    {
         writer->WriteDone(grpc::Status::OK);
-    }
 }
 
 
@@ -218,7 +218,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             {
                 // communicate send_thread through `consumer_state`
                 // NOTE: if the thread creation failed, `connected` will still be `false`.
-                newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
+                thd_manager->schedule(true, "MPPTunnel", [this] {
                     sendJob();
                 });
             }
@@ -275,16 +275,23 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
+void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
     send_queue.finish();
-
-    std::unique_lock lk(mu);
-    finished = true;
-    // must call setError in the critical area to keep consistent with `finished` from outside.
-    consumer_state.setError(err_msg);
-    cv_for_connected_or_finished.notify_all();
+    auto rest_work = [this, &err_msg] {
+        finished = true;
+        // must call setError in the critical area to keep consistent with `finished` from outside.
+        consumer_state.setError(err_msg);
+        cv_for_connected_or_finished.notify_all();
+    };
+    if (need_lock)
+    {
+        std::unique_lock lk(mu);
+        rest_work();
+    }
+    else
+        rest_work();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

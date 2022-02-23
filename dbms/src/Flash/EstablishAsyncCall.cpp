@@ -3,82 +3,8 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/Utils.h>
 
-
 namespace DB
 {
-
-const int tunnel_sender_cap = 40;
-const int rpc_exe_cap = 200;
-const int rpc_reg_cap = 10;
-
-CallExecPool::~CallExecPool()
-{
-    for (auto & q : tunnel_send_op_queues)
-        q->finish();
-    for (auto & q : calldata_proc_queues)
-        q->finish();
-    calldata_to_reg_queue.finish();
-    thd_manager->wait();
-}
-
-CallExecPool::CallExecPool()
-    : calldata_to_reg_queue(1000)
-{
-    thd_manager = newThreadManager();
-    for (int i = 0; i < rpc_reg_cap; i++)
-    {
-        thd_manager->schedule(false, "calldata_reg", [this] {
-            CallDataReg reg;
-            while (calldata_to_reg_queue.pop(reg))
-            {
-                new EstablishCallData(reg.service, reg.cq, reg.notify_cq);
-            }
-        });
-    }
-    for (int i = 0; i < rpc_exe_cap; i++)
-    {
-        calldata_proc_queues.emplace_back(std::make_shared<MPMCQueue<EstablishCallData *>>(100));
-        auto queue = calldata_proc_queues.back();
-        thd_manager->schedule(false, "rpc_exec", [queue] {
-            EstablishCallData * calldata;
-            while (queue->pop(calldata))
-            {
-                calldata->Proceed0();
-            }
-        });
-    }
-    for (int i = 0; i < tunnel_sender_cap; i++)
-    {
-        tunnel_send_op_queues.emplace_back(std::make_shared<MPMCQueue<std::shared_ptr<DB::MPPTunnel>>>(100));
-        auto queue = tunnel_send_op_queues[i];
-        thd_manager->schedule(false, "tunnel_sender", [queue] {
-            std::shared_ptr<DB::MPPTunnel> obj;
-            while (queue->pop(obj))
-            {
-                obj->sendJob();
-            }
-        });
-    }
-}
-
-void CallExecPool::SubmitTunnelSendOp(const std::shared_ptr<DB::MPPTunnel> & mpptunnel)
-{
-    int idx = tunnel_send_idx++;
-    idx = idx % tunnel_sender_cap;
-    if (idx < 0)
-        idx += tunnel_sender_cap;
-    tunnel_send_op_queues[idx]->push(mpptunnel);
-}
-
-void CallExecPool::SubmitCalldataProcTask(EstablishCallData * cd)
-{
-    int idx = rpc_exe_idx++;
-    idx = idx % rpc_exe_cap;
-    if (idx < 0)
-        idx += rpc_exe_cap;
-    calldata_proc_queues[idx]->push(cd);
-}
-
 std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
 {
     try
@@ -97,7 +23,6 @@ std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
 
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
     : service_(service)
-    , exec_pool(service->exec_pool.get())
     , cq_(cq)
     , notify_cq_(notify_cq)
     , responder_(&ctx_)
@@ -140,11 +65,12 @@ bool EstablishCallData::TryWrite()
             return false;
     }
     //there is a valid msg, submit write task
-    exec_pool->SubmitTunnelSendOp(mpptunnel_);
+    //    exec_pool->SubmitTunnelSendOp(mpptunnel_);
+    mpptunnel_->sendJob(false);
     return true;
 }
 
-void EstablishCallData::AsyncRpcInitOp()
+void EstablishCallData::rpcInitOp()
 {
     std::exception_ptr eptr = nullptr;
     try
@@ -222,27 +148,18 @@ void EstablishCallData::Proceed()
         // the memory address of this EstablishCallData instance.
         service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
     }
-    else
-    {
-        exec_pool->SubmitCalldataProcTask(this);
-    }
-}
-
-void EstablishCallData::Proceed0()
-{
-    if (state_ == PROCESS)
+    else if (state_ == PROCESS)
     {
         state_ = JOIN;
         // Spawn a new EstablishCallData instance to serve new clients while we process
         // the one for this EstablishCallData. The instance will deallocate itself as
         // part of its FINISH state.
-        exec_pool->calldata_to_reg_queue.push(CallDataReg{service_, cq_, notify_cq_});
-
+        new EstablishCallData(service_, cq_, notify_cq_);
         {
             std::unique_lock lk(mu);
             notifyReady();
         }
-        AsyncRpcInitOp();
+        rpcInitOp();
     }
     else if (state_ == PENDING)
     {
@@ -255,7 +172,8 @@ void EstablishCallData::Proceed0()
             {
                 ready = false;
                 lk.unlock();
-                exec_pool->SubmitTunnelSendOp(mpptunnel_);
+                mpptunnel_->sendJob(true);
+                //                exec_pool->SubmitTunnelSendOp(mpptunnel_);
             }
             else
             {

@@ -61,13 +61,8 @@ public:
         return EstablishMPPConnection0(context, request, sync_writer, nullptr);
     }
 
-
-    //    bool EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * calldata);
-
     ::grpc::Status
     CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
-
-    std::unique_ptr<CallExecPool> exec_pool;
 
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
