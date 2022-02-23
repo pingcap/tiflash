@@ -181,7 +181,9 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
 void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
-    parent.cancel(false);
+    /// can not cancel parent inputStream or the exception might be lost
+    if (!parent.executed)
+        parent.processor.cancel(false);
 }
 
 
