@@ -224,26 +224,19 @@ public:
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {
-        try
+        auto ctx = TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
+        Poco::File file(path);
+        if (!file.exists())
         {
-            auto ctx = TiFlashTestEnv::getContext();
-            auto provider = ctx.getFileProvider();
-            auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
-            DB::tests::TiFlashTestEnv::tryRemovePath(path);
-            Poco::File file(path);
-            if (!file.exists())
-            {
-                file.createDirectories();
-            }
+            file.createDirectories();
+        }
 
-            std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
-            writer = std::make_unique<LogWriter>(path + "/log_0", provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
-            resetReader();
-        }
-        catch (DB::Exception & e)
-        {
-            std::cout << e.displayText() << std::endl;
-        }
+        std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
+        writer = std::make_unique<LogWriter>(path + "/log_0", provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        resetReader();
     }
 
     std::unique_ptr<LogReader> getNewReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords, size_t log_num = 0)

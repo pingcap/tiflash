@@ -78,7 +78,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
 
     // Persist Page data to BlobStore
     auto edit = blob_store.write(write_batch, write_limiter);
-    page_directory.apply(std::move(edit));
+    page_directory.apply(std::move(edit), write_limiter);
 }
 
 DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)

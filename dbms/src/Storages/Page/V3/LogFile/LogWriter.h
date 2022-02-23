@@ -56,11 +56,11 @@ namespace PS::V3
  * Log number = 32bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
-class LogWriter final
+class LogWriter final : public Allocator<false>
 {
 public:
     LogWriter(
-        const String path_,
+        String path_,
         const FileProviderPtr & file_provider_,
         Format::LogNumberType log_number_,
         bool recycle_log_files_,
@@ -71,9 +71,9 @@ public:
 
     ~LogWriter();
 
-    void addRecord(ReadBuffer & payload, size_t payload_size);
+    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void flush();
+    void flush(const WriteLimiterPtr & write_limiter = nullptr);
 
     void close();
 
@@ -86,6 +86,8 @@ public:
 
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);
+
+    void resetBuffer();
 
 private:
     String path;
@@ -102,7 +104,8 @@ private:
 
     size_t written_bytes = 0;
 
-    char buffer[Format::BLOCK_SIZE];
+    char * buffer;
+    size_t buffer_size = Format::BLOCK_SIZE;
     WriteBuffer write_buffer;
 };
 } // namespace PS::V3

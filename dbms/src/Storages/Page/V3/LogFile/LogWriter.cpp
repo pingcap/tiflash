@@ -13,7 +13,7 @@
 namespace DB::PS::V3
 {
 LogWriter::LogWriter(
-    const String path_,
+    String path_,
     const FileProviderPtr & file_provider_,
     Format::LogNumberType log_number_,
     bool recycle_log_files_,
@@ -24,19 +24,29 @@ LogWriter::LogWriter(
     , log_number(log_number_)
     , recycle_log_files(recycle_log_files_)
     , manual_flush(manual_flush_)
-    , write_buffer(buffer, Format::BLOCK_SIZE)
+    , write_buffer(nullptr, 0)
 {
     log_file = file_provider->newWritableFile(
         path,
         EncryptionPath(path, ""),
         false,
         /*create_new_encryption_info_*/ false);
+
+    buffer = static_cast<char *>(alloc(buffer_size));
+    write_buffer = WriteBuffer(buffer, buffer_size);
+}
+
+void LogWriter::resetBuffer()
+{
+    write_buffer.set(buffer, buffer_size);
 }
 
 LogWriter::~LogWriter()
 {
     log_file->fsync();
     log_file->close();
+
+    free(buffer, buffer_size);
 }
 
 size_t LogWriter::writtenBytes() const
@@ -44,15 +54,14 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush()
+void LogWriter::flush(const WriteLimiterPtr & write_limiter)
 {
-    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), nullptr, false);
+    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, false);
     log_file->fsync();
     written_bytes += write_buffer.offset();
 
-    std::cout << "written_bytes : " << written_bytes << std::endl;
     // reset the write_buffer
-    write_buffer.set(buffer, Format::BLOCK_SIZE);
+    resetBuffer();
 }
 
 void LogWriter::close()
@@ -60,7 +69,7 @@ void LogWriter::close()
     log_file->close();
 }
 
-void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
+void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter)
 {
     // Header size varies depending on whether we are recycling or not.
     const int header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
@@ -69,6 +78,17 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
     // we still want to iterate once to emit a single zero-length record.
     bool begin = true;
     size_t payload_left = payload_size;
+
+    if (payload_size > buffer_size)
+    {
+        size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
+        size_t new_buff_size = payload_size + ((head_sizes / Format::BLOCK_SIZE) + 1) * Format::BLOCK_SIZE;
+
+        buffer = static_cast<char *>(realloc(buffer, buffer_size, new_buff_size));
+        buffer_size = new_buff_size;
+        resetBuffer();
+    }
+
     do
     {
         const Int64 leftover = Format::BLOCK_SIZE - block_offset;
@@ -107,7 +127,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
 
     if (!manual_flush)
     {
-        flush();
+        flush(write_limiter);
     }
 }
 

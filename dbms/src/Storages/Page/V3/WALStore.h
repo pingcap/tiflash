@@ -76,8 +76,8 @@ public:
         PSDiskDelegatorPtr & delegator,
         const WriteLimiterPtr & write_limiter = nullptr);
 
-    void apply(PageEntriesEdit & edit, const PageVersionType & version);
-    void apply(const PageEntriesEdit & edit);
+    void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
+    void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     bool compactLogs();
 

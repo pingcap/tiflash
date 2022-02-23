@@ -75,23 +75,23 @@ WALStore::WALStore(
 {
 }
 
-void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version)
+void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter)
 {
     for (auto & r : edit.getMutRecords())
     {
         r.version = version;
     }
-    apply(edit);
+    apply(edit, write_limiter);
 }
 
-void WALStore::apply(const PageEntriesEdit & edit)
+void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     const String serialized = ser::serializeTo(edit);
     ReadBufferFromString payload(serialized);
 
     {
         std::lock_guard lock(log_file_mutex);
-        log_file->addRecord(payload, serialized.size());
+        log_file->addRecord(payload, serialized.size(), write_limiter);
 
         // Roll to a new log file
         // TODO: Make it configurable

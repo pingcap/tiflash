@@ -394,13 +394,13 @@ std::set<PageId> PageDirectory::getAllPageIds()
     return page_ids;
 }
 
-void PageDirectory::apply(PageEntriesEdit && edit)
+void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, PageVersionType(last_sequence + 1, 0));
+    wal->apply(edit, PageVersionType(last_sequence + 1, 0), write_limiter);
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;

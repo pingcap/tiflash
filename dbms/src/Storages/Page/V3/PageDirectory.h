@@ -214,7 +214,7 @@ public:
 
     std::set<PageId> getAllPageIds();
 
-    void apply(PageEntriesEdit && edit);
+    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
