@@ -16,13 +16,11 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -Wno-dev \
-      -DENABLE_PROXY_RUNTIME_RELATIVE_PATH=ON \
+      -DCMAKE_INSTALL_PREFIX="$install_dir" \
       -DNO_WERROR=ON
 
 make -j $NPROC tiflash
-
-cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
-cp -f "${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib" "$install_dir/libtiflash_proxy.dylib"
+cmake -DCOMPONENT=tiflash-release -P cmake_install.cmake
 
 FILE="$install_dir/tiflash"
 otool -L "$FILE"
