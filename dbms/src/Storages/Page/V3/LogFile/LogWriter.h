@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/types.h>
 
@@ -59,7 +60,8 @@ class LogWriter final
 {
 public:
     LogWriter(
-        std::unique_ptr<WriteBufferFromFileBase> && dest_,
+        const String path_,
+        const FileProviderPtr & file_provider_,
         Format::LogNumberType log_number_,
         bool recycle_log_files_,
         bool manual_flush_ = false);
@@ -86,13 +88,22 @@ private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);
 
 private:
-    std::unique_ptr<WriteBufferFromFileBase> dest;
+    String path;
+    FileProviderPtr file_provider;
+
+    WritableFilePtr log_file;
+
     size_t block_offset; // Current offset in block
     Format::LogNumberType log_number;
     const bool recycle_log_files;
     // If true, it does not flush after each write. Instead it relies on the upper
     // layer to manually does the flush by calling ::flush()
     const bool manual_flush;
+
+    size_t written_bytes = 0;
+
+    char buffer[Format::BLOCK_SIZE];
+    WriteBuffer write_buffer;
 };
 } // namespace PS::V3
 } // namespace DB

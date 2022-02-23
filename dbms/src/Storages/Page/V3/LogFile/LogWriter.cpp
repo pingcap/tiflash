@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <common/logger_useful.h>
@@ -12,47 +13,51 @@
 namespace DB::PS::V3
 {
 LogWriter::LogWriter(
-    std::unique_ptr<WriteBufferFromFileBase> && dest_,
+    const String path_,
+    const FileProviderPtr & file_provider_,
     Format::LogNumberType log_number_,
     bool recycle_log_files_,
     bool manual_flush_)
-    : dest(std::move(dest_))
+    : path(path_)
+    , file_provider(file_provider_)
     , block_offset(0)
     , log_number(log_number_)
     , recycle_log_files(recycle_log_files_)
     , manual_flush(manual_flush_)
+    , write_buffer(buffer, Format::BLOCK_SIZE)
 {
-    // Must be `BLOCK_SIZE`, or we can not ensure the correctness of writing.
-    assert(dest->internalBuffer().size() == Format::BLOCK_SIZE);
+    log_file = file_provider->newWritableFile(
+        path,
+        EncryptionPath(path, ""),
+        false,
+        /*create_new_encryption_info_*/ false);
 }
 
 LogWriter::~LogWriter()
 {
-    if (dest)
-    {
-        flush();
-
-        dest->close(); // close explicitly
-    }
+    log_file->fsync();
+    log_file->close();
 }
 
 size_t LogWriter::writtenBytes() const
 {
-    return dest->getMaterializedBytes();
+    return written_bytes;
 }
 
 void LogWriter::flush()
 {
-    dest->sync();
+    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), nullptr, false);
+    log_file->fsync();
+    written_bytes += write_buffer.offset();
+
+    std::cout << "written_bytes : " << written_bytes << std::endl;
+    // reset the write_buffer
+    write_buffer.set(buffer, Format::BLOCK_SIZE);
 }
 
 void LogWriter::close()
 {
-    if (dest)
-    {
-        dest->close();
-        dest.reset();
-    }
+    log_file->close();
 }
 
 void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
@@ -75,7 +80,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
             {
                 // Fill the trailer with all zero
                 static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
-                writeString(MAX_ZERO_HEADER, leftover, *dest);
+                writeString(MAX_ZERO_HEADER, leftover, write_buffer);
             }
             block_offset = 0;
         }
@@ -101,7 +106,9 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
     } while (payload.hasPendingData());
 
     if (!manual_flush)
-        dest->sync();
+    {
+        flush();
+    }
 }
 
 void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
@@ -150,9 +157,9 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     // Write the checksum, header and the payload
     digest.update(payload.position(), length);
     Format::ChecksumType checksum = digest.checksum();
-    writeIntBinary(checksum, *dest);
-    writeString(header_buff.buffer().begin(), header_buff.count(), *dest);
-    writeString(payload.position(), length, *dest);
+    writeIntBinary(checksum, write_buffer);
+    writeString(header_buff.buffer().begin(), header_buff.count(), write_buffer);
+    writeString(payload.position(), length, write_buffer);
 
     block_offset += header_size + length;
 }

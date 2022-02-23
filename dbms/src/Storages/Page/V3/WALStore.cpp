@@ -113,6 +113,8 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     Poco::Logger * logger,
     bool manual_flush)
 {
+    (void)write_limiter;
+
     const auto path = delegator->defaultPath(); // TODO: multi-path
     LogFilename log_filename = LogFilename{
         (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
@@ -123,15 +125,8 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto fullname = log_filename.fullname(log_filename.stage);
     LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
     auto log_writer = std::make_unique<LogWriter>(
-        WriteBufferByFileProviderBuilder(
-            /*has_checksum=*/false,
-            provider,
-            fullname,
-            EncryptionPath{path, filename},
-            true,
-            write_limiter)
-            .with_buffer_size(Format::BLOCK_SIZE) // Must be `BLOCK_SIZE`
-            .build(),
+        path + "/" + fullname,
+        provider,
         new_log_lvl.first,
         /*recycle*/ true,
         /*manual_flush*/ manual_flush);
