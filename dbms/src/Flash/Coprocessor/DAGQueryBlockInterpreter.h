@@ -76,7 +76,8 @@ private:
         const ExpressionActionsPtr & expressionActionsPtr,
         Names & aggregation_keys,
         TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
