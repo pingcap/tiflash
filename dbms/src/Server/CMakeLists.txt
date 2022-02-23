@@ -135,7 +135,12 @@ else ()
         set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
         install (TARGETS tiflash
                 COMPONENT tiflash-release
-                DESTINATION ".")
+                DESTINATION "."
+                RUNTIME_DEPENDENCY_SET tiflash-release-dependency)
+        install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
+                COMPONENT tiflash-release
+                DESTINATION "."
+                PRE_INCLUDE_REGEXES ".*proxy.*")
         # TODO: handle ENABLE_PROXY_RUNTIME_RELATIVE_PATH here
         # TODO: check if MacOS works
     endif ()
