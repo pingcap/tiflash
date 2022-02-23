@@ -776,10 +776,10 @@ struct Transformer
 template <typename FromType, typename ToType, typename Transform>
 struct DateTimeTransformImpl
 {
-    using Op = Transformer<FromType, ToType, Transform>;
-
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
     {
+        using Op = Transformer<FromType, ToType, Transform>;
+
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(block, arguments, 1, 0);
 
         const ColumnPtr source_col = block.getByPosition(arguments[0]).column;
