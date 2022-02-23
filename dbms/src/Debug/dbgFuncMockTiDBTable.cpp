@@ -34,7 +34,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    String handle_pk_name = "";
+    String handle_pk_name;
     if (args.size() >= 4)
         handle_pk_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
@@ -273,8 +273,11 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     auto & kvstore = context.getTMTContext().getKVStore();
     auto & region_table = context.getTMTContext().getRegionTable();
     {
-        for (const auto & e : kvstore->regions())
-            regions.emplace_back(e.first);
+        {
+            auto manage_lock = kvstore->genRegionReadLock();
+            for (const auto & e : manage_lock.regions)
+                regions.emplace_back(e.first);
+        }
 
         for (const auto & region_id : regions)
             kvstore->mockRemoveRegion(region_id, region_table);

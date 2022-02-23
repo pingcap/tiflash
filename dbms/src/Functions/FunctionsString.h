@@ -10,6 +10,7 @@
 #include <Functions/IFunction.h>
 #include <Poco/UTF8Encoding.h>
 #include <Poco/Unicode.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -116,7 +117,7 @@ struct LowerUpperUTF8Impl
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets);
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
     static void constant(const std::string & data, std::string & res_data);
 
@@ -163,7 +164,7 @@ public:
     {
         if (!arguments[0]->isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
@@ -183,12 +184,12 @@ public:
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
-            Impl::vector_fixed(col->getChars(), col->getN(), col_res->getChars());
+            Impl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
@@ -203,7 +204,7 @@ struct TiDBLowerUpperUTF8Impl
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets);
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
     static void constant(const std::string & data, std::string & res_data);
 
@@ -225,12 +226,12 @@ struct TiDBLowerUpperBinaryImpl
                        ColumnString::Chars_t &,
                        ColumnString::Offsets &)
     {
-        throw Exception("the TiDB function of lower or upper for binary should do noting.");
+        throw Exception("the TiDB function of lower or upper for binary should do nothing.");
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
-        throw Exception("the TiDB function of lower or upper for binary should do noting.");
+        throw Exception("the TiDB function of lower or upper for binary should do nothing.");
     }
 };
 
@@ -263,7 +264,7 @@ public:
     {
         if (!arguments[0]->isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
@@ -280,7 +281,7 @@ public:
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };

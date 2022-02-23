@@ -1,9 +1,9 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/Types.h>
 
+#include <boost/noncopyable.hpp>
 #include <memory>
 
 namespace kvrpcpb
@@ -28,7 +28,7 @@ struct RaftCommandResult : private boost::noncopyable
         IndexError,
         BatchSplit,
         ChangePeer,
-        CommitMerge
+        CommitMerge,
     };
 
     bool sync_log;
@@ -43,16 +43,6 @@ struct RegionMergeResult
 {
     bool source_at_left;
     UInt64 version;
-};
-
-struct ReadIndexResult
-{
-    RegionException::RegionReadStatus status{RegionException::RegionReadStatus::OK};
-    UInt64 read_index{0};
-    std::unique_ptr<kvrpcpb::LockInfo> lock_info{nullptr};
-
-    ReadIndexResult(RegionException::RegionReadStatus status_, UInt64 read_index_ = 0, kvrpcpb::LockInfo * lock_info_ = nullptr);
-    ReadIndexResult() = default;
 };
 
 } // namespace DB
