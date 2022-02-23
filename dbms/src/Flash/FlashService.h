@@ -21,22 +21,21 @@ namespace DB
 {
 class IServer;
 
-class CallData;
+class EstablishCallData;
 
 class MPPTunnel;
 
 struct MppTunnelWriteOp
 {
     MppTunnelWriteOp()
-        : need_lock(false)
+    //        : need_lock(false)
     {}
-    MppTunnelWriteOp(std::shared_ptr<DB::MPPTunnel> mpptunnel_,
-                     bool need_lock_)
+    MppTunnelWriteOp(std::shared_ptr<DB::MPPTunnel> mpptunnel_)
         : mpptunnel(mpptunnel_)
-        , need_lock(need_lock_)
+    //        , need_lock(need_lock_)
     {}
     std::shared_ptr<DB::MPPTunnel> mpptunnel;
-    bool need_lock;
+    //    bool need_lock;
 };
 
 struct CallDataReg;
@@ -44,7 +43,7 @@ struct CallDataReg;
 //struct EstablishRpcParam {
 //    ::grpc::ServerContext * grpc_context;
 //    const ::mpp::EstablishMPPConnectionRequest * request;
-//    CallData * calldata;
+//    EstablishCallData * calldata;
 //};
 
 class FlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<tikvpb::Tikv::Service>
@@ -82,14 +81,14 @@ public:
     //                                          const ::mpp::EstablishMPPConnectionRequest * request,
     //                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
-    bool EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, CallData * calldata);
+    bool EstablishMPPConnection4Async(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * calldata);
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
     std::atomic<int> current_active_establish_thds{0};
     std::atomic<int> max_active_establish_thds{0};
     MPMCQueue<CallDataReg> calldata_to_reg_queue;
-    std::vector<std::shared_ptr<MPMCQueue<CallData *>>> calldata_proc_queues;
+    std::vector<std::shared_ptr<MPMCQueue<EstablishCallData *>>> calldata_proc_queues;
     std::vector<std::shared_ptr<MPMCQueue<std::shared_ptr<MppTunnelWriteOp>>>> tunnel_send_op_queues;
     std::atomic<long long> tunnel_send_idx{0}, rpc_exe_idx{0};
 
@@ -106,7 +105,6 @@ private:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
-    std::atomic<bool> end_syn = {false}, end_fin{false};
 };
 
 struct CallDataReg
@@ -117,36 +115,19 @@ struct CallDataReg
 };
 
 
-class CallData
+class EstablishCallData
 {
 public:
-    struct StatsHook
-    {
-        StatsHook(FlashService * service_)
-        {
-            service_->current_active_establish_thds++;
-            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-        }
-        ~StatsHook()
-        {
-            service_->current_active_establish_thds--;
-            service_->max_active_establish_thds = std::max(service_->max_active_establish_thds.load(), service_->current_active_establish_thds.load());
-        }
-        FlashService * service_;
-    };
-
     // Take in the "service" instance (in this case representing an asynchronous
     // server) and the completion queue "cq" used for asynchronous communication
     // with the gRPC runtime.
-    CallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
+    EstablishCallData(FlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
     void Pending();
 
-    void OnCancel();
-
     bool Write(const mpp::MPPDataPacket & packet, bool need_wait = true);
 
-    bool TryWrite(std::unique_lock<std::mutex> * p_lk = nullptr, bool trace = false);
+    bool TryWrite();
 
     void WriteDone(const ::grpc::Status & status, bool need_wait = true);
 
@@ -156,10 +137,6 @@ public:
 
     void Proceed0();
 
-    void ContinueFromPending();
-
-    void AsyncRpcInitOp();
-
     void notifyReady();
 
     std::mutex mu;
@@ -167,10 +144,13 @@ public:
 
     void attachQueue(MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue);
 
-    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> &mpptunnel);
+    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
-    //private:
-    // The means of communication with the gRPC runtime for an asynchronous
+private:
+    void AsyncRpcInitOp();
+
+    void ContinueFromPending();
+
     // server.
     FlashService * service_;
 
@@ -183,15 +163,14 @@ public:
 
     grpc::Status status4err;
 
+public:
     // What we get from the client.
     ::mpp::EstablishMPPConnectionRequest request_;
-    // What we send back to the client.
-    ::mpp::DispatchTaskResponse reply_;
 
+private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
     std::atomic<bool> ready{false};
-    std::atomic<int> fail_token{-1};
 
     // Let's implement a tiny state machine with the following states.
     enum CallStatus

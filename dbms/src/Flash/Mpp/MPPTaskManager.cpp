@@ -15,8 +15,7 @@ namespace DB
 template <class Mp, class Itr>
 void MPPTaskManager::notifyQueryWaiters(Mp & wait_map,
                                         const Itr & wait_it,
-                                        UInt64 query_id,
-                                        std::function<void(const MPPTaskId &, CallData *)> job)
+                                        std::function<void(const MPPTaskId &, EstablishCallData *)> job)
 {
     if (wait_it != wait_map.end())
     {
@@ -37,7 +36,7 @@ template <class Mp, class Itr>
 void MPPTaskManager::notifyWaiters(Mp & wait_map,
                                    const Itr & wait_it,
                                    const MPPTaskId & id,
-                                   std::function<void(CallData *)> job)
+                                   std::function<void(EstablishCallData *)> job)
 {
     if (wait_it != wait_map.end())
     {
@@ -65,7 +64,7 @@ void MPPTaskManager::ClearTimeoutWaiter(const MPPTaskId & id)
     auto & wait_map = wait_maps[bucket_id];
     const auto & wait_it = wait_map.find(id.start_ts);
     auto err_msg = fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id); // TODO add timeout count
-    notifyWaiters(wait_map, wait_it, id, [err_msg](CallData * calldata) {
+    notifyWaiters(wait_map, wait_it, id, [err_msg](EstablishCallData * calldata) {
         calldata->WriteErr(getPacketWithError(err_msg));
     });
 }
@@ -155,7 +154,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     return it->second;
 }
 
-MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, CallData * callData, std::chrono::seconds timeout, std::string & errMsg)
+MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, EstablishCallData * callData, std::chrono::seconds timeout, std::string & errMsg)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -188,10 +187,10 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
     {
         auto & wait_map = wait_maps[bucket_id];
         const auto & wait_it = wait_map.find(id.start_ts);
-        std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>> wait_ptr;
+        std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>> wait_ptr;
         if (wait_it == wait_map.end())
         {
-            wait_ptr = std::make_shared<std::unordered_map<MPPTaskId, std::vector<CallData *>>>();
+            wait_ptr = std::make_shared<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>();
             wait_map[id.start_ts] = wait_ptr;
         }
         else
@@ -201,7 +200,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, 
         callData->Pending();
         if (wait_ptr->find(id) == wait_ptr->end())
         {
-            (*wait_ptr)[id] = std::vector<CallData *>();
+            (*wait_ptr)[id] = std::vector<EstablishCallData *>();
         }
         (*wait_ptr)[id].emplace_back(callData);
         {
@@ -244,7 +243,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 
         auto & wait_map = wait_maps[bucket_id];
         const auto & wait_it = wait_map.find(query_id);
-        notifyQueryWaiters(wait_map, wait_it, query_id, [](const MPPTaskId & id, CallData * cd) {
+        notifyQueryWaiters(wait_map, wait_it, [](const MPPTaskId & id, EstablishCallData * cd) {
             auto err_msg = fmt::format("Task [{},{}] has been cancelled.", id.start_ts, id.task_id);
             cd->WriteErr(getPacketWithError(err_msg));
         });
@@ -298,7 +297,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
         cv.notify_all();
-        notifyQueryWaiters(wait_map, wait_it, task->id.start_ts, [](const MPPTaskId & id, CallData * cd) {
+        notifyQueryWaiters(wait_map, wait_it, [](const MPPTaskId & id, EstablishCallData * cd) {
             auto err_msg = fmt::format("Task [{},{}] has been cancelled.", id.start_ts, id.task_id);
             cd->WriteErr(getPacketWithError(err_msg));
         });
@@ -312,7 +311,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     task->manager = this;
     cv.notify_all();
     LOG_FMT_ERROR(log, "wwwoody! register the task done [{},{}]  has_waiter:{} ", task->id.start_ts, task->id.task_id, wait_it != wait_map.end() && wait_it->second->find(task->id) != wait_it->second->end());
-    notifyWaiters(wait_map, wait_it, task->id, [this, task](CallData * calldata) {
+    notifyWaiters(wait_map, wait_it, task->id, [this, task](EstablishCallData * calldata) {
         std::string err_msg;
         MPPTunnelPtr tunnel = nullptr;
         std::tie(tunnel, err_msg) = task->getTunnel(&(calldata->request_));

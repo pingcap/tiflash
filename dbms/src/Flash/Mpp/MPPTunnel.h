@@ -28,7 +28,7 @@
 namespace DB
 {
 
-class CallData;
+class EstablishCallData;
 
 /**
  * MPPTunnelBase represents the sender of an exchange connection.
@@ -98,16 +98,14 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    void consumerFinish(const String & err_msg, bool need_lock = true);
+    void consumerFinish(const String & err_msg);
 
-    std::atomic<bool> no_waiter{false};
+    std::atomic<bool> is_async{false};
 
-    std::string sendOp(bool needlock = true);
+    void sendJob();
 
 private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
-
-    void sendLoop();
 
     void waitForConsumerFinish(bool allow_throw);
 
@@ -121,7 +119,7 @@ private:
     bool is_local; // if the tunnel is used for local environment
 
     Writer * writer;
-    CallData *call_data;
+    EstablishCallData * call_data;
 
     std::chrono::seconds timeout;
 
@@ -132,7 +130,6 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
-    int fin_by = 0;
 
     /// Consumer can be sendLoop or local receiver.
     class ConsumerState
@@ -166,10 +163,10 @@ private:
     const LogWithPrefixPtr log;
 };
 
-class MPPTunnel : public MPPTunnelBase<CallData>
+class MPPTunnel : public MPPTunnelBase<EstablishCallData>
 {
 public:
-    using Base = MPPTunnelBase<CallData>;
+    using Base = MPPTunnelBase<EstablishCallData>;
     using Base::Base;
 };
 

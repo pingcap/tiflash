@@ -33,7 +33,7 @@ class MPPTaskManager : private boost::noncopyable
     const int bucket_num = 10000;
     std::mutex * mu_arr = new std::mutex[bucket_num];
     MPPQueryMap * mpp_query_maps = new MPPQueryMap[bucket_num];
-    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>> * wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<CallData *>>>>[bucket_num];
+    std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>> * wait_maps = new std::unordered_map<UInt64, std::shared_ptr<std::unordered_map<MPPTaskId, std::vector<EstablishCallData *>>>>[bucket_num];
     std::priority_queue<std::pair<long, MPPTaskId>, std::vector<std::pair<long, MPPTaskId>>, auto (*)(const std::pair<long, MPPTaskId> &, const std::pair<long, MPPTaskId> &)->bool> wait_deadline_queue{
         [](const std::pair<long, MPPTaskId> & a, const std::pair<long, MPPTaskId> & b) -> bool {
             return a.first > b.first;
@@ -58,13 +58,12 @@ public:
     void notifyWaiters(Mp & wait_map,
                        const Itr & wait_it,
                        const MPPTaskId & id,
-                       std::function<void(CallData *)> job);
+                       std::function<void(EstablishCallData *)> job);
 
     template <class Mp, class Itr>
     void notifyQueryWaiters(Mp & wait_map,
                             const Itr & wait_it,
-                            UInt64 query_id,
-                            std::function<void(const MPPTaskId & id, CallData *)> job);
+                            std::function<void(const MPPTaskId & id, EstablishCallData *)> job);
 
     int computeBucketId(UInt64 start_ts)
     {
@@ -81,7 +80,7 @@ public:
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 
-    MPPTaskPtr findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, CallData * callData, std::chrono::seconds timeout, std::string & errMsg);
+    MPPTaskPtr findTaskWithTimeoutAsync(const mpp::TaskMeta & meta, EstablishCallData * callData, std::chrono::seconds timeout, std::string & errMsg);
 
     void cancelMPPQuery(UInt64 query_id, const String & reason);
 

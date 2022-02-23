@@ -493,9 +493,9 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 
 void HandleRpcs(grpc::ServerCompletionQueue * cq,  grpc::ServerCompletionQueue * notify_cq, bool poll_which_cq)
 {
-    // Spawn a new CallData instance to serve new clients.
+    // Spawn a new EstablishCallData instance to serve new clients.
     // for (int i = 0; i < buf_size; i++)
-        // new CallData(service_, cq);
+        // new EstablishCallData(service_, cq);
     void * tag; // uniquely identifies a request.
     bool ok;
      grpc::ServerCompletionQueue * curcq = cq;
@@ -506,7 +506,7 @@ void HandleRpcs(grpc::ServerCompletionQueue * cq,  grpc::ServerCompletionQueue *
     {
         // Block waiting to read the next event from the completion queue. The
         // event is uniquely identified by its tag, which in this case is the
-        // memory address of a CallData instance.
+        // memory address of a EstablishCallData instance.
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
         if (!curcq->Next(&tag, &ok))
@@ -515,7 +515,7 @@ void HandleRpcs(grpc::ServerCompletionQueue * cq,  grpc::ServerCompletionQueue *
             break;
         }
         if (ok)
-            static_cast<CallData *>(tag)->Proceed();
+            static_cast<EstablishCallData *>(tag)->Proceed();
         //TODO try catch
     }
 }
@@ -577,7 +577,7 @@ public:
         for (int i = 0; i < (int)(cqs_.size()*ppc); i++)
         {
             for (int j = 0; j < buf_size; j++)
-                new CallData(flash_service.get(), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
+                new EstablishCallData(flash_service.get(), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
             thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), false); });
             thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), true); });
         }

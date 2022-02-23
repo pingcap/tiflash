@@ -44,10 +44,9 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
             bool fg = send_queue.finish();
-            if (fg && !is_local)
+            if (fg && !is_local && is_async)
             {
-                fin_by = 1;
-                writer->TryWrite(&lock);
+                writer->TryWrite();
             }
         }
         waitForConsumerFinish(/*allow_throw=*/false);
@@ -74,8 +73,8 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
                     send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
-                    if (!is_local)
-                        writer->TryWrite(&lk);
+                    if (!is_local && is_async)
+                        writer->TryWrite();
                 }
                 catch (...)
                 {
@@ -83,10 +82,9 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 }
             }
             bool fg = send_queue.finish(); //TODO fix all send_queue case
-            if (fg && !is_local)
+            if (fg && !is_local && is_async)
             {
-                fin_by = 2;
-                writer->TryWrite(&lk);
+                writer->TryWrite();
             }
         }
         else
@@ -114,16 +112,15 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
-            if (!is_local)
-                writer->TryWrite(&lk);
+            if (!is_local && is_async)
+                writer->TryWrite();
             if (close_after_write)
             {
                 bool fg = send_queue.finish();
                 //TODO check where double tryWrite correct
-                if (fg && !is_local)
+                if (fg && !is_local && is_async)
                 {
-                    fin_by = 3;
-                    writer->TryWrite(&lk);
+                    writer->TryWrite();
                 }
                 LOG_TRACE(log, "finish write.");
             }
@@ -135,7 +132,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::sendLoop()
+void MPPTunnelBase<Writer>::sendJob()
 {
     assert(!is_local);
     String err_msg;
@@ -145,11 +142,16 @@ void MPPTunnelBase<Writer>::sendLoop()
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
-            if (!writer->Write(*res))
+            if (!writer->Write(*res, !is_async))
             {
                 err_msg = "grpc writes failed.";
                 break;
             }
+            else
+            {
+                if (is_async)
+                    return;
+            }
         }
     }
     catch (Exception & e)
@@ -162,67 +164,17 @@ void MPPTunnelBase<Writer>::sendLoop()
     }
     catch (...)
     {
-        err_msg = "fatal error in sendLoop()";
+        err_msg = "fatal error in sendJob()";
     }
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg);
-    if (no_waiter)
+    if (is_async)
     {
-        //        std::cerr<<"async mpptunnel end"<<std::endl;
-        writer->WriteDone(grpc::Status::OK);
+        writer->WriteDone(grpc::Status::OK, false);
     }
 }
 
-template <typename Writer>
-std::string MPPTunnelBase<Writer>::sendOp(bool need_lock)
-{
-    assert(!is_local);
-    String err_msg;
-    try
-    {
-        /// TODO(fzh) reuse it later
-        MPPDataPacketPtr res;
-        if (send_queue.pop(res))
-        {
-            if (writer->Write(*res, false))
-            {
-                return "undone.op";
-            }
-            else
-            {
-                err_msg = "grpc writes failed.";
-                //                loopEnd = true;
-            }
-        }
-        else
-        {
-            //            loopEnd = true;
-            //            TODO
-        }
-    }
-    catch (Exception & e)
-    {
-        err_msg = e.message();
-    }
-    catch (std::exception & e)
-    {
-        err_msg = e.what();
-    }
-    catch (...)
-    {
-        err_msg = "fatal error in sendLoop()";
-    }
-    if (!err_msg.empty())
-        LOG_ERROR(log, err_msg);
-    consumerFinish(err_msg, need_lock);
-    if (no_waiter)
-    {
-        //        std::cerr<<"async mpptunnel end"<<std::endl;
-        writer->WriteDone(grpc::Status::OK, false);
-    }
-    return err_msg;
-}
 
 /// done normally and being called exactly once after writing all packets
 template <typename Writer>
@@ -238,10 +190,9 @@ void MPPTunnelBase<Writer>::writeDone()
         waitUntilConnectedOrFinished(lk);
 
         fg = send_queue.finish();
-        if (fg && !is_local)
+        if (fg && !is_local && is_async)
         {
-            fin_by = 4;
-            writer->TryWrite(&lk, true);
+            writer->TryWrite();
         }
     }
     waitForConsumerFinish(/*allow_throw=*/true);
@@ -271,13 +222,19 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             assert(writer_ == nullptr);
         else
         {
-            writer = writer_;
-            writer->attachQueue(&send_queue);
-            // communicate send_thread through `consumer_state`
-            // NOTE: if the thread creation failed, `connected` will still be `false`.
-            //            newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
-            //                sendLoop();
-            //            });
+            if (is_async)
+            {
+                writer = writer_;
+                writer->attachQueue(&send_queue);
+            }
+            else
+            {
+                // communicate send_thread through `consumer_state`
+                // NOTE: if the thread creation failed, `connected` will still be `false`.
+                newThreadManager()->scheduleThenDetach(true, "MPPTunnel", [this] {
+                    sendJob();
+                });
+            }
         }
         connected = true;
         cv_for_connected_or_finished.notify_all();
@@ -331,29 +288,19 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
+void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
-    if (send_queue.finish())
-    {
-        fin_by = 5;
-    }
-    if (need_lock)
-    {
-        std::unique_lock lk(mu);
-        finished = true;
-        // must call setError in the critical area to keep consistent with `finished` from outside.
-        consumer_state.setError(err_msg);
-        cv_for_connected_or_finished.notify_all();
-    } else {
-        finished = true;
-        // must call setError in the critical area to keep consistent with `finished` from outside.
-        consumer_state.setError(err_msg);
-        cv_for_connected_or_finished.notify_all();
-    }
+    send_queue.finish();
+
+    std::unique_lock lk(mu);
+    finished = true;
+    // must call setError in the critical area to keep consistent with `finished` from outside.
+    consumer_state.setError(err_msg);
+    cv_for_connected_or_finished.notify_all();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
-template class MPPTunnelBase<CallData>;
+template class MPPTunnelBase<EstablishCallData>;
 
 } // namespace DB
