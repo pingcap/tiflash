@@ -40,6 +40,11 @@ try
         R"(
 path="/data0/tiflash"
         )",
+        // Deprecated style with capacity
+        R"(
+path="/data0/tiflash"
+capacity=1024000000
+        )",
         // New style
         R"(
 [storage]
@@ -67,6 +72,65 @@ dir=["/data0/tiflash"]
 
         ASSERT_EQ(storage.kvstore_data_path.size(), 1);
         EXPECT_EQ(storage.kvstore_data_path[0], "/data0/tiflash/kvstore/");
+
+        auto all_paths = storage.getAllNormalPaths();
+        EXPECT_EQ(all_paths[0], "/data0/tiflash/");
+
+        // Ensure that creating PathCapacityMetrics is OK.
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, ExplicitKVStorePath)
+try
+{
+    Strings tests = {
+        // Deprecated style
+        R"(
+path="/data0/tiflash"
+[raft]
+kvstore_path="/data1111/kvstore"
+        )",
+        // New style
+        R"(
+[storage]
+[storage.main]
+dir=["/data0/tiflash"]
+[storage.raft]
+dir=["/data1111/kvstore"]
+        )",
+        // New style with remaining `raft.kvstore_path`, will be overwrite for backward compatibility
+        R"(
+[raft]
+kvstore_path="/data1111/kvstore"
+[storage]
+[storage.main]
+dir=["/data0/tiflash"]
+[storage.raft]
+dir=["/data222/kvstore"]
+        )",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+
+        size_t global_capacity_quota = 0;
+        TiFlashStorageConfig storage;
+        std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+
+        ASSERT_EQ(storage.main_data_paths.size(), 1);
+        EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
+        EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 1);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/data1111/kvstore/");
 
         auto all_paths = storage.getAllNormalPaths();
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");

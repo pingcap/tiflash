@@ -344,8 +344,8 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         if (!storage_config.parseFromDeprecatedConfiguration(config, log))
         {
             // Can not parse from the deprecated configuration "path".
-            String msg = "The configuration \"storage\" section is not defined. Please check your configuration file.";
-            LOG_ERROR(log, msg);
+            String msg = "The configuration \"storage.main\" section is not defined. Please check your configuration file.";
+            LOG_FMT_ERROR(log, "{}", msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
