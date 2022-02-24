@@ -251,9 +251,13 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
 
-        storage_interpreter.pushDownFilter(query_block.selection_name, conditions);
+        assert(!conditions.empty());
+        storage_interpreter.execute(pipeline, query_block.selection_name, conditions);
     }
-    storage_interpreter.execute(pipeline);
+    else
+    {
+        storage_interpreter.execute(pipeline);
+    }
 
     analyzer = std::move(storage_interpreter.analyzer);
 

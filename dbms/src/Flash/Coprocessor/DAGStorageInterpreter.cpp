@@ -1,7 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/SimpleRandomUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniformIntRandomGenerator.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -137,20 +137,9 @@ DAGStorageInterpreter::DAGStorageInterpreter(
 {
 }
 
-void DAGStorageInterpreter::pushDownFilter(const String & filter_executor_id_, const std::vector<const tipb::Expr *> & conditions_)
+void DAGStorageInterpreter::execute(DAGPipeline & pipeline, const String & selection_name, const std::vector<const tipb::Expr *> & conditions)
 {
-    if (executed)
-        throw TiFlashException("`pushDownFilter` should be called before `execute`", Errors::Coprocessor::Internal);
-    has_pushed_down_filter = true;
-    filter_executor_id = filter_executor_id_;
-    conditions = conditions_;
-}
-
-void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
-{
-    if (executed)
-        throw TiFlashException("DAGStorageInterpreter has called `execute`, shouldn't call again.", Errors::Coprocessor::Internal);
-    executed = true;
+    assert(selection_name.empty() == conditions.empty());
 
     const DAGContext & dag_context = *context.getDAGContext();
     LearnerReadSnapshot learner_read_snapshot = (dag_context.isBatchCop() || dag_context.isMPPTask()) ? doBatchCopLearnerRead() : doCopLearnerRead();
@@ -176,7 +165,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
 
     // Should build these vars under protect of `table_structure_lock`.
-    std::tie(dag_request, dag_schema) = buildRemoteTS(storage, handle_column_name);
+    std::tie(dag_request, dag_schema) = buildRemoteTS(storage, handle_column_name, selection_name, conditions);
 }
 
 LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
@@ -283,12 +272,12 @@ void DAGStorageInterpreter::doLocalRead(
 
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
-                thread_local SimpleRandom<int> simple_random(0, 99);
+                thread_local UniformIntRandomGenerator<int> random_generator(0, 99);
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
                 RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
-                    if (simple_random.rand() > 50)
+                    if (random_generator.rand() > 50)
                         region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
@@ -531,7 +520,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS(
     const ManageableStoragePtr & storage,
-    const String & handle_column_name)
+    const String & handle_column_name,
+    const String & selection_name,
+    const std::vector<const tipb::Expr *> & conditions)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     if (region_retry.empty())
@@ -558,10 +549,10 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     DAGSchema schema;
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
-    if (has_pushed_down_filter)
+    if (!conditions.empty())
     {
         executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(filter_executor_id);
+        executor->set_executor_id(selection_name);
         auto * selection = executor->mutable_selection();
         for (const auto & condition : conditions)
             *selection->add_conditions() = *condition;

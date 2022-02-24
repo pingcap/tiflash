@@ -40,9 +40,7 @@ public:
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
 
-    void execute(DAGPipeline & pipeline);
-
-    void pushDownFilter(const String & filter_executor_id_, const std::vector<const tipb::Expr *> & conditions_);
+    void execute(DAGPipeline & pipeline, const String & selection_name = "", const std::vector<const tipb::Expr *> & conditions = {});
 
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
@@ -79,22 +77,17 @@ private:
 
     std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> buildRemoteTS(
         const ManageableStoragePtr & storage,
-        const String & handle_column_name);
+        const String & handle_column_name,
+        const String & selection_name,
+        const std::vector<const tipb::Expr *> & conditions)
 
-    /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
+        /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
-    Context & context;
+        Context & context;
     String table_scan_executor_id;
     const tipb::TableScan & table_scan;
     size_t max_streams;
     LogWithPrefixPtr log;
-
-    bool executed = false;
-
-    /// for pushed down filter
-    bool has_pushed_down_filter = false;
-    String filter_executor_id;
-    std::vector<const tipb::Expr *> conditions;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
     TableID table_id;
