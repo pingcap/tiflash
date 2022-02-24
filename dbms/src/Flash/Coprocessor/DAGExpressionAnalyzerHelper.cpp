@@ -79,7 +79,7 @@ String DAGExpressionAnalyzerHelper::genFuncString(
 String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // multiIf is special because
     // 1. the type of odd argument(except the last one) must be UInt8
@@ -103,10 +103,11 @@ String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
 String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // rewrite IFNULL function with multiIf
-    // ifNull(arg1, arg2) -> if(isNull(arg1), arg2, arg1)
+    // ifNull(arg1, arg2) -> multiIf(isNull(arg1), arg2, arg1)
+    // todo if arg1 is not nullable, then just return arg1 is ok
     const String & func_name = "multiIf";
     Names argument_names;
     if (expr.children_size() != 2)
@@ -115,11 +116,12 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     }
 
     String condition_arg_name = analyzer->getActions(expr.children(0), actions, false);
-    String else_arg_name = analyzer->getActions(expr.children(1), actions, false);
+    String tmp_else_arg_name = analyzer->getActions(expr.children(1), actions, false);
     String is_null_result = analyzer->applyFunction("isNull", {condition_arg_name}, actions, getCollatorFromExpr(expr));
+    String not_null_else_arg_name = analyzer->applyFunction("assumeNotNull", {tmp_else_arg_name}, actions, nullptr);
 
     argument_names.push_back(std::move(is_null_result));
-    argument_names.push_back(std::move(else_arg_name));
+    argument_names.push_back(std::move(not_null_else_arg_name));
     argument_names.push_back(std::move(condition_arg_name));
 
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
@@ -128,7 +130,7 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
 String DAGExpressionAnalyzerHelper::buildInFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -199,7 +201,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
 String DAGExpressionAnalyzerHelper::buildLogicalFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -215,7 +217,7 @@ String DAGExpressionAnalyzerHelper::buildLogicalFunction(
 String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = "substringUTF8";
     Names argument_names;
@@ -241,7 +243,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
     const Names & argument_names,
     bool in_union,
     const tipb::FieldType & field_type,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     static const String tidb_cast_name = "tidb_cast";
 
@@ -263,7 +265,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
 String DAGExpressionAnalyzerHelper::buildCastFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
         throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
@@ -284,7 +286,7 @@ template <typename Impl>
 String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 3)
     {
@@ -328,7 +330,7 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
 String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -361,7 +363,7 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
 String DAGExpressionAnalyzerHelper::buildRoundFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // ROUND(x) -> ROUND(x, 0)
     if (expr.children_size() != 1)
