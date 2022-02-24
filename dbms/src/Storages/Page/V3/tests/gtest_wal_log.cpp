@@ -93,52 +93,6 @@ private:
         }
     };
 
-    class StringSouce : public DB::ReadBufferFromFileBase
-    {
-    public:
-        String & contents;
-        size_t read_pos;
-        bool fail_after_read_partial;
-        bool returned_partial;
-
-        explicit StringSouce(String & contents_, bool fail_after_read_partial_)
-            : DB::ReadBufferFromFileBase(PS::V3::Format::BLOCK_SIZE, nullptr, 0)
-            , contents(contents_)
-            , read_pos(0)
-            , fail_after_read_partial(fail_after_read_partial_)
-            , returned_partial(false)
-        {}
-
-        off_t getPositionInFile() override { return count(); }
-        String getFileName() const override { return ""; }
-        int getFD() const override { return -1; }
-
-        off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return 0; }
-
-    protected:
-        bool nextImpl() override
-        {
-            if (fail_after_read_partial)
-            {
-                EXPECT_FALSE(returned_partial) << "must not read() after eof/error";
-            }
-
-            // EOF
-            if (read_pos >= contents.size())
-                return false;
-
-            std::string_view left_bytes{contents};
-            left_bytes.remove_prefix(read_pos);
-            // There are more bytes than buffer size, only copy a part of it, otherwise, copy to the end of `contents`
-            const size_t num_bytes_read = std::min(internal_buffer.size(), left_bytes.size());
-            memcpy(internal_buffer.begin(), left_bytes.data(), num_bytes_read);
-            left_bytes.remove_prefix(num_bytes_read);
-            read_pos += num_bytes_read;
-            working_buffer.resize(num_bytes_read);
-            return true;
-        }
-    };
-
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
     std::unique_ptr<LogReader> reader;
