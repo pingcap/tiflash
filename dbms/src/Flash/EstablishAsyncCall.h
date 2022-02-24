@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class MPPTunnel;
 class AsyncFlashService;
 
@@ -26,12 +25,10 @@ public:
 class EstablishCallData : public PacketWriter
 {
 public:
-    // Take in the "service" instance (in this case representing an asynchronous
-    // server) and the completion queue "cq" used for asynchronous communication
-    // with the gRPC runtime.
+    // A state machine used for async grpc api EstablishMPPConnection. When a relative grpc event arrives,
+    // it reacts base on current state. The completion queue "cq" and "notify_cq"
+    // used for asynchronous communication with the gRPC runtime.
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
-
-    void Pending();
 
     bool Write(const mpp::MPPDataPacket & packet) override;
 
@@ -53,21 +50,17 @@ public:
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
-    void ContinueFromPending(const std::shared_ptr<MPPTunnel> & tunnel, std::string & err_msg);
-
 private:
     void notifyReady();
 
     void rpcInitOp();
 
-    // server.
+    // server instance
     AsyncFlashService * service_;
 
     // The producer-consumer queue where for asynchronous server notifications.
     grpc::ServerCompletionQueue *cq_, *notify_cq_;
-    // Context for the rpc, allowing to tweak aspects of it such as the use
-    // of compression, authentication, as well as to send metadata back to the
-    // client.
+
     grpc::ServerContext ctx_;
 
     grpc::Status status4err;
@@ -78,22 +71,21 @@ private:
 private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
+
+    // If the CallData is ready to write a msg.
     std::atomic<bool> ready{false};
 
-    // Let's implement a tiny state machine with the following states.
+    // Let's implement a state machine with the following states.
     enum CallStatus
     {
         CREATE,
         PROCESS,
-        PENDING,
         JOIN,
         ERR_HANDLE,
         FINISH
     };
     std::atomic<CallStatus> state_; // The current serving state.
-
     MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue_ = nullptr;
-
     std::shared_ptr<DB::MPPTunnel> mpptunnel_ = nullptr;
 };
 

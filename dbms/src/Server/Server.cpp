@@ -496,9 +496,7 @@ void HandleRpcs(grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * 
     bool ok;
     grpc::ServerCompletionQueue * curcq = cq;
     if (poll_which_cq)
-    {
         curcq = notify_cq;
-    }
     while (true)
     {
         // Block waiting to read the next event from the completion queue. The
@@ -561,13 +559,13 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         thread_manager = DB::newThreadManager();
-
+        int async_cq_num = (int)server.context().getSettingsRef().async_cqs;
         if (enable_async_server)
         {
-            for (int i = 0; i < (int)server.context().getSettingsRef().async_cqs; i++)
+            for (int i = 0; i < async_cq_num; ++i)
             {
-                cqs_.emplace_back(builder.AddCompletionQueue());
-                notify_cqs_.emplace_back(builder.AddCompletionQueue());
+                cqs.emplace_back(builder.AddCompletionQueue());
+                notify_cqs.emplace_back(builder.AddCompletionQueue());
             }
         }
         flash_grpc_server
@@ -577,13 +575,13 @@ public:
         if (enable_async_server)
         {
             int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
-            int ppc = server.context().getSettingsRef().async_pollers_per_cq;
-            for (int i = 0; i < (int)(cqs_.size() * ppc); i++)
+            int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
+            for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
             {
                 for (int j = 0; j < buf_size; j++)
-                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs_[i / ppc].get(), notify_cqs_[i / ppc].get());
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), false); });
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, ppc] { HandleRpcs(cqs_[i / ppc].get(), notify_cqs_[i / ppc].get(), true); });
+                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get());
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get(), false); });
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get(), true); });
             }
         }
     }
@@ -595,10 +593,10 @@ public:
         gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown(deadline);
-        for (int i = 0; i < (int)(cqs_.size()); ++i)
-            cqs_[i]->Shutdown();
-        for (int i = 0; i < (int)(notify_cqs_.size()); ++i)
-            notify_cqs_[i]->Shutdown();
+        for (auto & cq : cqs)
+            cq->Shutdown();
+        for (auto & cq : notify_cqs)
+            cq->Shutdown();
         thread_manager->wait();
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
@@ -615,7 +613,7 @@ private:
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_, notify_cqs_;
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs, notify_cqs;
     std::shared_ptr<ThreadManager> thread_manager;
 };
 

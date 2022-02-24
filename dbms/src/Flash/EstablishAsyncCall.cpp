@@ -10,9 +10,7 @@ std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
     try
     {
         if (eptr)
-        {
             std::rethrow_exception(eptr);
-        }
     }
     catch (const std::exception & e)
     {
@@ -33,27 +31,6 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     Proceed();
 }
 
-void EstablishCallData::ContinueFromPending(const std::shared_ptr<MPPTunnel> & tunnel, std::string & err_msg)
-{
-    if (tunnel == nullptr)
-        WriteErr(getPacketWithError(err_msg));
-    else
-    {
-        attachTunnel(tunnel);
-        state_ = EstablishCallData::CallStatus::JOIN;
-        mpptunnel_->is_async = true;
-        try
-        {
-            mpptunnel_->connect(this);
-        }
-        catch (...)
-        {
-            grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "has connected");
-            WriteDone(status);
-        }
-    }
-}
-
 bool EstablishCallData::TryWrite()
 {
     //check whether there is a valid msg to write
@@ -64,8 +41,7 @@ bool EstablishCallData::TryWrite()
         else
             return false;
     }
-    //there is a valid msg, submit write task
-    //    exec_pool->SubmitTunnelSendOp(mpptunnel_);
+    //there is a valid msg, do single write operation
     mpptunnel_->sendJob(false);
     return true;
 }
@@ -90,14 +66,8 @@ void EstablishCallData::rpcInitOp()
     }
 }
 
-void EstablishCallData::Pending()
-{
-    state_ = PENDING;
-}
-
 bool EstablishCallData::Write(const mpp::MPPDataPacket & packet)
 {
-    // The actual processing.
     try
     {
         responder_.Write(packet, this);
@@ -121,9 +91,6 @@ void EstablishCallData::WriteErr(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::WriteDone(const ::grpc::Status & status)
 {
-    // And we are done! Let the gRPC runtime know we've finished, using the
-    // memory address of this instance as the uniquely identifying tag for
-    // the event.
     state_ = FINISH;
     responder_.Finish(status, this);
 }
@@ -143,26 +110,20 @@ void EstablishCallData::Proceed()
 
         // As part of the initial CREATE state, we *request* that the system
         // start processing requests. In this request, "this" acts are
-        // the tag uniquely identifying the request (so that different EstablishCallData
-        // instances can serve different requests concurrently), in this case
-        // the memory address of this EstablishCallData instance.
+        // the tag uniquely identifying the request.
         service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
     }
     else if (state_ == PROCESS)
     {
         state_ = JOIN;
-        // Spawn a new EstablishCallData instance to serve new clients while we process
-        // the one for this EstablishCallData. The instance will deallocate itself as
-        // part of its FINISH state.
+        // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
+        // The instance will deallocate itself as part of its FINISH state.
         new EstablishCallData(service_, cq_, notify_cq_);
         {
             std::unique_lock lk(mu);
             notifyReady();
         }
         rpcInitOp();
-    }
-    else if (state_ == PENDING)
-    {
     }
     else if (state_ == JOIN)
     {
@@ -173,7 +134,6 @@ void EstablishCallData::Proceed()
                 ready = false;
                 lk.unlock();
                 mpptunnel_->sendJob(true);
-                //                exec_pool->SubmitTunnelSendOp(mpptunnel_);
             }
             else
             {

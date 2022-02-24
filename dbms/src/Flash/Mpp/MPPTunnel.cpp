@@ -58,11 +58,9 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 template <typename Writer>
 void MPPTunnelBase<Writer>::finishSendQueue()
 {
-    bool fg = send_queue.finish(); //TODO fix all send_queue case
+    bool fg = send_queue.finish();
     if (fg && !is_local && is_async)
-    {
         writer->TryWrite();
-    }
 }
 
 /// exit abnormally, such as being cancelled.
