@@ -13,23 +13,43 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
         : ChunkCodecStream(field_types)
     {
-        output = std::make_unique<WriteBufferFromOwnString>();
-        for (size_t i = 0; i < field_types.size(); i++)
+        for (const auto & field_type : field_types)
         {
-            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
         }
     }
 
     String getString() override
     {
+        if (output == nullptr)
+        {
+            throw Exception("The output should not be null in getString()");
+        }
         return output->releaseStr();
     }
 
-    void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
+    void clear() override { output = nullptr; }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
 };
+
+size_t getExtraInfoSize(const Block & block)
+{
+    size_t size = 64; /// to hold some length of structures, such as column number, row number...
+    size_t columns = block.columns();
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
+        size += column.name.size();
+        size += column.type->getName().size();
+        if (column.column->isColumnConst())
+        {
+            size += column.column->byteSize() * column.column->size();
+        }
+    }
+    return size;
+}
 
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
 {
@@ -58,6 +78,10 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
         throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
+
+    assert(output == nullptr);
+    output = std::make_unique<WriteBufferFromOwnString>(block.bytes() + getExtraInfoSize(block));
+
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();

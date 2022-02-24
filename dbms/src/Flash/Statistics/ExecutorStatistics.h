@@ -68,7 +68,7 @@ public:
         auto it = profile_streams_map.find(executor_id);
         if (it != profile_streams_map.end())
         {
-            for (const auto & input_stream : it->second.input_streams)
+            for (const auto & input_stream : it->second)
             {
                 auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get());
                 assert(p_stream);

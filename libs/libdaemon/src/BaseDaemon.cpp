@@ -14,7 +14,14 @@
 #ifndef USE_LLVM_LIBUNWIND
 #define UNW_LOCAL_ONLY
 #endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextern-c-compat"
+#endif
 #include <libunwind.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #ifdef __APPLE__
@@ -70,6 +77,10 @@
 #include <memory>
 #include <sstream>
 #include <typeinfo>
+
+#ifdef TIFLASH_LLVM_COVERAGE
+extern "C" int __llvm_profile_write_file(void);
+#endif
 
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
@@ -208,7 +219,9 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
 
     /// The time that is usually enough for separate thread to print info into log.
     ::sleep(10);
-
+#ifdef TIFLASH_LLVM_COVERAGE
+    __llvm_profile_write_file();
+#endif
     call_default_signal_handler(sig);
 }
 

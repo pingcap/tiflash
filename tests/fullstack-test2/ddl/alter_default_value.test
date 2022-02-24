@@ -80,7 +80,7 @@ mysql> alter table test.t drop column b7;
 
 ###########
 # Alter enum with unsupported collate
-mysql> alter table test.t add column e enum('Critical','Major','Minor','URGENT','High','Medium','Low','Unprioritized') COLLATE utf8mb4_0900_ai_ci DEFAULT 'Unprioritized';
+mysql> alter table test.t add column e enum('Critical','Major','Minor','URGENT','High','Medium','Low','Unprioritized') COLLATE utf8mb4_bin DEFAULT 'Unprioritized';
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+---------------+

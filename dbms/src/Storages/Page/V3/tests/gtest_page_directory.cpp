@@ -8,6 +8,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -33,7 +34,9 @@ public:
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        dir = PageDirectory::create(provider, delegator, nullptr);
+        CollapsingPageDirectory collapsed_state;
+        auto wal = WALStore::create(nullptr, provider, delegator);
+        dir = PageDirectory::create(collapsed_state, std::move(wal));
     }
 
     void TearDown() override

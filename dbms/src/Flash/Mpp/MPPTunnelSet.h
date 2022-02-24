@@ -1,8 +1,14 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTunnel.h>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <tipb/select.pb.h>
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <boost/noncopyable.hpp>
 
 namespace DB
@@ -33,12 +39,26 @@ public:
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    void addTunnel(const TunnelPtr & tunnel) { tunnels.push_back(tunnel); }
+    void addTunnel(const TunnelPtr & tunnel)
+    {
+        tunnels.push_back(tunnel);
+        if (!tunnel->isLocal())
+        {
+            remote_tunnel_cnt++;
+        }
+    }
+
+    int getRemoteTunnelCnt()
+    {
+        return remote_tunnel_cnt;
+    }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
 private:
     std::vector<TunnelPtr> tunnels;
+
+    int remote_tunnel_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>

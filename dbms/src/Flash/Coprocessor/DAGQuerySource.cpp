@@ -1,5 +1,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Parsers/makeDummyQuery.h>
 #include <fmt/core.h>
 
@@ -23,7 +24,10 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
-    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(getDAGContext().getQBIdToJoinAliasMap());
+
+    root_query_block->output_field_types = collectOutputFieldTypes(dag_request);
+    getDAGContext().initExecutorIdToJoinIdMap();
+
     for (UInt32 i : dag_request.output_offsets())
     {
         root_query_block->output_offsets.push_back(i);

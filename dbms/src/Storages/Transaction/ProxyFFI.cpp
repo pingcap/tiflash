@@ -4,9 +4,9 @@
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/ReadIndexWorker.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <diagnosticspb.pb.h>
 
 namespace CurrentMetrics
 {
@@ -105,9 +105,33 @@ EngineStoreApplyRes HandleAdminRaftCmd(
 static_assert(sizeof(RaftStoreProxyFFIHelper) == sizeof(TiFlashRaftProxyHelper));
 static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper));
 
+struct RustGcHelper : public ext::Singleton<RustGcHelper>
+{
+    void gcRustPtr(RawVoidPtr ptr, RawRustPtrType type) const
+    {
+        fn_gc_rust_ptr(ptr, type);
+    }
+
+    RustGcHelper() = default;
+
+    void setRustPtrGcFn(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType))
+    {
+        this->fn_gc_rust_ptr = fn_gc_rust_ptr;
+    }
+
+private:
+    void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType);
+};
+
 void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy)
 {
+    // any usage towards proxy helper must happen after this function.
+    {
+        // init global rust gc function pointer here.
+        RustGcHelper::instance().setRustPtrGcFn(proxy->fn_gc_rust_ptr);
+    }
     server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
+    std::atomic_thread_fence(std::memory_order::memory_order_seq_cst);
 }
 
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
@@ -221,13 +245,7 @@ void CppStrVec::updateView()
     }
 }
 
-kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
-{
-    auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-    return std::move(res.at(0).first);
-}
-
-BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
+BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
 {
     std::vector<std::string> req_strs;
     req_strs.reserve(req.size());
@@ -241,6 +259,24 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
     res.reserve(req.size());
     fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms);
     return res;
+}
+
+RawRustPtrWrap::RawRustPtrWrap(RawRustPtr inner)
+    : RawRustPtr(inner)
+{
+}
+
+RawRustPtrWrap::~RawRustPtrWrap()
+{
+    if (ptr == nullptr)
+        return;
+    RustGcHelper::instance().gcRustPtr(ptr, type);
+}
+RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
+{
+    RawRustPtr & tar = (*this);
+    tar = src;
+    src.ptr = nullptr;
 }
 
 struct PreHandledSnapshotWithBlock
@@ -355,7 +391,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         break;
     }
     default:
-        LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+        LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
         exit(-1);
     }
 }
@@ -375,8 +411,11 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
         case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
             delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
             break;
+        case RawCppPtrTypeImpl::WakerNotifier:
+            delete reinterpret_cast<AsyncNotifier *>(ptr);
+            break;
         default:
-            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+            LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
         }
     }
@@ -404,12 +443,6 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
 {
     return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
-}
-
-void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
-{
-    using diagnosticspb::ServerInfoResponse;
-    reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
 }
 
 CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_t full)
@@ -446,6 +479,12 @@ void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
     assert(server->tmt);
     assert(store.id() != 0);
     server->tmt->getKVStore()->setStore(std::move(store));
+}
+
+void MockSetFFI::MockSetRustGcHelper(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType))
+{
+    LOG_FMT_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
+    RustGcHelper::instance().setRustPtrGcFn(fn_gc_rust_ptr);
 }
 
 } // namespace DB

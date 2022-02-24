@@ -1,6 +1,7 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/ReadIndexStressTest.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
 #include <Debug/dbgFuncMisc.h>
@@ -103,6 +104,9 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
+    regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
+
+    regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

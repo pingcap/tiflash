@@ -180,7 +180,7 @@ private:
     Int32 size = -1; /// -1 indicates that there is no value.
     Int32 capacity = 0; /// power of two or zero
     char * large_data;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     bool less(const StringRef & a, const StringRef & b) const
     {
@@ -236,7 +236,7 @@ public:
 
     void setCollators(const TiDB::TiDBCollators & collators_)
     {
-        collator = collators_.size() > 0 ? collators_[0] : nullptr;
+        collator = !collators_.empty() ? collators_[0] : nullptr;
     }
 
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
@@ -730,7 +730,7 @@ private:
     DataTypePtr type;
 
 public:
-    AggregateFunctionsSingleValue(const DataTypePtr & type)
+    explicit AggregateFunctionsSingleValue(const DataTypePtr & type)
         : type(type)
     {
         if (StringRef(Data::name()) == StringRef("min")
