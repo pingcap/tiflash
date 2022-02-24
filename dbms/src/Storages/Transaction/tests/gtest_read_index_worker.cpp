@@ -207,12 +207,13 @@ void ReadIndexTest::testBasic()
     {
         // codec
         kvrpcpb::ReadIndexResponse resp;
-        std::string str = resp.SerializeAsString();
         {
-            resp.mutable_locked();
+            resp.mutable_locked()->set_key("123");
             resp.mutable_region_error();
             resp.set_read_index(12345);
         }
+        std::string str = resp.SerializeAsString();
+
         kvrpcpb::ReadIndexResponse resp2;
         SetPBMsByBytes(MsgPBType::ReadIndexResponse, &resp2, BaseBuffView{str.data(), str.size()});
         std::string str2 = resp2.SerializeAsString();
