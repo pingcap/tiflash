@@ -24,14 +24,7 @@ if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
     -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
     -DUSE_CCACHE=OFF \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    -DLINKER_NAME=lld \
-    -DUSE_LIBCXX=ON \
-    -DUSE_LLVM_LIBUNWIND=OFF \
-    -DUSE_LLVM_COMPILER_RT=OFF \
-    -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
     -DRUN_HAVE_STD_REGEX=0 \
-    -DCMAKE_AR="/usr/local/bin/llvm-ar" \
-    -DCMAKE_RANLIB="/usr/local/bin/llvm-ranlib" \
     -GNinja
   python3 ${SRCPATH}/release-centos7-llvm/scripts/fix_compile_commands.py \
           --file_path=${BUILD_DIR}/compile_commands.json \
