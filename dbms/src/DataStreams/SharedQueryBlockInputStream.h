@@ -69,6 +69,11 @@ public:
             throw Exception(exception_msg);
     }
 
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        ++cnt;
+    }
+
 protected:
     Block readImpl() override
     {

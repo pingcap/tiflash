@@ -178,28 +178,25 @@ TEST_F(PageStorageTest, MultipleWriteRead)
     size_t page_id_max = 100;
     for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
     {
-        DB::MemHolder holder;
+        std::mt19937 size_gen;
+        size_gen.seed(time(nullptr));
+        std::uniform_int_distribution<> dist(0, 3000);
 
-        auto buff = [page_id] {
-            std::mt19937 size_gen;
-            size_gen.seed(time(nullptr));
-            std::uniform_int_distribution<> dist(0, 3000);
+        const size_t buff_sz = 2 * DB::MB + dist(size_gen);
+        char * buff = static_cast<char *>(malloc(buff_sz));
+        if (buff == nullptr)
+        {
+            throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
+        }
 
-            const size_t buff_sz = 2 * DB::MB + dist(size_gen);
-            char * buff = static_cast<char *>(malloc(buff_sz));
-            if (buff == nullptr)
-            {
-                throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
-            }
+        const char buff_ch = page_id % 0xFF;
+        memset(buff, buff_ch, buff_sz);
+        DB::MemHolder holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
 
-            const char buff_ch = page_id % 0xFF;
-            memset(buff, buff_ch, buff_sz);
-            DB::createMemHolder(buff, [&](char * p) { free(p); });
-            return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
-        }();
+        auto read_buff = std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
 
         DB::WriteBatch wb;
-        wb.putPage(page_id, 0, buff, buff->buffer().size());
+        wb.putPage(page_id, 0, read_buff, read_buff->buffer().size());
         page_storage->write(std::move(wb));
     }
 

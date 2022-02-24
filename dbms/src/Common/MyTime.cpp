@@ -65,7 +65,8 @@ bool isValidSeperator(char c, int previous_parts)
     if (isPunctuation(c))
         return true;
 
-    return previous_parts == 2 && (c == ' ' || c == 'T');
+    // for https://github.com/pingcap/tics/issues/4036
+    return previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c));
 }
 
 std::vector<String> parseDateFormat(String format)
@@ -549,7 +550,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 
     bool truncated_or_incorrect = false;
 
-    // noAbsorb tests if can absorb FSP or TZ
+    // no_absorb tests if can absorb FSP or TZ
     auto no_absorb = [](const std::vector<String> & seps) {
         // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
         // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
@@ -700,7 +701,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             }
             else
             {
-                truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
             }
         }
         if (truncated_or_incorrect)
