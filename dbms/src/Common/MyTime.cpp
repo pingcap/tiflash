@@ -668,7 +668,6 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             switch (frac_str.size())
             {
             case 0:
-                ret = 1;
                 is_date = true;
                 break;
             case 1:
