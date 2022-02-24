@@ -401,7 +401,10 @@ std::set<PageId> PageDirectory::getAllPageIds()
 
 void PageDirectory::apply(PageEntriesEdit && edit)
 {
-    std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
+    // Note that we need to make sure increasing `sequence` in order, so it
+    // also needs to be protected by `write_lock` throughout the `apply`
+    // TODO: It is totally serialized, make it a pipeline
+    std::unique_lock write_lock(table_rw_mutex);
     UInt64 last_sequence = sequence.load();
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
