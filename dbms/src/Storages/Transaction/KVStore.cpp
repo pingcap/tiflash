@@ -625,6 +625,7 @@ void WaitCheckRegionReady(
             if (!need_retry)
             {
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
+                assert(resp.read_index() != 0);
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
             }
