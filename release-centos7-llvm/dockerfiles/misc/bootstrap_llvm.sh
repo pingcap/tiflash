@@ -50,4 +50,5 @@ function bootstrap_llvm() {
     rm -rf llvm-project
     
     echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" | tee /etc/ld.so.conf.d/llvm.conf
+    ldconfig
 }
