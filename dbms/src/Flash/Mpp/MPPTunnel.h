@@ -105,7 +105,8 @@ public:
 
     void sendJob(bool need_lock = true);
 
-    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> *getSendQueue() {
+    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * getSendQueue()
+    {
         return &send_queue;
     }
 

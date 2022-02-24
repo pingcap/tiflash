@@ -104,7 +104,6 @@ public:
     {
         ::grpc::Service::RequestAsyncServerStreaming(48, context, request, writer, new_call_cq, notification_cq, tag);
     }
-
 };
 
 } // namespace DB
