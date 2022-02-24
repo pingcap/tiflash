@@ -596,14 +596,14 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         {
         case 14: // YYYYMMDDHHMMSS
         {
-            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 6);
             hhmmss = true;
             break;
         }
         case 12: // YYMMDDHHMMSS
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 6);
             year = adjustYear(year);
             hhmmss = true;
@@ -611,7 +611,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         case 11: // YYMMDDHHMMS
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 6);
             year = adjustYear(year);
             hhmmss = true;
@@ -619,27 +619,27 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         case 10: // YYMMDDHHMM
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 5);
             year = adjustYear(year);
             break;
         }
         case 9: // YYMMDDHHM
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 5);
             year = adjustYear(year);
             break;
         }
         case 8: // YYYYMMDD
         {
-            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 3);
             break;
         }
         case 7: // YYMMDDH
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 4);
             year = adjustYear(year);
             break;
@@ -647,7 +647,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         case 6: // YYMMDD
         case 5: // YYMMD
         {
-            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);//NOLINT(cert-err34-c): check conversion error manually
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT(cert-err34-c): check conversion error manually
             truncated_or_incorrect = (ret != 3);
             year = adjustYear(year);
             break;
@@ -673,20 +673,20 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             case 1:
             case 2:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);//NOLINT(cert-err34-c): check conversion error manually
+                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT(cert-err34-c): check conversion error manually
                 truncated_or_incorrect = (ret != 1);
                 break;
             }
             case 3:
             case 4:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);//NOLINT(cert-err34-c): check conversion error manually
+                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
                 truncated_or_incorrect = (ret != 2);
                 break;
             }
             default:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);//NOLINT(cert-err34-c): check conversion error manually
+                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
                 truncated_or_incorrect = (ret != 3);
                 break;
             }
