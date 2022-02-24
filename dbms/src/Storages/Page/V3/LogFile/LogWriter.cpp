@@ -38,7 +38,7 @@ LogWriter::LogWriter(
 
 void LogWriter::resetBuffer()
 {
-    write_buffer.set(buffer, buffer_size);
+    write_buffer = WriteBuffer(buffer, buffer_size);
 }
 
 LogWriter::~LogWriter()
@@ -79,9 +79,9 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
     bool begin = true;
     size_t payload_left = payload_size;
 
-    if (payload_size > buffer_size)
+    size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
+    if (payload_size + head_sizes >= buffer_size)
     {
-        size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
         size_t new_buff_size = payload_size + ((head_sizes / Format::BLOCK_SIZE) + 1) * Format::BLOCK_SIZE;
 
         buffer = static_cast<char *>(realloc(buffer, buffer_size, new_buff_size));

@@ -21,6 +21,7 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
@@ -69,75 +70,6 @@ static String randomSkewedString(int i, std::mt19937 & rd)
 {
     return repeatedString(DB::toString(i), getSkewedNum(17, rd));
 }
-
-class StringSink : public DB::WriteBufferFromFileBase
-{
-public:
-    String & contents;
-
-    explicit StringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
-        , contents(contents_)
-    {}
-
-    off_t getPositionInFile() override { return count(); }
-    void sync() override { next(); }
-    String getFileName() const override { return ""; }
-    int getFD() const override { return -1; }
-    void close() override {}
-
-protected:
-    off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return getPositionInFile(); }
-    void doTruncate(off_t length [[maybe_unused]]) override {}
-    void nextImpl() override
-    {
-        if (offset() == 0)
-            return;
-        contents.append(working_buffer.begin(), offset());
-    }
-};
-class OverwritingStringSink : public DB::WriteBufferFromFileBase
-{
-public:
-    String & contents;
-
-    explicit OverwritingStringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
-        , contents(contents_)
-        , last_sync_pos(0)
-    {}
-
-    off_t getPositionInFile() override { return count(); }
-    void sync() override { next(); }
-    String getFileName() const override { return ""; }
-    int getFD() const override { return -1; }
-    void close() override {}
-
-protected:
-    off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return getPositionInFile(); }
-    void doTruncate(off_t length [[maybe_unused]]) override {}
-    void nextImpl() override
-    {
-        if (offset() == 0)
-            return;
-        if (last_sync_pos < contents.size())
-        {
-            size_t overwrite_size = std::min(contents.size() - last_sync_pos, offset());
-            // overwrite
-            memcpy(contents.data() + last_sync_pos, working_buffer.begin(), overwrite_size);
-            // append the left over from working_buffer (if any)
-            contents.append(working_buffer.begin() + overwrite_size, offset() - overwrite_size);
-        }
-        else
-        {
-            contents.append(working_buffer.begin(), offset());
-        }
-        last_sync_pos += offset();
-    }
-
-private:
-    size_t last_sync_pos;
-};
 
 // Param type is tuple<int, bool>
 // get<0>(tuple): non-zero if recycling log, zero if regular log
@@ -207,6 +139,11 @@ private:
         }
     };
 
+    String path;
+    String file_name;
+    FileProviderPtr provider;
+    WriteReadableFilePtr wr_file;
+
     String reader_contents;
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
@@ -224,31 +161,35 @@ public:
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {
-        auto ctx = TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
-        auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
+        provider = TiFlashTestEnv::getContext().getFileProvider();
+        path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
+
         Poco::File file(path);
         if (!file.exists())
         {
             file.createDirectories();
         }
 
-        std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
-        writer = std::make_unique<LogWriter>(path + "/log_0", provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        file_name = path + "/log_0";
+
+        writer = std::make_unique<LogWriter>(file_name, provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
         resetReader();
+
+
+        wr_file = provider->newWriteReadableFile(
+            file_name,
+            EncryptionPath{file_name, ""},
+            false,
+            /*create_new_encryption_info_*/ false);
     }
 
     std::unique_ptr<LogReader> getNewReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords, size_t log_num = 0)
     {
-        std::unique_ptr<ReadBufferFromFileBase> file_reader = std::make_unique<StringSouce>(reader_contents, /*fail_after_read_partial_*/ !allow_retry_read);
-        auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
-        auto provider = TiFlashTestEnv::getContext().getFileProvider();
-
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
-            path + "/log_0",
-            EncryptionPath{path + "/log_0", ""},
+            file_name,
+            EncryptionPath{file_name, ""},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
             /*read_limiter*/ nullptr,
@@ -271,12 +212,14 @@ public:
     void write(const std::string & msg)
     {
         ReadBufferFromString buff(msg);
+
         ASSERT_NO_THROW(writer->addRecord(buff, msg.size()));
     }
 
     size_t writtenBytes() const
     {
-        return reader_contents.size();
+        Poco::File file_in_disk(file_name);
+        return file_in_disk.getSize();
     }
 
     String read()
@@ -290,17 +233,20 @@ public:
 
     void incrementByte(int offset, char delta)
     {
-        reader_contents[offset] += delta;
+        char old_one[1];
+        PageUtil::readFile(wr_file, offset, old_one, 1, nullptr);
+        old_one[0] += delta;
+        PageUtil::writeFile(wr_file, offset, old_one, 1, nullptr);
     }
 
     void setByte(int offset, char new_byte)
     {
-        reader_contents[offset] = new_byte;
+        PageUtil::writeFile(wr_file, offset, &new_byte, 1, nullptr);
     }
 
     void shrinkSize(int bytes)
     {
-        reader_contents.resize(reader_contents.size() - bytes);
+        PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes);
     }
 
     void fixChecksum(int header_offset, int len, bool recyclable)
@@ -308,12 +254,17 @@ public:
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
         Digest::CRC32 digest;
+
+        size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + len;
+        char crc_buff[crc_buff_size];
+        PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff, crc_buff_size, nullptr);
+
         digest.update(
-            &reader_contents[header_offset + Format::CHECKSUM_START_OFFSET],
-            header_size - Format::CHECKSUM_START_OFFSET + len);
+            crc_buff,
+            crc_buff_size);
+
         auto checksum = digest.checksum();
-        WriteBuffer buff(&reader_contents[header_offset], sizeof(checksum));
-        writeIntBinary(checksum, buff);
+        PageUtil::writeFile(wr_file, header_offset, (char *)(&checksum), sizeof(checksum), nullptr);
     }
 
     /// Some methods to check the error reporter
@@ -524,10 +475,10 @@ TEST_P(LogFileRWTest, TruncatedTrailingRecordIsNotIgnored)
         // raise an error.
         return;
     }
-    resetReader(WALRecoveryMode::AbsoluteConsistency);
+
     write("foo");
     shrinkSize(4); // Drop all payload as well as a header byte
-    resetReader();
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
     ASSERT_GT(droppedBytes(), 0);
