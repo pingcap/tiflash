@@ -66,18 +66,78 @@ using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
 struct EntryOrDelete
 {
-    bool is_delete;
-    PageEntryV3 entry;
-
-    explicit EntryOrDelete(bool del)
-        : is_delete(del)
+    enum class Type
     {
-        assert(del == true);
+        NORMAL,
+        REF,
+        EXTERNAL,
+        DELETE,
+    };
+    Type type;
+    PageEntryV3 entry;
+    PageId origin_page_id;
+    Int64 being_ref_count = 1;
+
+    static EntryOrDelete newDelete()
+    {
+        return EntryOrDelete{
+            .type = Type::DELETE,
+            .entry = {}, // meaningless
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1, // meaningless
+        };
     }
-    explicit EntryOrDelete(const PageEntryV3 & entry_)
-        : is_delete(false)
-        , entry(entry_)
-    {}
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .type = Type::NORMAL,
+            .entry = entry,
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1,
+        };
+    }
+    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .type = Type::NORMAL,
+            .entry = entry,
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = ori_entry.being_ref_count,
+        };
+    }
+    static EntryOrDelete newRefEntry(PageId ori_id)
+    {
+        return EntryOrDelete{
+            .type = Type::REF,
+            .entry = {}, // meaningless
+            .origin_page_id = ori_id,
+            .being_ref_count = 1, // meaningless
+        };
+    }
+    static EntryOrDelete newExternal()
+    {
+        return EntryOrDelete{
+            .type = Type::EXTERNAL,
+            .entry = {}, // meaningless
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1, // meaningless
+        };
+    }
+
+    bool isDelete() const { return type == Type::DELETE; }
+    bool isExternal() const { return type == Type::EXTERNAL; }
+    bool isRef() const { return type == Type::REF; }
+    bool isNormal() const { return type == Type::NORMAL; }
+
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{type:{}, entry:{}, ori_page_id:{}, being_ref_count:{}}}",
+            static_cast<Int32>(type),
+            ::DB::PS::V3::toDebugString(entry),
+            origin_page_id,
+            being_ref_count);
+    }
 };
 using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
@@ -88,24 +148,36 @@ public:
         return std::make_unique<std::lock_guard<std::mutex>>(m);
     }
 
-    void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
+    inline void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
     {
-        entries.emplace(PageVersionType(seq), entry);
+        createNewVersion(seq, 0, entry);
     }
 
-    void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
-    {
-        entries.emplace(PageVersionType(seq, epoch), entry);
-    }
+    void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry);
 
     void createDelete(UInt64 seq)
     {
-        entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
+        auto page_lock = acquireLock();
+        if (entries.empty() || !entries.rbegin()->second.isDelete())
+        {
+            entries.emplace(PageVersionType(seq), EntryOrDelete::newDelete());
+        }
     }
 
-    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+    bool createNewRefVersion(UInt64 seq, PageId ori_page_id);
 
-    std::optional<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
+    enum ResolveResult
+    {
+        RESOLVE_FAIL,
+        RESOLVE_TO_REF,
+        RESOLVE_TO_NORMAL,
+    };
+    std::tuple<ResolveResult, PageId, PageVersionType>
+    resolveToPageId(UInt64 seq);
+
+    Int64 incrRefCount(const PageVersionType & ver);
+
+    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
@@ -151,7 +223,12 @@ public:
      *    lowest_seq : 1
      *    Then no entry should be delete.
      */
-    std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
+    std::pair<PageEntriesV3, bool> cleanOutdatedEntries(
+        UInt64 lowest_seq,
+        PageId page_id,
+        std::map<PageId, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+        const PageLock & page_lock);
+    std::pair<PageEntriesV3, bool> derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, Int64 deref_count);
 
     size_t size() const
     {
