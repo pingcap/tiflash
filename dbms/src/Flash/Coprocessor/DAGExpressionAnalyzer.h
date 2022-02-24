@@ -252,18 +252,6 @@ private:
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets) const;
 
-    std::pair<bool, Names> buildJoinKey(
-        ExpressionActionsPtr & actions,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        bool left,
-        bool is_right_out_join);
-
-    bool buildExtraCastsAfterTS(
-        ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
-
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
