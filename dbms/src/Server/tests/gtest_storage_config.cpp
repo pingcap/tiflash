@@ -46,7 +46,120 @@ protected:
     Poco::Logger * log;
 };
 
+<<<<<<< HEAD
 TEST_F(StorageConfig_test, MultiSSDSettings)
+=======
+TEST_F(StorageConfigTest, SimpleSinglePath)
+try
+{
+    Strings tests = {
+        // Deprecated style
+        R"(
+path="/data0/tiflash"
+        )",
+        // Deprecated style with capacity
+        R"(
+path="/data0/tiflash"
+capacity=1024000000
+        )",
+        // New style
+        R"(
+[storage]
+[storage.main]
+dir=["/data0/tiflash"]
+        )",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+
+        size_t global_capacity_quota = 0;
+        TiFlashStorageConfig storage;
+        std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+
+        ASSERT_EQ(storage.main_data_paths.size(), 1);
+        EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
+        EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 1);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/data0/tiflash/kvstore/");
+
+        auto all_paths = storage.getAllNormalPaths();
+        EXPECT_EQ(all_paths[0], "/data0/tiflash/");
+
+        // Ensure that creating PathCapacityMetrics is OK.
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, ExplicitKVStorePath)
+try
+{
+    Strings tests = {
+        // Deprecated style
+        R"(
+path="/data0/tiflash"
+[raft]
+kvstore_path="/data1111/kvstore"
+        )",
+        // New style
+        R"(
+[storage]
+[storage.main]
+dir=["/data0/tiflash"]
+[storage.raft]
+dir=["/data1111/kvstore"]
+        )",
+        // New style with remaining `raft.kvstore_path`, will be overwrite for backward compatibility
+        R"(
+[raft]
+kvstore_path="/data1111/kvstore"
+[storage]
+[storage.main]
+dir=["/data0/tiflash"]
+[storage.raft]
+dir=["/data222/kvstore"]
+        )",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+
+        size_t global_capacity_quota = 0;
+        TiFlashStorageConfig storage;
+        std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+
+        ASSERT_EQ(storage.main_data_paths.size(), 1);
+        EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
+        EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 1);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/data1111/kvstore/");
+
+        auto all_paths = storage.getAllNormalPaths();
+        EXPECT_EQ(all_paths[0], "/data0/tiflash/");
+
+        // Ensure that creating PathCapacityMetrics is OK.
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, MultiSSDSettings)
+>>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
 try
 {
     Strings tests = {
@@ -76,13 +189,69 @@ dir=["/data0/tiflash"]
         TiFlashStorageConfig storage;
         std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
 
-        ASSERT_EQ(storage.main_data_paths.size(), 3UL);
+        ASSERT_EQ(storage.main_data_paths.size(), 3);
         EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
         EXPECT_EQ(storage.main_data_paths[1], "/data1/tiflash/");
         EXPECT_EQ(storage.main_data_paths[2], "/data2/tiflash/");
 
-        ASSERT_EQ(storage.latest_data_paths.size(), 1UL);
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
         EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 1);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/data0/tiflash/kvstore/");
+
+        auto all_paths = storage.getAllNormalPaths();
+        EXPECT_EQ(all_paths[0], "/data0/tiflash/");
+
+        // Ensure that creating PathCapacityMetrics is OK.
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, MultiNVMeSSDSettings)
+try
+{
+    Strings tests = {
+        R"(
+[storage]
+[storage.main]
+dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
+        )",
+        R"(
+[storage]
+[storage.main]
+dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
+[storage.latest]
+dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
+        )",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+
+        size_t global_capacity_quota = 0;
+        TiFlashStorageConfig storage;
+        std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+
+        ASSERT_EQ(storage.main_data_paths.size(), 3);
+        EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
+        EXPECT_EQ(storage.main_data_paths[1], "/data1/tiflash/");
+        EXPECT_EQ(storage.main_data_paths[2], "/data2/tiflash/");
+
+        ASSERT_EQ(storage.latest_data_paths.size(), 3);
+        EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
+        EXPECT_EQ(storage.latest_data_paths[1], "/data1/tiflash/");
+        EXPECT_EQ(storage.latest_data_paths[2], "/data2/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 3);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/data0/tiflash/kvstore/");
+        EXPECT_EQ(storage.kvstore_data_path[1], "/data1/tiflash/kvstore/");
+        EXPECT_EQ(storage.kvstore_data_path[2], "/data2/tiflash/kvstore/");
 
         auto all_paths = storage.getAllNormalPaths();
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
@@ -124,12 +293,15 @@ dir=["/ssd0/tiflash"]
         TiFlashStorageConfig storage;
         std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
 
-        ASSERT_EQ(storage.main_data_paths.size(), 2UL);
+        ASSERT_EQ(storage.main_data_paths.size(), 2);
         EXPECT_EQ(storage.main_data_paths[0], "/hdd0/tiflash/");
         EXPECT_EQ(storage.main_data_paths[1], "/hdd1/tiflash/");
 
-        ASSERT_EQ(storage.latest_data_paths.size(), 1UL);
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
         EXPECT_EQ(storage.latest_data_paths[0], "/ssd0/tiflash/");
+
+        ASSERT_EQ(storage.kvstore_data_path.size(), 1);
+        EXPECT_EQ(storage.kvstore_data_path[0], "/ssd0/tiflash/kvstore/");
 
         auto all_paths = storage.getAllNormalPaths();
         EXPECT_EQ(all_paths[0], "/ssd0/tiflash/");
@@ -180,12 +352,67 @@ path = "/data0/tiflash,/data1/tiflash"
 [storage.main]
 dir = [ "/data0/tiflash", "/data1/tiflash" ]
 capacity = [ 10737418240 ]
+<<<<<<< HEAD
 # [storage.latest]
 # dir = [ ]
 # capacity = [ 10737418240, 10737418240 ]
 # [storage.raft]
 # dir = [ ]
 )",
+=======
+        )",
+        // case for the length of storage.latest.dir is not the same with storage.latest.capacity
+        R"(
+path = "/data0/tiflash,/data1/tiflash"
+[storage]
+[storage.main]
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
+capacity = [ 10737418240, 10737418240 ]
+[storage.latest]
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
+capacity = [ 10737418240 ]
+        )",
+        // case for storage.main.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = "/data0/tiflash,/data1/tiflash"
+        )",
+        // case for storage.latest.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = [ "/data0/tiflash", "/data1/tiflash" ] 
+[storage.latest]
+dir = "/data0/tiflash"
+        )",
+        // case for storage.raft.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = [ "/data0/tiflash", "/data1/tiflash" ] 
+[storage.raft]
+dir = "/data0/tiflash"
+        )",
+        // case for storage.main.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = 123
+        )",
+        // case for storage.main.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = [["/data0/tiflash", "/data1/tiflash"], ["/data2/tiflash", ]]
+        )",
+        // case for storage.main.dir is not an string array
+        R"(
+[storage]
+[storage.main]
+dir = [1,2,3]
+        )",
+>>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -250,12 +477,12 @@ capacity=[ 1024 ]
         TiFlashStorageConfig storage;
         std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
 
-        ASSERT_EQ(storage.main_data_paths.size(), 3UL);
+        ASSERT_EQ(storage.main_data_paths.size(), 3);
         EXPECT_EQ(storage.main_data_paths[0], "/data0/tiflash/");
         EXPECT_EQ(storage.main_data_paths[1], "/data1/tiflash/");
         EXPECT_EQ(storage.main_data_paths[2], "/data2/tiflash/");
 
-        ASSERT_EQ(storage.latest_data_paths.size(), 1UL);
+        ASSERT_EQ(storage.latest_data_paths.size(), 1);
         EXPECT_EQ(storage.latest_data_paths[0], "/data0/tiflash/");
 
         auto all_paths = storage.getAllNormalPaths();
@@ -269,6 +496,7 @@ capacity=[ 1024 ]
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
         switch (i)
         {
+<<<<<<< HEAD
             case 0:
             case 1:
                 EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0UL);
@@ -276,13 +504,22 @@ capacity=[ 1024 ]
             case 2:
                 EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048UL);
                 break;
+=======
+        case 0:
+        case 1:
+            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0);
+            break;
+        case 2:
+            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048);
+            break;
+>>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         }
         idx = path_capacity.locatePath("/data1/tiflash/");
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
-        EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 3072UL);
+        EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 3072);
         idx = path_capacity.locatePath("/data2/tiflash/");
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
-        EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 4196UL);
+        EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 4196);
     }
 }
 CATCH
@@ -343,6 +580,7 @@ result_rows = 0
 )",
         // case for set some settings
         R"(
+<<<<<<< HEAD
 [profiles]
 [profiles.default]
 max_memory_usage = 123456
@@ -357,6 +595,119 @@ dt_enable_rough_set_filter = false
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
+=======
+[storage]
+[storage.io_rate_limit]
+max_bytes_per_sec=1024000
+max_read_bytes_per_sec=1024000
+max_write_bytes_per_sec=1024000
+foreground_write_weight=1
+background_write_weight=2
+foreground_read_weight=5
+background_read_weight=2
+        )",
+    };
+
+    Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfigTest");
+
+    auto verify_default = [](const StorageIORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
+        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 25);
+        ASSERT_EQ(io_config.bg_write_weight, 25);
+        ASSERT_EQ(io_config.fg_read_weight, 25);
+        ASSERT_EQ(io_config.bg_read_weight, 25);
+        ASSERT_EQ(io_config.readWeight(), 50);
+        ASSERT_EQ(io_config.writeWeight(), 50);
+        ASSERT_EQ(io_config.totalWeight(), 100);
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
+    };
+
+    auto verify_case0 = [](const StorageIORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
+        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 1);
+        ASSERT_EQ(io_config.bg_write_weight, 2);
+        ASSERT_EQ(io_config.fg_read_weight, 5);
+        ASSERT_EQ(io_config.bg_read_weight, 2);
+        ASSERT_EQ(io_config.readWeight(), 7);
+        ASSERT_EQ(io_config.writeWeight(), 3);
+        ASSERT_EQ(io_config.totalWeight(), 10);
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
+    };
+
+    auto verify_case1 = [](const StorageIORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
+        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 1);
+        ASSERT_EQ(io_config.bg_write_weight, 2);
+        ASSERT_EQ(io_config.fg_read_weight, 5);
+        ASSERT_EQ(io_config.bg_read_weight, 2);
+        ASSERT_EQ(io_config.readWeight(), 7);
+        ASSERT_EQ(io_config.writeWeight(), 3);
+        ASSERT_EQ(io_config.totalWeight(), 10);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400);
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400 * 5);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 2);
+    };
+
+    auto verify_case2 = [](const StorageIORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
+        ASSERT_FALSE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 1);
+        ASSERT_EQ(io_config.bg_write_weight, 2);
+        ASSERT_EQ(io_config.fg_read_weight, 5);
+        ASSERT_EQ(io_config.bg_read_weight, 2);
+        ASSERT_EQ(io_config.readWeight(), 7);
+        ASSERT_EQ(io_config.writeWeight(), 3);
+        ASSERT_EQ(io_config.totalWeight(), 10);
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 682666);
+    };
+
+    auto verify_case3 = [](const StorageIORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
+        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 1);
+        ASSERT_EQ(io_config.bg_write_weight, 2);
+        ASSERT_EQ(io_config.fg_read_weight, 5);
+        ASSERT_EQ(io_config.bg_read_weight, 2);
+        ASSERT_EQ(io_config.readWeight(), 7);
+        ASSERT_EQ(io_config.writeWeight(), 3);
+        ASSERT_EQ(io_config.totalWeight(), 10);
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
+    };
+
+    std::vector<std::function<void(const StorageIORateLimitConfig &)>> case_verifiers;
+    case_verifiers.push_back(verify_case0);
+    case_verifiers.push_back(verify_case1);
+    case_verifiers.push_back(verify_case2);
+    case_verifiers.push_back(verify_case3);
+
+    for (size_t i = 0; i < 2u /*tests.size()*/; ++i)
+>>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
@@ -367,6 +718,7 @@ dt_enable_rough_set_filter = false
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.setUsersConfig(config);
 
+<<<<<<< HEAD
         // Create a copy of global_ctx
         auto ctx = global_ctx;
         for (const auto & addr_ : test_addrs)
@@ -391,6 +743,12 @@ dt_enable_rough_set_filter = false
             ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("system"));
             ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("test"));
         }
+=======
+        StorageIORateLimitConfig io_config;
+        verify_default(io_config);
+        io_config.parse(config->getString("storage.io_rate_limit"), log);
+        case_verifiers[i](io_config);
+>>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
     }
 }
 CATCH
