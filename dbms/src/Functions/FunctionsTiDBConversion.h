@@ -927,11 +927,11 @@ struct TiDBConvertToDecimal
         using UType = typename U::NativeType;
         auto value = CastInternalType(v.value);
 
-        if (v_scale <= scale)
+        if (v_scale < scale)
         {
             value *= scale_mul;
         }
-        else
+        else if (v_scale > scale)
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
             value /= scale_mul;
