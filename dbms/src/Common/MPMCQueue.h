@@ -121,7 +121,7 @@ public:
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
-    /// Return: true finish is done successfully , false if it had been cancelled or finished
+    /// Return true if the previous status is NORMAL.
     bool finish()
     {
         std::unique_lock lock(mu);
