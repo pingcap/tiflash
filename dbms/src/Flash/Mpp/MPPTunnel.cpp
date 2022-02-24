@@ -134,6 +134,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
     assert(!is_local);
+    bool async = is_async.load();
     String err_msg;
     try
     {
@@ -148,7 +149,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
             }
             else
             {
-                if (is_async)
+                if (async)
                     return;
             }
         }
@@ -168,7 +169,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg, need_lock);
-    if (is_async)
+    if (async)
         writer->WriteDone(grpc::Status::OK);
 }
 
