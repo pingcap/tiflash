@@ -157,7 +157,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline, const String & selec
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
 
     if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size, storage, required_columns, learner_read_snapshot);
+        doLocalRead(pipeline, settings.max_block_size, storage, required_columns, learner_read_snapshot, conditions);
 
     for (const auto & region_info : dag_context.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
@@ -242,7 +242,8 @@ void DAGStorageInterpreter::doLocalRead(
     size_t max_block_size,
     const ManageableStoragePtr & storage,
     const Names & required_columns,
-    const LearnerReadSnapshot & learner_read_snapshot)
+    const LearnerReadSnapshot & learner_read_snapshot,
+    const std::vector<const tipb::Expr *> & conditions)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     SelectQueryInfo query_info;
