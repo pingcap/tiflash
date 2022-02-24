@@ -287,13 +287,6 @@ bool TiFlashRaftProxyHelper::pollTimerTask(TimerTask & task, RawVoidPtr waker) c
     return fn_poll_timer_task(task.ptr, waker);
 }
 
-void SetReadIndexResp(RawVoidPtr resp, BaseBuffView view)
-{
-    auto * res = reinterpret_cast<kvrpcpb::ReadIndexResponse *>(resp);
-    res->ParseFromArray(view.data, view.len);
-}
-
-
 struct ReadIndexNotifyCtrl : MutexLockWrap
 {
     using Data = std::deque<std::pair<RegionID, Timestamp>>;

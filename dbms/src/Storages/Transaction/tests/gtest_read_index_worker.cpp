@@ -214,7 +214,7 @@ void ReadIndexTest::testBasic()
             resp.set_read_index(12345);
         }
         kvrpcpb::ReadIndexResponse resp2;
-        SetReadIndexResp(&resp2, BaseBuffView{str.data(), str.size()});
+        SetPBMsByBytes(MsgPBType::ReadIndexResponse, &resp2, BaseBuffView{str.data(), str.size()});
         std::string str2 = resp2.SerializeAsString();
 
         ASSERT_EQ(str2, str);

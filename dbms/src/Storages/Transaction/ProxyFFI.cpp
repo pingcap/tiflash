@@ -7,6 +7,7 @@
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/diagnosticspb.pb.h>
 
 namespace CurrentMetrics
 {
@@ -245,6 +246,13 @@ void CppStrVec::updateView()
     }
 }
 
+void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
+{
+    kvrpcpb::ReadIndexResponse res;
+    res.ParseFromArray(view.data, view.len);
+    reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
+}
+
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
 {
     std::vector<std::string> req_strs;
@@ -257,7 +265,7 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(const std::vector<kv
     auto outer_view = data.intoOuterView();
     BatchReadIndexRes res;
     res.reserve(req.size());
-    fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms);
+    fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms, InsertBatchReadIndexResp);
     return res;
 }
 
@@ -320,6 +328,15 @@ RawCppPtr PreHandleSnapshot(
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
+
+#ifndef NDEBUG
+        {
+            auto & kvstore = server->tmt->getKVStore();
+            auto state = kvstore->getProxyHelper()->getRegionLocalState(new_region->id());
+            assert(state.state() == raft_serverpb::PeerState::Applying);
+        }
+#endif
+
         switch (kvstore->applyMethod())
         {
         case TiDB::SnapshotApplyMethod::Block:
@@ -433,13 +450,6 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     return encryption_method_name[static_cast<uint8_t>(method)];
 }
 
-void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
-{
-    kvrpcpb::ReadIndexResponse res;
-    res.ParseFromArray(view.data, view.len);
-    reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
-}
-
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
 {
     return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
@@ -485,6 +495,48 @@ void MockSetFFI::MockSetRustGcHelper(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustP
 {
     LOG_FMT_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
     RustGcHelper::instance().setRustPtrGcFn(fn_gc_rust_ptr);
+}
+
+void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view)
+{
+    switch (type)
+    {
+    case MsgPBType::ReadIndexResponse:
+        reinterpret_cast<kvrpcpb::ReadIndexResponse *>(ptr)->ParseFromArray(view.data, view.len);
+        break;
+    case MsgPBType::RegionLocalState:
+        reinterpret_cast<raft_serverpb::RegionLocalState *>(ptr)->ParseFromArray(view.data, view.len);
+        break;
+    case MsgPBType::ServerInfoResponse:
+        reinterpret_cast<diagnosticspb::ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
+        break;
+    }
+}
+
+raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint64_t region_id) const
+{
+    assert(this->fn_get_region_local_state);
+
+    raft_serverpb::RegionLocalState state;
+    RawCppStringPtr error_msg_ptr{};
+    SCOPE_EXIT({
+        delete error_msg_ptr;
+    });
+    auto res = this->fn_get_region_local_state(this->proxy_ptr, region_id, &state, &error_msg_ptr);
+    switch (res)
+    {
+    case KVGetStatus::Ok:
+        break;
+    case KVGetStatus::Error:
+    {
+        throw Exception(fmt::format("{} meet internal error: {}", __FUNCTION__, *error_msg_ptr), ErrorCodes::LOGICAL_ERROR);
+    }
+    case KVGetStatus::NotFound:
+        // make not found as `Tombstone`
+        state.set_state(raft_serverpb::PeerState::Tombstone);
+        break;
+    }
+    return state;
 }
 
 } // namespace DB

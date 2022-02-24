@@ -62,7 +62,8 @@ public:
     ~RegionMockTest();
 
 private:
-    TiFlashRaftProxyHelper mock_proxy_helper;
+    TiFlashRaftProxyHelper mock_proxy_helper{};
+    const TiFlashRaftProxyHelper * ori_proxy_helper{};
     KVStorePtr kvstore;
     RegionPtr region;
 };

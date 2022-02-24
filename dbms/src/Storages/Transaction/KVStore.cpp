@@ -84,14 +84,6 @@ RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
     return manage_lock.index.findByRangeOverlap(range);
 }
 
-void KVStore::handleRegionsByRangeOverlap(
-    const RegionRange & range,
-    std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const
-{
-    auto task_lock = genTaskLock();
-    callback(getRegionsByRangeOverlap(range), task_lock);
-}
-
 RegionTaskLock RegionTaskCtrl::genRegionTaskLock(RegionID region_id) const
 {
     RegionTaskElement * e = nullptr;
@@ -283,7 +275,11 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 {
-    auto task_lock = genTaskLock();
+    handleDestroy(region_id, tmt, genTaskLock());
+}
+
+void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
+{
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
