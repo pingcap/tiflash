@@ -119,7 +119,7 @@ private:
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
     void appendCastAfterAgg(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -131,7 +131,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -139,7 +139,7 @@ private:
 
     void buildCommonAggFunc(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -147,13 +147,13 @@ private:
 
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns);
 
     void buildAggGroupBy(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,

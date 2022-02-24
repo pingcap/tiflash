@@ -72,7 +72,7 @@ String getAggFuncName(
 
 void DAGExpressionAnalyzer::buildGroupConcat(
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
@@ -190,7 +190,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
 void DAGExpressionAnalyzer::buildCommonAggFunc(
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
@@ -216,7 +216,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
 
 void DAGExpressionAnalyzer::buildAggGroupBy(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
@@ -270,7 +270,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
 
 void DAGExpressionAnalyzer::buildAggFuncs(
     const tipb::Aggregation & aggregation,
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     AggregateDescriptions & aggregate_descriptions,
     NamesAndTypes & aggregated_columns)
 {
@@ -700,7 +700,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
 }
 
 void DAGExpressionAnalyzer::appendCastAfterAgg(
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     const tipb::Aggregation & aggregation)
 {
     bool need_update_source_columns = false;
