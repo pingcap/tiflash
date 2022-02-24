@@ -559,7 +559,7 @@ public:
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         thread_manager = DB::newThreadManager();
-        int async_cq_num = (int)server.context().getSettingsRef().async_cqs;
+        int async_cq_num = server.context().getSettingsRef().async_cqs;
         if (enable_async_server)
         {
             for (int i = 0; i < async_cq_num; ++i)

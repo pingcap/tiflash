@@ -24,11 +24,13 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , cq_(cq)
     , notify_cq_(notify_cq)
     , responder_(&ctx_)
-    , state_(CREATE)
+    , state_(PROCESS)
     , send_queue_(nullptr)
 {
-    // Invoke the serving logic right away.
-    Proceed();
+    // As part of the initial CREATE state, we *request* that the system
+    // start processing requests. In this request, "this" acts are
+    // the tag uniquely identifying the request.
+    service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
 }
 
 bool EstablishCallData::TryWrite()
@@ -103,17 +105,7 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::Proceed()
 {
-    if (state_ == CREATE)
-    {
-        // Make this instance progress to the PROCESS state.
-        state_ = PROCESS;
-
-        // As part of the initial CREATE state, we *request* that the system
-        // start processing requests. In this request, "this" acts are
-        // the tag uniquely identifying the request.
-        service_->RequestEstablishMPPConnection(&ctx_, &request_, &responder_, cq_, notify_cq_, this);
-    }
-    else if (state_ == PROCESS)
+    if (state_ == PROCESS)
     {
         state_ = JOIN;
         // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.

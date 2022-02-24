@@ -76,7 +76,6 @@ private:
     // Let's implement a state machine with the following states.
     enum CallStatus
     {
-        CREATE,
         PROCESS,
         JOIN,
         ERR_HANDLE,
