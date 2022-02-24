@@ -185,11 +185,11 @@ public:
     CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
 };
 
-// `PageDiectory` store multi-versions entries for the same
+// `PageDirectory` store multi-versions entries for the same
 // page id. User can acquire a snapshot from it and get a
 // consist result by the snapshot.
 // All its functions are consider concurrent safe.
-// User should call `gc` periodly to remove outdated version
+// User should call `gc` periodic to remove outdated version
 // of entries in order to keep the memory consumption as well
 // as the restoring time in a reasonable level.
 class PageDirectory

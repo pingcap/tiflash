@@ -32,7 +32,7 @@ TEST(WALSeriTest, AllPuts)
     auto iter = edit.getRecords().begin();
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p1));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p1);
 }
 
 TEST(WALSeriTest, PutsAndRefsAndDels)
@@ -63,7 +63,7 @@ try
     auto iter = edit.getRecords().begin();
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p3));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p3);
     iter++;
     EXPECT_EQ(iter->page_id, 4);
     EXPECT_EQ(iter->version, ver21);
@@ -71,7 +71,7 @@ try
     iter++;
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p5));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p5);
     iter++;
     EXPECT_EQ(iter->type, WriteBatch::WriteType::DEL);
     EXPECT_EQ(iter->page_id, 2);
@@ -104,15 +104,15 @@ TEST(WALSeriTest, Upserts)
     auto iter = edit.getRecords().begin();
     EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20_1);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p1_2));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p1_2);
     iter++;
     EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21_1);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p3_2));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p3_2);
     iter++;
     EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
-    EXPECT_TRUE(isSameEntry(iter->entry, entry_p5_2));
+    EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
 
 TEST(WALLognameTest, parsing)

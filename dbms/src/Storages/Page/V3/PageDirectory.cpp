@@ -557,7 +557,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 
             if (versioned_pageid_entries.empty())
             {
-                throw Exception(fmt::format("Can't get any entries from [BlobFileId={}]", blob_id));
+                throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
             }
 
             blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
