@@ -108,10 +108,14 @@ public:
     std::optional<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
 
     /**
-     * Take out the `VersionedEntries` which exist in the `BlobFileId`.
-     * Also return the total size of entries.
+     * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
+     * store them into `blob_versioned_entries`.
+     * Return the total size of entries in this version list.
      */
-    std::pair<VersionedEntries, PageSize> getEntriesByBlobId(BlobFileId blob_id);
+    PageSize getEntriesByBlobIds(
+        const std::unordered_set<BlobFileId> & blob_ids,
+        PageId page_id,
+        std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
 
     /**
      * GC will give a `lowest_seq`.
@@ -217,7 +221,7 @@ public:
     void apply(PageEntriesEdit && edit);
 
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
-    getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc);
+    getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
     std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
 
@@ -255,7 +259,10 @@ public:
 private:
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
-    using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;
+    // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
+    // "No iterators or references are invalidated"
+    // https://en.cppreference.com/w/cpp/container/map/insert
+    using MVCCMapType = std::map<PageId, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
 
     mutable std::mutex snapshots_mutex;

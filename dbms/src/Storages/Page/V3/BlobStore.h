@@ -20,7 +20,7 @@ extern const int LOGICAL_ERROR;
 namespace PS::V3
 {
 class CollapsingPageDirectory;
-using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
+using PageIdAndVersionedEntries = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
 
 class BlobStore : public Allocator<false>
 {

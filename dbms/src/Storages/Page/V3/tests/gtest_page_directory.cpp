@@ -604,52 +604,151 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     INSERT_BLOBID_ENTRY(3, 8);
     INSERT_BLOBID_ENTRY(1, 11);
 
-    const auto & [versioned_entries1, total_size1] = entries.getEntriesByBlobId(1);
+    PageId page_id = 100;
+    auto check_for_blob_id_1 = [&](const PageIdAndVersionedEntries & entries) {
+        auto it = entries.begin();
 
-    ASSERT_EQ(versioned_entries1.size(), 4);
-    ASSERT_EQ(total_size1, 1 + 2 + 5 + 11);
-    auto it = versioned_entries1.begin();
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 1);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v1);
 
-    ASSERT_EQ(it->first.sequence, 1);
-    ASSERT_SAME_ENTRY(it->second, entry_v1);
+        it++;
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 2);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v2);
 
-    it++;
-    ASSERT_EQ(it->first.sequence, 2);
-    ASSERT_SAME_ENTRY(it->second, entry_v2);
+        it++;
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 5);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v5);
 
-    it++;
-    ASSERT_EQ(it->first.sequence, 5);
-    ASSERT_SAME_ENTRY(it->second, entry_v5);
+        it++;
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 11);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v11);
+    };
+    auto check_for_blob_id_2 = [&](const PageIdAndVersionedEntries & entries) {
+        auto it = entries.begin();
 
-    it++;
-    ASSERT_EQ(it->first.sequence, 11);
-    ASSERT_SAME_ENTRY(it->second, entry_v11);
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 3);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v3);
 
-    const auto & [versioned_entries2, total_size2] = entries.getEntriesByBlobId(2);
+        it++;
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 4);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v4);
+    };
+    auto check_for_blob_id_3 = [&](const PageIdAndVersionedEntries & entries) {
+        auto it = entries.begin();
 
-    ASSERT_EQ(versioned_entries2.size(), 2);
-    ASSERT_EQ(total_size2, 3 + 4);
-    it = versioned_entries2.begin();
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 6);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v6);
 
-    ASSERT_EQ(it->first.sequence, 3);
-    ASSERT_SAME_ENTRY(it->second, entry_v3);
+        it++;
+        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<1>(*it).sequence, 8);
+        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v8);
+    };
 
-    it++;
-    ASSERT_EQ(it->first.sequence, 4);
-    ASSERT_SAME_ENTRY(it->second, entry_v4);
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, page_id, blob_entries);
 
-    const auto & [versioned_entries3, total_size3] = entries.getEntriesByBlobId(3);
+        ASSERT_EQ(blob_entries.size(), 0);
+        ASSERT_EQ(total_size, 0);
+    }
 
-    ASSERT_EQ(versioned_entries3.size(), 2);
-    ASSERT_EQ(total_size3, 6 + 8);
-    it = versioned_entries3.begin();
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        const BlobFileId blob_id = 1;
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
 
-    ASSERT_EQ(it->first.sequence, 6);
-    ASSERT_SAME_ENTRY(it->second, entry_v6);
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[blob_id].size(), 4);
+        ASSERT_EQ(total_size, 1 + 2 + 5 + 11);
+        check_for_blob_id_1(blob_entries[blob_id]);
+    }
 
-    it++;
-    ASSERT_EQ(it->first.sequence, 8);
-    ASSERT_SAME_ENTRY(it->second, entry_v8);
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        const BlobFileId blob_id = 2;
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[blob_id].size(), 2);
+        ASSERT_EQ(total_size, 3 + 4);
+        check_for_blob_id_2(blob_entries[blob_id]);
+    }
+
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        const BlobFileId blob_id = 3;
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[blob_id].size(), 2);
+        ASSERT_EQ(total_size, 6 + 8);
+        check_for_blob_id_3(blob_entries[blob_id]);
+    }
+
+    // {1, 2}
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 2);
+        ASSERT_EQ(blob_entries[1].size(), 4);
+        ASSERT_EQ(blob_entries[2].size(), 2);
+        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (3 + 4));
+        check_for_blob_id_1(blob_entries[1]);
+        check_for_blob_id_2(blob_entries[2]);
+    }
+
+    // {2, 3}
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 2);
+        ASSERT_EQ(blob_entries[2].size(), 2);
+        ASSERT_EQ(blob_entries[3].size(), 2);
+        ASSERT_EQ(total_size, (6 + 8) + (3 + 4));
+        check_for_blob_id_2(blob_entries[2]);
+        check_for_blob_id_3(blob_entries[3]);
+    }
+
+    // {1, 2, 3}
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 3);
+        ASSERT_EQ(blob_entries[1].size(), 4);
+        ASSERT_EQ(blob_entries[2].size(), 2);
+        ASSERT_EQ(blob_entries[3].size(), 2);
+        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (6 + 8) + (3 + 4));
+        check_for_blob_id_1(blob_entries[1]);
+        check_for_blob_id_2(blob_entries[2]);
+        check_for_blob_id_3(blob_entries[3]);
+    }
+
+    // {1, 2, 3, 100}; blob_id 100 is not exist in actual
+    {
+        std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, page_id, blob_entries);
+
+        ASSERT_EQ(blob_entries.size(), 3); // 100 not exist
+        ASSERT_EQ(blob_entries.find(100), blob_entries.end());
+        ASSERT_EQ(blob_entries[1].size(), 4);
+        ASSERT_EQ(blob_entries[2].size(), 2);
+        ASSERT_EQ(blob_entries[3].size(), 2);
+        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (6 + 8) + (3 + 4));
+        check_for_blob_id_1(blob_entries[1]);
+        check_for_blob_id_2(blob_entries[2]);
+        check_for_blob_id_3(blob_entries[3]);
+    }
 }
 
 #undef INSERT_BLOBID_ENTRY
@@ -706,8 +805,8 @@ try
     INSERT_ENTRY(page_id, 4);
     INSERT_ENTRY_ACQ_SNAP(page_id, 5);
 
-    ASSERT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
-    ASSERT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+    EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
 
     /**
      * after GC =>  {
@@ -720,8 +819,8 @@ try
     // v1, v2 have been removed.
     ASSERT_EQ(getNumEntries(del_entries), 2);
 
-    ASSERT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
-    ASSERT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
+    EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
 
     // Release all snapshots and run gc again, (min gc version get pushed forward and)
     // all versions get compacted.
@@ -731,7 +830,7 @@ try
     ASSERT_EQ(getNumEntries(del_entries), 2);
 
     auto snapshot_after_gc = dir.createSnapshot();
-    ASSERT_ENTRY_EQ(entry_v5, dir, page_id, snapshot_after_gc);
+    EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot_after_gc);
 }
 CATCH
 
@@ -1009,36 +1108,30 @@ try
     // Full GC get entries
     auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
-    EXPECT_EQ(candidate_entries_1.first[1].size(), 2); // 2 page entries list
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
 
     auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
-    EXPECT_EQ(entries_in_file2.size(), 2); // 2 page entries list
-    EXPECT_EQ(entries_in_file3.size(), 1); // 1 page entries list
+    EXPECT_EQ(entries_in_file2.size(), 2); // 2 entries for 1 page id
+    EXPECT_EQ(entries_in_file3.size(), 1); // 1 entries for 1 page id
 
     PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
-        for (const auto & [page_id, version_entries] : entries)
+        for (const auto & [page_id, ver, entry] : entries)
         {
-            for (const auto & [ver, entry] : version_entries)
-            {
-                gc_migrate_entries.upsertPage(page_id, ver, entry);
-            }
+            gc_migrate_entries.upsertPage(page_id, ver, entry);
         }
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
         (void)file_id;
-        for (const auto & [page_id, version_entries] : entries)
+        for (const auto & [page_id, ver, entry] : entries)
         {
-            for (const auto & [ver, entry] : version_entries)
-            {
-                gc_migrate_entries.upsertPage(page_id, ver, entry);
-            }
+            gc_migrate_entries.upsertPage(page_id, ver, entry);
         }
     }
 
@@ -1062,17 +1155,18 @@ try
 
     EXPECT_EQ(dir.numPages(), 2);
 
-    // 1.1 Full GC get entries
+    // 1.1 Full GC get entries for blob_id in [1]
     auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
-    EXPECT_EQ(candidate_entries_1.first[1].size(), 2);
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
 
+    // for blob_id in [2, 3]
     auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
-    EXPECT_EQ(entries_in_file2.size(), 1);
-    EXPECT_EQ(entries_in_file3.size(), 1);
+    EXPECT_EQ(entries_in_file2.size(), 2); // 2 entries for 1 page id
+    EXPECT_EQ(entries_in_file3.size(), 1); // 1 entry for 1 page_id
 
     // 2.1 Execute GC
     dir.gc();
@@ -1083,23 +1177,17 @@ try
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
-        for (const auto & [page_id, version_entries] : entries)
+        for (const auto & [page_id, ver, entry] : entries)
         {
-            for (const auto & [ver, entry] : version_entries)
-            {
-                gc_migrate_entries.upsertPage(page_id, ver, entry);
-            }
+            gc_migrate_entries.upsertPage(page_id, ver, entry);
         }
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
         (void)file_id;
-        for (const auto & [page_id, version_entries] : entries)
+        for (const auto & [page_id, ver, entry] : entries)
         {
-            for (const auto & [ver, entry] : version_entries)
-            {
-                gc_migrate_entries.upsertPage(page_id, ver, entry);
-            }
+            gc_migrate_entries.upsertPage(page_id, ver, entry);
         }
     }
 

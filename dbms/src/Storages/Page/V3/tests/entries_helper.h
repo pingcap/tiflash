@@ -55,7 +55,7 @@ inline ::testing::AssertionResult entryCompare(
     const PageEntryV3 & rhs)
 {
     // Maybe need more fields check later
-    if (lhs.file_id == rhs.file_id && lhs.offset == rhs.offset && lhs.size == rhs.size)
+    if (isSameEntry(lhs, rhs))
     {
         return ::testing::AssertionSuccess();
     }
