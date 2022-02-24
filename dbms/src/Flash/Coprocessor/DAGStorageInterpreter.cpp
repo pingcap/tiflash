@@ -1,7 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/UniformIntRandomGenerator.h>
+#include <Common/UniformRandomIntGenerator.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -273,12 +273,12 @@ void DAGStorageInterpreter::doLocalRead(
 
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
-                thread_local UniformIntRandomGenerator<int> random_generator(0, 99);
+                thread_local UniformRandomIntGenerator<int> random(0, 99);
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
                 RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
-                    if (random_generator.rand() > 50)
+                    if (random.rand() > 50)
                         region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);

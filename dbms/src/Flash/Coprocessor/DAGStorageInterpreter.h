@@ -40,7 +40,14 @@ public:
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
 
-    void execute(DAGPipeline & pipeline, const String & selection_name = "", const std::vector<const tipb::Expr *> & conditions = {});
+    void execute(DAGPipeline & pipeline, const String & selection_name, const std::vector<const tipb::Expr *> & conditions);
+
+    void execute(DAGPipeline & pipeline)
+    {
+        std::string empty_selection_name;
+        std::vector<const tipb::Expr *> empty_conditions;
+        execute(pipeline, empty_selection_name, empty_conditions);
+    }
 
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
@@ -67,7 +74,8 @@ private:
         size_t max_block_size,
         const ManageableStoragePtr & storage,
         const Names & required_columns,
-        const LearnerReadSnapshot & learner_read_snapshot);
+        const LearnerReadSnapshot & learner_read_snapshot,
+        const std::vector<const tipb::Expr *> & conditions);
 
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(Int64 query_schema_version);
 

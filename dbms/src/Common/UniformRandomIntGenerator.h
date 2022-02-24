@@ -5,11 +5,11 @@
 namespace DB
 {
 template <typename IntType>
-class UniformIntRandomGenerator
+class UniformRandomIntGenerator
 {
 public:
     /// [min, max]
-    UniformIntRandomGenerator(IntType min, IntType max)
+    UniformRandomIntGenerator(IntType min, IntType max)
         : dis(std::uniform_int_distribution<IntType>(min, max))
         , gen(std::default_random_engine(std::random_device{}()))
     {}
