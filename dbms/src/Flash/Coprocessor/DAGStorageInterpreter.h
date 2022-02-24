@@ -79,11 +79,11 @@ private:
         const ManageableStoragePtr & storage,
         const String & handle_column_name,
         const String & selection_name,
-        const std::vector<const tipb::Expr *> & conditions)
+        const std::vector<const tipb::Expr *> & conditions);
 
-        /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
+    /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
-        Context & context;
+    Context & context;
     String table_scan_executor_id;
     const tipb::TableScan & table_scan;
     size_t max_streams;

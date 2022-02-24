@@ -252,6 +252,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
             conditions.push_back(&condition);
 
         assert(!conditions.empty());
+        assert(!query_block.selection_name.empty());
         storage_interpreter.execute(pipeline, query_block.selection_name, conditions);
     }
     else
