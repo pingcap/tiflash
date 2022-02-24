@@ -526,10 +526,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
 
-            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
-            // Small packs are appended to Delta Cache, the flushed later.
-            // While large packs are directly written to PageStorage.
-            if (small_pack)
+            bool is_small = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
+            // Small column fies are appended to Delta Cache, then flushed later.
+            // While large column fies are directly written to PageStorage.
+            if (is_small)
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
@@ -539,8 +539,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
             else
             {
-                // If pack haven't been written, or the pk range has changed since last write, then write it and
-                // delete former written pack.
+                // If column file haven't been written, or the pk range has changed since last write, then write it and
+                // delete former written column file.
                 if (!write_column_file || (write_column_file && write_range != rowkey_range))
                 {
                     wbs.rollbackWrittenLogAndData();
@@ -711,10 +711,10 @@ void DeltaMergeStore::ingestFiles(
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto pack = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
-                if (pack->getRows() != 0)
+                auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
+                if (column_file->getRows() != 0)
                 {
-                    column_files.emplace_back(std::move(pack));
+                    column_files.emplace_back(std::move(column_file));
                     wbs.data.putRefPage(ref_id, file_id);
                 }
             }
@@ -1127,13 +1127,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     size_t delta_bytes = delta_saved_bytes + unsaved_bytes;
     size_t segment_rows = segment->getEstimatedRows();
     size_t segment_bytes = segment->getEstimatedBytes();
-    size_t pack_count = delta->getColumnFileCount();
+    size_t column_file_count = delta->getColumnFileCount();
 
     size_t placed_delta_rows = delta->getPlacedDeltaRows();
 
     auto & delta_last_try_flush_rows = delta->getLastTryFlushRows();
     auto & delta_last_try_flush_bytes = delta->getLastTryFlushBytes();
-    auto & delta_last_try_compact_packs = delta->getLastTryCompactPacks();
+    auto & delta_last_try_compact_column_files = delta->getLastTryCompactColumnFiles();
     auto & delta_last_try_merge_delta_rows = delta->getLastTryMergeDeltaRows();
     auto & delta_last_try_merge_delta_bytes = delta->getLastTryMergeDeltaBytes();
     auto & delta_last_try_split_rows = delta->getLastTrySplitRows();
@@ -1168,7 +1168,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(pack_count) - delta_last_try_compact_packs, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
@@ -1304,7 +1304,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_bg_compact = [&]() {
         if (should_compact)
         {
-            delta_last_try_compact_packs = pack_count;
+            delta_last_try_compact_column_files = column_file_count;
             try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
             return true;
         }
