@@ -207,6 +207,7 @@ public:
         return io;
     }
 
+    int getNewThreadCountOfExchangeReceiver() const;
     UInt64 getFlags() const
     {
         return flags;
@@ -278,6 +279,7 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    int new_thread_count_of_exchange_receiver = 0;
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;

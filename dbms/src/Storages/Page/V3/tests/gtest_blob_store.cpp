@@ -691,8 +691,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
     WriteBatch wb;
+    char c_buff[buff_size * buff_nums];
     {
-        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             for (size_t j = 0; j < buff_size; ++j)
@@ -774,8 +774,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
     WriteBatch wb;
+    char c_buff[buff_size * buff_nums];
     {
-        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             for (size_t j = 0; j < buff_size; ++j)
