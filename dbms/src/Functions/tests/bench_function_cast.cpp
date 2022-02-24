@@ -156,6 +156,7 @@ public:
         DataTypePtr dest_type_dec_65_30 = createDecimal(65, 30);
         DataTypePtr dest_type_dec_8_0 = createDecimal(8, 0);
         DataTypePtr dest_type_dec_10_0 = createDecimal(10, 0);
+        DataTypePtr dest_type_dec_10_5 = createDecimal(10, 5);
         DataTypePtr dest_type_dec_10_8 = createDecimal(10, 8);
         DataTypePtr dest_type_dec_20_0 = createDecimal(20, 0);
         DataTypePtr dest_type_dec_30_0 = createDecimal(30, 0);
@@ -174,6 +175,7 @@ public:
         dest_col_dec_65_30 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_65_30->getName()), std::make_shared<DataTypeString>(), "");
         dest_col_dec_8_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_8_0->getName()), std::make_shared<DataTypeString>(), "");
         dest_col_dec_10_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_0->getName()), std::make_shared<DataTypeString>(), "");
+        dest_col_dec_10_5 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_5->getName()), std::make_shared<DataTypeString>(), "");
         dest_col_dec_10_8 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_8->getName()), std::make_shared<DataTypeString>(), "");
         dest_col_dec_20_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_20_0->getName()), std::make_shared<DataTypeString>(), "");
         dest_col_dec_30_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_30_0->getName()), std::make_shared<DataTypeString>(), "");
@@ -238,6 +240,7 @@ public:
 
     ColumnWithTypeAndName dest_col_dec_8_0;
     ColumnWithTypeAndName dest_col_dec_10_0;
+    ColumnWithTypeAndName dest_col_dec_10_5;
     ColumnWithTypeAndName dest_col_dec_10_8;
     ColumnWithTypeAndName dest_col_dec_20_0;
     ColumnWithTypeAndName dest_col_dec_30_0;
@@ -334,6 +337,8 @@ CAST_BENCHMARK(CastToDecimalBench, int64_small_to_decimal_10_0, from_col_int64_s
 // cast(decimal as decimal)
 // no; Int64; Int64
 CAST_BENCHMARK(CastToDecimalBench, decimal_3_0_to_decimal_10_0, from_col_dec_3_0, dest_col_dec_10_0);
+// no; Int64; Int64
+CAST_BENCHMARK(CastToDecimalBench, decimal_3_0_to_decimal_10_5, from_col_dec_3_0, dest_col_dec_10_5);
 // need; Int64; Int64
 CAST_BENCHMARK(CastToDecimalBench, decimal_3_0_to_decimal_10_8, from_col_dec_3_0, dest_col_dec_10_8);
 
