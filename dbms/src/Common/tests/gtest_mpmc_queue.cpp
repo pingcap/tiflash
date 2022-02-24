@@ -595,6 +595,7 @@ TEST_F(TestMPMCQueue, isNextOpNonBlocking)
 {
     MPMCQueue<int> q(2);
     ASSERT_TRUE(q.isNextPushNonBlocking());
+    ASSERT_FALSE(q.isNextPopNonBlocking());
     ASSERT_TRUE(q.push(1));
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
