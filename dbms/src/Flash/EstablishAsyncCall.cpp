@@ -59,7 +59,7 @@ bool EstablishCallData::TryWrite()
     //check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
-        if (ready && (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)) //not ready or no packet
+        if (ready && (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)) //not ready or no packet
             ready = false;
         else
             return false;
@@ -168,7 +168,7 @@ void EstablishCallData::Proceed()
     {
         {
             std::unique_lock lk(mu);
-            if (send_queue_ && (send_queue_->size() || send_queue_->isFinished()) && mpptunnel_)
+            if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
             {
                 ready = false;
                 lk.unlock();
