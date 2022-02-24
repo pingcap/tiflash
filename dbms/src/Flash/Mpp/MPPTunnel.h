@@ -103,7 +103,7 @@ public:
 
     std::atomic<bool> is_async{false};
 
-    // In async mode, do a singe send operation.
+    // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
     // In sync mode, as a background task to keep sending until done.
     void sendJob(bool need_lock = true);
 
