@@ -5,7 +5,7 @@
 
 namespace DB
 {
-std::string DeriveErrWhat(std::exception_ptr eptr) // passing by value is ok
+std::string DeriveErrWhat(std::exception_ptr eptr)
 {
     try
     {
@@ -127,19 +127,15 @@ void EstablishCallData::Proceed()
     }
     else if (state_ == JOIN)
     {
+        std::unique_lock lk(mu);
+        if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
         {
-            std::unique_lock lk(mu);
-            if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
-            {
-                ready = false;
-                lk.unlock();
-                mpptunnel_->sendJob(true);
-            }
-            else
-            {
-                notifyReady();
-            }
+            ready = false;
+            lk.unlock();
+            mpptunnel_->sendJob(true);
         }
+        else
+            notifyReady();
     }
     else if (state_ == ERR_HANDLE)
     {
