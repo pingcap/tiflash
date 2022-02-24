@@ -135,10 +135,16 @@ public:
             return false;
     }
 
-    bool canNonBlockingPop() const
+    bool isNextPopNonBlocking() const
     {
         std::unique_lock lock(mu);
         return read_pos < write_pos || !isNormal();
+    }
+
+    bool isNextPushNonBlocking() const
+    {
+        std::unique_lock lock(mu);
+        return write_pos - read_pos < capacity || !isNormal();
     }
 
     MPMCQueueStatus getStatus() const
