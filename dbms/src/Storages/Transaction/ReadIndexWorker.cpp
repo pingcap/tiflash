@@ -260,7 +260,7 @@ RawRustPtr TiFlashRaftProxyHelper::makeAsyncWaker(void (*wake_fn)(RawVoidPtr), R
 std::optional<ReadIndexTask> TiFlashRaftProxyHelper::makeReadIndexTask(const kvrpcpb::ReadIndexRequest & req) const
 {
     thread_local std::string buff_cache;
-    req.SerializePartialToString(&buff_cache);
+    req.SerializeToString(&buff_cache);
     auto req_view = strIntoView(&buff_cache);
     if (RawRustPtr ptr = fn_make_read_index_task(proxy_ptr, req_view); ptr.ptr)
     {

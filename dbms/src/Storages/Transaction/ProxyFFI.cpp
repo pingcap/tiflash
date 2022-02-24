@@ -9,6 +9,15 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/diagnosticspb.pb.h>
 
+#define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
+    do                                                                                    \
+    {                                                                                     \
+        [[maybe_unused]] bool parse_res_##n = (a).ParseFromArray(b, static_cast<int>(c)); \
+        assert(parse_res_##n);                                                            \
+    } while (false)
+#define CHECK_PARSE_PB_BUFF_FWD(n, ...) CHECK_PARSE_PB_BUFF_IMPL(n, __VA_ARGS__)
+#define CHECK_PARSE_PB_BUFF(...) CHECK_PARSE_PB_BUFF_FWD(__LINE__, __VA_ARGS__)
+
 namespace CurrentMetrics
 {
 extern const Metric RaftNumSnapshotsPendingApply;
@@ -84,9 +93,8 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        request.ParseFromArray(req_buff.data, static_cast<int>(req_buff.len));
-        response.ParseFromArray(resp_buff.data, static_cast<int>(resp_buff.len));
-
+        CHECK_PARSE_PB_BUFF(request, req_buff.data, req_buff.len);
+        CHECK_PARSE_PB_BUFF(response, resp_buff.data, resp_buff.len);
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->handleAdminRaftCmd(
             std::move(request),
@@ -249,7 +257,7 @@ void CppStrVec::updateView()
 void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
 {
     kvrpcpb::ReadIndexResponse res;
-    res.ParseFromArray(view.data, view.len);
+    CHECK_PARSE_PB_BUFF(res, view.data, view.len);
     reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
 }
 
@@ -324,7 +332,7 @@ RawCppPtr PreHandleSnapshot(
     try
     {
         metapb::Region region;
-        region.ParseFromArray(region_buff.data, static_cast<int>(region_buff.len));
+        CHECK_PARSE_PB_BUFF(region, region_buff.data, region_buff.len);
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
@@ -484,7 +492,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
 void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
 {
     metapb::Store store{};
-    store.ParseFromArray(buff.data, buff.len);
+    CHECK_PARSE_PB_BUFF(store, buff.data, buff.len);
     assert(server);
     assert(server->tmt);
     assert(store.id() != 0);
@@ -502,13 +510,13 @@ void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view)
     switch (type)
     {
     case MsgPBType::ReadIndexResponse:
-        reinterpret_cast<kvrpcpb::ReadIndexResponse *>(ptr)->ParseFromArray(view.data, view.len);
+        CHECK_PARSE_PB_BUFF(*reinterpret_cast<kvrpcpb::ReadIndexResponse *>(ptr), view.data, view.len);
         break;
     case MsgPBType::RegionLocalState:
-        reinterpret_cast<raft_serverpb::RegionLocalState *>(ptr)->ParseFromArray(view.data, view.len);
+        CHECK_PARSE_PB_BUFF(*reinterpret_cast<raft_serverpb::RegionLocalState *>(ptr), view.data, view.len);
         break;
     case MsgPBType::ServerInfoResponse:
-        reinterpret_cast<diagnosticspb::ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
+        CHECK_PARSE_PB_BUFF(*reinterpret_cast<diagnosticspb::ServerInfoResponse *>(ptr), view.data, view.len);
         break;
     }
 }
