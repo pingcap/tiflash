@@ -139,18 +139,17 @@ private:
         }
     };
 
-    String path;
-    String file_name;
-    FileProviderPtr provider;
-    WriteReadableFilePtr wr_file;
-
-    String reader_contents;
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
     std::unique_ptr<LogReader> reader;
     Poco::Logger * log;
 
 protected:
+    String path;
+    String file_name;
+    FileProviderPtr provider;
+    WriteReadableFilePtr wr_file;
+
     bool recyclable_log;
     bool allow_retry_read;
     const int log_file_num = 123;
@@ -233,7 +232,7 @@ public:
 
     void incrementByte(int offset, char delta)
     {
-        char old_one[1];
+        char old_one[1] = "";
         PageUtil::readFile(wr_file, offset, old_one, 1, nullptr);
         old_one[0] += delta;
         PageUtil::writeFile(wr_file, offset, old_one, 1, nullptr);
@@ -264,7 +263,7 @@ public:
             crc_buff_size);
 
         auto checksum = digest.checksum();
-        PageUtil::writeFile(wr_file, header_offset, (char *)(&checksum), sizeof(checksum), nullptr);
+        PageUtil::writeFile(wr_file, header_offset, reinterpret_cast<char *>(&checksum), sizeof(checksum), nullptr);
     }
 
     /// Some methods to check the error reporter
@@ -285,11 +284,6 @@ public:
         if (report.message.find(msg) == std::string::npos)
             return report.message;
         return "OK";
-    }
-
-    String & getReaderContents()
-    {
-        return reader_contents;
     }
 };
 
@@ -694,126 +688,140 @@ TEST_P(LogFileRWTest, ErrorJoinsRecords)
     }
 }
 
-// TEST_P(LogFileRWTest, Recycle)
-// {
-//     if (!recyclable_log)
-//     {
-//         return; // test is only valid for recycled logs
-//     }
-//     write("foo");
-//     write("bar");
-//     write("baz");
-//     write("bif");
-//     write("blitz");
-//     while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
-//     {
-//         write("xxxxxxxxxxxxxxxx");
-//     }
-//     const size_t content_size_before_overwrite = getReaderContents().size();
+TEST_P(LogFileRWTest, Recycle)
+{
+    if (!recyclable_log)
+    {
+        return; // test is only valid for recycled logs
+    }
 
-//     // Overwrite some record with same log file number
-//     std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-//     std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(filename + "/log_0", provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
-//     String text_to_write = "foooo";
-//     ReadBufferFromString foo(text_to_write);
-//     recycle_writer->addRecord(foo, text_to_write.size());
-//     text_to_write = "bar";
-//     ReadBufferFromString bar(text_to_write);
-//     recycle_writer->addRecord(bar, text_to_write.size());
+    write("foo");
+    write("bar");
+    write("baz");
+    write("bif");
+    write("blitz");
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
+    {
+        write("xxxxxxxxxxxxxxxx");
+    }
+    const size_t content_size_before_overwrite = writtenBytes();
 
-//     // Check that we should only read new records overwrited (with the same log number)
-//     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-//     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-//     ASSERT_EQ("foooo", read());
-//     ASSERT_EQ("bar", read());
-//     ASSERT_EQ("EOF", read());
-// }
+    // Overwrite some record with same log file number
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ log_file_num,
+        /*recycle_log*/ recyclable_log);
 
-// TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
-// {
-//     if (!recyclable_log)
-//     {
-//         return; // test is only valid for recycled logs
-//     }
-//     write("foo");
-//     write("bar");
-//     write("baz");
-//     write("bif");
-//     write("blitz");
-//     while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
-//     {
-//         write("xxxxxxxxxxxxxxxx");
-//     }
-//     const size_t content_size_before_overwrite = getReaderContents().size();
+    String text_to_write = "foooo";
+    ReadBufferFromString foo(text_to_write);
+    recycle_writer->addRecord(foo, text_to_write.size());
+    text_to_write = "bar";
+    ReadBufferFromString bar(text_to_write);
+    recycle_writer->addRecord(bar, text_to_write.size());
 
-//     // Overwrite some record with another log file number
-//     size_t overwrite_log_num = log_file_num + 1;
-//     std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-//     std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ overwrite_log_num, /*recycle_log*/ recyclable_log);
-//     String text_to_write = "foooo";
-//     ReadBufferFromString foo(text_to_write);
-//     recycle_writer->addRecord(foo, text_to_write.size());
-//     text_to_write = "bar";
-//     ReadBufferFromString bar(text_to_write);
-//     recycle_writer->addRecord(bar, text_to_write.size());
+    // Check that we should only read new records overwrited (with the same log number)
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
+    ASSERT_EQ("foooo", read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
+}
 
-//     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-//     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-//     // read with old log number
-//     ASSERT_EQ("EOF", read());
+TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
+{
+    if (!recyclable_log)
+    {
+        return; // test is only valid for recycled logs
+    }
+    write("foo");
+    write("bar");
+    write("baz");
+    write("bif");
+    write("blitz");
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
+    {
+        write("xxxxxxxxxxxxxxxx");
+    }
+    const size_t content_size_before_overwrite = writtenBytes();
 
-//     // read with new log number
-//     auto new_log_reader = getNewReader(WALRecoveryMode::TolerateCorruptedTailRecords, overwrite_log_num);
-//     auto read_from_new = [&new_log_reader]() -> String {
-//         if (auto [ok, scratch] = new_log_reader->readRecord(); ok)
-//             return scratch;
-//         return "EOF";
-//     };
-//     ASSERT_EQ("foooo", read_from_new());
-//     ASSERT_EQ("bar", read_from_new());
-//     ASSERT_EQ("EOF", read_from_new());
-// }
+    // Overwrite some record with another log file number
+    size_t overwrite_log_num = log_file_num + 1;
 
-// TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
-// {
-//     if (!recyclable_log)
-//     {
-//         return; // test is only valid for recycled logs
-//     }
-//     write("foo");
-//     write("bar");
-//     size_t boundary = getReaderContents().size();
-//     write("baz");
-//     write("bif");
-//     write("blitz");
-//     size_t num_writes_stuff = 0;
-//     while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
-//     {
-//         write("xxxxxxxxxxxxxxxx");
-//         num_writes_stuff++;
-//     }
-//     const size_t content_size_before_overwrite = getReaderContents().size();
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ overwrite_log_num,
+        /*recycle_log*/ recyclable_log);
 
-//     // Overwrite some record with same log file number
-//     std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-//     std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
-//     String text_to_write = repeatedString("A", boundary - PS::V3::Format::RECYCLABLE_HEADER_SIZE);
-//     ReadBufferFromString foo(text_to_write);
-//     recycle_writer->addRecord(foo, text_to_write.size());
+    String text_to_write = "foooo";
+    ReadBufferFromString foo(text_to_write);
+    recycle_writer->addRecord(foo, text_to_write.size());
+    text_to_write = "bar";
+    ReadBufferFromString bar(text_to_write);
+    recycle_writer->addRecord(bar, text_to_write.size());
 
-//     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-//     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-//     // read with old log number
-//     ASSERT_EQ(text_to_write, read());
-//     ASSERT_EQ("baz", read());
-//     ASSERT_EQ("bif", read());
-//     ASSERT_EQ("blitz", read());
-//     while (num_writes_stuff--)
-//     {
-//         ASSERT_EQ("xxxxxxxxxxxxxxxx", read());
-//     }
-//     ASSERT_EQ("EOF", read());
-// }
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
+    // read with old log number
+    ASSERT_EQ("EOF", read());
+
+    // read with new log number
+    auto new_log_reader = getNewReader(WALRecoveryMode::TolerateCorruptedTailRecords, overwrite_log_num);
+    auto read_from_new = [&new_log_reader]() -> String {
+        if (auto [ok, scratch] = new_log_reader->readRecord(); ok)
+            return scratch;
+        return "EOF";
+    };
+    ASSERT_EQ("foooo", read_from_new());
+    ASSERT_EQ("bar", read_from_new());
+    ASSERT_EQ("EOF", read_from_new());
+}
+
+TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
+{
+    if (!recyclable_log)
+    {
+        return; // test is only valid for recycled logs
+    }
+    write("foo");
+    write("bar");
+    size_t boundary = writtenBytes();
+    write("baz");
+    write("bif");
+    write("blitz");
+    size_t num_writes_stuff = 0;
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
+    {
+        write("xxxxxxxxxxxxxxxx");
+        num_writes_stuff++;
+    }
+    const size_t content_size_before_overwrite = writtenBytes();
+
+    // Overwrite some record with same log file number
+
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ log_file_num,
+        /*recycle_log*/ recyclable_log);
+    String text_to_write = repeatedString("A", boundary - PS::V3::Format::RECYCLABLE_HEADER_SIZE);
+    ReadBufferFromString foo(text_to_write);
+    recycle_writer->addRecord(foo, text_to_write.size());
+
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
+    // read with old log number
+    ASSERT_EQ(text_to_write, read());
+    ASSERT_EQ("baz", read());
+    ASSERT_EQ("bif", read());
+    ASSERT_EQ("blitz", read());
+    while (num_writes_stuff--)
+    {
+        ASSERT_EQ("xxxxxxxxxxxxxxxx", read());
+    }
+    ASSERT_EQ("EOF", read());
+}
 
 INSTANTIATE_TEST_CASE_P(
     Recycle_AllowRetryRead,
