@@ -145,7 +145,16 @@ else ()
         install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
                 COMPONENT tiflash-release
                 DESTINATION "."
-                POST_EXCLUDE_REGEXES "libdl.*" "libc-.*" "libc\\..*" "libgcc_s.*" "librt.*" "libm.*" "ld-.*" "libpthread.*"# exclude libc dependencies
+                PRE_EXCLUDE_REGEXES
+                    "libdl.*"
+                    "libc-.*"
+                    "libc\\..*"
+                    "libgcc_s.*"
+                    "librt.*"
+                    "libm.*"
+                    "ld-linux-x86-64.*"
+                    "ld-linux-aarch64.*"
+                    "libpthread.*"# exclude libc dependencies
                 DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
 
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
