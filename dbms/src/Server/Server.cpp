@@ -9,6 +9,7 @@
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
@@ -64,7 +65,6 @@
 #include <limits>
 #include <memory>
 
-#include "Common/ThreadManager.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"

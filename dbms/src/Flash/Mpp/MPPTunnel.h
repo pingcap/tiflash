@@ -103,6 +103,8 @@ public:
 
     std::atomic<bool> is_async{false};
 
+    // In async mode, do a singe send operation.
+    // In sync mode, as a background task to keep sending until done.
     void sendJob(bool need_lock = true);
 
     MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * getSendQueue()

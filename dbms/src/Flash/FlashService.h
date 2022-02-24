@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Flash/EstablishAsyncCall.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -12,7 +13,6 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-#include <Flash/EstablishAsyncCall.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
 #pragma GCC diagnostic pop
@@ -77,8 +77,7 @@ protected:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
-}; // namespace DB
-
+};
 
 //a copy of WithAsyncMethod_EstablishMPPConnection, since we want both sync & async server, we need copy it and inherit from FlashServer
 class AsyncFlashService final : public FlashService
@@ -90,9 +89,7 @@ public:
         ::grpc::Service::MarkMethodAsync(48);
     }
 
-    ~AsyncFlashService()
-    {
-    }
+    ~AsyncFlashService() {}
     // disable synchronous version of this method
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * /*context*/, const ::mpp::EstablishMPPConnectionRequest * /*request*/, ::grpc::ServerWriter<::mpp::MPPDataPacket> * /*writer*/) override
     {
