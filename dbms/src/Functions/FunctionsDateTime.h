@@ -3189,11 +3189,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         if (!arguments[0]->isMyDateOrMyDateTime())
             throw Exception(
                 fmt::format("First argument for function {} (unit) must be MyDate or MyDateTime", getName()),
