@@ -78,15 +78,29 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 
     {
         const auto & new_range = new_region->getRange();
-        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
-            for (const auto & region : region_map)
+        auto task_lock = genTaskLock();
+        auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
+        for (const auto & overlapped_region : region_map)
+        {
+            if (overlapped_region.first != region_id)
             {
-                if (region.first != region_id)
+                auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
+                if (state.state() != raft_serverpb::PeerState::Tombstone)
                 {
-                    LOG_FMT_WARNING(log, "range of region {} is overlapped with region {}, please check whether its `PeerState` is `Tombstone` in raftstore proxy", region_id, region.first);
+                    throw Exception(fmt::format(
+                                        "range of region {} is overlapped with {}, state: {}",
+                                        region_id,
+                                        overlapped_region.first,
+                                        state.ShortDebugString()),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+                else
+                {
+                    LOG_FMT_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    handleDestroy(overlapped_region.first, tmt, task_lock);
                 }
             }
-        });
+        }
     }
 
     {
