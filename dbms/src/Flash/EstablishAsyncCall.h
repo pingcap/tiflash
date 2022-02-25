@@ -66,7 +66,6 @@ private:
     // What we get from the client.
     ::mpp::EstablishMPPConnectionRequest request_;
 
-private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
 
