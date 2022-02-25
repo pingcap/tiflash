@@ -131,9 +131,9 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                 auto next_column_pos_copy = next_column_pos;
                 while (column_ids_iter_copy != read_column_ids.end())
                 {
-                    const auto * ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
+                    const auto & ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
                     // when pk is handle, we can decode the pk from the key
-                    if (!(schema_snapshot->pk_is_handle && ci->hasPriKeyFlag()))
+                    if (!(schema_snapshot->pk_is_handle && ci.hasPriKeyFlag()))
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();
