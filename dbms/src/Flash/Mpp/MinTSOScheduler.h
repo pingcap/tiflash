@@ -23,7 +23,6 @@ private:
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
     UInt64 used_threads;
-    UInt64 default_threads;
     Poco::Logger * log;
 };
 

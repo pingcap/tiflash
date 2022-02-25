@@ -9,7 +9,6 @@ MinTSOScheduler::MinTSOScheduler(MPPTaskManagerPtr task_manager_, UInt64 soft_li
     , thread_soft_limit(soft_limit)
     , thread_hard_limit(hard_limit)
     , used_threads(0)
-    , default_threads(100)
     , log(&Poco::Logger::get("MinTSOScheduler"))
 {
     assert(thread_hard_limit > thread_soft_limit);
@@ -21,7 +20,7 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
     std::lock_guard<std::mutex> lock(mu);
     if (min_tso == 0 || id.start_ts <= min_tso) /// must executing
     {
-        if (used_threads + default_threads <= thread_hard_limit) /// have threads under thread_hard_limit
+        if (used_threads + task->getNeededThreads() <= thread_hard_limit) /// have threads under thread_hard_limit
         {
             auto query_task_set = task_manager->getQueryTaskSetWithLock(id.start_ts);
 
@@ -34,9 +33,9 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
                 active_set.insert(id.start_ts);
                 min_tso = id.start_ts;
             }
-            query_task_set->used_threads += default_threads;
+            query_task_set->used_threads += task->getNeededThreads();
             ++query_task_set->scheduled_task;
-            used_threads += default_threads;
+            used_threads += task->getNeededThreads();
         }
         else
         {
@@ -45,7 +44,7 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
     }
     else
     {
-        if (used_threads + default_threads <= thread_soft_limit) /// have threads under thread_soft_limit
+        if (used_threads + task->getNeededThreads() <= thread_soft_limit) /// have threads under thread_soft_limit
         {
             auto query_task_set = task_manager->getQueryTaskSetWithLock(id.start_ts);
 
@@ -57,9 +56,9 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
             {
                 active_set.insert(id.start_ts);
             }
-            query_task_set->used_threads += default_threads;
+            query_task_set->used_threads += task->getNeededThreads();
             ++query_task_set->scheduled_task;
-            used_threads += default_threads;
+            used_threads += task->getNeededThreads();
         }
         else
         {
@@ -97,7 +96,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
     }
 
     /// schedule new tasks
-    while (!waiting_set.empty() && used_threads + default_threads <= thread_soft_limit)
+    while (!waiting_set.empty() && used_threads < thread_soft_limit)
     {
         /// find a normal query
         UInt64 current_query_id = 0;
@@ -112,9 +111,13 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
             current_query_id = *waiting_set.begin();
             query_task_set = task_manager->getQueryTaskSetWithoutLock(current_query_id);
         }
-        /// get a snapshot tasks to schedule (TODO: schedule tasks in batch)
+        /// get a snapshot tasks to schedule
         auto to_schedule_tasks = query_task_set->task_map.size() - query_task_set->scheduled_task;
-        auto needed_threads = to_schedule_tasks * default_threads;
+        auto needed_threads = 0;
+        for (auto & task : query_task_set->task_map)
+        {
+            needed_threads += task.second->getNeededThreads();
+        }
         if (used_threads + needed_threads <= thread_soft_limit || ((min_tso == current_query_id || min_tso == 0) && used_threads + needed_threads <= thread_hard_limit))
         {
             query_task_set->scheduled_task += to_schedule_tasks;

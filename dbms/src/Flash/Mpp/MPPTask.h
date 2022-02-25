@@ -57,6 +57,15 @@ public:
 
     int estimateCountOfNewThreads();
 
+    int getNeededThreads()
+    {
+        if (needed_threads == 0)
+        {
+            needed_threads = estimateCountOfNewThreads();
+        }
+        return needed_threads;
+    }
+
     void deleteAndScheduleQueries();
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -108,6 +117,8 @@ private:
     Exception err;
 
     friend class MPPTaskManager;
+
+    int needed_threads;
 
     std::mutex schedule_mu;
     std::condition_variable schedule_cv;
