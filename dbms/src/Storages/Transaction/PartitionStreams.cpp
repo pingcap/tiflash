@@ -75,7 +75,7 @@ static void writeRegionDataToStorage(
         }
 
         Block block;
-        bool ok = false, need_decode = true;
+        bool need_decode = true;
 
         // try to use block cache if exists
         if (region.pre_decode_cache)
@@ -88,7 +88,6 @@ static void writeRegionDataToStorage(
             if (region.pre_decode_cache->schema_version == schema_version)
             {
                 block = std::move(region.pre_decode_cache->block);
-                ok = true;
                 need_decode = false;
             }
             else
@@ -111,8 +110,7 @@ static void writeRegionDataToStorage(
             block_schema_version = decoding_schema_snapshot->schema_version;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
-            ok = reader.read(*block_ptr, data_list_read, force_decode);
-            if (!ok)
+            if (!reader.read(*block_ptr, data_list_read, force_decode))
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
             GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
