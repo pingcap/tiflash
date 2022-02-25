@@ -144,7 +144,7 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
                         ErrorCodes::LOGICAL_ERROR);
 
     size_t encoded_fields_idx = 0;
-    for (auto & column_info : table_info.columns)
+    for (const auto & column_info : table_info.columns)
     {
         if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
             continue;

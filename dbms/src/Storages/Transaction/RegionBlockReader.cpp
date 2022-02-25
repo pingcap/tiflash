@@ -15,9 +15,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-using TiDB::DatumFlat;
-using TiDB::TableInfo;
-
 RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_)
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
@@ -79,7 +76,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         next_column_pos++;
         column_ids_iter++;
     }
-    constexpr size_t MustHaveColCnt = 3; // extra handle, del, version
+    // extra handle, del, version must exists
+    constexpr size_t MustHaveColCnt = 3; // NOLINT(readability-identifier-naming)
     if (unlikely(next_column_pos != MustHaveColCnt))
         throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
 
