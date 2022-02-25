@@ -28,7 +28,7 @@ using SortedColumnIDWithPos = std::map<ColumnID, size_t>;
 using SortedColumnIDWithPosConstIter = SortedColumnIDWithPos::const_iterator;
 using TableInfo = TiDB::TableInfo;
 using ColumnInfo = TiDB::ColumnInfo;
-using ColumnInfos = std::vector<TiDB::ColumnInfo>;
+using ColumnInfos = std::vector<ColumnInfo>;
 struct DecodingStorageSchemaSnapshot
 {
     // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
