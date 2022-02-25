@@ -48,7 +48,7 @@ static void writeRegionDataToStorage(
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
-    auto atomicReadWrite = [&](bool force_decode) { // NOLINT(readability-identifier-naming)
+    auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -154,7 +154,7 @@ static void writeRegionDataToStorage(
 
     /// Try read then write once.
     {
-        if (atomicReadWrite(false))
+        if (atomic_read_write(false))
             return;
     }
 
@@ -163,7 +163,7 @@ static void writeRegionDataToStorage(
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicReadWrite(true))
+        if (!atomic_read_write(true))
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
@@ -469,7 +469,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
 
-    const auto atomicDecode = [&](bool force_decode) -> bool { // NOLINT(readability-identifier-naming)
+    const auto atomic_decode = [&](bool force_decode) -> bool {
         Stopwatch watch;
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -510,12 +510,12 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_snapshot);
 
-    if (!atomicDecode(false))
+    if (!atomic_decode(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicDecode(true))
+        if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
                             ErrorCodes::LOGICAL_ERROR);
     }
@@ -534,7 +534,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     auto table_id = region->getMappedTableID();
     auto context = tmt.getContext();
-    const auto atomicGet = [&](bool force_decode) -> bool { // NOLINT(readability-identifier-naming)
+    const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
@@ -553,12 +553,12 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         return true;
     };
 
-    if (!atomicGet(false))
+    if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicGet(true))
+        if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
                             ErrorCodes::LOGICAL_ERROR);
     }
