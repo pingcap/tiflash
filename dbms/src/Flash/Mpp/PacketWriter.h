@@ -15,6 +15,8 @@ public:
     virtual ~PacketWriter(){};
 
     // Write a packet, if this api is called, it means the rpc is ready for writing
+    // For sync writer, it is always ready for writing.
+    // For async writer, it is judged and called by "TryWrite".
     virtual bool Write(const mpp::MPPDataPacket & packet) = 0;
 
     // Check if the rpc is ready for writing. If true, it will write a packet.
