@@ -66,6 +66,11 @@ public:
         return needed_threads;
     }
 
+    bool isScheduled()
+    {
+        return scheduled;
+    }
+
     void deleteAndScheduleQueries();
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);

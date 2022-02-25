@@ -11,11 +11,16 @@ MinTSOScheduler::MinTSOScheduler(MPPTaskManagerPtr task_manager_, UInt64 soft_li
     , used_threads(0)
     , log(&Poco::Logger::get("MinTSOScheduler"))
 {
-    assert(thread_hard_limit > thread_soft_limit);
+    assert(thread_hard_limit >= thread_soft_limit);
 }
 
 bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
 {
+    /// disable this schedule
+    if (thread_hard_limit == 0)
+    {
+        return false;
+    }
     auto id = task->getId();
     std::lock_guard<std::mutex> lock(mu);
     if (min_tso == 0 || id.start_ts <= min_tso) /// must executing
@@ -39,7 +44,7 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
         }
         else
         {
-            throw Exception("threads are unavailable for the min_tso query!");
+            throw Exception(fmt::format("threads are unavailable for the min_tso query, need {}, but used {} of the thread hard limit {}.", task->getNeededThreads(), used_threads, thread_hard_limit));
         }
     }
     else
@@ -78,6 +83,11 @@ bool MinTSOScheduler::putWaitingQuery(MPPTaskPtr task)
 /// so this func is called exactly once for a query.
 void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
 {
+    /// disable this schedule
+    if (thread_hard_limit == 0)
+    {
+        return;
+    }
     std::lock_guard<std::mutex> lock(mu);
     /// delete from working set and return threads
     active_set.erase(query_id);
@@ -113,10 +123,12 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
         }
         /// get a snapshot tasks to schedule
         auto to_schedule_tasks = query_task_set->task_map.size() - query_task_set->scheduled_task;
+        assert(to_schedule_tasks > 0);
         auto needed_threads = 0;
-        for (auto & task : query_task_set->task_map)
+        for (const auto & task_it : query_task_set->task_map)
         {
-            needed_threads += task.second->getNeededThreads();
+            if (!task_it.second->isScheduled())
+                needed_threads += task_it.second->getNeededThreads();
         }
         if (used_threads + needed_threads <= thread_soft_limit || ((min_tso == current_query_id || min_tso == 0) && used_threads + needed_threads <= thread_hard_limit))
         {
@@ -138,7 +150,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id)
         {
             if (min_tso == current_query_id || min_tso == 0) /// the min_tso query should fully run
             {
-                throw Exception("threads are unavailable for the min_tso query!");
+                throw Exception(fmt::format("threads are unavailable for the min_tso query, need {}, but used {} of the thread hard limit {}.", needed_threads, used_threads, thread_hard_limit));
             }
             return;
         }

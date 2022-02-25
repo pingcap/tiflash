@@ -300,7 +300,7 @@ void MPPTask::runImpl()
     {
         preprocess();
         needed_threads = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
 
         if (status.load() != RUNNING)
         {
@@ -309,7 +309,6 @@ void MPPTask::runImpl()
             /// current task is not registered yet, so need to check the task status explicitly
             throw Exception("task not in running state, may be cancelled");
         }
-
 
         waitForScheduling();
 
