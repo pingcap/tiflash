@@ -20,6 +20,9 @@ public:
     virtual bool Write(const mpp::MPPDataPacket & packet) = 0;
 
     // Check if the rpc is ready for writing. If true, it will write a packet.
+    // Because for async writer,
+    // the caller can't know if the rpc session is ready for writing.
+    // If it is not ready, caller can't write a packet.
     virtual bool TryWrite() { return false; }
 
     virtual void WriteDone(const ::grpc::Status & /*status*/) {}
