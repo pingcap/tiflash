@@ -32,7 +32,7 @@ using ColumnInfos = std::vector<TiDB::ColumnInfo>;
 struct DecodingStorageSchemaSnapshot
 {
     // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
-    // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may be be a real column in tidb schema,
+    // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may not be a real column in tidb schema,
     // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
     ColumnInfos column_infos;

@@ -42,13 +42,13 @@ static void writeRegionDataToStorage(
     RegionDataReadInfoList & data_list_read,
     Poco::Logger * log)
 {
-    constexpr auto FUNCTION_NAME = __FUNCTION__;
+    constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
-    auto atomicReadWrite = [&](bool force_decode) {
+    auto atomicReadWrite = [&](bool force_decode) { // NOLINT(readability-identifier-naming)
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -469,7 +469,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
 
-    const auto atomicDecode = [&](bool force_decode) -> bool {
+    const auto atomicDecode = [&](bool force_decode) -> bool { // NOLINT(readability-identifier-naming)
         Stopwatch watch;
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -534,7 +534,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     auto table_id = region->getMappedTableID();
     auto context = tmt.getContext();
-    const auto atomicGet = [&](bool force_decode) -> bool {
+    const auto atomicGet = [&](bool force_decode) -> bool { // NOLINT(readability-identifier-naming)
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
