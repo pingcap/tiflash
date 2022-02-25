@@ -1801,37 +1801,37 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
-    template<typename FromDataType>
+    template <typename FromDataType>
     static bool getFromScaledPrecInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
     {
         const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
-                using FromFieldType = typename FromDataType::FieldType;
-                // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
-                if constexpr (std::is_integral_v<FromFieldType>)
-                {
-                    from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
-                }
-                else
-                {
-                    // Cannot reach here. castTypeToEither will return false directly.
-                    assert(0);
-                    (void)from_scaled_prec;
-                    (void)to_decimal_scale;
-                }
-                return true;
+            using FromFieldType = typename FromDataType::FieldType;
+            // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
+            }
+            else
+            {
+                // Cannot reach here. castTypeToEither will return false directly.
+                assert(0);
+                (void)from_scaled_prec;
+                (void)to_decimal_scale;
+            }
+            return true;
         };
 
         return castTypeToEither<
-                DataTypeUInt8,
-                DataTypeUInt16,
-                DataTypeUInt32,
-                DataTypeUInt64,
-                DataTypeInt8,
-                DataTypeInt16,
-                DataTypeInt32,
-                DataTypeInt64,
-                DataTypeEnum8,
-                DataTypeEnum16>(from_type.get(), f);
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeEnum8,
+            DataTypeEnum16>(from_type.get(), f);
     }
 
     static PrecType getFromScaledPrecDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool zero_scale_diff)
@@ -1871,13 +1871,13 @@ private:
     static bool getFromScaledPrecDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff, PrecType & from_scaled_prec)
     {
         return castTypeToEither<
-                DataTypeDecimal32,
-                DataTypeDecimal64,
-                DataTypeDecimal128,
-                DataTypeDecimal256>(from_type.get(), [to_decimal_scale, zero_scale_diff, &from_scaled_prec](const auto & from_type_ptr, bool) {
-                from_scaled_prec = getFromScaledPrecDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, zero_scale_diff);
-                return true;
-            });
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(from_type.get(), [to_decimal_scale, zero_scale_diff, &from_scaled_prec](const auto & from_type_ptr, bool) {
+            from_scaled_prec = getFromScaledPrecDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, zero_scale_diff);
+            return true;
+        });
     }
 
     // Get the prec of from value after scaled, which is from_prec + scale_diff.
