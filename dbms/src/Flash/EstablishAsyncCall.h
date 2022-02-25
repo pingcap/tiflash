@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -83,6 +84,6 @@ private:
     std::atomic<CallStatus> state_; // The current serving state.
     MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue_ = nullptr;
     std::shared_ptr<DB::MPPTunnel> mpptunnel_ = nullptr;
+    std::shared_ptr<Stopwatch> stopwatch;
 };
-
 } // namespace DB

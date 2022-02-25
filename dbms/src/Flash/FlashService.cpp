@@ -223,7 +223,7 @@ grpc::Status FlashService::Coprocessor(
                 calldata->WriteErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
-            if (sync_writer)
+            else
             {
                 LOG_ERROR(log, err_msg);
                 if (sync_writer->Write(getPacketWithError(err_msg)))
@@ -246,12 +246,13 @@ grpc::Status FlashService::Coprocessor(
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
-    if (sync_writer)
+    else
     {
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
         tunnel->waitForFinish();
+        LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
 
     // TODO: Check if there are errors in task.

@@ -80,6 +80,10 @@ void EstablishCallData::WriteErr(const mpp::MPPDataPacket & packet)
 void EstablishCallData::WriteDone(const ::grpc::Status & status)
 {
     state_ = FINISH;
+    if (stopwatch)
+    {
+        LOG_FMT_INFO(mpptunnel_->getLogger(), "connection for {} cost {} ms.", mpptunnel_->id(), stopwatch->elapsedMilliseconds());
+    }
     responder_.Finish(status, this);
 }
 
@@ -131,8 +135,8 @@ void EstablishCallData::Proceed()
 
 void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel)
 {
+    stopwatch = std::make_shared<Stopwatch>();
     this->mpptunnel_ = mpptunnel;
     this->send_queue_ = mpptunnel->getSendQueue();
 }
-
 } // namespace DB
