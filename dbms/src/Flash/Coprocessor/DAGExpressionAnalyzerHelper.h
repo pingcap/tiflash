@@ -67,7 +67,7 @@ public:
     static String buildRegexpFunction(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     static String genFuncString(
         const String & func_name,

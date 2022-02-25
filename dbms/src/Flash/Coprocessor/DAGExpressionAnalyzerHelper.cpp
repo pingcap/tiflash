@@ -383,7 +383,7 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
 String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;

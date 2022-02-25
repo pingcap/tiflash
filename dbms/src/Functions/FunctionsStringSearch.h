@@ -81,7 +81,7 @@ public:
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if constexpr (Impl::need_customized_escape_char || Impl::support_match_type)
+        if constexpr (Impl::need_customized_escape_char)
         {
             if (!arguments[2]->isInteger())
                 throw Exception(

@@ -317,10 +317,19 @@ struct PositionImpl
     }
 };
 
+static re2_st::RE2::Options getDefaultRe2Options()
+{
+    re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+    options.set_case_sensitive(true);
+    options.set_one_line(true);
+    options.set_dot_nl(false);
+    return options;
+}
+
 static String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator)
 {
     /// for regexp only ci/cs is supported
-    re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+    re2_st::RE2::Options options = getDefaultRe2Options();
     if (collator != nullptr && collator->isCI())
         options.set_case_sensitive(false);
 
@@ -335,8 +344,8 @@ static String getRE2ModeModifiers(const std::string & match_type, const TiDB::Ti
                 /// according to MySQL doc: if either argument is a binary string, the arguments are handled in
                 /// case-sensitive fashion as binary strings, even if match_type contains the i character.
                 /// However, test in MySQL 8.0.25 shows that i flag still take affect even if the collation is binary,
-                /// if (collator == nullptr || !collator->isBinary())
-                options.set_case_sensitive(false);
+                if (collator == nullptr || !collator->isBinary())
+                    options.set_case_sensitive(false);
                 break;
             case 'c':
                 options.set_case_sensitive(true);
