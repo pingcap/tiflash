@@ -5,20 +5,6 @@
 
 namespace DB
 {
-std::string DeriveErrWhat(std::exception_ptr eptr)
-{
-    try
-    {
-        if (eptr)
-            std::rethrow_exception(eptr);
-    }
-    catch (const std::exception & e)
-    {
-        return std::string(e.what());
-    }
-    return "";
-}
-
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
     : service_(service)
     , cq_(cq)
@@ -62,7 +48,7 @@ void EstablishCallData::rpcInitOp()
     if (eptr)
     {
         state_ = FINISH;
-        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), DeriveErrWhat(eptr));
+        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
         responder_.Finish(status, this);
         return;
     }
