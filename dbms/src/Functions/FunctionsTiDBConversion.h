@@ -1801,12 +1801,27 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
-    template <typename FromDataType>
-    static PrecType getFromScaledPrec(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff)
+    template<typename FromDataType>
+    static bool getFromScaledPrecInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
     {
-        PrecType from_scaled_prec = std::numeric_limits<PrecType>::max();
-        // cast(int/enum as decimal)
-        if (castTypeToEither<
+        const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
+                using FromFieldType = typename FromDataType::FieldType;
+                // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
+                if constexpr (std::is_integral_v<FromFieldType>)
+                {
+                    from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
+                }
+                else
+                {
+                    // Cannot reach here. castTypeToEither will return false directly.
+                    assert(0);
+                    (void)from_scaled_prec;
+                    (void)to_decimal_scale;
+                }
+                return true;
+        };
+
+        return castTypeToEither<
                 DataTypeUInt8,
                 DataTypeUInt16,
                 DataTypeUInt32,
@@ -1816,20 +1831,65 @@ private:
                 DataTypeInt32,
                 DataTypeInt64,
                 DataTypeEnum8,
-                DataTypeEnum16>(from_type.get(), [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
-                using FromFieldType = typename FromDataType::FieldType;
-                // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
-                if constexpr (std::is_integral_v<FromFieldType>)
-                {
-                    from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
-                }
-                else
-                {
-                    (void)from_scaled_prec;
-                    (void)to_decimal_scale;
-                }
+                DataTypeEnum16>(from_type.get(), f);
+    }
+
+    static PrecType getFromScaledPrecDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool zero_scale_diff)
+    {
+        Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
+        if (scale_diff < 0)
+        {
+            // During cast(decimal as decimal), we will use from_int_val/(10^abs(scale_diff)) as the to_int.
+            // Why plus 1: need do rounding during division, such as cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
+            // Why zero: should not minus from_prec when determining CastInternalType to avoid truncating from_int_val.
+            if (zero_scale_diff)
+                scale_diff = 0;
+            else
+                scale_diff += 1;
+        }
+        return from_prec + scale_diff;
+    }
+
+    static bool getFromScaledPrecDatetime(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff, PrecType & from_scaled_prec)
+    {
+        if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
+        {
+            const auto fsp = datetime_type->getFraction();
+            if (fsp > 0)
+            {
+                from_scaled_prec = getFromScaledPrecDecimalInternal(14 + fsp, fsp, to_decimal_scale, zero_scale_diff);
+            }
+            else
+            {
+                from_scaled_prec = 14 + to_decimal_scale;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    static bool getFromScaledPrecDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff, PrecType & from_scaled_prec)
+    {
+        return castTypeToEither<
+                DataTypeDecimal32,
+                DataTypeDecimal64,
+                DataTypeDecimal128,
+                DataTypeDecimal256>(from_type.get(), [to_decimal_scale, zero_scale_diff, &from_scaled_prec](const auto & from_type_ptr, bool) {
+                from_scaled_prec = getFromScaledPrecDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, zero_scale_diff);
                 return true;
-            }))
+            });
+    }
+
+    // Get the prec of from value after scaled, which is from_prec + scale_diff.
+    // Becase the internal store of Decimal is the multipiler of 10^scale_diff.
+    // zero_scale_diff: true when used to determine CastInternalType, false when used to determine if can skip overflow check.
+    template <typename FromDataType>
+    static PrecType getFromScaledPrec(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff)
+    {
+        PrecType from_scaled_prec = std::numeric_limits<PrecType>::max();
+
+        // cast(int/enum as decimal)
+        if (getFromScaledPrecInteger<FromDataType>(from_type, to_decimal_scale, from_scaled_prec))
         {
             return from_scaled_prec;
         }
@@ -1837,47 +1897,17 @@ private:
         // cast(date as decimal)
         if (checkDataType<DataTypeMyDate>(from_type.get()))
         {
-            return (8 + to_decimal_scale);
+            return 8 + to_decimal_scale;
         }
 
-        auto get_from_scaled_prec_for_decimal = [](PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool zero_scale_diff) {
-            Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
-            if (scale_diff < 0)
-            {
-                // During cast(decimal as decimal), we will use from_int_val/(10^abs(scale_diff)) as the to_int.
-                // Why plus 1: need do rounding during division, such as cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
-                // Why zero: should not minus from_prec when determining CastInternalType to avoid truncating from_int_val.
-                if (zero_scale_diff)
-                    scale_diff = 0;
-                else
-                    scale_diff += 1;
-            }
-            return (from_prec + scale_diff);
-        };
-
         // cast(datetime as decimal)
-        if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
+        if (getFromScaledPrecDatetime(from_type, to_decimal_scale, zero_scale_diff, from_scaled_prec))
         {
-            const auto fsp = datetime_type->getFraction();
-            if (fsp > 0)
-            {
-                return get_from_scaled_prec_for_decimal(14 + fsp, fsp, to_decimal_scale, zero_scale_diff);
-            }
-            else
-            {
-                return (14 + to_decimal_scale);
-            }
+            return from_scaled_prec;
         }
 
         // cast(decimal as decimal)
-        if (castTypeToEither<
-                DataTypeDecimal32,
-                DataTypeDecimal64,
-                DataTypeDecimal128,
-                DataTypeDecimal256>(from_type.get(), [&from_scaled_prec, to_decimal_scale, &get_from_scaled_prec_for_decimal, zero_scale_diff](const auto & from_type_ptr, bool) {
-                from_scaled_prec = get_from_scaled_prec_for_decimal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, zero_scale_diff);
-                return true;
-            }))
+        if (getFromScaledPrecDecimal(from_type, to_decimal_scale, zero_scale_diff, from_scaled_prec))
         {
             return from_scaled_prec;
         }
