@@ -86,6 +86,8 @@ public:
     AsyncFlashService(IServer & server)
         : FlashService(server)
     {
+        // 48 is EstablishMPPConnection API ID of GRPC
+        // note:  if the kvrpc protocal is updated, please keep consistent with the generated code.
         ::grpc::Service::MarkMethodAsync(48);
     }
 
