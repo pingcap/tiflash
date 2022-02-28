@@ -14,7 +14,6 @@ class FlashConfig:
             self.http_port = self.conf_toml['http_port']
         else:
             self.http_port = self.conf_toml['https_port']
-        tmp_path = self.conf_toml['tmp_path']
 
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
@@ -32,7 +31,7 @@ class FlashConfig:
         self.cluster_refresh_interval = min(
             int(flash_cluster.get('refresh_interval', 20)), self.cluster_master_ttl)
         self.update_rule_interval = int(flash_cluster.get('update_rule_interval', 10))
-        self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
+        self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(self.conf_toml.get('tmp_path', '/tmp')))
         self.max_time_out = self.cluster_master_ttl
 
         self.enable_tls = False

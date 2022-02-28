@@ -175,7 +175,7 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
             {
                 assert(executor.has_executor_id());
                 const auto & executor_id = executor.executor_id();
-                mpp_exchange_receiver_map[executor_id] = std::make_shared<ExchangeReceiver>(
+                auto exchange_receiver = std::make_shared<ExchangeReceiver>(
                     std::make_shared<GRPCReceiverContext>(
                         executor.exchange_receiver(),
                         getMPPTaskMeta(),
@@ -185,12 +185,15 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
                     log);
+                mpp_exchange_receiver_map[executor_id] = exchange_receiver;
+                new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
             }
             return true;
         });
         mpp_exchange_receiver_map_inited = true;
     }
 }
+
 
 const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
 {
@@ -199,6 +202,11 @@ const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext
     if (!mpp_exchange_receiver_map_inited)
         throw TiFlashException("mpp_exchange_receiver_map has not been initialized", Errors::Coprocessor::Internal);
     return mpp_exchange_receiver_map;
+}
+
+int DAGContext::getNewThreadCountOfExchangeReceiver() const
+{
+    return new_thread_count_of_exchange_receiver;
 }
 
 } // namespace DB

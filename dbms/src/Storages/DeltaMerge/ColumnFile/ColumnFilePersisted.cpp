@@ -15,7 +15,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
 {
     if (schema)
     {
-        writeIntBinary((UInt32)schema->columns(), buf);
+        writeIntBinary(static_cast<UInt32>(schema->columns()), buf);
         for (auto & col : *schema)
         {
             writeIntBinary(col.column_id, buf);
@@ -25,7 +25,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
     }
     else
     {
-        writeIntBinary((UInt32)0, buf);
+        writeIntBinary(static_cast<UInt32>(0), buf);
     }
 }
 
@@ -70,12 +70,12 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
     type->deserializeBinaryBulkWithMultipleStreams(column, //
                                                    [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                    rows,
-                                                   (double)(data_buf.size()) / rows,
+                                                   static_cast<double>(data_buf.size()) / rows,
                                                    true,
                                                    {});
 }
 
-void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.delta, buf); // Add binary version
     switch (STORAGE_FORMAT_CURRENT.delta)
@@ -93,13 +93,13 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_fil
     }
 }
 
-ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    ColumnFiles column_files;
+    ColumnFilePersisteds column_files;
     switch (version)
     {
         // V1 and V2 share the same deserializer.
@@ -114,8 +114,6 @@ ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange &
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    for (auto & f : column_files)
-        f->setSaved();
     return column_files;
 }
 } // namespace DM
