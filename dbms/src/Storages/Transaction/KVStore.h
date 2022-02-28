@@ -54,6 +54,7 @@ enum class EngineStoreApplyRes : uint32_t;
 struct TiFlashRaftProxyHelper;
 struct RegionPreDecodeBlockData;
 using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
+class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
 
@@ -125,6 +126,28 @@ public:
     // May return 0 if uninitialized
     uint64_t getStoreID(std::memory_order = std::memory_order_relaxed) const;
 
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
+
+    /// Initialize read-index worker context. It only can be invoked once.
+    /// `worker_coefficient` means `worker_coefficient * runner_cnt` workers will be created.
+    /// `runner_cnt` means number of runner which controls behavior of worker.
+    void initReadIndexWorkers(
+        std::function<std::chrono::milliseconds()> && fn_min_dur_handle_region,
+        size_t runner_cnt,
+        size_t worker_coefficient = 64);
+
+    /// Create `runner_cnt` threads to run ReadIndexWorker asynchronously and automatically.
+    /// If there is other runtime framework, DO NOT invoke it.
+    void asyncRunReadIndexWorkers();
+
+    /// Stop workers after there is no more read-index task.
+    void stopReadIndexWorkers();
+
+    /// TODO: if supported by runtime framework, run one round for specific runner by `id`.
+    void runOneRoundOfReadIndexRunner(size_t runner_id);
+
+    ~KVStore();
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
@@ -136,6 +159,7 @@ private:
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend class tests::RegionKVStoreTest;
+    friend class ReadIndexStressTest;
     struct StoreMeta
     {
         using Base = metapb::Store;
@@ -185,8 +209,8 @@ private:
         TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
-    /// Get and callback all regions whose range overlapped with start/end key.
-    void handleRegionsByRangeOverlap(const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const;
+    void releaseReadIndexWorkers();
+    void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
 private:
     RegionManager region_manager;
@@ -213,6 +237,10 @@ private:
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
 
+    // It should be initialized after `proxy_helper` is set.
+    // It should be visited from outside after status of proxy is `Running`
+    ReadIndexWorkerManager * read_index_worker_manager{nullptr};
+
     std::atomic_int64_t read_index_event_flag{0};
 
     StoreMeta store;
@@ -229,6 +257,6 @@ class KVStoreTaskLock : private boost::noncopyable
 };
 
 void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t &, double, double);
+void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t &, double, double, double);
 
 } // namespace DB

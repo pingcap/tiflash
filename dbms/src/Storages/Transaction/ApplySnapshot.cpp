@@ -50,17 +50,17 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         old_applied_index = old_region->appliedIndex();
         if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
-            auto s = fmt::format("{}: [region {}] already has newer apply-index {}, should not happen",
-                                 __PRETTY_FUNCTION__,
+            auto s = fmt::format("[region {}] already has newer apply-index {} than {}, should not happen",
                                  region_id,
-                                 old_applied_index);
+                                 old_applied_index,
+                                 new_index);
             throw Exception(s, ErrorCodes::LOGICAL_ERROR);
         }
         else if (old_applied_index == new_index)
         {
-            LOG_WARNING(log,
-                        old_region->toString(false) << " already has same applied index, just ignore next process. "
-                                                    << "Please check log whether server crashed after successfully applied snapshot.");
+            LOG_FMT_WARNING(log,
+                            "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
+                            old_region->getDebugString());
             return;
         }
 
@@ -78,15 +78,29 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 
     {
         const auto & new_range = new_region->getRange();
-        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
-            for (const auto & region : region_map)
+        auto task_lock = genTaskLock();
+        auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
+        for (const auto & overlapped_region : region_map)
+        {
+            if (overlapped_region.first != region_id)
             {
-                if (region.first != region_id)
+                auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
+                if (state.state() != raft_serverpb::PeerState::Tombstone)
                 {
-                    LOG_FMT_WARNING(log, "range of region {} is overlapped with region {}, please check whether its `PeerState` is `Tombstone` in raftstore proxy", region_id, region.first);
+                    throw Exception(fmt::format(
+                                        "range of region {} is overlapped with {}, state: {}",
+                                        region_id,
+                                        overlapped_region.first,
+                                        state.ShortDebugString()),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+                else
+                {
+                    LOG_FMT_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    handleDestroy(overlapped_region.first, tmt, task_lock);
                 }
             }
-        });
+        }
     }
 
     {
@@ -188,7 +202,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (old_region != nullptr)
         {
-            LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+            LOG_FMT_DEBUG(log, "{}: previous {}, new {}", __FUNCTION__, old_region->getDebugString(), new_region->getDebugString());
             {
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();

@@ -71,6 +71,7 @@ public:
     Int32 minutes() const;
     Int32 seconds() const;
     Int32 microSecond() const;
+    Int64 nanoSecond() const { return nanos; };
 
     String toString() const;
 };

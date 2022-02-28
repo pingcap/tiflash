@@ -15,7 +15,7 @@ using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnFileBig : public ColumnFilePersisted
 {
-    friend class ColumnBigFileReader;
+    friend class ColumnFileBigReader;
 
 private:
     DMFilePtr file;
@@ -71,20 +71,19 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePtr deserializeMetadata(DMContext & context, //
-                                             const RowKeyRange & segment_range,
-                                             ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+                                                      const RowKeyRange & segment_range,
+                                                      ReadBuffer & buf);
 
     String toString() const override
     {
         String s = "{big_file,rows:" + DB::toString(getRows()) //
             + ",bytes:" + DB::toString(getBytes()) + "}"; //
-        +",saved:" + DB::toString(saved) + "}"; //
         return s;
     }
 };
 
-class ColumnBigFileReader : public ColumnFileReader
+class ColumnFileBigReader : public ColumnFileReader
 {
 private:
     const DMContext & context;
@@ -113,7 +112,7 @@ private:
     size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
-    ColumnBigFileReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileBigReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
         : context(context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
