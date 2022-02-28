@@ -74,7 +74,7 @@ public:
         const Names & argument_names,
         const TiDB::TiDBCollators & collators);
 
-    /// generate AggregateDescription and append it to AggregateDescriptions if need.
+    /// Generate AggregateDescription and append it to AggregateDescriptions if need.
     /// And append output column to aggregated_columns.
     static void appendAggDescription(
         const Names & arg_names,
