@@ -8,10 +8,10 @@ namespace DB
 {
 /// read blocks directly from Union, then broadcast or partition blocks and encode them, later put them into sending tunnels
 /// it should be an output stream but derived from the inputSteam
-class ExchangeSender : public IProfilingBlockInputStream
+class ExchangeSenderBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : writer(std::move(writer))
         , log(getLogWithPrefix(log_, name))
     {

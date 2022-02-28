@@ -47,6 +47,12 @@ void FunctionIsNull::executeImpl(Block & block, const ColumnNumbers & arguments,
         /// Merely return the embedded null map.
         block.getByPosition(result).column = static_cast<const ColumnNullable &>(*elem.column).getNullMapColumnPtr();
     }
+    else if (elem.column->onlyNull())
+    {
+        /// Since all element is null, return a one-constant column representing
+        /// a one-filled null map.
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(1));
+    }
     else
     {
         /// Since no element is nullable, return a zero-constant column representing
