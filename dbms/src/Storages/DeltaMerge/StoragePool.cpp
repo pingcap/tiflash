@@ -149,8 +149,10 @@ PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, 
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_WARNING(&Poco::Logger::get(who),
-                    fmt::format("The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]", existed_path, dtfile_id));
+        LOG_FMT_WARNING(&Poco::Logger::get(who),
+                        "The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]",
+                        existed_path,
+                        dtfile_id);
     } while (true);
     return dtfile_id;
 }

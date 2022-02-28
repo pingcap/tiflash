@@ -60,8 +60,6 @@ public:
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
-    PageId maxLogPageId() { return max_log_page_id; }
-    PageId maxDataPageId() { return max_data_page_id; }
     PageId maxMetaPageId() { return max_meta_page_id; }
 
     PageId newLogPageId() { return ++max_log_page_id; }
