@@ -83,12 +83,13 @@ protected:
 class AsyncFlashService final : public FlashService
 {
 public:
+    // 48 is EstablishMPPConnection API ID of GRPC
+    // note:  if the kvrpc protocal is updated, please keep consistent with the generated code.
+    const int EstablishMPPConnectionApiID = 48;
     AsyncFlashService(IServer & server)
         : FlashService(server)
     {
-        // 48 is EstablishMPPConnection API ID of GRPC
-        // note:  if the kvrpc protocal is updated, please keep consistent with the generated code.
-        ::grpc::Service::MarkMethodAsync(48);
+        ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);
     }
 
     ~AsyncFlashService() {}
@@ -101,7 +102,7 @@ public:
 
     void RequestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
     {
-        ::grpc::Service::RequestAsyncServerStreaming(48, context, request, writer, new_call_cq, notification_cq, tag);
+        ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
     }
 };
 
