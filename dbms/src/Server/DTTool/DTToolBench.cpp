@@ -294,7 +294,7 @@ int benchEntry(const std::vector<std::string> & opts)
         }
         else
         {
-            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_);
+            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
