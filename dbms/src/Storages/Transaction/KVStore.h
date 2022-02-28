@@ -209,9 +209,8 @@ private:
         TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
-    /// Get and callback all regions whose range overlapped with start/end key.
-    void handleRegionsByRangeOverlap(const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const;
     void releaseReadIndexWorkers();
+    void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
 private:
     RegionManager region_manager;
