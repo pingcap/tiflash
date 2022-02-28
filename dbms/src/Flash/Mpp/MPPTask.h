@@ -52,6 +52,8 @@ public:
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
+    int estimateCountOfNewThreads();
+
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 

@@ -104,7 +104,6 @@ BUILD_DIR="/build/release-centos7/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "${SRCPATH}" \
-  -DENABLE_EMBEDDED_COMPILER=FALSE \
   -DENABLE_TESTS=ON \
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
   -DUSE_CCACHE=${USE_CCACHE} \

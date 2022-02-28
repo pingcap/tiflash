@@ -144,7 +144,7 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
                         ErrorCodes::LOGICAL_ERROR);
 
     size_t encoded_fields_idx = 0;
-    for (auto & column_info : table_info.columns)
+    for (const auto & column_info : table_info.columns)
     {
         if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
             continue;
@@ -306,22 +306,22 @@ bool appendRowV2ToBlock(
                   : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);
 }
 
-inline bool addDefaultValueToColumnIfPossible(const ColumnInfo * column_info, Block & block, size_t block_column_pos, bool force_decode)
+inline bool addDefaultValueToColumnIfPossible(const ColumnInfo & column_info, Block & block, size_t block_column_pos, bool force_decode)
 {
     // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
     // This could saves lots of unnecessary schema syncs for old data with a schema that has newly added columns.
     // for clustered index, if the pk column does not exists, it can still be decoded from the key
-    if (column_info->hasPriKeyFlag())
+    if (column_info.hasPriKeyFlag())
         return true;
 
-    if (column_info->hasNoDefaultValueFlag() && column_info->hasNotNullFlag())
+    if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
     {
         if (!force_decode)
             return false;
     }
     // not null or has no default value, tidb will fill with specific value.
     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-    raw_column->insert(column_info->defaultValueToField());
+    raw_column->insert(column_info.defaultValueToField());
     return true;
 }
 
@@ -375,7 +375,7 @@ bool appendRowV2ToBlockImpl(
         }
         else if (column_ids_iter->first < next_datum_column_id)
         {
-            const auto * column_info = column_infos[column_ids_iter->second];
+            const auto & column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
             column_ids_iter++;
@@ -401,7 +401,7 @@ bool appendRowV2ToBlockImpl(
             }
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-            const auto * column_info = column_infos[column_ids_iter->second];
+            const auto & column_info = column_infos[column_ids_iter->second];
             if (is_null)
             {
                 if (!raw_column->isColumnNullable())
@@ -412,7 +412,7 @@ bool appendRowV2ToBlockImpl(
                     }
                     else
                     {
-                        throw Exception("Detected invalid null when decoding data of column " + column_info->name + " with column type " + raw_column->getName(),
+                        throw Exception("Detected invalid null when decoding data of column " + column_info.name + " with column type " + raw_column->getName(),
                                         ErrorCodes::LOGICAL_ERROR);
                     }
                 }
@@ -436,7 +436,7 @@ bool appendRowV2ToBlockImpl(
     {
         if (column_ids_iter->first != pk_handle_id)
         {
-            const auto * column_info = column_infos[column_ids_iter->second];
+            const auto & column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
         }
@@ -490,7 +490,7 @@ bool appendRowV1ToBlock(
         }
         else if (column_ids_iter->first < next_field_column_id)
         {
-            const auto * column_info = column_infos[column_ids_iter->second];
+            const auto & column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
             column_ids_iter++;
@@ -509,10 +509,10 @@ bool appendRowV1ToBlock(
             }
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-            const auto * column_info = column_infos[column_ids_iter->second];
-            DatumFlat datum(decoded_field_iter->second, column_info->tp);
+            const auto & column_info = column_infos[column_ids_iter->second];
+            DatumFlat datum(decoded_field_iter->second, column_info.tp);
             const Field & unflattened = datum.field();
-            if (datum.overflow(*column_info))
+            if (datum.overflow(column_info))
             {
                 // Overflow detected, fatal if force_decode is true,
                 // as schema being newer and narrow shouldn't happen.
@@ -520,13 +520,13 @@ bool appendRowV1ToBlock(
                 if (force_decode)
                 {
                     throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
-                                        + column_info->name + " with column " + raw_column->getName(),
+                                        + column_info.name + " with column " + raw_column->getName(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
 
                 return false;
             }
-            if (datum.invalidNull(*column_info))
+            if (datum.invalidNull(column_info))
             {
                 // Null value with non-null type detected, fatal if force_decode is true,
                 // as schema being newer and with invalid null shouldn't happen.
@@ -534,7 +534,7 @@ bool appendRowV1ToBlock(
                 if (force_decode)
                 {
                     throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                                        + " of column " + column_info->name + " with type " + raw_column->getName(),
+                                        + " of column " + column_info.name + " with type " + raw_column->getName(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
 
@@ -550,7 +550,7 @@ bool appendRowV1ToBlock(
     {
         if (column_ids_iter->first != pk_handle_id)
         {
-            const auto * column_info = column_infos[column_ids_iter->second];
+            const auto & column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
         }

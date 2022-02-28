@@ -88,7 +88,7 @@ private:
 
     RegionException::UnavailableRegions ids;
     std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
-    std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
+    std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
 };
 
 class MvccQueryInfoWrap
@@ -195,6 +195,9 @@ LearnerReadSnapshot doLearnerRead(
         batch_read_index_req.reserve(ori_batch_region_size);
 
         {
+            // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
+            auto read_index_tso = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
+
             for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
             {
                 const auto & region_to_query = regions_info[region_idx];
@@ -208,7 +211,7 @@ LearnerReadSnapshot doLearnerRead(
                 else
                 {
                     auto & region = regions_snapshot.find(region_id)->second;
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, mvcc_query_info->read_tso));
+                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, read_index_tso));
                 }
             }
         }
@@ -240,9 +243,9 @@ LearnerReadSnapshot doLearnerRead(
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
-            if (const auto * proxy_helper = kvstore->getProxyHelper(); proxy_helper)
+            if (kvstore->getProxyHelper())
             {
-                auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+                auto res = kvstore->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
                 for (auto && [resp, region_id] : res)
                 {
                     batch_read_index_result.emplace(region_id, std::move(resp));
@@ -320,7 +323,7 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
+                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
                 if (wait_res != WaitIndexResult::Finished)
                 {
                     handle_wait_timeout_region(region_to_query.region_id);
@@ -467,6 +470,13 @@ void validateQueryInfo(
     {
         throw RegionException(std::move(fail_region_ids), fail_status);
     }
+}
+
+MvccQueryInfo::MvccQueryInfo(bool resolve_locks_, UInt64 read_tso_)
+    : read_tso(read_tso_)
+    , resolve_locks(read_tso_ == std::numeric_limits<UInt64>::max() ? false : resolve_locks_)
+{
+    // using `std::numeric_limits::max()` to resolve lock may break basic logic.
 }
 
 } // namespace DB

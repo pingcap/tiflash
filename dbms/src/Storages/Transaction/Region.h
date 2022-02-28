@@ -15,6 +15,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
+
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -114,7 +119,7 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    std::string getDebugString(std::stringstream & ss) const;
+    std::string getDebugString() const;
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -142,12 +147,10 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    ReadIndexResult learnerRead(UInt64 start_ts);
-
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
 
     UInt64 appliedIndex() const;
 
@@ -187,6 +190,7 @@ private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
+    friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -229,6 +233,8 @@ public:
     UInt64 appliedIndex();
 
 private:
+    friend class tests::RegionKVStoreTest;
+
     RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(

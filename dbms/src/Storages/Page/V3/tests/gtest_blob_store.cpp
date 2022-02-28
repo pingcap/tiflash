@@ -1,7 +1,12 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -10,30 +15,123 @@ namespace DB::PS::V3::tests
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStats = BlobStore::BlobStats;
 
-class BlobStoreTest : public DB::base::TiFlashStorageTestBasic
+class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    void SetUp() override
-    {
-        path = getTemporaryPath();
-        DB::tests::TiFlashTestEnv::tryRemovePath(path);
-
-        Poco::File file(path);
-        if (!file.exists())
-        {
-            file.createDirectories();
-        }
-    }
+    BlobStoreStatsTest()
+        : logger(&Poco::Logger::get("BlobStoreStatsTest"))
+    {}
 
 protected:
     BlobStore::Config config;
-    String path{};
+    Poco::Logger * logger;
 };
 
-TEST_F(BlobStoreTest, testStats)
+TEST_F(BlobStoreStatsTest, RestoreEmpty)
 {
-    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
+    BlobStats stats(logger, config);
 
+    CollapsingPageDirectory dir;
+    {
+        PageEntriesEdit edit;
+        dir.apply(std::move(edit));
+    }
+    stats.restore(dir);
+
+    auto stats_copy = stats.getStats();
+    ASSERT_TRUE(stats_copy.empty());
+
+    EXPECT_EQ(stats.roll_id, 1);
+    auto next_file_id = stats.chooseNewStat();
+    EXPECT_EQ(next_file_id, 1);
+    EXPECT_NO_THROW(stats.createStat(next_file_id, stats.lock()));
+}
+
+TEST_F(BlobStoreStatsTest, Restore)
+try
+{
+    BlobStats stats(logger, config);
+
+    BlobFileId file_id1 = 10;
+    BlobFileId file_id2 = 12;
+
+    CollapsingPageDirectory dir;
+    {
+        PageEntriesEdit edit;
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 1,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 128,
+                .tag = 0,
+                .offset = 1024,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 2,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 3,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id2,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        dir.apply(std::move(edit));
+    }
+    stats.restore(dir);
+
+    auto stats_copy = stats.getStats();
+    ASSERT_EQ(stats_copy.size(), 2);
+    EXPECT_EQ(stats.roll_id, 13);
+
+    auto stat1 = stats.blobIdToStat(file_id1);
+    EXPECT_EQ(stat1->sm_total_size, 2048 + 512);
+    EXPECT_EQ(stat1->sm_valid_size, 128 + 512);
+    auto stat2 = stats.blobIdToStat(file_id2);
+    EXPECT_EQ(stat2->sm_total_size, 2048 + 512);
+    EXPECT_EQ(stat2->sm_valid_size, 512);
+
+    // This will throw exception since we try to create
+    // a new file bigger than restored `roll_id`
+    EXPECT_ANY_THROW({ stats.createStat(14, stats.lock()); });
+
+    for (BlobFileId i = 1; i <= 20; ++i)
+    {
+        if (i == file_id1 || i == file_id2)
+        {
+            EXPECT_ANY_THROW({ stats.createStat(i, stats.lock()); });
+        }
+        else
+        {
+            auto new_file_id = stats.chooseNewStat();
+            EXPECT_EQ(new_file_id, i);
+            EXPECT_NO_THROW({ stats.createStat(new_file_id, stats.lock()); });
+        }
+    }
+}
+CATCH
+
+TEST_F(BlobStoreStatsTest, testStats)
+{
+    BlobStats stats(logger, config);
 
     auto stat = stats.createStat(0, stats.lock());
 
@@ -59,12 +157,12 @@ TEST_F(BlobStoreTest, testStats)
 }
 
 
-TEST_F(BlobStoreTest, testStat)
+TEST_F(BlobStoreStatsTest, testStat)
 {
     BlobFileId blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
 
-    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
+    BlobStats stats(logger, config);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
@@ -131,13 +229,13 @@ TEST_F(BlobStoreTest, testStat)
     ASSERT_LE(stat->sm_valid_rate, 1);
 }
 
-TEST_F(BlobStoreTest, testFullStats)
+TEST_F(BlobStoreStatsTest, testFullStats)
 {
     BlobFileId blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
     BlobFileOffset offset = 0;
 
-    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
+    BlobStats stats(logger, config);
 
     stat = stats.createStat(1, stats.lock());
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
@@ -176,6 +274,84 @@ TEST_F(BlobStoreTest, testFullStats)
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 }
+
+class BlobStoreTest : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    void SetUp() override
+    {
+        path = getTemporaryPath();
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
+
+        Poco::File file(path);
+        if (!file.exists())
+        {
+            file.createDirectories();
+        }
+    }
+
+protected:
+    BlobStore::Config config;
+    String path{};
+};
+
+TEST_F(BlobStoreTest, Restore)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    auto blob_store = BlobStore(file_provider, path, config);
+
+    BlobFileId file_id1 = 10;
+    BlobFileId file_id2 = 12;
+
+    CollapsingPageDirectory dir;
+    {
+        PageEntriesEdit edit;
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 1,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 128,
+                .tag = 0,
+                .offset = 1024,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 2,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id1,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        edit.appendRecord(PageEntriesEdit::EditRecord{
+            .type = WriteBatch::WriteType::PUT,
+            .page_id = 3,
+            .ori_page_id = 0,
+            .version = PageVersionType(678),
+            .entry = PageEntryV3{
+                .file_id = file_id2,
+                .size = 512,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            }});
+        dir.apply(std::move(edit));
+    }
+    blob_store.restore(dir);
+
+    auto blob_need_gc = blob_store.getGCStats();
+    ASSERT_EQ(blob_need_gc.size(), 1);
+    EXPECT_EQ(blob_need_gc[0], 12);
+}
+CATCH
 
 TEST_F(BlobStoreTest, testWriteRead)
 {
@@ -515,8 +691,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
     WriteBatch wb;
+    char c_buff[buff_size * buff_nums];
     {
-        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             for (size_t j = 0; j < buff_size; ++j)
@@ -560,7 +736,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     blob_store.remove(entries_del1);
     ASSERT_EQ(entries_del1.begin()->file_id, 1);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
 
     ASSERT_EQ(stat->sm_valid_rate, 0.5);
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
@@ -598,8 +774,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
     WriteBatch wb;
+    char c_buff[buff_size * buff_nums];
     {
-        char c_buff[buff_size * buff_nums];
         for (size_t i = 0; i < buff_nums; ++i)
         {
             for (size_t j = 0; j < buff_size; ++j)
@@ -633,7 +809,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     // Remain entries index [8, 9].
     blob_store.remove(entries_del);
 
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
 
     const auto & gc_stats = blob_store.getGCStats();
     ASSERT_FALSE(gc_stats.empty());
@@ -686,7 +862,7 @@ TEST_F(BlobStoreTest, GC)
     gc_context[1] = versioned_pageid_entries;
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
-    auto stat = blob_store.blob_stats.fileIdToStat(1);
+    auto stat = blob_store.blob_stats.blobIdToStat(1);
     stat->changeToReadOnly();
 
     const auto & gc_edit = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));

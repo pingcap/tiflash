@@ -28,10 +28,6 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
-find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
-if (TARGET CURL::libcurl)
-    set(CURL_LIBRARIES CURL::libcurl)
-endif()
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
@@ -54,10 +50,10 @@ add_headers_and_sources(dbms src/Core)
 add_headers_and_sources(dbms src/DataStreams)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
+add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
-add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
@@ -191,7 +187,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
@@ -260,6 +255,11 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro(grep_bench_sources BASE_DIR DST_VAR)
+        # Cold match files that are not in tests/ directories
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
@@ -276,6 +276,23 @@ if (ENABLE_TESTS)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
+
+    grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
+    add_executable(bench_dbms EXCLUDE_FROM_ALL
+        ${dbms_bench_sources}
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        )
+    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+
+    target_link_libraries(bench_dbms gtest dbms test_utils benchmark clickhouse_functions)
+    if (ENABLE_TIFLASH_DTWORKLOAD)
+        target_link_libraries(bench_dbms dt-workload-lib)
+    endif ()
+
+    add_check(bench_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
