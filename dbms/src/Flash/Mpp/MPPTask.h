@@ -48,7 +48,7 @@ public:
 
     void preprocess();
 
-    void waitForScheduling();
+    void scheduleOrWait();
     void scheduleThisTask();
 
     void run();
@@ -71,7 +71,6 @@ public:
         return scheduled;
     }
 
-    void deleteAndScheduleQueries();
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 

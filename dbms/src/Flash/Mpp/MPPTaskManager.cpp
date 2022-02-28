@@ -8,8 +8,9 @@
 
 namespace DB
 {
-MPPTaskManager::MPPTaskManager()
-    : log(&Poco::Logger::get("TaskManager"))
+MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
+    : scheduler(scheduler_)
+    , log(&Poco::Logger::get("TaskManager"))
 {}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
@@ -89,10 +90,8 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
-            if (!canceled_task_set->task_map.empty())
-            {
-                canceled_task_set->task_map.begin()->second->deleteAndScheduleQueries();
-            }
+
+            scheduler->deleteAndScheduleQueries(query_id, *this);
             mpp_query_map.erase(it);
         }
     }
@@ -113,7 +112,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         throw Exception("The task " + task->id.toString() + " has been registered");
     }
-    if (it == mpp_query_map.end())
+    if (it == mpp_query_map.end()) /// the first one
     {
         auto ptr = std::make_shared<MPPQueryTaskSet>();
         ptr->task_map.emplace(task->id, task);
@@ -143,7 +142,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                task->deleteAndScheduleQueries();
+                scheduler->deleteAndScheduleQueries(task->id.start_ts, *this);
                 mpp_query_map.erase(it);
             }
             return;
@@ -193,10 +192,10 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
     return it == mpp_query_map.end() ? nullptr : it->second;
 }
 
-MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithLock(UInt64 query_id)
+bool MPPTaskManager::tryToScheduleTask(MPPTaskPtr task)
 {
     std::lock_guard<std::mutex> lock(mu);
-    return getQueryTaskSetWithoutLock(query_id);
+    return scheduler->tryToSchedule(task, *this);
 }
 
 } // namespace DB

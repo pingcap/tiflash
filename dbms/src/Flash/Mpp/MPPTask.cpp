@@ -310,7 +310,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
 
-        waitForScheduling();
+        scheduleOrWait();
 
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
@@ -440,9 +440,9 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
     return status.compare_exchange_strong(from, to);
 }
 
-void MPPTask::waitForScheduling()
+void MPPTask::scheduleOrWait()
 {
-    if (context->getTMTContext().getMPPTaskScheduler()->putWaitingQuery(shared_from_this()))
+    if (!manager->tryToScheduleTask(shared_from_this()))
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
@@ -458,10 +458,6 @@ void MPPTask::scheduleThisTask()
     std::unique_lock<std::mutex> lock(schedule_mu);
     scheduled = true;
     schedule_cv.notify_one();
-}
-void MPPTask::deleteAndScheduleQueries()
-{
-    context->getTMTContext().getMPPTaskScheduler()->deleteAndScheduleQueries(id.start_ts);
 }
 
 int MPPTask::estimateCountOfNewThreads()

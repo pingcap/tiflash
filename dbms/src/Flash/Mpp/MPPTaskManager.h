@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
+#include <Flash/Mpp/MinTSOScheduler.h>
 #include <common/logger_useful.h>
 #include <kvproto/mpp.pb.h>
 
@@ -34,6 +35,8 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSetPtr>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
+    MPPTaskSchedulerPtr scheduler;
+
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
@@ -43,7 +46,7 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
 public:
-    MPPTaskManager();
+    MPPTaskManager(MPPTaskSchedulerPtr);
     ~MPPTaskManager() = default;
 
     std::vector<UInt64> getCurrentQueries();
@@ -51,11 +54,12 @@ public:
     std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id);
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
-    MPPQueryTaskSetPtr getQueryTaskSetWithLock(UInt64 query_id);
 
     bool registerTask(MPPTaskPtr task);
 
     void unregisterTask(MPPTask * task);
+
+    bool tryToScheduleTask(MPPTaskPtr task);
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 
