@@ -280,7 +280,8 @@ public:
                                 + " of first argument of function " + getName() + ". Must be constant string.",
                             ErrorCodes::ILLEGAL_COLUMN);
 
-        re = Regexps::get<false, false>(col->getValue<String>());
+        int flags = OptimizedRegularExpression::RE_DOT_NL;
+        re = Regexps::get<false, false>(col->getValue<String>(), flags);
         capture = re->getNumberOfSubpatterns() > 0 ? 1 : 0;
 
         matches.resize(capture + 1);

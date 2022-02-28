@@ -1,5 +1,5 @@
 #include <Common/FailPoint.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 
 namespace DB
 {
@@ -10,7 +10,7 @@ extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
-Block ExchangeSender::readImpl()
+Block ExchangeSenderBlockInputStream::readImpl()
 {
     FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
     if (writer->dagContext().isRootMPPTask())
