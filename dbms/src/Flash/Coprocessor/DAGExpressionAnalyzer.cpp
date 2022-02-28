@@ -822,7 +822,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         if ((need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
         {
-            const auto & it = had_casted_map.find(current_columns[offset].name);
+           auto it = had_casted_map.find(current_columns[offset].name);
             if (it == had_casted_map.end())
             {
                 /// first add timestamp cast
