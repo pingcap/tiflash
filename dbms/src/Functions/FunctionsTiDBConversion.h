@@ -843,15 +843,15 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, const CastInternalType & max_value, ScaleType scale, const CastInternalType & scale_mul, int fsp, const Context & context)
+    static U toTiDBDecimal(MyDateTime & date_time, const CastInternalType & max_value, ScaleType from_scale, ScaleType to_scale, const CastInternalType & scale_mul, int fsp, const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
+            + date_time.hour * 10000ULL + date_time.minute * 100ULL + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * pow10[fsp] + date_time.micro_second;
+            Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
-            return toTiDBDecimal<Decimal128, U>(decimal, fsp, max_value, scale, scale_mul, context);
+            return toTiDBDecimal<Decimal128, U>(decimal, from_scale, max_value, to_scale, scale_mul, context);
         }
         else
         {
@@ -1149,9 +1149,7 @@ struct TiDBConvertToDecimal
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
             const CastInternalType max_value = getMaxValueIfNecessary(prec);
-            const ScaleType from_scale = col_from->getScale();
-            const ScaleType scale_diff = ((from_scale > scale) ? (from_scale - scale) : (scale - from_scale));
-            const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale_diff);
+            const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(col_from->getScale(), scale);
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), max_value, scale, scale_mul, context);
         }
@@ -1166,18 +1164,24 @@ struct TiDBConvertToDecimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             const CastInternalType max_value = getMaxValueIfNecessary(prec);
-            const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
-            for (size_t i = 0; i < size; ++i)
+            if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
             {
-                if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
+                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                for (size_t i = 0; i < size; ++i)
                 {
                     MyDate date(vec_from[i]);
                     vec_to[i] = toTiDBDecimal<ToFieldType>(date, max_value, scale_mul, context);
                 }
-                else
+            }
+            else
+            {
+                // Treat datetime(fsp) as decimal(20, 6).
+                const ScaleType from_scale = 6;
+                const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
+                for (size_t i = 0; i < size; ++i)
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, max_value, scale, scale_mul, type.getFraction(), context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, max_value, from_scale, scale, scale_mul, type.getFraction(), context);
                 }
             }
         }
@@ -1242,6 +1246,13 @@ struct TiDBConvertToDecimal
         {
             return CastInternalType(0);
         }
+    }
+
+    // Only used for cast decimal to decimal.
+    static CastInternalType getScaleMulForDecimalToDecimal(ScaleType from_scale, ScaleType to_scale)
+    {
+        const ScaleType scale_diff = ((from_scale > to_scale) ? (from_scale - to_scale) : (to_scale - from_scale));
+        return getScaleMultiplier<CastInternalType>(scale_diff);
     }
 };
 
@@ -1857,7 +1868,9 @@ private:
             const auto fsp = datetime_type->getFraction();
             if (fsp > 0)
             {
-                from_scaled_prec = getFromScaledPrecDecimalInternal(14 + fsp, fsp, to_decimal_scale, zero_scale_diff);
+                // We treat datetime(fsp) as decimal(20, 6) instead of decimal(14 + fsp, fsp).
+                // Because the internal fraction is always aligmented to 6 valid digits, so we can avoid division for fsp.
+                from_scaled_prec = getFromScaledPrecDecimalInternal(20, 6, to_decimal_scale, zero_scale_diff);
             }
             else
             {
