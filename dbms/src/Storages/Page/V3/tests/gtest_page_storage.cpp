@@ -132,9 +132,9 @@ try
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
 
-    // make sure that 0.8 * rate_target <= actual_rate <= 1.25 * rate_target
-    EXPECT_GE(write_actual_rate / rate_target, 0.80);
-    EXPECT_LE(write_actual_rate / rate_target, 1.25);
+    // make sure that 0.8 * rate_target <= actual_rate <= 1.30 * rate_target
+    EXPECT_GE(write_actual_rate / rate_target, 0.70);
+    EXPECT_LE(write_actual_rate / rate_target, 1.30);
 
     Int64 consumed = 0;
     auto get_stat = [&consumed]() {
@@ -142,9 +142,9 @@ try
     };
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
-                                                                    rate_target,
-                                                                    LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -154,14 +154,14 @@ try
 
         auto read_elapsed = read_watch.elapsedSeconds();
         auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
-        EXPECT_GE(read_actual_rate / rate_target, 0.80);
-        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+        EXPECT_GE(read_actual_rate / rate_target, 0.70);
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
-                                                                    rate_target,
-                                                                    LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
 
         std::vector<PageId> page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -174,8 +174,8 @@ try
 
         auto read_elapsed = read_watch.elapsedSeconds();
         auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
-        EXPECT_GE(read_actual_rate / rate_target, 0.80);
-        EXPECT_LE(read_actual_rate / rate_target, 1.25);
+        EXPECT_GE(read_actual_rate / rate_target, 0.70);
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
     }
 }
 CATCH
