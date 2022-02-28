@@ -797,7 +797,7 @@ NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
 }
 
 void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
-    ExpressionActionsPtr & actions,
+    const ExpressionActionsPtr & actions,
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets,
     bool need_append_timezone_cast,
