@@ -92,7 +92,7 @@ function clean_data_log() {
 function check_env() {
   local cur_dir=$(pwd)
   if [[ ! -d ${cur_dir}/../../tests/.build/tiflash ]]; then
-    echo "No pre-build directory: ${cur_dir}/../../tests/.build/tiflash"
+    echo "No pre-build tiflash binary directory: ${cur_dir}/../../tests/.build/tiflash"
     exit -1
   fi
 }
