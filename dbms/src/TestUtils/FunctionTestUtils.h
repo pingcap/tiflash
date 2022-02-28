@@ -7,7 +7,9 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -34,12 +36,36 @@ struct TypeTraits
     using FieldType = typename NearestFieldType<T>::Type;
 };
 
+template <>
+struct TypeTraits<Null>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = Null;
+};
+
+template <>
+struct TypeTraits<MyDate>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDate::FieldType;
+};
+
+template <>
+struct TypeTraits<MyDateTime>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDateTime::FieldType;
+};
+
 template <typename T>
 struct TypeTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
     static constexpr bool is_decimal = false;
-    using FieldType = std::optional<typename NearestFieldType<T>::Type>;
+    using FieldType = std::optional<typename TypeTraits<T>::FieldType>;
 };
 
 template <typename T>
@@ -62,6 +88,12 @@ struct TypeTraits<Nullable<Decimal<T>>>
 
 template <typename T>
 struct InferredDataType;
+
+template <>
+struct InferredDataType<Null>
+{
+    using Type = DataTypeNothing;
+};
 
 template <>
 struct InferredDataType<UInt8>
@@ -127,6 +159,18 @@ template <>
 struct InferredDataType<String>
 {
     using Type = DataTypeString;
+};
+
+template <>
+struct InferredDataType<MyDate>
+{
+    using Type = DataTypeMyDate;
+};
+
+template <>
+struct InferredDataType<MyDateTime>
+{
+    using Type = DataTypeMyDateTime;
 };
 
 template <typename T>
@@ -249,8 +293,59 @@ ColumnWithTypeAndName createConstColumn(
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
-ColumnWithTypeAndName createDateTimeColumnNullable(std::initializer_list<std::optional<MyDateTime>> init, int fraction);
-ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const MyDateTime & dt, int fraction);
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+    auto col = data_type_ptr->createColumn();
+    for (const auto & dt : init)
+    {
+        if (dt.has_value())
+            col->insert(Field(dt->toPackedUInt()));
+        else
+        {
+            if constexpr (is_nullable)
+            {
+                col->insert(Null());
+            }
+            else
+            {
+                throw Exception("Null value for not nullable DataTypeMyDateTime");
+            }
+        }
+    }
+    return {std::move(col), data_type_ptr, "datetime"};
+}
+
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const std::optional<MyDateTime> & dt, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+
+    ColumnPtr col;
+    if (dt.has_value())
+        col = data_type_ptr->createColumnConst(size, Field(dt->toPackedUInt()));
+    else
+    {
+        if constexpr (is_nullable)
+        {
+            col = data_type_ptr->createColumnConst(size, Field(Null()));
+        }
+        else
+        {
+            throw Exception("Null value for not nullable DataTypeMyDateTime");
+        }
+    }
+    return {std::move(col), data_type_ptr, "datetime"};
+}
 
 // parse a string into decimal field.
 template <typename T>
@@ -397,6 +492,96 @@ ColumnWithTypeAndName executeFunction(
 {
     ColumnsWithTypeAndName vec({first_column, columns...});
     return executeFunction(context, func_name, vec);
+}
+
+template <typename T>
+ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredDataVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(updated_vec, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName createNullableColumn(InferredDataInitializerList<T> init, const std::vector<Int32> & null_map, const String name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredDataVector<T>(init);
+    return createNullableColumn<T>(vec, null_map, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredDataVector<T> & init_vec,
+    const std::vector<Int32> & null_map,
+    const String & name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredDataVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(data_type_args, updated_vec, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    InferredDataInitializerList<T> init,
+    const std::vector<Int32> & null_map,
+    const String & name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredDataVector<T>(init);
+    return createNullableColumn<T>(data_type_args, vec, null_map, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredLiteralVector<T> & init_vec,
+    const std::vector<Int32> & null_map,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredLiteralVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(data_type_args, updated_vec, name, 0);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredLiteralInitializerList<T> & init,
+    const std::vector<Int32> & null_map,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredLiteralVector<T>(init);
+    return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
 class FunctionTest : public ::testing::Test

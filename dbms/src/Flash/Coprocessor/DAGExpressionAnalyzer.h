@@ -42,8 +42,6 @@ public:
 
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
-    Int32 getImplicitCastCount() const { return implicit_cast_count; };
-
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
     String appendWhere(
@@ -54,15 +52,11 @@ public:
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
 
-    /// <aggregation_keys, collators, aggregate_descriptions>
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> appendAggregation(
+    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
-
-    void appendAggSelect(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -75,7 +69,7 @@ public:
 
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const String & column_prefix);
+        const String & column_prefix) const;
 
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
@@ -106,7 +100,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const DAGQueryBlock & query_block);
+        const tipb::TableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -120,6 +114,10 @@ public:
         String & filter_column_name);
 
 private:
+    void appendCastAfterAgg(
+        ExpressionActionsChain & chain,
+        const tipb::Aggregation & agg);
+
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -132,7 +130,16 @@ private:
         ExpressionActionsChain::Step & step,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
         bool result_is_nullable);
+
+    void buildCommonAggFunc(
+        const tipb::Expr & expr,
+        ExpressionActionsChain::Step & step,
+        const String & agg_func_name,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        bool empty_input_as_null);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
@@ -148,8 +155,7 @@ private:
     String appendCastIfNeeded(
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions,
-        const String & expr_name,
-        bool explicit_cast);
+        const String & expr_name);
 
     /**
      * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
@@ -193,14 +199,10 @@ private:
         ExpressionActionsPtr & actions);
 
     // all columns from table scan
-    std::vector<NameAndTypePair> source_columns;
-    // all columns after aggregation
-    std::vector<NameAndTypePair> aggregated_columns;
+    NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
-    Settings settings;
     const Context & context;
-    bool after_agg;
-    Int32 implicit_cast_count;
+    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };

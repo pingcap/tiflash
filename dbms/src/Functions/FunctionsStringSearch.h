@@ -171,7 +171,7 @@ public:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
 
