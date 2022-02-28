@@ -108,7 +108,7 @@ public:
                 continue;
             }
             auto & col_def = (*table_info.columns)[i];
-            if (col_def.id == table_info.handle.id)
+            if (col_def.id == table_info.handle.id || col_def.id == VERSION_COLUMN_ID || col_def.id == TAG_COLUMN_ID)
             {
                 continue;
             }
@@ -238,8 +238,7 @@ private:
 
     std::string randomString()
     {
-        static constexpr int max_size = 1024; // 1KB
-        int size = rand_gen() % max_size + 1;
+        constexpr int size = 128;
         std::string str(size, 0);
         std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
         return str;
