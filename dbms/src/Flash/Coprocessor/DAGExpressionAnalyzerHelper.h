@@ -64,7 +64,17 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
-    static void buildAggFunction(
+    static String buildRegexpFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
+    static String genFuncString(
+        const String & func_name,
+        const Names & argument_names,
+        const TiDB::TiDBCollators & collators);
+
+     static void buildAggFunction(
         const Names & arg_names,
         const DataTypes & arg_types,
         TiDB::TiDBCollators & arg_collators,
@@ -72,12 +82,7 @@ public:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
-
-    static String genFuncString(
-        const String & func_name,
-        const Names & argument_names,
-        const TiDB::TiDBCollators & collators);
-
+  
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
