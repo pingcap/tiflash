@@ -830,7 +830,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
                 auto updated_type = current_columns[offset].type;
                 if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
                 {
-                    if (tz_col.length() == 0)
+                    if (tz_col.empty())
                         tz_col = getActions(tz_expr, actions);
                     updated_name = appendTimeZoneCast(tz_col, current_columns[offset].name, tz_cast_func_name, actions);
                 }
