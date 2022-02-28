@@ -857,7 +857,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     source_columns = std::move(after_cast_columns);
 }
 
-std::pair<bool, BoolVec> DAGExpressionAnalyzer::checkIfCastIsRequired(
+std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequired(
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets) const
 {
@@ -895,7 +895,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    auto [need_append_type_cast, need_append_type_cast_vec] = checkIfCastIsRequired(schema, output_offsets);
+    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequired(schema, output_offsets);
 
     if (need_append_timezone_cast || need_append_type_cast)
     {

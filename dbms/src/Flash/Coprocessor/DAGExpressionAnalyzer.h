@@ -67,10 +67,15 @@ public:
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
+    // Generate a project action for non-root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same, and
+    // guarantee that left/right block of join don't have duplicated column names.
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
         const String & column_prefix) const;
 
+    // Generate a project action for root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same.
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
         const std::vector<tipb::FieldType> & schema,
@@ -231,7 +236,8 @@ private:
         bool need_append_timezone_cast,
         const BoolVec & need_append_type_cast_vec);
 
-    std::pair<bool, BoolVec> checkIfCastIsRequired(
+    // return {need_append_type_cast, BoolVec of which one should append type cast}
+    std::pair<bool, BoolVec> isCastRequired(
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets) const;
 
