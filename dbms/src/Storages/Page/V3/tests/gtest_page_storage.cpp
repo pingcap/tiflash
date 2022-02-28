@@ -142,9 +142,9 @@ try
     };
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -159,9 +159,9 @@ try
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
 
         std::vector<PageId> page_ids;
         for (size_t i = 0; i < wb_nums; ++i)

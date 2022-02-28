@@ -485,9 +485,9 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
 
     char c_buff_read[wb_nums * buff_size];
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -518,9 +518,9 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
 
@@ -533,9 +533,9 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<ReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
 
