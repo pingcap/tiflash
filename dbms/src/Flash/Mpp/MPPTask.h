@@ -61,14 +61,25 @@ public:
     {
         if (needed_threads == 0)
         {
-            needed_threads = estimateCountOfNewThreads();
+            throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
         }
         return needed_threads;
     }
 
-    bool isScheduled()
+    bool isReadyForSchedule()
     {
-        return scheduled;
+        if (status.load() == INITIALIZING)
+        {
+            return false;
+        }
+        if (status.load() == RUNNING)
+        {
+            return !scheduled;
+        }
+        else
+        {
+            throw Exception("The task should not be " + taskStatusToString(status).toString() + " during scheduling.");
+        }
     }
 
     // tunnel and error_message
