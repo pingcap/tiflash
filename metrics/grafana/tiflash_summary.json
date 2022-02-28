@@ -5286,7 +5286,7 @@
           },
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Duration of end to end pre-decode when applying region snapshot",
+          "description": "Duration of SST to DT in pre-decode when applying region snapshot",
           "gridPos": {
             "h": 7,
             "w": 12,
@@ -5304,7 +5304,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_predecode_e2e\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_predecode_sst2dt\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -5313,7 +5313,7 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Snapshot Predecode End To End Duration",
+          "title": "Snapshot Predecode SST to DT Duration",
           "tooltip": {
             "show": true,
             "showHistogram": true

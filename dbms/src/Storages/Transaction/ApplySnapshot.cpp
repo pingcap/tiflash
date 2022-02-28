@@ -255,7 +255,6 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
 
     Stopwatch watch;
     auto & ctx = tmt.getContext();
-    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_e2e).Observe(watch.elapsedSeconds()); });
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
@@ -332,7 +331,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_e2e).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     PageIds ids;
     while (true)
