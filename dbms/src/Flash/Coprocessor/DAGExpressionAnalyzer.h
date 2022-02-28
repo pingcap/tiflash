@@ -237,7 +237,7 @@ private:
         const BoolVec & need_append_type_cast_vec);
 
     // return {need_append_type_cast, BoolVec of which one should append type cast}
-    std::pair<bool, BoolVec> isCastRequired(
+    std::pair<bool, BoolVec> isCastRequiredForRootFinalProjection(
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets) const;
 

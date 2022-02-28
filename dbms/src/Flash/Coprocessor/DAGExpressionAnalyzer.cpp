@@ -822,7 +822,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         if ((need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
         {
-           auto it = had_casted_map.find(current_columns[offset].name);
+            auto it = had_casted_map.find(current_columns[offset].name);
             if (it == had_casted_map.end())
             {
                 /// first add timestamp cast
@@ -895,7 +895,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequired(schema, output_offsets);
+    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
 
     if (need_append_timezone_cast || need_append_type_cast)
     {
