@@ -71,7 +71,7 @@ private:
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
 
     // If the CallData is ready to write a msg.
-    std::atomic<bool> ready{false};
+    bool ready = false;
 
     // Let's implement a state machine with the following states.
     enum CallStatus
