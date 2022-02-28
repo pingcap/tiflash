@@ -74,7 +74,9 @@ public:
         const Names & argument_names,
         const TiDB::TiDBCollators & collators);
 
-     static void buildAggFunction(
+    /// generate AggregateDescription and append it to AggregateDescriptions if need.
+    /// And append output column to aggregated_columns.
+    static void appendAggDescription(
         const Names & arg_names,
         const DataTypes & arg_types,
         TiDB::TiDBCollators & arg_collators,
@@ -82,7 +84,7 @@ public:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
-  
+
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 

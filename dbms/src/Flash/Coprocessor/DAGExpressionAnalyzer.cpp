@@ -51,21 +51,27 @@ tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
         : constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
 }
 
+
 String getAggFuncName(
     const tipb::Expr & expr,
     const tipb::Aggregation & agg,
     const Settings & settings)
 {
     String agg_func_name = getAggFunctionName(expr);
-    if (expr.has_distinct() && Poco::toLower(agg_func_name) == "countdistinct")
+
+    static const String count_distinct_func_name = "countDistinct";
+    if (expr.has_distinct() && agg_func_name == count_distinct_func_name)
         return settings.count_distinct_implementation;
-    if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
+
+    static const String sum_func_name = "sum";
+    if (agg.group_by_size() == 0 && agg_func_name == sum_func_name && expr.has_field_type()
         && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
     {
         /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
         /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
         return count_second_stage;
     }
+
     return agg_func_name;
 }
 } // namespace
@@ -211,7 +217,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
         arg_names[i] = arg_name;
     }
 
-    DAGExpressionAnalyzerHelper::buildAggFunction(arg_names, arg_types, arg_collators, agg_func_name, aggregate_descriptions, aggregated_columns, empty_input_as_null);
+    DAGExpressionAnalyzerHelper::appendAggDescription(arg_names, arg_types, arg_collators, agg_func_name, aggregate_descriptions, aggregated_columns, empty_input_as_null);
 }
 
 void DAGExpressionAnalyzer::buildAggGroupBy(
@@ -254,7 +260,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
                 /// extra aggregation function any(group_by_column) here as the output of the group by column
                 TiDB::TiDBCollators arg_collators{collator};
-                DAGExpressionAnalyzerHelper::buildAggFunction({name}, {type}, arg_collators, "any", aggregate_descriptions, aggregated_columns, false);
+                DAGExpressionAnalyzerHelper::appendAggDescription({name}, {type}, arg_collators, "any", aggregate_descriptions, aggregated_columns, false);
             }
             else
             {

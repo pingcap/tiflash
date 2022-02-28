@@ -404,8 +404,8 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     }
     return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
-  
-void DAGExpressionAnalyzerHelper::buildAggFunction(
+
+void DAGExpressionAnalyzerHelper::appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
     TiDB::TiDBCollators & arg_collators,
