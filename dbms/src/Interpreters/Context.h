@@ -406,9 +406,6 @@ public:
     void setMaxTableSizeToDrop(size_t max_size);
     void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
 
-    /// Lets you select the compression settings according to the conditions described in the configuration file.
-    CompressionSettings chooseCompressionSettings(size_t part_size, double part_size_ratio) const;
-
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
 

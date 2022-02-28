@@ -37,7 +37,6 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IStorage.h>
@@ -140,8 +139,6 @@ struct ContextShared
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
-    /// Rules for selecting the compression settings, depending on the size of the part.
-    mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -1615,25 +1612,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-CompressionSettings Context::chooseCompressionSettings(size_t part_size, double part_size_ratio) const
-{
-    auto lock = getLock();
-
-    if (!shared->compression_settings_selector)
-    {
-        constexpr auto config_name = "compression";
-        auto & config = getConfigRef();
-
-        if (config.has(config_name))
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>(config, "compression");
-        else
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>();
-    }
-
-    return shared->compression_settings_selector->choose(part_size, part_size_ratio);
 }
 
 

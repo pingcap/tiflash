@@ -9,6 +9,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/String.h>
 #include <Poco/Timespan.h>
 
 
@@ -833,11 +834,12 @@ public:
 
     static CompressionMethod getCompressionMethod(const String & s)
     {
-        if (s == "lz4")
+        String lower_str = Poco::toLower(s);
+        if (lower_str == "lz4")
             return CompressionMethod::LZ4;
-        if (s == "lz4hc")
+        if (lower_str == "lz4hc")
             return CompressionMethod::LZ4HC;
-        if (s == "zstd")
+        if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
 
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);

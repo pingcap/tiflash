@@ -199,12 +199,12 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
         LOG_FMT_INFO(logger, "creating output stream");
+        context.getSettingsRef().dt_compression_method.set(args.compression_method);
+        context.getSettingsRef().dt_compression_level.set(args.compression_level);
         auto output_stream = DB::DM::DMFileBlockOutputStream(
             context,
             new_file,
-            src_file->getColumnDefines(),
-            {},
-            {args.compression_method, args.compression_level});
+            src_file->getColumnDefines());
 
         input_stream->readPrefix();
         if (!args.dry_mode)
