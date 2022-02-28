@@ -1,3 +1,4 @@
+#include <Encryption/MockKeyManager.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -11,6 +12,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 
 namespace DB
 {
@@ -93,6 +95,49 @@ try
     }
 }
 CATCH
+
+TEST_F(PageStorageTest, WriteReadWithEncryption)
+try
+{
+    const UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+    const auto enc_file_provider = std::make_shared<FileProvider>(key_manager, true);
+    auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+    auto page_storage_enc = std::make_shared<PageStorageImpl>("test.t2", delegator, config, enc_file_provider);
+    page_storage_enc->restore();
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(0, tag, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage_enc->write(std::move(batch));
+    }
+
+    DB::Page page0 = page_storage_enc->read(0);
+    ASSERT_EQ(page0.data.size(), buf_sz);
+    ASSERT_EQ(page0.page_id, 0UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+    DB::Page page1 = page_storage_enc->read(1);
+    ASSERT_EQ(page1.data.size(), buf_sz);
+    ASSERT_EQ(page1.page_id, 1UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+}
+CATCH
+
 
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
