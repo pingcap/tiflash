@@ -6,6 +6,8 @@
 
 namespace DB
 {
+/// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_tso query to preempt threads under the hard limit of threads. The min_tso query avoids the deadlock resulted from threads competition among nodes.
+/// schedule tasks under the lock protection of the task manager
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
@@ -24,6 +26,5 @@ private:
     UInt64 used_threads;
     Poco::Logger * log;
 };
-
 
 } // namespace DB

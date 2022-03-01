@@ -18,11 +18,12 @@ struct MPPQueryTaskSet
     /// thread, which means no task can register/un-register for the
     /// query, here we do not need mutex because all the write/read
     /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
-    std::atomic<bool> to_be_cancelled = false;
+    bool to_be_cancelled = false;
     MPPTaskMap task_map;
     /// only used in scheduler
     UInt32 scheduled_task = 0;
     UInt32 used_threads = 0;
+    std::queue<MPPTaskPtr> waiting_tasks;
 };
 
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;

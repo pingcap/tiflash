@@ -66,22 +66,6 @@ public:
         return needed_threads;
     }
 
-    bool isReadyForSchedule()
-    {
-        if (status.load() == INITIALIZING)
-        {
-            return false;
-        }
-        if (status.load() == RUNNING)
-        {
-            return !scheduled;
-        }
-        else
-        {
-            throw Exception("The task should not be " + taskStatusToString(status).toString() + " during scheduling.");
-        }
-    }
-
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
