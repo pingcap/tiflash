@@ -67,10 +67,6 @@ public:
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
-    // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-    grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);
-
-protected:
     IServer & server;
     const TiFlashSecurityConfig & security_config;
     Poco::Logger * log;
