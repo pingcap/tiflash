@@ -857,7 +857,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     source_columns = std::move(after_cast_columns);
 }
 
-std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequired(
+std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjection(
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets) const
 {
