@@ -56,7 +56,7 @@ namespace PS::V3
  * Log number = 32bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
-class LogWriter final : public Allocator<false>
+class LogWriter final : private Allocator<false>
 {
 public:
     LogWriter(
