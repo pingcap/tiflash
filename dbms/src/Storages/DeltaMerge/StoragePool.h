@@ -28,15 +28,6 @@ public:
 
     void restore();
 
-    PageId maxLogPageId() { return max_log_page_id; }
-    PageId maxDataPageId() { return max_data_page_id; }
-    PageId maxMetaPageId() { return max_meta_page_id; }
-
-    PageId newLogPageId() { return ++max_log_page_id; }
-    PageId newMetaPageId() { return ++max_meta_page_id; }
-
-    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
-
     PageStoragePtr log() { return log_storage; }
     PageStoragePtr data() { return data_storage; }
     PageStoragePtr meta() { return meta_storage; }
@@ -51,15 +42,33 @@ private:
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;
 
-    std::atomic<PageId> max_log_page_id;
-    std::atomic<PageId> max_data_page_id;
-    std::atomic<PageId> max_meta_page_id;
-
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     std::mutex mutex;
 
     const Context & global_context;
+
+    friend class PageIdGenerator;
+};
+
+class PageIdGenerator : private boost::noncopyable
+{
+public:
+    PageIdGenerator() = default;
+
+    void restore(const StoragePool & storage_pool);
+
+    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
+
+    PageId maxMetaPageId() { return max_meta_page_id; }
+
+    PageId newLogPageId() { return ++max_log_page_id; }
+    PageId newMetaPageId() { return ++max_meta_page_id; }
+
+private:
+    std::atomic<PageId> max_log_page_id = 0;
+    std::atomic<PageId> max_data_page_id = 0;
+    std::atomic<PageId> max_meta_page_id = 0;
 };
 
 struct StorageSnapshot : private boost::noncopyable

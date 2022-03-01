@@ -218,31 +218,31 @@ int benchEntry(const std::vector<std::string> & opts)
             std::cerr << "invalid dtfile version: " << version << std::endl;
             return -EINVAL;
         }
-        auto algorithm_ = vm["algorithm"].as<std::string>();
+        auto algorithm_config = vm["algorithm"].as<std::string>();
         DB::ChecksumAlgo algorithm;
-        if (algorithm_ == "xxh3")
+        if (algorithm_config == "xxh3")
         {
             algorithm = DB::ChecksumAlgo::XXH3;
         }
-        else if (algorithm_ == "crc32")
+        else if (algorithm_config == "crc32")
         {
             algorithm = DB::ChecksumAlgo::CRC32;
         }
-        else if (algorithm_ == "crc64")
+        else if (algorithm_config == "crc64")
         {
             algorithm = DB::ChecksumAlgo::CRC64;
         }
-        else if (algorithm_ == "city128")
+        else if (algorithm_config == "city128")
         {
             algorithm = DB::ChecksumAlgo::City128;
         }
-        else if (algorithm_ == "none")
+        else if (algorithm_config == "none")
         {
             algorithm = DB::ChecksumAlgo::None;
         }
         else
         {
-            std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
+            std::cerr << "invalid algorithm: " << algorithm_config << std::endl;
             return -EINVAL;
         }
         auto frame = vm["frame"].as<size_t>();
@@ -286,7 +286,7 @@ int benchEntry(const std::vector<std::string> & opts)
                                                       "encryption: {}\n"
                                                       "algorithm:  {}";
         DB::DM::DMConfigurationOpt opt = std::nullopt;
-        auto logger = &Poco::Logger::get("DTTool::Bench");
+        auto * logger = &Poco::Logger::get("DTTool::Bench");
         if (version == 1)
         {
             LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
@@ -294,7 +294,7 @@ int benchEntry(const std::vector<std::string> & opts)
         }
         else
         {
-            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_);
+            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
@@ -323,11 +323,13 @@ int benchEntry(const std::vector<std::string> & opts)
         auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        auto page_id_generator = std::make_unique<DB::DM::PageIdGenerator>();
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
+            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             dm_settings.not_compress_columns,

@@ -142,7 +142,7 @@ def runTest(label, name, testPath, tidbBranch) {
                     container("docker") {
                         sh """
                         pwd
-                        DOWNLOAD_TAR=true COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=./tests/.build bash -e release-centos7-llvm/scripts/fetch-ci-build.sh
+                        DOWNLOAD_TAR=true COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} bash -e release-centos7-llvm/scripts/fetch-ci-build.sh
                         """
                     }
                 }
