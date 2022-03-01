@@ -229,6 +229,7 @@ private:
         const String & column_prefix,
         const std::vector<Int32> & output_offsets) const;
 
+    // May change the source columns.
     void appendCastForRootFinalProjection(
         const ExpressionActionsPtr & actions,
         const std::vector<tipb::FieldType> & require_schema,
