@@ -13,7 +13,7 @@
 # limitations under the License.
 
 project (TiFlash)
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.21)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")

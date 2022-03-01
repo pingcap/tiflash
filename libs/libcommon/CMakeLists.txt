@@ -153,7 +153,7 @@ target_link_libraries (
 )
 
 if (RT_LIBRARY)
-    target_link_libraries (common ${RT_LIBRARY})
+    target_link_libraries (common PUBLIC ${RT_LIBRARY})
 endif ()
 
 if (ENABLE_TESTS)
