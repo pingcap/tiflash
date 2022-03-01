@@ -1,4 +1,5 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGRequestVerifier.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Parsers/makeDummyQuery.h>
@@ -15,6 +16,10 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     : context(context_)
 {
     const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
+#ifndef NDEBUG
+    DAGRequestVerifier(getDAGContext()).verify(&dag_request);
+#endif // NDEBUG
+
     if (dag_request.has_root_executor())
     {
         QueryBlockIDGenerator id_generator;
