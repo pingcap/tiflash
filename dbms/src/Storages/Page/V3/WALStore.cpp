@@ -119,7 +119,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto fullname = log_filename.fullname(log_filename.stage);
     LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
     auto log_writer = std::make_unique<LogWriter>(
-        path + "/" + fullname,
+        fullname,
         provider,
         new_log_lvl.first,
         /*recycle*/ true,
