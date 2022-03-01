@@ -432,6 +432,7 @@ private:
     StoragePathPool path_pool;
     Settings settings;
     StoragePool storage_pool;
+    PageIdGenerator page_id_generator;
 
     String db_name;
     String table_name;
