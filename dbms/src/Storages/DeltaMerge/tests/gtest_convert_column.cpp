@@ -359,7 +359,8 @@ try
         ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,0))")));
         Decimal32 expected_default_value;
         {
-            ReadBufferFromString buf(String("-5.4999999"));
+            String s("-5.4999999");
+            ReadBufferFromString buf(s);
             readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 0);
             DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 0);
             EXPECT_EQ(expected_default_field.toString(), "-5");
@@ -395,7 +396,8 @@ try
         ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,1))")));
         Decimal32 expected_default_value;
         {
-            ReadBufferFromString buf(String("0.050000001"));
+            String s("0.050000001");
+            ReadBufferFromString buf(s);
             readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 1);
             DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 1);
             EXPECT_EQ(expected_default_field.toString(), "0.1");
