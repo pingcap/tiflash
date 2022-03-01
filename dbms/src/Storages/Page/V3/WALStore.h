@@ -78,7 +78,21 @@ public:
     void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool compactLogs(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    struct CheckpointSnapshot
+    {
+        Format::LogNumberType current_writting_log_num;
+        LogFilenameSet compact_log_files;
+
+        bool needSave() const
+        {
+            // TODO: Make it configurable and check the reasonable of this number
+            return compact_log_files.size() > 4;
+        }
+    };
+
+    CheckpointSnapshot prepareCompactLogs() const;
+
+    bool compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
 private:
     WALStore(
@@ -96,7 +110,8 @@ private:
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
-    std::mutex log_file_mutex;
+    const WriteLimiterPtr write_limiter;
+    mutable std::mutex log_file_mutex;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;

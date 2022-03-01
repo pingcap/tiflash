@@ -64,7 +64,7 @@ void VersionedPageEntries::createNewVersion(UInt64 seq, UInt64 epoch, const Page
     {
         entries.emplace(PageVersionType(seq, epoch), EntryOrDelete::newNormalEntry(entry));
     }
-    else if (last_entry->second.isNormal())
+    else if (last_entry->second.isEntry())
     {
         if (last_entry->second.being_ref_count != 1 && seq > last_entry->first.sequence)
         {
@@ -136,7 +136,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq)
     if (auto iter = MapUtils::findMutLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
     {
-        if (iter->second.isNormal())
+        if (iter->second.isEntry())
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
         else if (iter->second.isRef())
             return {RESOLVE_TO_REF, iter->second.origin_page_id, iter->first};
@@ -152,7 +152,7 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
         iter != entries.end())
     {
         // NORMAL
-        if (iter->second.isNormal())
+        if (iter->second.isEntry())
             return iter->second.entry;
     }
     return std::nullopt;
@@ -164,7 +164,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
     if (auto iter = MapUtils::findMutLess(entries, PageVersionType(ver.sequence + 1));
         iter != entries.end())
     {
-        if (iter->second.isNormal())
+        if (iter->second.isEntry())
             return ++iter->second.being_ref_count;
         else
             throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
@@ -187,7 +187,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     auto page_lock = acquireLock();
     for (const auto & [versioned_type, entry_or_del] : entries)
     {
-        if (!entry_or_del.isNormal())
+        if (!entry_or_del.isEntry())
         {
             continue;
         }
@@ -223,7 +223,7 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
         return std::make_pair(outdated_entries, false);
     }
 
-    bool keep_if_being_ref = !(iter->second.isNormal() || iter->second.isExternal());
+    bool keep_if_being_ref = !(iter->second.isEntry() || iter->second.isExternal());
     --iter; // keep the first version less than <lowest_seq+1, 0>
     while (true)
     {
@@ -253,7 +253,7 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
                 iter = entries.erase(iter);
             }
         }
-        else if (iter->second.isNormal() || iter->second.isExternal())
+        else if (iter->second.isEntry() || iter->second.isExternal())
         {
             if (keep_if_being_ref)
             {
@@ -300,6 +300,34 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::derefAndClean(UInt64 lowest
     }
 
     return cleanOutdatedEntries(lowest_seq, page_id, nullptr, page_lock);
+}
+
+void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, PageEntriesEdit & edit)
+{
+    auto page_lock = acquireLock();
+    // dump the latest entry if it is not a "delete"
+    auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+    if (last_iter->second.isExternal() || last_iter->second.isEntry() || last_iter->second.isRef())
+    {
+        edit.snap(page_id, last_iter->first, last_iter->second);
+    }
+    else if (last_iter->second.isDelete())
+    {
+        if (last_iter == entries.begin())
+        {
+            // only delete left, then we don't need to keep this
+            return;
+        }
+        auto prev_iter = --last_iter;
+        if (prev_iter->second.isEntry() || prev_iter->second.isExternal())
+        {
+            if (prev_iter->second.being_ref_count == 1)
+                return;
+            // It is being ref by another id, should persist the item and delete
+            edit.snap(page_id, prev_iter->first, prev_iter->second);
+            edit.snap(page_id, last_iter->first, last_iter->second);
+        }
+    }
 }
 
 /**********************************
@@ -679,6 +707,11 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         }
         case EditRecordType::REF:
             throw Exception(fmt::format("should handle ref before switch statement"));
+        case EditRecordType::VAR_DELETE:
+        case EditRecordType::VAR_ENTRY:
+        case EditRecordType::VAR_EXTERNAL:
+        case EditRecordType::VAR_REF:
+            throw Exception(fmt::format("should not handle var"));
         }
     }
 
@@ -688,7 +721,17 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
 
 std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
 {
+    // Increase the epoch for migrated records
     for (auto & record : migrated_edit.getMutRecords())
+    {
+        record.version.epoch += 1;
+    }
+
+    // Apply migrate edit into WAL with the increased epoch version
+    wal->apply(migrated_edit, write_limiter);
+
+    // Apply migrate edit to the mvcc map
+    for (const auto & record : migrated_edit.getRecords())
     {
         MVCCMapType::const_iterator iter;
         {
@@ -700,16 +743,10 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
             }
         } // release the read lock on `table_rw_mutex`
 
-        // Increase the epoch for migrated record.
-        record.version.epoch += 1;
-
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
         versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
     }
-
-    // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit, write_limiter);
 
     if (!need_scan_page_ids)
     {
@@ -769,7 +806,15 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
 
-    done_anything |= wal->compactLogs(write_limiter, read_limiter);
+    {
+        // In order not to make read amplification too high, only apply compact logs when ...
+        auto files_snap = wal->prepareCompactLogs();
+        if (files_snap.needSave())
+        {
+            auto edit = dump();
+            done_anything |= wal->compactLogs(std::move(files_snap), std::move(edit), write_limiter, read_limiter);
+        }
+    }
 
     {
         // Cleanup released snapshots
@@ -850,6 +895,31 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
     }
 
     return all_del_entries;
+}
+
+PageEntriesEdit PageDirectory::dump()
+{
+    auto snap = createSnapshot();
+    PageEntriesEdit edit;
+    MVCCMapType::iterator iter;
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        iter = mvcc_table_directory.begin();
+        if (iter == mvcc_table_directory.end())
+            return edit;
+    }
+    while (true)
+    {
+        iter->second->collapseTo(snap->sequence, iter->first, edit);
+
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            ++iter;
+            if (iter == mvcc_table_directory.end())
+                break;
+        }
+    }
+    return edit;
 }
 
 } // namespace PS::V3

@@ -31,7 +31,7 @@ private:
 class WALStoreReader
 {
 public:
-    static LogFilenameSet listAllFiles(PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
+    static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
 
     static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -45,7 +45,7 @@ public:
     {
         if (reporter.hasError())
         {
-            throw Exception("Something worong while reading log file");
+            throw Exception("Something wrong while reading log file");
         }
     }
 

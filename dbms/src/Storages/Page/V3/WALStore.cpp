@@ -117,6 +117,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         path};
     auto filename = log_filename.filename(log_filename.stage);
     auto fullname = log_filename.fullname(log_filename.stage);
+    // TODO check whether the file already existed
     LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
     auto log_writer = std::make_unique<LogWriter>(
         fullname,
@@ -129,9 +130,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         log_filename};
 }
 
-// In order to make `restore` in a reasonable time, we need to compact
-// log files.
-bool WALStore::compactLogs(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+WALStore::CheckpointSnapshot WALStore::prepareCompactLogs() const
 {
     const auto current_writting_log_num = [this]() {
         std::lock_guard lock(log_file_mutex);
@@ -146,32 +145,30 @@ bool WALStore::compactLogs(const WriteLimiterPtr & write_limiter, const ReadLimi
         else
             ++iter;
     }
-    // In order not to make read amplification too high, only apply compact logs when ...
-    if (compact_log_files.size() < 4) // TODO: Make it configurable and check the reasonable of this number
+    return WALStore::CheckpointSnapshot{
+        .current_writting_log_num = current_writting_log_num,
+        .compact_log_files = std::move(compact_log_files),
+    };
+}
+
+// In order to make `restore` in a reasonable time, we need to compact
+// log files.
+bool WALStore::compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & /*read_limiter*/)
+{
+    if (!snapshot.needSave())
         return false;
 
-    CollapsingPageDirectory collapsing_directory;
-    auto reader = WALStoreReader::create(provider, compact_log_files, read_limiter);
-    while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
-        {
-            // TODO: Handle error, some error could be ignored.
-            reader->throwIfError();
-            // else it just run to the end of file.
-            break;
-        }
-        collapsing_directory.apply(std::move(edit));
-    }
-
-    {
-        const auto log_num = reader->logNum();
+        const auto log_num = snapshot.compact_log_files.rbegin()->log_num;
         // Create a temporary file for compacting log files.
         auto [compact_log, log_filename] = createLogWriter(delegator, provider, {log_num, 1}, logger, /*manual_flush*/ true);
-        collapsing_directory.dumpTo(compact_log);
+        {
+            const String serialized = ser::serializeTo(edit);
+            ReadBufferFromString payload(serialized);
+            compact_log->addRecord(payload, serialized.size());
+        }
         compact_log->flush(write_limiter);
-        compact_log.reset(); // close fd explictly before renaming file.
+        compact_log.reset(); // close fd explicitly before renaming file.
 
         // Rename it to be a normal log file.
         const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
@@ -183,7 +180,7 @@ bool WALStore::compactLogs(const WriteLimiterPtr & write_limiter, const ReadLimi
     }
 
     // Remove compacted log files.
-    for (const auto & filename : compact_log_files)
+    for (const auto & filename : snapshot.compact_log_files)
     {
         if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
         {
@@ -191,7 +188,7 @@ bool WALStore::compactLogs(const WriteLimiterPtr & write_limiter, const ReadLimi
         }
     }
     // TODO: Log more information. duration, num entries, size of compact log file...
-    LOG_FMT_INFO(logger, "Compact logs done [num_compacts={}]", compact_log_files.size());
+    LOG_FMT_INFO(logger, "Compact logs done [num_compacts={}]", snapshot.compact_log_files.size());
     return true;
 }
 

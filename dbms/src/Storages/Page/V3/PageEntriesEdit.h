@@ -4,6 +4,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/types.h>
 #include <fmt/format.h>
 
 namespace DB::PS::V3
@@ -53,7 +54,82 @@ enum class EditRecordType
     DEL,
     //
     UPSERT,
+    //
+    VAR_ENTRY,
+    VAR_REF,
+    VAR_EXTERNAL,
+    VAR_DELETE,
 };
+
+struct EntryOrDelete
+{
+    EditRecordType type;
+    PageEntryV3 entry;
+    PageId origin_page_id;
+    Int64 being_ref_count = 1;
+
+    static EntryOrDelete newDelete()
+    {
+        return EntryOrDelete{
+            .type = EditRecordType::VAR_DELETE,
+            .entry = {}, // meaningless
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1, // meaningless
+        };
+    }
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .type = EditRecordType::VAR_ENTRY,
+            .entry = entry,
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1,
+        };
+    }
+    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .type = EditRecordType::VAR_ENTRY,
+            .entry = entry,
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = ori_entry.being_ref_count,
+        };
+    }
+    static EntryOrDelete newRefEntry(PageId ori_id)
+    {
+        return EntryOrDelete{
+            .type = EditRecordType::VAR_REF,
+            .entry = {}, // meaningless
+            .origin_page_id = ori_id,
+            .being_ref_count = 1, // meaningless
+        };
+    }
+    static EntryOrDelete newExternal()
+    {
+        return EntryOrDelete{
+            .type = EditRecordType::VAR_EXTERNAL,
+            .entry = {}, // meaningless
+            .origin_page_id = 0, // meaningless
+            .being_ref_count = 1,
+        };
+    }
+
+    bool isDelete() const { return type == EditRecordType::VAR_DELETE; }
+    bool isExternal() const { return type == EditRecordType::VAR_EXTERNAL; }
+    bool isRef() const { return type == EditRecordType::VAR_REF; }
+    bool isEntry() const { return type == EditRecordType::VAR_ENTRY; }
+
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{type:{}, entry:{}, ori_page_id:{}, being_ref_count:{}}}",
+            static_cast<Int32>(type),
+            ::DB::PS::V3::toDebugString(entry),
+            origin_page_id,
+            being_ref_count);
+    }
+};
+
 
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
@@ -108,6 +184,19 @@ public:
         records.insert(records.end(), rhs_records.begin(), rhs_records.end());
     }
 
+
+    void snap(PageId page_id, const PageVersionType & ver, const EntryOrDelete & var)
+    {
+        EditRecord record{};
+        record.type = var.type;
+        record.page_id = page_id;
+        record.ori_page_id = var.origin_page_id;
+        record.version = ver;
+        record.entry = var.entry;
+        record.being_ref_count = var.being_ref_count;
+        records.emplace_back(record);
+    }
+
     void clear() { records.clear(); }
 
     bool empty() const { return records.empty(); }
@@ -121,6 +210,7 @@ public:
         PageId ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
+        Int64 being_ref_count;
     };
     using EditRecords = std::vector<EditRecord>;
 

@@ -500,22 +500,22 @@ try
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Stage 3. compact logs and verify
-    wal->compactLogs();
-    wal.reset();
+    // wal->compactLogs();
+    // wal.reset();
 
-    // After logs compacted, they should be written as one edit.
-    num_edits_read = 0;
-    num_pages_read = 0;
-    wal = WALStore::create(
-        [&](PageEntriesEdit && edit) {
-            num_pages_read += edit.size();
-            EXPECT_EQ(page_id, edit.size()) << fmt::format("at idx={}", num_edits_read);
-            num_edits_read += 1;
-        },
-        provider,
-        delegator);
-    EXPECT_EQ(num_edits_read, 1);
-    EXPECT_EQ(num_pages_read, page_id);
+    // // After logs compacted, they should be written as one edit.
+    // num_edits_read = 0;
+    // num_pages_read = 0;
+    // wal = WALStore::create(
+    //     [&](PageEntriesEdit && edit) {
+    //         num_pages_read += edit.size();
+    //         EXPECT_EQ(page_id, edit.size()) << fmt::format("at idx={}", num_edits_read);
+    //         num_edits_read += 1;
+    //     },
+    //     provider,
+    //     delegator);
+    // EXPECT_EQ(num_edits_read, 1);
+    // EXPECT_EQ(num_pages_read, page_id);
 }
 CATCH
 

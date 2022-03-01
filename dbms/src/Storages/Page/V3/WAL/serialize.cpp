@@ -1,7 +1,9 @@
+#include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -19,40 +21,23 @@ inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
     readIntBinary(version.epoch, buf);
 }
 
-void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT);
-
-    writeIntBinary(EditRecordType::PUT, buf);
-
-    UInt32 flags = 0;
-    writeIntBinary(flags, buf);
-    writeIntBinary(record.page_id, buf);
-    serializeVersionTo(record.version, buf);
-    writeIntBinary(record.entry.file_id, buf);
-    writeIntBinary(record.entry.offset, buf);
-    writeIntBinary(record.entry.size, buf);
-    writeIntBinary(record.entry.checksum, buf);
+    writeIntBinary(entry.file_id, buf);
+    writeIntBinary(entry.offset, buf);
+    writeIntBinary(entry.size, buf);
+    writeIntBinary(entry.checksum, buf);
     // fieldsOffset TODO: compression on `fieldsOffset`
-    writeIntBinary(record.entry.field_offsets.size(), buf);
-    for (const auto & [off, checksum] : record.entry.field_offsets)
+    writeIntBinary(entry.field_offsets.size(), buf);
+    for (const auto & [off, checksum] : entry.field_offsets)
     {
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
 }
 
-void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
 {
-    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT);
-
-    UInt32 flags = 0;
-    readIntBinary(flags, buf);
-    PageId page_id;
-    readIntBinary(page_id, buf);
-    PageVersionType version;
-    deserializeVersionFrom(buf, version);
-    PageEntryV3 entry;
     readIntBinary(entry.file_id, buf);
     readIntBinary(entry.offset, buf);
     readIntBinary(entry.size, buf);
@@ -73,13 +58,38 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
             entry.field_offsets.emplace_back(field_offset, field_checksum);
         }
     }
+}
+
+void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+{
+    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT);
+
+    writeIntBinary(EditRecordType::PUT, buf);
+
+    UInt32 flags = 0;
+    writeIntBinary(flags, buf);
+    writeIntBinary(record.page_id, buf);
+    serializeVersionTo(record.version, buf);
+    writeIntBinary(record.being_ref_count, buf);
+
+    serializeEntryTo(record.entry, buf);
+}
+
+void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+{
+    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT);
+
+    UInt32 flags = 0;
+    readIntBinary(flags, buf);
 
     // All consider as put
     PageEntriesEdit::EditRecord rec;
     rec.type = EditRecordType::PUT;
-    rec.page_id = page_id;
-    rec.version = version;
-    rec.entry = entry;
+    readIntBinary(rec.page_id, buf);
+    deserializeVersionFrom(buf, rec.version);
+    readIntBinary(rec.being_ref_count, buf);
+
+    deserializeEntryFrom(buf, rec.entry);
     edit.appendRecord(rec);
 }
 
@@ -97,52 +107,43 @@ void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
 void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::REF);
-
-    PageId page_id, ori_page_id;
-    readIntBinary(page_id, buf);
-    readIntBinary(ori_page_id, buf);
-    PageVersionType version;
-    deserializeVersionFrom(buf, version);
+    assert(record_type == EditRecordType::REF || record_type == EditRecordType::VAR_REF);
 
     PageEntriesEdit::EditRecord rec;
     rec.type = record_type;
-    rec.page_id = page_id;
-    rec.ori_page_id = ori_page_id;
-    rec.version = version;
+    readIntBinary(rec.page_id, buf);
+    readIntBinary(rec.ori_page_id, buf);
+    deserializeVersionFrom(buf, rec.version);
     edit.appendRecord(rec);
 }
 
 
 void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::PUT_EXTERNAL);
+    assert(record.type == EditRecordType::PUT_EXTERNAL || record.type == EditRecordType::VAR_EXTERNAL);
 
     writeIntBinary(record.type, buf);
 
     writeIntBinary(record.page_id, buf);
     serializeVersionTo(record.version, buf);
+    writeIntBinary(record.being_ref_count, buf);
 }
 
 void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::PUT_EXTERNAL);
-
-    PageId page_id;
-    readIntBinary(page_id, buf);
-    PageVersionType version;
-    deserializeVersionFrom(buf, version);
+    assert(record_type == EditRecordType::PUT_EXTERNAL || record_type == EditRecordType::VAR_EXTERNAL);
 
     PageEntriesEdit::EditRecord rec;
     rec.type = EditRecordType::PUT_EXTERNAL;
-    rec.page_id = page_id;
-    rec.version = version;
+    readIntBinary(rec.page_id, buf);
+    deserializeVersionFrom(buf, rec.version);
+    readIntBinary(rec.being_ref_count, buf);
     edit.appendRecord(rec);
 }
 
 void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::DEL);
+    assert(record.type == EditRecordType::DEL || record.type == EditRecordType::VAR_DELETE);
 
     writeIntBinary(record.type, buf);
 
@@ -152,7 +153,7 @@ void serializeDelTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
 void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::DEL);
+    assert(record_type == EditRecordType::DEL || record_type == EditRecordType::VAR_DELETE);
 
     PageId page_id;
     readIntBinary(page_id, buf);
@@ -160,7 +161,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     deserializeVersionFrom(buf, version);
 
     PageEntriesEdit::EditRecord rec;
-    rec.type = EditRecordType::DEL;
+    rec.type = record_type;
     rec.page_id = page_id;
     rec.version = version;
     edit.appendRecord(rec);
@@ -176,21 +177,25 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
         {
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
+        case EditRecordType::VAR_ENTRY:
         {
             deserializePutFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::REF:
+        case EditRecordType::VAR_REF:
         {
             deserializeRefFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::DEL:
+        case EditRecordType::VAR_DELETE:
         {
             deserializeDelFrom(record_type, buf, edit);
             break;
         }
         case EditRecordType::PUT_EXTERNAL:
+        case EditRecordType::VAR_EXTERNAL:
         {
             deserializePutExternalFrom(record_type, buf, edit);
             break;
@@ -212,19 +217,21 @@ String serializeTo(const PageEntriesEdit & edit)
         {
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
+        case EditRecordType::VAR_ENTRY:
             serializePutTo(record, buf);
             break;
         case EditRecordType::REF:
+        case EditRecordType::VAR_REF:
             serializeRefTo(record, buf);
             break;
+        case EditRecordType::VAR_DELETE:
         case EditRecordType::DEL:
             serializeDelTo(record, buf);
             break;
         case EditRecordType::PUT_EXTERNAL:
+        case EditRecordType::VAR_EXTERNAL:
             serializePutExternalTo(record, buf);
             break;
-        default:
-            throw Exception(fmt::format("Unknown record type: {}", record.type), ErrorCodes::LOGICAL_ERROR);
         }
     }
     return buf.releaseStr();
@@ -242,4 +249,5 @@ PageEntriesEdit deserializeFrom(std::string_view record)
     deserializeFrom(buf, edit);
     return edit;
 }
+
 } // namespace DB::PS::V3::ser

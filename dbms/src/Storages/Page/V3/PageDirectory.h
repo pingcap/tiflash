@@ -64,81 +64,6 @@ using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
-struct EntryOrDelete
-{
-    enum class Type
-    {
-        NORMAL,
-        REF,
-        EXTERNAL,
-        DELETE,
-    };
-    Type type;
-    PageEntryV3 entry;
-    PageId origin_page_id;
-    Int64 being_ref_count = 1;
-
-    static EntryOrDelete newDelete()
-    {
-        return EntryOrDelete{
-            .type = Type::DELETE,
-            .entry = {}, // meaningless
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1, // meaningless
-        };
-    }
-    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
-    {
-        return EntryOrDelete{
-            .type = Type::NORMAL,
-            .entry = entry,
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1,
-        };
-    }
-    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
-    {
-        return EntryOrDelete{
-            .type = Type::NORMAL,
-            .entry = entry,
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = ori_entry.being_ref_count,
-        };
-    }
-    static EntryOrDelete newRefEntry(PageId ori_id)
-    {
-        return EntryOrDelete{
-            .type = Type::REF,
-            .entry = {}, // meaningless
-            .origin_page_id = ori_id,
-            .being_ref_count = 1, // meaningless
-        };
-    }
-    static EntryOrDelete newExternal()
-    {
-        return EntryOrDelete{
-            .type = Type::EXTERNAL,
-            .entry = {}, // meaningless
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1, // meaningless
-        };
-    }
-
-    bool isDelete() const { return type == Type::DELETE; }
-    bool isExternal() const { return type == Type::EXTERNAL; }
-    bool isRef() const { return type == Type::REF; }
-    bool isNormal() const { return type == Type::NORMAL; }
-
-    String toDebugString() const
-    {
-        return fmt::format(
-            "{{type:{}, entry:{}, ori_page_id:{}, being_ref_count:{}}}",
-            static_cast<Int32>(type),
-            ::DB::PS::V3::toDebugString(entry),
-            origin_page_id,
-            being_ref_count);
-    }
-};
 using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
@@ -230,6 +155,8 @@ public:
         const PageLock & page_lock);
     std::pair<PageEntriesV3, bool> derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, Int64 deref_count);
 
+    void collapseTo(UInt64 seq, PageId page_id, PageEntriesEdit & edit);
+
     size_t size() const
     {
         auto lock = acquireLock();
@@ -303,6 +230,8 @@ public:
     std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::vector<PageEntriesV3> gc(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+
+    PageEntriesEdit dump();
 
     size_t numPages() const
     {

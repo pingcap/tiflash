@@ -16,7 +16,7 @@
 namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
-    PSDiskDelegatorPtr & delegator,
+    const PSDiskDelegatorPtr & delegator,
     Poco::Logger * logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
