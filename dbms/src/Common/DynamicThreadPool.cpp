@@ -1,4 +1,7 @@
 #include <Common/DynamicThreadPool.h>
+#include <Common/TiFlashMetrics.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -80,8 +83,22 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+void executeTask(const std::unique_ptr<IExecutableTask> &task)
+{
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Decrement();
+    });
+    task->execute();
+}
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Increment();
+    GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Value()));
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Decrement();
+    });
     Queue * queue = fixed_queues[index].get();
     while (true)
     {
@@ -89,7 +106,7 @@ void DynamicThreadPool::fixedWork(size_t index)
         queue->pop(task);
         if (!task)
             break;
-        task->execute();
+        executeTask(task);
 
         idle_fixed_queues.push(queue);
     }
@@ -97,7 +114,12 @@ void DynamicThreadPool::fixedWork(size_t index)
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    initial_task->execute();
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Increment();
+    GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Value()));
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Decrement();
+    });
+    executeTask(initial_task);
 
     DynamicNode node;
     while (true)
@@ -114,7 +136,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
-        node.task->execute();
+        executeTask(node.task);
         node.task.reset();
     }
     alive_dynamic_threads.fetch_sub(1);

@@ -184,8 +184,11 @@ grpc::Status FlashService::Coprocessor(
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
     Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.

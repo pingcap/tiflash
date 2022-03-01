@@ -1,10 +1,13 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -119,6 +122,11 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
     assert(!is_local);
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+    });
     String err_msg;
     try
     {

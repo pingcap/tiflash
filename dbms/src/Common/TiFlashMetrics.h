@@ -151,7 +151,15 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_thread_count, "Number of threads", Gauge,                                                                                 \
+        F(type_max_threads_of_thdpool, {"type", "max_threads_of_elastic_thdpool"}),                                                       \
+        F(type_active_threads_of_thdpool, {"type", "active_threads_of_elastic_thdpool"}),                                                 \
+        F(type_total_threads_of_thdpool, {"type", "total_threads_of_elastic_thdpool"}),                                                   \
+        F(type_max_threads_of_raw, {"type", "max_threads_of_raw"}),                                                       \
+        F(type_total_threads_of_raw, {"type", "total_threads_of_raw"}),                                                    \
+        F(type_max_threads_of_establish_mpp, {"type", "max_threads_of_establish_mpp"}),                                                   \
+        F(type_active_threads_of_establish_mpp, {"type", "active_threads_of_establish_mpp"}))
 // clang-format on
 
 struct ExpBuckets
