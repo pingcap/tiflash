@@ -89,6 +89,7 @@ void EstablishCallData::WriteDone(const ::grpc::Status & status)
 
 void EstablishCallData::notifyReady()
 {
+    std::unique_lock lk(mu);
     ready = true;
     cv.notify_one();
 }
@@ -101,19 +102,18 @@ void EstablishCallData::Proceed()
         // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
         // The instance will deallocate itself as part of its FINISH state.
         new EstablishCallData(service_, cq_, notify_cq_);
-        {
-            std::unique_lock lk(mu);
-            notifyReady();
-        }
+        notifyReady();
         rpcInitOp();
     }
     else if (state_ == JOIN)
     {
-        std::unique_lock lk(mu);
+
         if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
         {
-            ready = false;
-            lk.unlock();
+            {
+                std::unique_lock lk(mu);
+                ready = false;
+            }
             mpptunnel_->sendJob(true);
         }
         else
