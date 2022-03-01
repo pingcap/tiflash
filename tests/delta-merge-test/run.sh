@@ -6,6 +6,8 @@ set_branch
 
 set -xe
 
+check_env
+
 # We need to separate mock-test for dt and tmt, since this behavior
 # is different in some tests
 # * "tmt" engine ONLY support disable_bg_flush = false.
