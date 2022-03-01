@@ -14,10 +14,10 @@ public:
     MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit);
     ~MinTSOScheduler() = default;
     bool tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manager);
+    void deleteQueryIfCancelled(UInt64, MPPTaskManager &);
     void deleteAndScheduleQueries(UInt64, MPPTaskManager &);
 
 private:
-    std::mutex mu;
     std::set<UInt64> waiting_set;
     std::set<UInt64> active_set;
     UInt64 min_tso;

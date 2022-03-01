@@ -62,6 +62,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             return;
         it->second->to_be_cancelled = true;
         task_set = it->second;
+        scheduler->deleteQueryIfCancelled(query_id, *this);
         cv.notify_all();
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
@@ -90,7 +91,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
-
             scheduler->deleteAndScheduleQueries(query_id, *this);
             mpp_query_map.erase(it);
         }
