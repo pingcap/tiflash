@@ -1,10 +1,10 @@
-#include <Flash/Coprocessor/HandleJoinHelper.h>
 #include <Common/TiFlashException.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <DataTypes/getLeastSupertype.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/HandleJoinHelper.h>
 #include <Interpreters/Join.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 
