@@ -107,7 +107,6 @@ void EstablishCallData::Proceed()
     }
     else if (state_ == JOIN)
     {
-
         if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
         {
             {
