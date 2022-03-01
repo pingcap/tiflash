@@ -380,6 +380,30 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
 }
 
+String DAGExpressionAnalyzerHelper::buildRegexpFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    TiDB::TiDBCollatorPtr collator = getCollatorFromExpr(expr);
+    if (expr.sig() == tipb::ScalarFuncSig::RegexpReplaceSig || expr.sig() == tipb::ScalarFuncSig::RegexpSig)
+    {
+        /// according to https://github.com/pingcap/tidb/blob/v5.0.0/expression/builtin_like.go#L126,
+        /// For binary collation, it will use RegexpXXXSig, otherwise it will use RegexpXXXUTF8Sig
+        /// Need to set the collator explicitly because `getCollatorFromExpr` will return nullptr
+        /// if new collation is not enabled.
+        collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, collator);
+}
+
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
     {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
      {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},
@@ -401,6 +425,8 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
      {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
+     {"regexp", DAGExpressionAnalyzerHelper::buildRegexpFunction},
+     {"replaceRegexpAll", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
 
 } // namespace DB
