@@ -86,6 +86,7 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 void executeTask(const std::unique_ptr<IExecutableTask> &task)
 {
     GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Increment();
+    GET_METRIC(tiflash_thread_count, type_max_active_threads_of_thdpool).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_active_threads_of_thdpool).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value()));
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Decrement();
     });
