@@ -10,12 +10,16 @@ SRCPATH=${1:-$(
   cd $SCRIPTPATH/../..
   pwd -P
 )}
-source ${SCRIPTPATH}/env.sh
+
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+
+TIFLASH_CI_BUILD_URI_PREFIX="builds/pingcap/tiflash/ci-cache/tmp/pr-build"
+TIFLASH_CI_BUILD_PRE_FIX="http://fileserver.pingcap.net/download/${TIFLASH_CI_BUILD_URI_PREFIX}"
+
 TAR_BIN_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/tiflash.tar.gz"
 COMMIT_HASH_FILE_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/commit-hash"
 
-build_dir="$SRCPATH/release-centos7-llvm"
-cd ${build_dir}
+cd "${SRCPATH}/${INSTALL_DIR_SUFFIX}/.."
 tar -zcf tiflash.tar.gz ./tiflash
 MD5_SUM=$(md5sum ./tiflash.tar.gz | awk '{ print $1 }')
 echo "${CI_BUILD_INFO_PRE_FIX}" >./commit-hash

@@ -89,8 +89,17 @@ function clean_data_log() {
   rm -rf ./data ./log
 }
 
+function check_env() {
+  local cur_dir=$(pwd)
+  if [[ ! -d ${cur_dir}/../../tests/.build/tiflash ]]; then
+    echo "No pre-build tiflash binary directory: ${cur_dir}/../../tests/.build/tiflash"
+    exit -1
+  fi
+}
+
 export -f show_env
 export -f wait_env
 export -f wait_tiflash_env
 export -f set_branch
 export -f clean_data_log
+export -f check_env
