@@ -59,6 +59,38 @@ try
             createColumn<Int16>({4, 3, 2, 9, 8}),
             createColumn<Int8>({5, 7, 6, 5, 4})));
 
+    // int unsigned + int = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({-1, -100, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int32>>({-1, -100, {}}),
+            createColumn<UInt32>({100, 1, 1000})));
+
+    // int unsigned + bigint = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({-1, -100, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({-1, -100, {}}),
+            createColumn<UInt32>({100, 1, 1000})));
+
+    // bigint unsigned + bigint unsigned = bigint unsigned
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({1, 1, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({1, 1, {}}),
+            createColumn<UInt64>({100, 100, 1000})));
+
+    // bigint + bigint = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({-100, 1, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({1, 1, {}}),
+            createColumn<Int64>({-100, 100, 1000})));
+
     // consider null
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({}),
@@ -137,12 +169,13 @@ try
             createColumn<Nullable<UInt64>>({18446744073709551615U}),
             createColumn<Nullable<UInt64>>({18446744073709551614U})));
 
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Int64>>({92233720368547720}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<UInt64>>({9223372036854775818U}),
-            createColumn<Nullable<Int64>>({92233720368547720})));
+    // bigint unsgiend + bigint = Decimal, not support for now
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<Nullable<Int64>>({92233720368547720}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<Nullable<UInt64>>({9223372036854775818U}),
+    //         createColumn<Nullable<Int64>>({92233720368547720})));
 }
 CATCH
 
@@ -194,6 +227,38 @@ try
             createColumn<Int64>({3, 8, 4, 6, 7}),
             createColumn<Int16>({4, 3, 2, 9, 8}),
             createColumn<Int8>({5, 7, 6, 5, 4})));
+
+    // int unsigned + int = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({100, 1, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int32>>({-1, -100, {}}),
+            createColumn<UInt32>({100, 1, 1000})));
+
+    // int unsigned + bigint = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({100, 1, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({-1, -100, {}}),
+            createColumn<UInt32>({100, 1, 1000})));
+
+    // bigint unsigned + bigint unsigned = bigint unsigned
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({100, 100, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({1, 1, {}}),
+            createColumn<UInt64>({100, 100, 1000})));
+
+    // bigint + bigint = bigint
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({1, 100, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int64>>({1, 1, {}}),
+            createColumn<Int64>({-100, 100, 1000})));
 
     // consider null
     ASSERT_COLUMN_EQ(
@@ -273,12 +338,13 @@ try
             createColumn<Nullable<UInt64>>({18446744073709551615U}),
             createColumn<Nullable<UInt64>>({18446744073709551614U})));
 
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt64>>({9223372036854775818U}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<UInt64>>({9223372036854775818U}),
-            createColumn<Nullable<Int64>>({92233720368547720})));
+    // bigint unsgiend + bigint = Decimal, not support for now
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<Nullable<UInt64>>({9223372036854775818U}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<Nullable<UInt64>>({9223372036854775818U}),
+    //         createColumn<Nullable<Int64>>({92233720368547720})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({923372036854775818}),

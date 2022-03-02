@@ -10,13 +10,15 @@ namespace DB
 template <typename A, typename B>
 struct BinaryLeastBaseImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfBinaryLeast<A, B>::Type;
+    using ResultType = typename NumberTraits::ResultOfBinaryLeastGreatest<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
         /** gcc 4.9.2 successfully vectorizes a loop from this function. */
-        return accurate::lessOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a);
+        const Result tmp_b = static_cast<Result>(b);
+        return accurate::lessOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -34,7 +36,9 @@ struct BinaryLeastBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) < static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a);
+        const Result tmp_b = static_cast<Result>(b);
+        return tmp_a < tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -57,7 +61,6 @@ using FunctionTiDBLeast = FunctionVectorizedLeastGreatest<LeastImpl, FunctionBin
 void registerFunctionLeast(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBLeast>();
-    factory.registerFunction<FunctionBinaryLeast>();
 }
 
 } // namespace DB

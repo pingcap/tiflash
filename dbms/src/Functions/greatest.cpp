@@ -7,12 +7,14 @@ namespace DB
 template <typename A, typename B>
 struct BinaryGreatestBaseImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfBinaryGreatest<A, B>::Type;
+    using ResultType = typename NumberTraits::ResultOfBinaryLeastGreatest<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return accurate::greaterOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a);
+        const Result tmp_b = static_cast<Result>(b);
+        return accurate::greaterOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -30,7 +32,9 @@ struct BinaryGreatestBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a);
+        const Result tmp_b = static_cast<Result>(b);
+        return tmp_a > tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -53,7 +57,6 @@ using FunctionTiDBGreatest = FunctionVectorizedLeastGreatest<GreatestImpl, Funct
 void registerFunctionGreatest(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBGreatest>();
-    factory.registerFunction<FunctionBinaryGreatest>();
 }
 
 } // namespace DB

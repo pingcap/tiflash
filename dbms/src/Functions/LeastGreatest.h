@@ -17,7 +17,6 @@
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/castColumn.h>
 #include <common/types.h>
 #include <fmt/core.h>
 
