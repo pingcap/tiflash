@@ -131,7 +131,7 @@ private:
     UInt8 threshold;
 
 public:
-    AggregateFunctionUniqUpTo(UInt8 threshold)
+    explicit AggregateFunctionUniqUpTo(UInt8 threshold)
         : threshold(threshold)
     {
     }

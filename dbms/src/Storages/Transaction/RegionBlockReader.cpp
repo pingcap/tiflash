@@ -15,9 +15,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-using TiDB::DatumFlat;
-using TiDB::TableInfo;
-
 RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_)
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
@@ -79,7 +76,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         next_column_pos++;
         column_ids_iter++;
     }
-    constexpr size_t MustHaveColCnt = 3; // extra handle, del, version
+    // extra handle, del, version must exists
+    constexpr size_t MustHaveColCnt = 3; // NOLINT(readability-identifier-naming)
     if (unlikely(next_column_pos != MustHaveColCnt))
         throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
 
@@ -131,9 +129,9 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                 auto next_column_pos_copy = next_column_pos;
                 while (column_ids_iter_copy != read_column_ids.end())
                 {
-                    const auto * ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
+                    const auto & ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
                     // when pk is handle, we can decode the pk from the key
-                    if (!(schema_snapshot->pk_is_handle && ci->hasPriKeyFlag()))
+                    if (!(schema_snapshot->pk_is_handle && ci.hasPriKeyFlag()))
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();

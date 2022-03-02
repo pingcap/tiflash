@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+SCRIPTPATH="$(
+    cd "$(dirname "$0")"
+    pwd -P
+)"
+
+"${SCRIPTPATH}/sysroot/bin/clang" -Wl,-Bdynamic -l:libc++abi.so -l:libc++.so $@

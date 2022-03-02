@@ -50,7 +50,7 @@ const ColumnConst * checkAndGetColumnConst(const IColumn * column, bool maybe_nu
 
     const ColumnConst * res = static_cast<const ColumnConst *>(column);
 
-    auto * data_column = &res->getDataColumn();
+    const auto * data_column = &res->getDataColumn();
     if (maybe_nullable_column && data_column->isColumnNullable())
         data_column = &typeid_cast<const ColumnNullable *>(data_column)->getNestedColumn();
     if (!checkColumn<Type>(data_column))
@@ -115,7 +115,7 @@ struct IGetVecHelper
 {
     static_assert(std::is_arithmetic_v<T>);
     virtual T get(size_t) const = 0;
-    virtual ~IGetVecHelper() {}
+    virtual ~IGetVecHelper() = default;
     static std::unique_ptr<IGetVecHelper> getHelper(const ColumnVector<T> * p);
     static std::unique_ptr<IGetVecHelper> getHelper(const ColumnConst * p);
 };
@@ -123,7 +123,7 @@ struct IGetVecHelper
 template <typename T>
 struct GetVecHelper : public IGetVecHelper<T>
 {
-    GetVecHelper(const ColumnVector<T> * p_)
+    explicit GetVecHelper(const ColumnVector<T> * p_)
         : p(p_)
     {}
     T get(size_t i) const override
@@ -138,7 +138,7 @@ private:
 template <typename T>
 struct GetConstVecHelper : public IGetVecHelper<T>
 {
-    GetConstVecHelper(const ColumnConst * p_)
+    explicit GetConstVecHelper(const ColumnConst * p_)
         : value(p_->getValue<T>())
     {}
     T get(size_t) const override
@@ -162,5 +162,7 @@ std::unique_ptr<IGetVecHelper<T>> IGetVecHelper<T>::getHelper(const ColumnConst 
     return std::unique_ptr<IGetVecHelper<T>>{new GetConstVecHelper<T>{p}};
 }
 
+static Field FIELD_INT8_1 = toField(Int8(1));
+static Field FIELD_INT8_0 = toField(Int8(0));
 
 } // namespace DB

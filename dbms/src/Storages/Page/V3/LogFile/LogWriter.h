@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/types.h>
 
@@ -55,11 +56,12 @@ namespace PS::V3
  * Log number = 32bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
-class LogWriter final
+class LogWriter final : private Allocator<false>
 {
 public:
     LogWriter(
-        std::unique_ptr<WriteBufferFromFileBase> && dest_,
+        String path_,
+        const FileProviderPtr & file_provider_,
         Format::LogNumberType log_number_,
         bool recycle_log_files_,
         bool manual_flush_ = false);
@@ -69,25 +71,42 @@ public:
 
     ~LogWriter();
 
-    void addRecord(ReadBuffer & payload, size_t payload_size);
+    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void flush();
+    void flush(const WriteLimiterPtr & write_limiter = nullptr);
 
     void close();
 
-    Format::LogNumberType logNumber() const { return log_number; }
+    size_t writtenBytes() const;
+
+    Format::LogNumberType logNumber() const
+    {
+        return log_number;
+    }
 
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);
 
+    void resetBuffer();
+
 private:
-    std::unique_ptr<WriteBufferFromFileBase> dest;
+    String path;
+    FileProviderPtr file_provider;
+
+    WritableFilePtr log_file;
+
     size_t block_offset; // Current offset in block
     Format::LogNumberType log_number;
-    bool recycle_log_files;
+    const bool recycle_log_files;
     // If true, it does not flush after each write. Instead it relies on the upper
     // layer to manually does the flush by calling ::flush()
-    bool manual_flush;
+    const bool manual_flush;
+
+    size_t written_bytes = 0;
+
+    char * buffer;
+    size_t buffer_size = Format::BLOCK_SIZE;
+    WriteBuffer write_buffer;
 };
 } // namespace PS::V3
 } // namespace DB

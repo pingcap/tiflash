@@ -1,8 +1,5 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable (region_test region.cpp)
-target_link_libraries (region_test dbms)
-
 # glob all unit tests of tmt into gtests_tmt
 macro (grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories
@@ -10,7 +7,7 @@ macro (grep_gtest_sources BASE_DIR DST_VAR)
 endmacro ()
 
 # attach all tmt gtest sources
-grep_gtest_sources (${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gtests_tmt_sources)
+grep_gtest_sources (${TiFlash_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gtests_tmt_sources)
 
 add_executable (gtests_tmt EXCLUDE_FROM_ALL ${gtests_tmt_sources})
 target_include_directories (gtests_tmt BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

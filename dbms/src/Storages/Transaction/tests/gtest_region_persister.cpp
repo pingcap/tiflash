@@ -165,11 +165,22 @@ try
     TableID table_id = 100;
     {
         raft_serverpb::RaftApplyState apply_state;
-        apply_state.set_applied_index(6671);
-        apply_state.mutable_truncated_state()->set_index(6672);
-        apply_state.mutable_truncated_state()->set_term(6673);
+        raft_serverpb::RegionLocalState region_state;
+        {
+            apply_state.set_applied_index(6671);
+            apply_state.mutable_truncated_state()->set_index(6672);
+            apply_state.mutable_truncated_state()->set_term(6673);
 
-        region = std::make_shared<Region>(createRegionMeta(1001, table_id, std::make_optional(apply_state)));
+            *region_state.mutable_region() = createRegionInfo(1001, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300));
+            region_state.mutable_merge_state()->set_commit(888);
+            region_state.mutable_merge_state()->set_min_index(777);
+            *region_state.mutable_merge_state()->mutable_target() = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
+        };
+        region = std::make_shared<Region>(RegionMeta(
+            createPeer(31, true),
+            apply_state,
+            5,
+            region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);

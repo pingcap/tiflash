@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -12,7 +13,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -412,8 +412,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    //{tipb::ScalarFuncSig::RegexpSig, "cast"},
-    //{tipb::ScalarFuncSig::RegexpUTF8Sig, "cast"},
+    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
@@ -477,12 +477,12 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Second, "second"},
     {tipb::ScalarFuncSig::MicroSecond, "microSecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
-    //{tipb::ScalarFuncSig::MonthName, "cast"},
+    {tipb::ScalarFuncSig::MonthName, "toMonthName"},
 
     //{tipb::ScalarFuncSig::NowWithArg, "cast"},
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
-    //{tipb::ScalarFuncSig::DayName, "cast"},
+    {tipb::ScalarFuncSig::DayName, "toDayName"},
     {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},
@@ -741,7 +741,7 @@ const String & getFunctionName(const tipb::Expr & expr)
 
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -818,35 +818,29 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     if (functionIsInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        ss << exprToString(expr.children(0), input_col) << " " << func_name << " (";
-        bool first = true;
-        for (int i = 1; i < expr.children_size(); i++)
-        {
-            String s = exprToString(expr.children(i), input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
+        fmt_buf.joinStr(
+            expr.children().begin() + 1,
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
     else
     {
-        ss << func_name << "(";
-        bool first = true;
-        for (const tipb::Expr & child : expr.children())
-        {
-            String s = exprToString(child, input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{}(", func_name);
+        fmt_buf.joinStr(
+            expr.children().begin(),
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
-    return ss.str();
+    return fmt_buf.toString();
 }
 
 const String & getTypeName(const tipb::Expr & expr)
@@ -1135,7 +1129,7 @@ tipb::Expr constructNULLLiteralTiExpr()
     return expr;
 }
 
-std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
+TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr)
 {
     if (expr.has_field_type())
         return getCollatorFromFieldType(expr.field_type());
@@ -1152,7 +1146,7 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
         int direction = by_items[i].desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
-        std::shared_ptr<ICollator> collator = nullptr;
+        TiDB::TiDBCollatorPtr collator = nullptr;
         if (removeNullable(order_columns[i].type)->isString())
             collator = getCollatorFromExpr(by_items[i].expr());
 

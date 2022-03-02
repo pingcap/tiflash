@@ -1,4 +1,4 @@
-set (BOOST_FIBER_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/fiber)
+set (BOOST_FIBER_LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/boost/libs/fiber)
 
 if(WIN32 AND NOT CMAKE_CXX_PLATFORM_ID MATCHES "Cygwin")
   set(_default_target windows)

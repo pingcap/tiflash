@@ -1,0 +1,6 @@
+CI_BUILD_INFO_PRE_FIX="commit hash value"
+CI_CCACHE_USED_SRCPATH="/build/tics"
+BUILD_DIR_SUFFIX="release-centos7-llvm/build-release"
+BUILD_UT_DIR="/build/release-centos7-llvm/build-release"
+INSTALL_DIR_SUFFIX="release-centos7-llvm/tiflash"
+INSTALL_UT_DIR="/build/${INSTALL_DIR_SUFFIX}"

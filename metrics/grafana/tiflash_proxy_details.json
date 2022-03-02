@@ -4699,7 +4699,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": " \tThe CPU utilization of split check",
+          "description": " \tThe CPU utilization of read index worker",
           "editable": true,
           "error": false,
           "fill": 0,
@@ -4739,7 +4739,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", name=~\"split_check\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", name=~\"ReadIndexWkr_.*\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
@@ -4752,7 +4752,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Split check CPU",
+          "title": "Read Index Worker CPU",
           "tooltip": {
             "msResolution": false,
             "shared": true,

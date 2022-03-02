@@ -176,6 +176,12 @@ static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
  */
 #ifdef __clang__
 #define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
+#ifndef __APPLE__
+#define tiflash_compiler_builtin_memcpy __builtin_memcpy_inline // __builtin_memcpy_inline gurantees that compiler will not emit call to libc's memcpy
+#else
+#define tiflash_compiler_builtin_memcpy __builtin_memcpy
+#endif
 #else
 #define TIFLASH_DUMMY_FUNCTION_DEFINITION
+#define tiflash_compiler_builtin_memcpy __builtin_memcpy
 #endif

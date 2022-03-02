@@ -82,6 +82,12 @@ public:
      */
     virtual UInt64 getRightMargin() = 0;
 
+
+    /**
+     * Return the size of file and the size contains valid data.
+     */
+    virtual std::pair<UInt64, UInt64> getSizes() const = 0;
+
     /**
      * Sanity check for correctness
      */
@@ -132,7 +138,7 @@ protected:
 
 private:
     /* Check the range */
-    bool checkSpace(UInt64 offset, size_t num);
+    bool checkSpace(UInt64 offset, size_t size) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:

@@ -3,6 +3,10 @@
 #include <Storages/Transaction/TiDB.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <pingcap/kv/Snapshot.h>
 #pragma GCC diagnostic pop
 

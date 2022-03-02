@@ -45,20 +45,19 @@ public:
     String aggregation_name;
     const tipb::Executor * having = nullptr;
     String having_name;
-    const tipb::Executor * limitOrTopN = nullptr;
-    String limitOrTopN_name;
-    const tipb::Executor * exchangeSender = nullptr;
+    const tipb::Executor * limit_or_topn = nullptr;
+    String limit_or_topn_name;
+    const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;
-    String qb_join_subquery_alias;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
+
+    // only meaningful for root query block.
     std::vector<tipb::FieldType> output_field_types;
-    // kinds of project
     std::vector<Int32> output_offsets;
-    void fillOutputFieldTypes();
-    void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
+
     bool isRootQueryBlock() const { return id == 1; };
 };
 

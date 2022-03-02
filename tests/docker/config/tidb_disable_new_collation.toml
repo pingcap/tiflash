@@ -1,0 +1,4 @@
+# TiDB Configuration.
+
+host = "0.0.0.0"
+new_collations_enabled_on_first_bootstrap = false

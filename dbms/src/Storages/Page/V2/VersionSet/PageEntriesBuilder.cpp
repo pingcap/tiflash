@@ -8,6 +8,7 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::PUT:
             current_version->put(rec.page_id, rec.entry);
             break;

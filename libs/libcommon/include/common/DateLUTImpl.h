@@ -1,13 +1,13 @@
 #pragma once
 
+#include <cassert>
+#include <ctime>
+#include <string>
+#include <type_traits>
+
 #include "DayNum.h"
 #include "defines.h"
 #include "types.h"
-
-#include <ctime>
-#include <cassert>
-#include <string>
-#include <type_traits>
 
 
 #define DATE_LUT_MIN_YEAR 1925 /// 1925 since wast majority of timezones changed to 15-minute aligned offsets somewhere in 1924 or earlier.
@@ -161,7 +161,6 @@ public:
     static_assert(sizeof(Values) == 16);
 
 private:
-
     /// Mask is all-ones to allow efficient protection against overflow.
     static constexpr UInt32 date_lut_mask = 0x1ffff;
     static_assert(date_lut_mask == DATE_LUT_SIZE - 1);
@@ -382,7 +381,7 @@ public:
     {
         UInt16 idx = year - DATE_LUT_MIN_YEAR;
         if (unlikely(idx >= DATE_LUT_YEARS))
-            return 31;  /// Implementation specific behaviour on overflow.
+            return 31; /// Implementation specific behaviour on overflow.
 
         /// 32 makes arithmetic more simple.
         const auto any_day_of_month = years_lut[year - DATE_LUT_MIN_YEAR] + 32 * (month - 1);
@@ -511,22 +510,40 @@ public:
     inline time_t fromDayNum(ExtendedDayNum d) const { return lut[toLUTIndex(d)].date; }
 
     template <typename DateOrTime>
-    inline time_t toDate(DateOrTime v) const { return lut[toLUTIndex(v)].date; }
+    inline time_t toDate(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)].date;
+    }
 
     template <typename DateOrTime>
-    inline unsigned toMonth(DateOrTime v) const { return lut[toLUTIndex(v)].month; }
+    inline unsigned toMonth(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)].month;
+    }
 
     template <typename DateOrTime>
-    inline unsigned toQuarter(DateOrTime v) const { return (lut[toLUTIndex(v)].month - 1) / 3 + 1; }
+    inline unsigned toQuarter(DateOrTime v) const
+    {
+        return (lut[toLUTIndex(v)].month - 1) / 3 + 1;
+    }
 
     template <typename DateOrTime>
-    inline Int16 toYear(DateOrTime v) const { return lut[toLUTIndex(v)].year; }
+    inline Int16 toYear(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)].year;
+    }
 
     template <typename DateOrTime>
-    inline unsigned toDayOfWeek(DateOrTime v) const { return lut[toLUTIndex(v)].day_of_week; }
+    inline unsigned toDayOfWeek(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)].day_of_week;
+    }
 
     template <typename DateOrTime>
-    inline unsigned toDayOfMonth(DateOrTime v) const { return lut[toLUTIndex(v)].day_of_month; }
+    inline unsigned toDayOfMonth(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)].day_of_month;
+    }
 
     template <typename DateOrTime>
     inline unsigned toDayOfYear(DateOrTime v) const
@@ -569,8 +586,8 @@ public:
         auto first_day_of_week_of_year = lut[first_day_of_year].day_of_week;
 
         return LUTIndex{first_day_of_week_of_year <= 4
-            ? first_day_of_year + 1 - first_day_of_week_of_year
-            : first_day_of_year + 8 - first_day_of_week_of_year};
+                            ? first_day_of_year + 1 - first_day_of_week_of_year
+                            : first_day_of_year + 8 - first_day_of_week_of_year};
     }
 
     template <typename DateOrTime>
@@ -947,14 +964,21 @@ public:
         size_t index = makeLUTIndex(year, month, day_of_month);
         UInt32 time_offset = hour * 3600 + minute * 60 + second;
 
-        if (time_offset >= lut[index].time_at_offset_change())
+        /// for time_offset between [lut[index].time_at_offset_change(), the end of current day), it should adjust the offset change
+        /// for time_offset between [lut[index].time_at_offset_change(), lut[index].time_at_offset_change() + lut[index].amount_of_offset_change())
+        /// if lut[index].amount_of_offset_change() > 0, it should not happen
+        /// if lut[index].amount_of_offset_change() < 0, the time_offset is ambiguous, return the greater timestamp by `time_offset -= lut[index].amount_of_offset_change();`
+        if (static_cast<Int64>(time_offset) >= static_cast<Int64>(lut[index].time_at_offset_change()) + static_cast<Int64>(lut[index].amount_of_offset_change()))
             time_offset -= lut[index].amount_of_offset_change();
 
         return lut[index].date + time_offset;
     }
 
     template <typename DateOrTime>
-    inline const Values & getValues(DateOrTime v) const { return lut[toLUTIndex(v)]; }
+    inline const Values & getValues(DateOrTime v) const
+    {
+        return lut[toLUTIndex(v)];
+    }
 
     template <typename DateOrTime>
     inline UInt32 toNumYYYYMM(DateOrTime v) const
@@ -1004,7 +1028,7 @@ public:
     inline DateComponents toDateComponents(time_t t) const
     {
         const Values & values = getValues(t);
-        return { values.year, values.month, values.day_of_month };
+        return {values.year, values.month, values.day_of_month};
     }
 
     inline DateTimeComponents toDateTimeComponents(time_t t) const
@@ -1047,8 +1071,7 @@ public:
     {
         DateTimeComponents components = toDateTimeComponents(t);
 
-        return
-              components.time.second
+        return components.time.second
             + components.time.minute * 100
             + components.time.hour * 10000
             + UInt64(components.date.day) * 1000000
@@ -1208,7 +1231,7 @@ public:
     {
         DateTimeComponents components = toDateTimeComponents(t);
 
-        std::string s {"0000-00-00 00:00:00"};
+        std::string s{"0000-00-00 00:00:00"};
 
         s[0] += components.date.year / 1000;
         s[1] += (components.date.year / 100) % 10;
@@ -1233,7 +1256,7 @@ public:
     {
         const Values & values = getValues(t);
 
-        std::string s {"0000-00-00"};
+        std::string s{"0000-00-00"};
 
         s[0] += values.year / 1000;
         s[1] += (values.year / 100) % 10;
@@ -1251,7 +1274,7 @@ public:
     {
         const Values & values = getValues(d);
 
-        std::string s {"0000-00-00"};
+        std::string s{"0000-00-00"};
 
         s[0] += values.year / 1000;
         s[1] += (values.year / 100) % 10;

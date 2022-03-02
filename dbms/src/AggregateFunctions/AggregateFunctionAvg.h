@@ -35,7 +35,7 @@ class AggregateFunctionAvg final
     ScaleType result_scale;
 
 public:
-    AggregateFunctionAvg() {}
+    AggregateFunctionAvg() = default;
     AggregateFunctionAvg(PrecType prec_, ScaleType scale_, PrecType result_prec_, ScaleType result_scale_)
         : prec(prec_)
         , scale(scale_)

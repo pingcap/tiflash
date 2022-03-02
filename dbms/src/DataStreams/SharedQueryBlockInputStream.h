@@ -16,10 +16,12 @@ namespace DB
  */
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "SharedQuery";
+
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
         : queue(clients)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
         , in(in_)
     {
         children.push_back(in);
@@ -38,7 +40,7 @@ public:
         }
     }
 
-    String getName() const override { return "SharedQuery"; }
+    String getName() const override { return NAME; }
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
@@ -65,6 +67,11 @@ public:
             thread_manager->wait();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
+    }
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        ++cnt;
     }
 
 protected:

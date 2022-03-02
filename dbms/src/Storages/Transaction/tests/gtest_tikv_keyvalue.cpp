@@ -6,6 +6,57 @@
 
 #include "region_helper.h"
 
+namespace DB
+{
+TiKVValue encode_lock_cf_value(
+    UInt8 lock_type,
+    const String & primary,
+    Timestamp ts,
+    UInt64 ttl,
+    const String * short_value,
+    Timestamp min_commit_ts,
+    Timestamp for_update_ts,
+    uint64_t txn_size,
+    const std::vector<std::string> & async_commit,
+    const std::vector<uint64_t> & rollback)
+{
+    auto lock_value = RecordKVFormat::encodeLockCfValue(lock_type, primary, ts, ttl, short_value, min_commit_ts);
+    WriteBufferFromOwnString res;
+    res.write(lock_value.getStr().data(), lock_value.getStr().size());
+    {
+        res.write(RecordKVFormat::MIN_COMMIT_TS_PREFIX);
+        RecordKVFormat::encodeUInt64(min_commit_ts, res);
+    }
+    {
+        res.write(RecordKVFormat::FOR_UPDATE_TS_PREFIX);
+        RecordKVFormat::encodeUInt64(for_update_ts, res);
+    }
+    {
+        res.write(RecordKVFormat::TXN_SIZE_PREFIX);
+        RecordKVFormat::encodeUInt64(txn_size, res);
+    }
+    {
+        res.write(RecordKVFormat::ROLLBACK_TS_PREFIX);
+        TiKV::writeVarUInt(rollback.size(), res);
+        for (auto ts : rollback)
+        {
+            RecordKVFormat::encodeUInt64(ts, res);
+        }
+    }
+    {
+        res.write(RecordKVFormat::ASYNC_COMMIT_PREFIX);
+        TiKV::writeVarUInt(async_commit.size(), res);
+        for (const auto & s : async_commit)
+        {
+            writeVarInt(s.size(), res);
+            res.write(s.data(), s.size());
+        }
+    }
+    return TiKVValue(res.releaseStr());
+}
+
+} // namespace DB
+
 using namespace DB;
 
 using RangeRef = std::pair<const TiKVKey &, const TiKVKey &>;
@@ -14,9 +65,7 @@ inline bool checkTableInvolveRange(const TableID table_id, const RangeRef & rang
 {
     const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
     const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
-    if (end_key < range.first || (!range.second.empty() && start_key >= range.second))
-        return false;
-    return true;
+    return !(end_key < range.first || (!range.second.empty() && start_key >= range.second));
 }
 
 inline TiKVKey genIndex(const TableID tableId, const Int64 id)
@@ -31,7 +80,7 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
     return RecordKVFormat::encodeAsTiKVKey(key);
 }
 
-TEST(TiKVKeyValue_test, PortedTests)
+TEST(TiKVKeyValueTest, PortedTests)
 {
     bool res = true;
     {
@@ -56,8 +105,20 @@ TEST(TiKVKeyValue_test, PortedTests)
 
     {
         std::string shor_value = "value";
-        auto lock_value = RecordKVFormat::encodeLockCfValue(
-            Region::DelFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), &shor_value, 66666);
+        auto lock_for_update_ts = 7777, txn_size = 1;
+        const std::vector<std::string> & async_commit = {"s1", "s2"};
+        const std::vector<uint64_t> & rollback = {3, 4};
+        auto lock_value = encode_lock_cf_value(
+            Region::DelFlag,
+            "primary key",
+            421321,
+            std::numeric_limits<UInt64>::max(),
+            &shor_value,
+            66666,
+            lock_for_update_ts,
+            txn_size,
+            async_commit,
+            rollback);
         auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
         auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
         {
@@ -68,6 +129,10 @@ TEST(TiKVKeyValue_test, PortedTests)
             ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.lock_ttl);
             ASSERT_TRUE(66666 == lock_info.min_commit_ts);
             ASSERT_TRUE(ori_key == lock_info.key);
+            ASSERT_EQ(lock_for_update_ts, lock_info.lock_for_update_ts);
+            ASSERT_EQ(txn_size, lock_info.txn_size);
+
+            ASSERT_EQ(true, lock_info.use_async_commit);
         }
         {
             auto lock_info = lock.intoLockInfo();
@@ -77,6 +142,15 @@ TEST(TiKVKeyValue_test, PortedTests)
             ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info->lock_ttl());
             ASSERT_TRUE(66666 == lock_info->min_commit_ts());
             ASSERT_TRUE(RecordKVFormat::decodeTiKVKey(*ori_key) == lock_info->key());
+            ASSERT_EQ(true, lock_info->use_async_commit());
+            ASSERT_EQ(lock_for_update_ts, lock_info->lock_for_update_ts());
+            ASSERT_EQ(txn_size, lock_info->txn_size());
+            {
+                auto secondaries = lock_info->secondaries();
+                ASSERT_EQ(2, secondaries.size());
+                ASSERT_EQ(secondaries[0], async_commit[0]);
+                ASSERT_EQ(secondaries[1], async_commit[1]);
+            }
         }
 
         {
@@ -84,11 +158,33 @@ TEST(TiKVKeyValue_test, PortedTests)
             auto k1 = RecordKVFormat::genKey(1, 123);
             auto k2 = RecordKVFormat::genKey(1, 124);
             d.insert(TiKVKey::copyFrom(k1),
-                RecordKVFormat::encodeLockCfValue(
-                    Region::PutFlag, "primary key", 8765, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+                     RecordKVFormat::encodeLockCfValue(
+                         Region::PutFlag,
+                         "primary key",
+                         8765,
+                         std::numeric_limits<UInt64>::max(),
+                         nullptr,
+                         66666));
             d.insert(TiKVKey::copyFrom(k2),
-                RecordKVFormat::encodeLockCfValue(
-                    Region::DelFlag, "primary key", 5678, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+                     RecordKVFormat::encodeLockCfValue(
+                         RecordKVFormat::LockType::Lock,
+                         "",
+                         8,
+                         20));
+            d.insert(TiKVKey::copyFrom(k2),
+                     RecordKVFormat::encodeLockCfValue(
+                         RecordKVFormat::LockType::Pessimistic,
+                         "",
+                         8,
+                         20));
+            d.insert(TiKVKey::copyFrom(k2),
+                     RecordKVFormat::encodeLockCfValue(
+                         Region::DelFlag,
+                         "primary key",
+                         5678,
+                         std::numeric_limits<UInt64>::max(),
+                         nullptr,
+                         66666));
             ASSERT_TRUE(d.getSize() == 2);
             ASSERT_TRUE(
                 std::get<2>(d.getData().find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})->second)
@@ -116,8 +212,8 @@ TEST(TiKVKeyValue_test, PortedTests)
         ASSERT_TRUE(d.getSize() == 1);
 
         ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3),
-                        RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
-            == 0);
+                             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+                    == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
         auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
@@ -147,7 +243,6 @@ TEST(TiKVKeyValue_test, PortedTests)
     }
 
     {
-
         UInt64 a = 13241432453554;
         Crc32 crc32;
         crc32.put(&a, sizeof(a));
@@ -350,11 +445,11 @@ TEST(TiKVKeyValue_test, PortedTests)
     }
 
     {
-        const Int64 tableId = 2333;
+        const Int64 table_id = 2333;
         const Timestamp ts = 66666;
         std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
         memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
-        auto big_endian_table_id = RecordKVFormat::encodeInt64(tableId);
+        auto big_endian_table_id = RecordKVFormat::encodeInt64(table_id);
         memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
         memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
         std::string pk = "12345678...";
@@ -363,7 +458,7 @@ TEST(TiKVKeyValue_test, PortedTests)
         RecordKVFormat::appendTs(tikv_key, ts);
         {
             auto decoded_key = RecordKVFormat::decodeTiKVKey(tikv_key);
-            ASSERT_EQ(RecordKVFormat::getTableId(decoded_key), tableId);
+            ASSERT_EQ(RecordKVFormat::getTableId(decoded_key), table_id);
             auto tidb_pk = RecordKVFormat::getRawTiDBPK(decoded_key);
             ASSERT_EQ(*tidb_pk, pk);
         }
@@ -372,7 +467,7 @@ TEST(TiKVKeyValue_test, PortedTests)
     ASSERT_TRUE(res);
 }
 
-TEST(TiKVKeyValue_test, Redact)
+TEST(TiKVKeyValueTest, Redact)
 try
 {
     String table_info_json
@@ -386,7 +481,7 @@ try
         end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
     }
     RegionRangeKeys range(std::move(start), std::move(end));
-    auto & raw_keys = range.rawKeys();
+    const auto & raw_keys = range.rawKeys();
     ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.first), 49);
     ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.second), 49);
 
@@ -411,7 +506,6 @@ CATCH
 
 namespace
 {
-
 // In python, we can convert a test case from `s`
 // 'range = parseTestCase({{{}}});\nASSERT_EQ(range, expected_range);'.format(','.join(map(lambda x: '{{{}}}'.format(','.join(map(lambda y: '0x{:02x}'.format(int(y, 16)), x.strip('[').strip(']').split()))), s.split(','))))
 
@@ -446,7 +540,7 @@ std::string rangeToString(const HandleRange<HandleID> & r)
 
 } // namespace
 
-TEST(RegionRange_test, DISABLED_GetHandleRangeByTableID)
+TEST(RegionRangeTest, DISABLED_GetHandleRangeByTableID)
 try
 {
     HandleRange<HandleID> range;

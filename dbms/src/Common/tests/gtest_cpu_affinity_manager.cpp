@@ -11,13 +11,13 @@
 #include <Common/Config/TOMLConfiguration.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
+
 #define private public
 #include <Common/CPUAffinityManager.h>
 #undef private
-
-#include <unistd.h>
 
 namespace DB
 {

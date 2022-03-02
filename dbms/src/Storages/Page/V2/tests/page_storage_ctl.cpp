@@ -8,6 +8,7 @@
 #include <Poco/Timer.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -164,7 +165,7 @@ try
         dump_all_entries(page_files, mode);
         return 0;
     case LIST_ALL_PAGE_FILE:
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             std::cout << page_file.toString() << std::endl;
         }
@@ -202,7 +203,7 @@ try
         for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
         {
             LOG_FMT_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
-            storage.gc(/*not_skip=*/true);
+            storage.gc(/*not_skip=*/true, nullptr, nullptr);
             LOG_FMT_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
         }
         break;
@@ -244,6 +245,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
+                case DB::WriteBatch::WriteType::PUT_EXTERNAL:
                 case DB::WriteBatch::WriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
@@ -305,7 +307,7 @@ void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, co
     size_t global_total_valid_size = 0;
 
     printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (page_file.getType() != PageFile::Type::Formal)
         {

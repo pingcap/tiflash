@@ -10,6 +10,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
@@ -229,17 +230,18 @@ try
 
     size_t times_remover_called = 0;
 
-    PageStorage::ExternalPagesScanner scanner = []() -> PageStorage::PathAndIdsVec {
+    ExternalPageCallbacks callbacks;
+    callbacks.v2_scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    PageStorage::ExternalPagesRemover remover
-        = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.v2_remover
+        = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 2UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
         EXPECT_GT(normal_page_ids.count(1024), 0UL);
     };
-    storage->registerExternalPagesCallbacks(scanner, remover);
+    storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("fist gc");
         storage->gc();
@@ -273,12 +275,12 @@ try
     }
 
     snapshot.reset();
-    remover = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.v2_remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
     };
-    storage->registerExternalPagesCallbacks(scanner, remover);
+    storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("gc with snapshot released");
         storage->gc();

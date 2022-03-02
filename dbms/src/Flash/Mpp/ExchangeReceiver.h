@@ -92,6 +92,22 @@ public:
 
     size_t getSourceNum() const { return source_num; }
 
+    int computeNewThreadCount() const { return getSourceNum(); }
+
+    void collectNewThreadCount(int & cnt)
+    {
+        if (!collected)
+        {
+            collected = true;
+            cnt += computeNewThreadCount();
+        }
+    }
+
+    void resetNewThreadCountCompute()
+    {
+        collected = false;
+    }
+
 private:
     using Request = typename RPCContext::Request;
 
@@ -105,6 +121,7 @@ private:
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header);
+
 
     void connectionDone(
         bool meet_error,
@@ -131,6 +148,8 @@ private:
     String err_msg;
 
     LogWithPrefixPtr exc_log;
+
+    bool collected = false;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
