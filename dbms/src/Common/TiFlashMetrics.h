@@ -153,10 +153,10 @@ namespace DB
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
     M(tiflash_thread_count, "Number of threads", Gauge,                                                                                   \
-        F(type_max_threads_of_thdpool, {"type", "threadpool_total_max"}),                                                                 \
-        F(type_active_threads_of_thdpool, {"type", "threadpool_active"}),                                                                 \
-        F(type_max_active_threads_of_thdpool, {"type", "threadpool_active_max"}),                                                         \
-        F(type_total_threads_of_thdpool, {"type", "threadpool_total"}),                                                                   \
+        F(type_max_threads_of_thdpool, {"type", "thread_pool_total_max"}),                                                                \
+        F(type_active_threads_of_thdpool, {"type", "thread_pool_active"}),                                                                \
+        F(type_max_active_threads_of_thdpool, {"type", "thread_pool_active_max"}),                                                        \
+        F(type_total_threads_of_thdpool, {"type", "thread_pool_total"}),                                                                  \
         F(type_max_threads_of_raw, {"type", "total_max"}),                                                                                \
         F(type_total_threads_of_raw, {"type", "total"}),                                                                                  \
         F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
