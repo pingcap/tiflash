@@ -1,6 +1,7 @@
 #include "CompressionSettings.h"
 
 #include <Interpreters/Settings.h>
+#include <lz4hc.h>
 
 
 namespace DB
@@ -18,7 +19,7 @@ int CompressionSettings::getDefaultLevel(CompressionMethod method)
     case CompressionMethod::LZ4:
         return 1;
     case CompressionMethod::LZ4HC:
-        return 0;
+        return LZ4HC_CLEVEL_DEFAULT;
     case CompressionMethod::ZSTD:
         return 1;
     default:
