@@ -70,8 +70,8 @@ class WALStore
 public:
     using ChecksumClass = Digest::CRC64;
 
-    static WALStorePtr create(
-        std::function<void(PageEntriesEdit &&)> && restore_callback,
+    static std::pair<WALStorePtr, WALStoreReaderPtr>
+    create(
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator);
 
@@ -98,7 +98,7 @@ private:
     WALStore(
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
-        std::unique_ptr<LogWriter> && cur_log);
+        Format::LogNumberType last_log_num_);
 
     static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
@@ -110,8 +110,8 @@ private:
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
-    const WriteLimiterPtr write_limiter;
     mutable std::mutex log_file_mutex;
+    Format::LogNumberType last_log_num;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;

@@ -6,6 +6,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
@@ -50,45 +51,88 @@ namespace PS::V3
  * VersionedPageEntries methods *
  ********************************/
 
-void VersionedPageEntries::createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
+void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
     if (entries.empty())
     {
-        entries.emplace(PageVersionType(seq, epoch), EntryOrDelete::newNormalEntry(entry));
+        entries.emplace(ver, VarEntry::newNormalEntry(entry));
         return;
     }
 
-    auto last_entry = entries.rbegin();
-    if (last_entry->second.isDelete())
+    auto last_iter = entries.rbegin();
+    if (last_iter->second.isDelete())
     {
-        entries.emplace(PageVersionType(seq, epoch), EntryOrDelete::newNormalEntry(entry));
+        entries.emplace(ver, VarEntry::newNormalEntry(entry));
     }
-    else if (last_entry->second.isEntry())
+    else if (last_iter->second.isEntry())
     {
-        if (last_entry->second.being_ref_count != 1 && seq > last_entry->first.sequence)
+        if (last_iter->second.being_ref_count != 1 && last_iter->first < ver)
         {
             throw Exception(fmt::format(
-                "Try to replace normal entry with an newer version [seq={}] [prev_seq={}] [lady_entry={}]",
-                seq,
-                last_entry->first.sequence,
-                last_entry->second.toDebugString()));
+                "Try to replace normal entry with an newer version [ver={}] [prev_ver={}] [lady_entry={}]",
+                ver,
+                last_iter->first,
+                last_iter->second.toDebugString()));
         }
         // inherit the `being_ref_count` of the last entry
-        entries.emplace(PageVersionType(seq, epoch), EntryOrDelete::newRepalcingEntry(last_entry->second, entry));
+        entries.emplace(ver, VarEntry::newRepalcingEntry(last_iter->second, entry));
     }
-    else if (last_entry->second.isRef())
+    else if (last_iter->second.isRef())
         throw Exception(fmt::format("Try to create new normal entry on an ref page"));
-    else if (last_entry->second.isExternal())
+    else if (last_iter->second.isExternal())
         throw Exception(fmt::format("Try to create new normal entry on an ext page"));
 }
 
-bool VersionedPageEntries::createNewRefVersion(UInt64 seq, PageId ori_page_id)
+std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
+{
+    auto page_lock = acquireLock();
+    auto need_create = [this, &ver]() {
+        if (entries.empty())
+            return true;
+        auto last_iter = entries.rbegin();
+        if (last_iter->second.isDelete())
+        {
+            return true;
+        }
+        else if (last_iter->second.isExternal())
+        {
+            // just ignore
+        }
+        else if (last_iter->second.isEntry())
+        {
+            throw Exception(fmt::format(
+                "try to create new external on a id that already has entry "
+                "[ver={}] [last_ver={}] [last_entry={}]",
+                ver,
+                last_iter->first,
+                last_iter->second.toDebugString()));
+        }
+        else if (last_iter->second.isRef())
+        {
+            throw Exception(fmt::format(
+                "try to create new external on a id that already has ref to another id "
+                "[ver={}] [last_ver={}] [last_entry={}]",
+                ver,
+                last_iter->first,
+                last_iter->second.toDebugString()));
+        }
+        return false;
+    }();
+
+    if (!need_create)
+        return nullptr;
+    auto var_entry = VarEntry::newExternal();
+    entries.emplace(ver, var_entry);
+    return var_entry.external_holder;
+}
+
+bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id)
 {
     auto page_lock = acquireLock();
     if (entries.empty())
     {
-        entries.emplace(PageVersionType(seq), EntryOrDelete::newRefEntry(ori_page_id));
+        entries.emplace(ver, VarEntry::newRefEntry(ori_page_id));
         return true;
     }
 
@@ -106,8 +150,8 @@ bool VersionedPageEntries::createNewRefVersion(UInt64 seq, PageId ori_page_id)
 
         throw Exception(fmt::format(
             "try to create new ref version on a id that already has ref to another id "
-            "[seq={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
-            seq,
+            "[ver={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
+            ver,
             ori_page_id,
             last_iter->first,
             last_iter->second.toDebugString()));
@@ -115,14 +159,15 @@ bool VersionedPageEntries::createNewRefVersion(UInt64 seq, PageId ori_page_id)
     else if (last_iter->second.isDelete())
     {
         // apply ref on a deleted page, ok
-        entries.emplace(PageVersionType(seq), EntryOrDelete::newRefEntry(ori_page_id));
+        entries.emplace(ver, VarEntry::newRefEntry(ori_page_id));
         return true;
     }
 
+    // else entry or external
     throw Exception(fmt::format(
         "try to create new ref version on an id that already has entries "
-        "[seq={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
-        seq,
+        "[ver={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
+        ver,
         ori_page_id,
         last_iter->first,
         last_iter->second.toDebugString()));
@@ -136,7 +181,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq)
     if (auto iter = MapUtils::findMutLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
     {
-        if (iter->second.isEntry())
+        if (iter->second.isEntry() || iter->second.isExternal())
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
         else if (iter->second.isRef())
             return {RESOLVE_TO_REF, iter->second.origin_page_id, iter->first};
@@ -164,7 +209,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
     if (auto iter = MapUtils::findMutLess(entries, PageVersionType(ver.sequence + 1));
         iter != entries.end())
     {
-        if (iter->second.isEntry())
+        if (iter->second.isEntry() || iter->second.isExternal())
             return ++iter->second.being_ref_count;
         else
             throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
@@ -285,20 +330,27 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::derefAndClean(UInt64 lowest
 {
     auto page_lock = acquireLock();
 
+    // decrease the ref-counter
+    auto iter = MapUtils::findMutLess(entries, PageVersionType(deref_ver.sequence + 1, 0));
+    if (iter == entries.end())
     {
-        // decrease the ref-counter
-        auto iter = MapUtils::findMutLess(entries, PageVersionType(deref_ver.sequence + 1, 0));
-        if (iter == entries.end())
+        throw Exception(fmt::format("Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
+    }
+    if (iter->second.isDelete())
+    {
+        if (iter == entries.begin())
         {
             throw Exception(fmt::format("Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
-        if (iter->second.being_ref_count <= deref_count)
-        {
-            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
-        }
-        iter->second.being_ref_count -= deref_count;
+        --iter; // move to the previous entry
     }
+    if (iter->second.being_ref_count <= deref_count)
+    {
+        throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
+    }
+    iter->second.being_ref_count -= deref_count;
 
+    // Clean outdated entries after decreased the ref-counter
     return cleanOutdatedEntries(lowest_seq, page_id, nullptr, page_lock);
 }
 
@@ -309,7 +361,7 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
     auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
     if (last_iter->second.isExternal() || last_iter->second.isEntry() || last_iter->second.isRef())
     {
-        edit.snap(page_id, last_iter->first, last_iter->second);
+        edit.varEntry(page_id, last_iter->first, last_iter->second);
     }
     else if (last_iter->second.isDelete())
     {
@@ -324,120 +376,21 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
             if (prev_iter->second.being_ref_count == 1)
                 return;
             // It is being ref by another id, should persist the item and delete
-            edit.snap(page_id, prev_iter->first, prev_iter->second);
-            edit.snap(page_id, last_iter->first, last_iter->second);
+            edit.varEntry(page_id, prev_iter->first, prev_iter->second);
+            edit.varEntry(page_id, last_iter->first, last_iter->second);
         }
     }
-}
-
-/**********************************
-  * CollapsingPageDirectory methods *
-  *********************************/
-
-CollapsingPageDirectory::CollapsingPageDirectory() = default;
-
-void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
-{
-    for (const auto & record : edit.getRecords())
-    {
-        if (max_applied_ver < record.version)
-        {
-            max_applied_ver = record.version;
-        }
-        max_applied_page_id = std::max(record.page_id, max_applied_page_id);
-
-        switch (record.type)
-        {
-        case EditRecordType::PUT:
-            [[fallthrough]];
-        case EditRecordType::UPSERT:
-        {
-            // Insert or replace with latest entry
-            if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
-            {
-                table_directory[record.page_id] = std::make_pair(record.version, record.entry);
-            }
-            else
-            {
-                const auto & [ver, entry] = iter->second;
-                (void)entry;
-                if (ver < record.version)
-                {
-                    iter->second = std::make_pair(record.version, record.entry);
-                }
-                // else just ignore outdate version
-            }
-            break;
-        }
-        case EditRecordType::DEL:
-        {
-            // Remove the entry if the version of del is newer
-            if (auto iter = table_directory.find(record.page_id); iter != table_directory.end())
-            {
-                const auto & [ver, entry] = iter->second;
-                (void)entry;
-                if (ver < record.version)
-                {
-                    table_directory.erase(iter);
-                }
-            }
-            break;
-        }
-        default:
-        {
-            // REF is converted into `PUT` in serialized edit, so it should not run into here.
-            throw Exception(fmt::format("Unknown write type: {}", record.type));
-        }
-        }
-    }
-}
-
-void CollapsingPageDirectory::dumpTo(std::unique_ptr<LogWriter> & log_writer)
-{
-    PageEntriesEdit edit;
-    for (const auto & [page_id, versioned_entry] : table_directory)
-    {
-        const auto & version = versioned_entry.first;
-        const auto & entry = versioned_entry.second;
-        edit.upsertPage(page_id, version, entry);
-    }
-    const String serialized = ser::serializeTo(edit);
-    ReadBufferFromString payload(serialized);
-    log_writer->addRecord(payload, serialized.size());
 }
 
 /**************************
   * PageDirectory methods *
   *************************/
 
-PageDirectory::PageDirectory()
-    : PageDirectory(0, nullptr)
-{
-}
-
-PageDirectory::PageDirectory(UInt64 init_seq, WALStorePtr && wal_)
-    : sequence(init_seq)
+PageDirectory::PageDirectory(WALStorePtr && wal_)
+    : sequence(0)
     , wal(std::move(wal_))
     , log(getLogWithPrefix(nullptr, "PageDirectory"))
 {
-}
-
-PageDirectory PageDirectory::create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal)
-{
-    // Reset the `sequence` to the maximum of persisted.
-    PageDirectory dir(
-        /*init_seq=*/collapsing_directory.max_applied_ver.sequence,
-        std::move(wal));
-    for (const auto & [page_id, versioned_entry] : collapsing_directory.table_directory)
-    {
-        const auto & version = versioned_entry.first;
-        const auto & entry = versioned_entry.second;
-        auto [iter, created] = dir.mvcc_table_directory.insert(std::make_pair(page_id, nullptr));
-        if (created)
-            iter->second = std::make_shared<VersionedPageEntries>();
-        iter->second->createNewVersion(version.sequence, version.epoch, entry);
-    }
-    return dir;
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
@@ -451,7 +404,6 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
     CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
     return snap;
 }
-
 
 std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 {
@@ -494,17 +446,6 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
     return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
 }
 
-static inline PageDirectorySnapshotPtr
-toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
-{
-    return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
-}
-
-PageIDAndEntryV3 PageDirectory::get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
-{
-    return get(page_id, toConcreteSnapshot(snap));
-}
-
 PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
 {
     MVCCMapType::const_iterator iter;
@@ -521,11 +462,6 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
     }
 
     throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
-}
-
-PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const
-{
-    return get(page_ids, toConcreteSnapshot(snap));
 }
 
 PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
@@ -563,6 +499,49 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     return id_entries;
 }
 
+PageId PageDirectory::getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+{
+    PageId id_to_resolve = page_id;
+    PageVersionType ver_to_resolve(snap->sequence, 0);
+    bool ok = true;
+    while (ok)
+    {
+        MVCCMapType::const_iterator iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(id_to_resolve);
+            if (iter == mvcc_table_directory.end())
+            {
+                throw Exception(fmt::format("Invalid external page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+            }
+        }
+        auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence);
+        switch (need_collapse)
+        {
+        case VersionedPageEntries::RESOLVE_TO_NORMAL:
+            return id_to_resolve;
+        case VersionedPageEntries::RESOLVE_FAIL:
+            ok = false;
+            break;
+        case VersionedPageEntries::RESOLVE_TO_REF:
+            if (id_to_resolve == next_id_to_resolve)
+            {
+                ok = false;
+                break;
+            }
+            id_to_resolve = next_id_to_resolve;
+            ver_to_resolve = next_ver_to_resolve;
+            break; // continue the resolving
+        }
+    }
+    throw Exception(fmt::format(
+        "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+        page_id,
+        snap->sequence,
+        id_to_resolve,
+        ver_to_resolve));
+}
+
 PageId PageDirectory::getMaxId() const
 {
     PageId max_page_id = 0;
@@ -589,6 +568,76 @@ std::set<PageId> PageDirectory::getAllPageIds()
     return page_ids;
 }
 
+void PageDirectory::applyRefEditRecord(
+    MVCCMapType & mvcc_table_directory,
+    const VersionedPageEntriesPtr & version_list,
+    const PageEntriesEdit::EditRecord & rec,
+    const PageVersionType & version)
+{
+    // applying ref 3->2, existing ref 2->1, normal entry 1, then we should collapse
+    // the ref to be 3->1, increase the refcounting of normale entry 1
+    auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory](PageId id_to_resolve, PageVersionType ver_to_resolve)
+        -> std::tuple<bool, PageId, PageVersionType> {
+        while (true)
+        {
+            auto resolve_ver_iter = mvcc_table_directory.find(id_to_resolve);
+            if (resolve_ver_iter == mvcc_table_directory.end())
+                return {false, 0, PageVersionType(0)};
+
+            const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
+            // If we already hold the lock from `id_to_resolve`, then we should not request it again.
+            // This can happen when `id_to_resolve` have other operating in current writebatch
+            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(ver_to_resolve.sequence);
+            switch (need_collapse)
+            {
+            case VersionedPageEntries::RESOLVE_FAIL:
+                return {false, id_to_resolve, ver_to_resolve};
+            case VersionedPageEntries::RESOLVE_TO_NORMAL:
+                return {true, id_to_resolve, ver_to_resolve};
+            case VersionedPageEntries::RESOLVE_TO_REF:
+                if (id_to_resolve == next_id_to_resolve)
+                {
+                    return {false, next_id_to_resolve, next_ver_to_resolve};
+                }
+                id_to_resolve = next_id_to_resolve;
+                ver_to_resolve = next_ver_to_resolve;
+                break; // continue the resolving
+            }
+        }
+    }(rec.ori_page_id, version);
+    if (!resolve_success)
+    {
+        throw Exception(fmt::format(
+            "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [ver={}] [resolve_id={}] [resolve_ver={}]",
+            rec.page_id,
+            rec.ori_page_id,
+            version,
+            resolved_id,
+            resolved_ver));
+    }
+    // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
+    bool is_ref_created = version_list->createNewRef(version, resolved_id);
+
+    if (is_ref_created)
+    {
+        // Add the ref-count of being-ref entry
+        if (auto resolved_iter = mvcc_table_directory.find(resolved_id); resolved_iter != mvcc_table_directory.end())
+        {
+            resolved_iter->second->incrRefCount(resolved_ver);
+        }
+        else
+        {
+            throw Exception(fmt::format(
+                "The ori page id is not found [page_id={}] [ori_id={}] [ver={}] [resolved_id={}] [resolved_ver={}]",
+                rec.page_id,
+                rec.ori_page_id,
+                version,
+                resolved_id,
+                resolved_ver));
+        }
+    }
+}
+
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // Note that we need to make sure increasing `sequence` in order, so it
@@ -596,11 +645,12 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // TODO: It is totally serialized, make it a pipeline
     std::unique_lock write_lock(table_rw_mutex);
     UInt64 last_sequence = sequence.load();
+    PageVersionType new_version(last_sequence + 1, 0);
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, PageVersionType(last_sequence + 1, 0), write_limiter);
+    wal->apply(edit, new_version, write_limiter);
 
-    // stage 2, create entry version list for pageId. nothing need to be rollback
+    // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
     {
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
@@ -610,108 +660,45 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         }
 
         auto & version_list = iter->second;
-        if (r.type == EditRecordType::REF)
+        try
         {
-            // applying ref 3->2, existing ref 2->1, normal entry 1, then we should collapse
-            // the ref to be 3->1, increase the refcounting of normale entry 1
-            auto [resolve_success, resolved_id, resolved_ver] = [this](PageId id_to_resolve, PageVersionType ver_to_resolve)
-                -> std::tuple<bool, PageId, PageVersionType> {
-                while (true)
+            switch (r.type)
+            {
+            case EditRecordType::PUT_EXTERNAL:
+            {
+                auto holder = version_list->createNewExternal(new_version);
+                if (holder)
                 {
-                    auto resolve_ver_iter = mvcc_table_directory.find(id_to_resolve);
-                    if (resolve_ver_iter == mvcc_table_directory.end())
-                        return {false, 0, PageVersionType(0)};
-
-                    const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
-                    // If we already hold the lock from `id_to_resolve`, then we should not request it again.
-                    // This can happen when `id_to_resolve` have other operating in current writebatch
-                    auto resolve_page_lock = resolve_version_list->acquireLock();
-                    auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(ver_to_resolve.sequence);
-                    switch (need_collapse)
+                    *holder = r.page_id;
                     {
-                    case VersionedPageEntries::RESOLVE_FAIL:
-                        return {false, id_to_resolve, ver_to_resolve};
-                    case VersionedPageEntries::RESOLVE_TO_NORMAL:
-                        return {true, id_to_resolve, ver_to_resolve};
-                    case VersionedPageEntries::RESOLVE_TO_REF:
-                        if (id_to_resolve == next_id_to_resolve)
-                        {
-                            return {false, next_id_to_resolve, next_ver_to_resolve};
-                        }
-                        id_to_resolve = next_id_to_resolve;
-                        ver_to_resolve = next_ver_to_resolve;
-                        break; // continue the resolving
+                        std::lock_guard guard(external_ids_mutex);
+                        external_ids.emplace_back(std::weak_ptr<PageId>(holder));
                     }
                 }
-            }(r.ori_page_id, PageVersionType(last_sequence + 1));
-            if (!resolve_success)
-            {
-                throw Exception(fmt::format(
-                    "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
-                    r.page_id,
-                    r.ori_page_id,
-                    last_sequence + 1,
-                    resolved_id,
-                    resolved_ver));
+                break;
             }
-            // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
-            bool is_ref_created = version_list->createNewRefVersion(last_sequence + 1, resolved_id);
-
-            if (is_ref_created)
-            {
-                // Add the ref-count of being-ref entry
-                if (auto resolved_iter = mvcc_table_directory.find(resolved_id); resolved_iter != mvcc_table_directory.end())
-                {
-                    resolved_iter->second->incrRefCount(resolved_ver);
-                }
-                else
-                {
-                    throw Exception(fmt::format(
-                        "The ori page id is not found [page_id={}] [ori_id={}] [seq={}] [resolved_id={}] [resolved_ver={}]",
-                        r.page_id,
-                        r.ori_page_id,
-                        last_sequence + 1,
-                        resolved_id,
-                        resolved_ver));
-                }
+            case EditRecordType::PUT:
+                version_list->createNewEntry(new_version, r.entry);
+                break;
+            case EditRecordType::DEL:
+                version_list->createDelete(new_version);
+                break;
+            case EditRecordType::REF:
+                applyRefEditRecord(mvcc_table_directory, version_list, r, new_version);
+                break;
+            case EditRecordType::UPSERT:
+                throw Exception(fmt::format("should not handle upsert edit"));
+            case EditRecordType::VAR_DELETE:
+            case EditRecordType::VAR_ENTRY:
+            case EditRecordType::VAR_EXTERNAL:
+            case EditRecordType::VAR_REF:
+                throw Exception(fmt::format("should not handle var_* edit"));
             }
-
-            continue; // continue to process next record in `edit`
         }
-
-        switch (r.type)
+        catch (DB::Exception & e)
         {
-        case EditRecordType::PUT_EXTERNAL:
-        {
-            throw Exception("Not implemented");
-        }
-        case EditRecordType::PUT:
-            [[fallthrough]];
-        case EditRecordType::UPSERT:
-        {
-            try
-            {
-                version_list->createNewVersion(last_sequence + 1, r.entry);
-            }
-            catch (DB::Exception & e)
-            {
-                e.addMessage(fmt::format(" [page_id={}] [seq={}]", r.page_id, last_sequence + 1));
-                throw e;
-            }
-            break;
-        }
-        case EditRecordType::DEL:
-        {
-            version_list->createDelete(last_sequence + 1);
-            break;
-        }
-        case EditRecordType::REF:
-            throw Exception(fmt::format("should handle ref before switch statement"));
-        case EditRecordType::VAR_DELETE:
-        case EditRecordType::VAR_ENTRY:
-        case EditRecordType::VAR_EXTERNAL:
-        case EditRecordType::VAR_REF:
-            throw Exception(fmt::format("should not handle var"));
+            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", r.type, r.page_id, new_version, edit.size()));
+            e.rethrow();
         }
     }
 
@@ -719,7 +706,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
+void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
 {
     // Increase the epoch for migrated records
     for (auto & record : migrated_edit.getMutRecords())
@@ -745,15 +732,27 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
 
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
-        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
+        versioned_entries->createNewEntry(record.version, record.entry);
     }
+}
 
-    if (!need_scan_page_ids)
+std::set<PageId> PageDirectory::getAliveExternalIds() const
+{
+    std::set<PageId> valid_external_ids;
     {
-        return {};
+        std::lock_guard guard(external_ids_mutex);
+        for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
+        {
+            if (auto holder = iter->lock(); holder == nullptr)
+                iter = external_ids.erase(iter);
+            else
+            {
+                valid_external_ids.emplace(*holder);
+                ++iter;
+            }
+        }
     }
-
-    return getAllPageIds();
+    return valid_external_ids;
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -821,11 +820,11 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
-            if (iter->expired())
+            if (auto snap = iter->lock(); snap == nullptr)
                 iter = snapshots.erase(iter);
             else
             {
-                lowest_seq = std::min(lowest_seq, iter->lock()->sequence);
+                lowest_seq = std::min(lowest_seq, snap->sequence);
                 ++iter;
             }
         }

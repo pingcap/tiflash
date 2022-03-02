@@ -218,13 +218,19 @@ TEST_F(WALStoreTest, Empty)
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
     size_t num_callback_called = 0;
-    auto wal = WALStore::create(
-        [&](PageEntriesEdit &&) {
-            num_callback_called += 1;
-        },
-        provider,
-        delegator);
+    auto [wal, reader] = WALStore::create(provider, delegator);
     ASSERT_NE(wal, nullptr);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        if (!ok)
+        {
+            reader->throwIfError();
+            // else it just run to the end of file.
+            break;
+        }
+        num_callback_called += 1;
+    }
     ASSERT_EQ(num_callback_called, 0);
 }
 
@@ -236,6 +242,8 @@ try
     auto path = getTemporaryPath();
 
     // Stage 1. empty
+    std::vector<size_t> size_each_edit;
+    auto [wal, reader] = WALStore::create(provider, delegator);
     {
         size_t num_applied_edit = 0;
         auto reader = WALStoreReader::create(provider, delegator);
@@ -244,11 +252,8 @@ try
             num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 0);
-        EXPECT_EQ(reader->logNum(), 0);
+        EXPECT_EQ(reader->lastLogNum(), 0);
     }
-
-    std::vector<size_t> size_each_edit;
-    auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
     ASSERT_NE(wal, nullptr);
 
     // Stage 2. Apply with only puts
@@ -264,10 +269,11 @@ try
     }
 
     wal.reset();
+    reader.reset();
 
+    std::tie(wal, reader) = WALStore::create(provider, delegator);
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -279,8 +285,6 @@ try
         }
         EXPECT_EQ(num_applied_edit, 1);
     }
-
-    wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
 
     // Stage 3. Apply with puts and refs
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -303,10 +307,11 @@ try
     }
 
     wal.reset();
+    reader.reset();
 
+    std::tie(wal, reader) = WALStore::create(provider, delegator);
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -319,7 +324,6 @@ try
         EXPECT_EQ(num_applied_edit, 2);
     }
 
-    wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
 
     // Stage 4. Apply with delete and upsert
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -337,6 +341,7 @@ try
     }
 
     wal.reset();
+    reader.reset();
 
     {
         size_t num_applied_edit = 0;
@@ -362,7 +367,7 @@ try
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
 
-    auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
+    auto [wal, reader] = WALStore::create(provider, delegator);
     ASSERT_NE(wal, nullptr);
 
     std::vector<size_t> size_each_edit;
@@ -432,14 +437,20 @@ try
 
     {
         size_t num_applied_edit = 0;
-        wal = WALStore::create(
-            [&](PageEntriesEdit && edit) {
-                // Details of each edit is verified in `WALSeriTest`
-                EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
-                num_applied_edit += 1;
-            },
-            provider,
-            delegator);
+        std::tie(wal, reader) = WALStore::create(provider, delegator);
+        while (reader->remained())
+        {
+            auto [ok, edit] = reader->next();
+            if (!ok)
+            {
+                reader->throwIfError();
+                // else it just run to the end of file.
+                break;
+            }
+            // Details of each edit is verified in `WALSeriTest`
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            num_applied_edit += 1;
+        }
         EXPECT_EQ(num_applied_edit, 3);
     }
 }
@@ -453,7 +464,7 @@ try
     auto path = getTemporaryPath();
 
     // Stage 1. empty
-    auto wal = WALStore::create([](PageEntriesEdit &&) {}, provider, delegator);
+    auto [wal, reader] = WALStore::create(provider, delegator);
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
@@ -486,14 +497,20 @@ try
 
     size_t num_edits_read = 0;
     size_t num_pages_read = 0;
-    wal = WALStore::create(
-        [&](PageEntriesEdit && edit) {
-            num_pages_read += edit.size();
-            EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
-            num_edits_read += 1;
-        },
-        provider,
-        delegator);
+    std::tie(wal, reader) = WALStore::create(provider, delegator);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        if (!ok)
+        {
+            reader->throwIfError();
+            // else it just run to the end of file.
+            break;
+        }
+        num_pages_read += edit.size();
+        EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
+        num_edits_read += 1;
+    }
     EXPECT_EQ(num_edits_read, num_edits_test);
     EXPECT_EQ(num_pages_read, page_id);
 

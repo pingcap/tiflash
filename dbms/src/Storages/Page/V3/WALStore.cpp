@@ -31,43 +31,25 @@
 
 namespace DB::PS::V3
 {
-WALStorePtr WALStore::create(
-    std::function<void(PageEntriesEdit &&)> && restore_callback,
+std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator)
 {
     auto reader = WALStoreReader::create(provider, delegator);
-    while (reader->remained())
-    {
-        auto [ok, edit] = reader->next();
-        if (!ok)
-        {
-            // TODO: Handle error, some error could be ignored.
-            // If the file happened to some error,
-            // should truncate it to throw away incomplete data.
-            reader->throwIfError();
-            // else it just run to the end of file.
-            break;
-        }
-        // apply the edit read
-        restore_callback(std::move(edit));
-    }
-
     // Create a new LogFile for writing new logs
-    auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
-    auto * logger = &Poco::Logger::get("WALStore");
-    auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, {log_num, 0}, logger, false);
-    (void)filename;
-    return std::unique_ptr<WALStore>(new WALStore(delegator, provider, std::move(log_file)));
+    auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
+    return {
+        std::unique_ptr<WALStore>(new WALStore(delegator, provider, last_log_num)),
+        reader};
 }
 
 WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
-    std::unique_ptr<LogWriter> && cur_log)
+    Format::LogNumberType last_log_num_)
     : delegator(delegator_)
     , provider(provider_)
-    , log_file(std::move(cur_log))
+    , last_log_num(last_log_num_)
     , logger(&Poco::Logger::get("WALStore"))
 {
 }
@@ -88,17 +70,17 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
 
     {
         std::lock_guard lock(log_file_mutex);
-        log_file->addRecord(payload, serialized.size(), write_limiter);
-
         // Roll to a new log file
         // TODO: Make it configurable
-        if (log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
+        if (log_file == nullptr || log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
         {
-            auto log_num = log_file->logNumber() + 1;
+            auto log_num = last_log_num++;
             auto [new_log_file, filename] = createLogWriter(delegator, provider, {log_num, 0}, logger, false);
             (void)filename;
             log_file.swap(new_log_file);
         }
+
+        log_file->addRecord(payload, serialized.size(), write_limiter);
     }
 }
 
@@ -155,7 +137,7 @@ WALStore::CheckpointSnapshot WALStore::prepareCompactLogs() const
 // log files.
 bool WALStore::compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & /*read_limiter*/)
 {
-    if (!snapshot.needSave())
+    if (!snapshot.needSave() || snapshot.compact_log_files.empty())
         return false;
 
     {

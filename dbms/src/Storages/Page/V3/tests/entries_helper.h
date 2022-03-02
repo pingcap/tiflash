@@ -66,7 +66,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * page_id_expr,
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
-    const PageDirectory & dir,
+    const PageDirectoryPtr & dir,
     const PageId page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -94,7 +94,7 @@ inline ::testing::AssertionResult getEntryCompare(
     String error;
     try
     {
-        auto id_entry = dir.get(page_id, snap);
+        auto id_entry = dir->get(page_id, snap);
         return check_id_entry({page_id, expected_entry}, id_entry);
     }
     catch (DB::Exception & ex)
@@ -125,7 +125,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectory & dir,
+    const PageDirectoryPtr & dir,
     const PageIds page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -171,7 +171,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     String error;
     try
     {
-        auto id_entries = dir.get(page_ids, snap);
+        auto id_entries = dir->get(page_ids, snap);
         return check_id_entries(expected_entries, id_entries);
     }
     catch (DB::Exception & ex)
@@ -199,14 +199,14 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageDirectory & dir,
+    const PageDirectoryPtr & dir,
     const PageId page_id,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;
     try
     {
-        auto id_entry = dir.get(page_id, snap);
+        auto id_entry = dir->get(page_id, snap);
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got <{}, {}>",
             page_id_expr,
@@ -236,14 +236,14 @@ inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
     const char * page_ids_expr,
     const char * snap_expr,
-    const PageDirectory & dir,
+    const PageDirectoryPtr & dir,
     const PageIds page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;
     try
     {
-        auto id_entry = dir.get(page_ids, snap);
+        auto id_entry = dir->get(page_ids, snap);
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got {}",
             page_ids_expr,

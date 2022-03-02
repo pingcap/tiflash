@@ -6,6 +6,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -34,9 +35,8 @@ public:
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        CollapsingPageDirectory collapsed_state;
-        auto wal = WALStore::create(nullptr, provider, delegator);
-        dir = PageDirectory::create(collapsed_state, std::move(wal));
+        PageDirectoryFactory factory;
+        dir = factory.create(provider, delegator);
     }
 
     void TearDown() override
@@ -44,33 +44,33 @@ public:
     }
 
 protected:
-    PageDirectory dir;
+    PageDirectoryPtr dir;
 };
 
 TEST_F(PageDirectoryTest, ApplyPutRead)
 try
 {
-    auto snap0 = dir.createSnapshot();
+    auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
 
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
 
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 2, snap1); // creating snap2 won't affect the result of snap1
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
@@ -88,27 +88,27 @@ try
     // Put identical page in different `edit`
     PageId page_id = 50;
 
-    auto snap0 = dir.createSnapshot();
+    auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snap0);
 
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(page_id, entry1);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
 
     PageEntryV3 entry2{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x1234, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(page_id, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, page_id, snap2);
     {
@@ -127,9 +127,9 @@ try
         edit.put(page_id, entry3);
 
         // Should not be dead-lock
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap3 = dir.createSnapshot();
+    auto snap3 = dir->createSnapshot();
 
     PageIds ids{page_id};
     PageIDAndEntriesV3 expected_entries{{page_id, entry3}};
@@ -146,10 +146,10 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
 
@@ -160,10 +160,10 @@ try
         edit.del(2);
         edit.put(3, entry3);
         edit.put(4, entry4);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     // sanity check for snap1
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
@@ -191,15 +191,15 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
@@ -209,9 +209,9 @@ try
     {
         PageEntriesEdit edit;
         edit.put(3, entry_updated);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
@@ -221,9 +221,9 @@ try
     {
         PageEntriesEdit edit;
         edit.put(2, entry_updated2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap3 = dir.createSnapshot();
+    auto snap3 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
@@ -242,15 +242,15 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
@@ -258,9 +258,9 @@ try
     {
         PageEntriesEdit edit;
         edit.del(3);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
@@ -270,9 +270,9 @@ try
     {
         PageEntriesEdit edit;
         edit.del(2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap3 = dir.createSnapshot();
+    auto snap3 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
@@ -292,15 +292,15 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
@@ -308,9 +308,9 @@ try
     {
         PageEntriesEdit edit;
         edit.ref(4, 3);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
@@ -330,15 +330,15 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
@@ -346,9 +346,9 @@ try
     {
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
@@ -366,15 +366,15 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
         edit.ref(3, 2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
@@ -382,9 +382,9 @@ try
     { // Ref 4 -> 3, collapse to 4 -> 2
         PageEntriesEdit edit;
         edit.ref(4, 3);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap2 = dir.createSnapshot();
+    auto snap2 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
@@ -404,16 +404,16 @@ try
         PageEntriesEdit edit;
         edit.put(1, entry1);
         edit.put(2, entry2);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
 
     { // Ref 4-> 999
         PageEntriesEdit edit;
         edit.put(3, entry3);
         edit.ref(4, 999);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snap1 = dir.createSnapshot();
+    auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry3, dir, 3, snap1);
@@ -435,7 +435,7 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
         edit.ref(1, 0);
     }
 
-    dir.apply(std::move(edit));
+    dir->apply(std::move(edit));
 
     PageEntriesEdit edit2;
     {
@@ -446,16 +446,66 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
         edit2.del(1);
     }
 
-    dir.apply(std::move(edit2));
+    dir->apply(std::move(edit2));
 }
+
+TEST_F(PageDirectoryTest, NormalPageId)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.put(9, PageEntryV3{});
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+    }
+    auto s0 = dir->createSnapshot();
+    // calling getNormalPageId on non-external-page is not acceptable
+    EXPECT_ANY_THROW(dir->getNormalPageId(9, s0));
+    EXPECT_EQ(10, dir->getNormalPageId(10, s0));
+    EXPECT_ANY_THROW(dir->getNormalPageId(11, s0));
+    EXPECT_ANY_THROW(dir->getNormalPageId(12, s0));
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.ref(12, 10);
+        edit.del(10);
+        dir->apply(std::move(edit));
+    }
+    auto s1 = dir->createSnapshot();
+    EXPECT_ANY_THROW(dir->getNormalPageId(10, s1));
+    EXPECT_EQ(10, dir->getNormalPageId(11, s1));
+    EXPECT_EQ(10, dir->getNormalPageId(12, s1));
+
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir->apply(std::move(edit));
+    }
+    auto s2 = dir->createSnapshot();
+    EXPECT_ANY_THROW(dir->getNormalPageId(10, s2));
+    EXPECT_ANY_THROW(dir->getNormalPageId(11, s2));
+    EXPECT_EQ(10, dir->getNormalPageId(12, s2));
+
+    {
+        PageEntriesEdit edit;
+        edit.del(12);
+        dir->apply(std::move(edit));
+    }
+    auto s3 = dir->createSnapshot();
+    EXPECT_ANY_THROW(dir->getNormalPageId(10, s3));
+    EXPECT_ANY_THROW(dir->getNormalPageId(11, s3));
+    EXPECT_ANY_THROW(dir->getNormalPageId(12, s3));
+}
+CATCH
 
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    entries.createNewVersion((VERSION), entry_v##VERSION);
+    entries.createNewEntry(PageVersionType(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                        \
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    entries.createNewVersion((VERSION), (EPOCH), entry_gc_v##VERSION##_##EPOCH);
+    entries.createNewEntry(PageVersionType((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
 TEST(VersionedEntriesTest, InsertGet)
 {
@@ -497,7 +547,7 @@ TEST(VersionedEntriesTest, InsertGet)
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
-    entries.createDelete(15);
+    entries.createDelete(PageVersionType(15));
     ASSERT_FALSE(entries.getEntry(1).has_value());
     ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_gc_v2_1);
     ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_gc_v2_1);
@@ -527,7 +577,7 @@ try
     INSERT_GC_ENTRY(5, 2);
     INSERT_ENTRY(10);
     INSERT_ENTRY(11);
-    entries.createDelete(15);
+    entries.createDelete(PageVersionType(15));
 
     PageId page_id = 100;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
@@ -584,12 +634,12 @@ TEST(VersionedEntriesTest, DeleteMultiTime)
 try
 {
     VersionedPageEntries entries;
-    entries.createDelete(1);
+    entries.createDelete(PageVersionType(1));
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
-    entries.createDelete(15);
-    entries.createDelete(17);
-    entries.createDelete(16);
+    entries.createDelete(PageVersionType(15));
+    entries.createDelete(PageVersionType(17));
+    entries.createDelete(PageVersionType(16));
 
     PageId page_id = 100;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
@@ -622,7 +672,7 @@ try
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(5);
+    entries.createDelete(PageVersionType(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -660,7 +710,7 @@ try
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(5);
+    entries.createDelete(PageVersionType(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -727,7 +777,7 @@ try
     entries.incrRefCount(PageVersionType(2));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
-    entries.createDelete(5);
+    entries.createDelete(PageVersionType(5));
 
     // <2, 2> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
@@ -951,19 +1001,19 @@ class PageDirectoryGCTest : public PageDirectoryTest
     {                                                                                                                          \
         PageEntriesEdit edit;                                                                                                  \
         edit.put((PAGE_ID), entry_v##VERSION);                                                                                 \
-        dir.apply(std::move(edit));                                                                                            \
+        dir->apply(std::move(edit));                                                                                           \
     }
 // Insert an entry into mvcc directory
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
 // Insert an entry into mvcc directory, and acquire a snapshot
 #define INSERT_ENTRY_ACQ_SNAP(PAGE_ID, VERSION) \
     INSERT_ENTRY(PAGE_ID, VERSION)              \
-    auto snapshot##VERSION = dir.createSnapshot();
-#define INSERT_DELETE(PAGE_ID)      \
-    {                               \
-        PageEntriesEdit edit;       \
-        edit.del((PAGE_ID));        \
-        dir.apply(std::move(edit)); \
+    auto snapshot##VERSION = dir->createSnapshot();
+#define INSERT_DELETE(PAGE_ID)       \
+    {                                \
+        PageEntriesEdit edit;        \
+        edit.del((PAGE_ID));         \
+        dir->apply(std::move(edit)); \
     }
 
 static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
@@ -1000,7 +1050,7 @@ try
      *   }
      *   snapshot remain: [v3,v5]
      */
-    auto del_entries = dir.gc();
+    auto del_entries = dir->gc();
     EXPECT_EQ(del_entries.size(), 1);
     // v1, v2 have been removed.
     ASSERT_EQ(getNumEntries(del_entries), 2);
@@ -1012,10 +1062,10 @@ try
     // all versions get compacted.
     snapshot3.reset();
     snapshot5.reset();
-    del_entries = dir.gc();
+    del_entries = dir->gc();
     ASSERT_EQ(getNumEntries(del_entries), 2);
 
-    auto snapshot_after_gc = dir.createSnapshot();
+    auto snapshot_after_gc = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot_after_gc);
 }
 CATCH
@@ -1054,7 +1104,7 @@ try
          *   }
          *   snapshot remain: [v3, v5]
          */
-        const auto & del_entries = dir.gc();
+        const auto & del_entries = dir->gc();
         // page_id: []; another_page_id: v1 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
     }
@@ -1068,7 +1118,7 @@ try
          *   }
          *   snapshot remain: [v5]
          */
-        const auto & del_entries = dir.gc();
+        const auto & del_entries = dir->gc();
         // page_id: v2; another_page_id: v3 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 2);
     }
@@ -1082,7 +1132,7 @@ try
          *   }
          *   snapshot remain: []
          */
-        const auto & del_entries = dir.gc();
+        const auto & del_entries = dir->gc();
         // page_id: v5; another_page_id: v6,v7,v8 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 5);
     }
@@ -1128,7 +1178,7 @@ try
          *   }
          *   snapshot remain: [v1,v3,v5,v10]
          */
-        auto removed_entries = dir.gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
+        auto removed_entries = dir->gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
         EXPECT_EQ(getNumEntries(removed_entries), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1149,7 +1199,7 @@ try
         snapshot3.reset();
         snapshot5.reset();
         snapshot10.reset();
-        auto removed_entries = dir.gc();
+        auto removed_entries = dir->gc();
         EXPECT_EQ(getNumEntries(removed_entries), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1164,11 +1214,11 @@ try
          *   snapshot remain: []
          */
         snapshot1.reset();
-        auto removed_entries = dir.gc(); // this will compact all versions
+        auto removed_entries = dir->gc(); // this will compact all versions
         // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
         EXPECT_EQ(getNumEntries(removed_entries), 8);
 
-        auto snap_after_gc = dir.createSnapshot();
+        auto snap_after_gc = dir->createSnapshot();
         EXPECT_ENTRY_EQ(entry_v10, dir, page_id, snap_after_gc);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snap_after_gc);
     }
@@ -1201,9 +1251,9 @@ try
         PageEntriesEdit edit;
         edit.del(page_id);
         edit.put(another_page_id, entry_v8);
-        dir.apply(std::move(edit));
+        dir->apply(std::move(edit));
     }
-    auto snapshot8 = dir.createSnapshot();
+    auto snapshot8 = dir->createSnapshot();
     INSERT_ENTRY_ACQ_SNAP(another_page_id, 9);
     INSERT_DELETE(another_page_id);
 
@@ -1221,10 +1271,10 @@ try
          *   }
          *   snapshot remain: [v5,v8,v9]
          */
-        auto del_entries = dir.gc();
+        auto del_entries = dir->gc();
         // page_id: v3; another_page_id: v1,v2 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 3);
-        ASSERT_EQ(dir.numPages(), 2);
+        ASSERT_EQ(dir->numPages(), 2);
     }
 
     {
@@ -1239,10 +1289,10 @@ try
         EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir.gc();
+        auto del_entries = dir->gc();
         // page_id: v5; another_page_id: v4,v6,v7 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 4);
-        ASSERT_EQ(dir.numPages(), 1); // page_id should be removed.
+        ASSERT_EQ(dir->numPages(), 1); // page_id should be removed.
     }
 
     {
@@ -1255,7 +1305,7 @@ try
         snapshot8.reset();
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir.gc();
+        auto del_entries = dir->gc();
         // another_page_id: v8 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
     }
@@ -1266,13 +1316,13 @@ try
          *   snapshot remain: []
          */
         snapshot9.reset();
-        auto del_entries = dir.gc();
+        auto del_entries = dir->gc();
         // another_page_id: v9 have been removed.
         EXPECT_EQ(getNumEntries(del_entries), 1);
-        ASSERT_EQ(dir.numPages(), 0); // all should be removed.
+        ASSERT_EQ(dir->numPages(), 0); // all should be removed.
     }
 
-    auto snapshot_after_all = dir.createSnapshot();
+    auto snapshot_after_all = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot_after_all);
     EXPECT_ENTRY_NOT_EXIST(dir, another_page_id, snapshot_after_all);
 }
@@ -1292,11 +1342,11 @@ try
 
     // FIXME: This will copy many outdate pages
     // Full GC get entries
-    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
+    auto candidate_entries_1 = dir->getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
     EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
 
-    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
+    auto candidate_entries_2_3 = dir->getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
@@ -1322,7 +1372,7 @@ try
     }
 
     // Full GC execute apply
-    dir.gcApply(std::move(gc_migrate_entries), false);
+    dir->gcApply(std::move(gc_migrate_entries));
 }
 CATCH
 
@@ -1339,15 +1389,15 @@ try
     INSERT_ENTRY_TO(another_page_id, 6, 1);
     INSERT_DELETE(page_id);
 
-    EXPECT_EQ(dir.numPages(), 2);
+    EXPECT_EQ(dir->numPages(), 2);
 
     // 1.1 Full GC get entries for blob_id in [1]
-    auto candidate_entries_1 = dir.getEntriesByBlobIds({1});
+    auto candidate_entries_1 = dir->getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
     EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
 
     // for blob_id in [2, 3]
-    auto candidate_entries_2_3 = dir.getEntriesByBlobIds({2, 3});
+    auto candidate_entries_2_3 = dir->getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
@@ -1355,9 +1405,9 @@ try
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 entry for 1 page_id
 
     // 2.1 Execute GC
-    dir.gc();
+    dir->gc();
     // `page_id` get removed
-    EXPECT_EQ(dir.numPages(), 1);
+    EXPECT_EQ(dir->numPages(), 1);
 
     PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
@@ -1378,7 +1428,44 @@ try
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir.gcApply(std::move(gc_migrate_entries), false); }, DB::Exception);
+    ASSERT_THROW({ dir->gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCOnRefedEntries)
+try
+{
+    // 10->entry1, 11->10=>11->entry1; del 10->entry1
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(10, entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.del(10);
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gc();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    // del 11->entry1
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir->apply(std::move(edit));
+    }
+    // entry1 get removed
+    {
+        auto outdated_entries = dir->gc();
+        EXPECT_EQ(1, getNumEntries(outdated_entries));
+        // EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
+    }
 }
 CATCH
 
