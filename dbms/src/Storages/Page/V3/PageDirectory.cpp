@@ -394,13 +394,13 @@ std::set<PageId> PageDirectory::getAllPageIds()
     return page_ids;
 }
 
-void PageDirectory::apply(PageEntriesEdit && edit)
+void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, PageVersionType(last_sequence + 1, 0));
+    wal->apply(edit, PageVersionType(last_sequence + 1, 0), write_limiter);
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
@@ -496,7 +496,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids)
+std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
 {
     {
         std::shared_lock read_lock(table_rw_mutex);
@@ -519,7 +519,7 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
     } // Then we should release the read lock on `table_rw_mutex`
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit);
+    wal->apply(migrated_edit, write_limiter);
 
     if (!need_scan_page_ids)
     {
@@ -567,12 +567,12 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
 }
 
 
-std::vector<PageEntriesV3> PageDirectory::gc()
+std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
 
-    done_anything |= wal->compactLogs();
+    done_anything |= wal->compactLogs(write_limiter, read_limiter);
 
     {
         // Cleanup released snapshots

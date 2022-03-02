@@ -73,33 +73,29 @@ public:
     static WALStorePtr create(
         std::function<void(PageEntriesEdit &&)> && restore_callback,
         FileProviderPtr & provider,
-        PSDiskDelegatorPtr & delegator,
-        const WriteLimiterPtr & write_limiter = nullptr);
+        PSDiskDelegatorPtr & delegator);
 
-    void apply(PageEntriesEdit & edit, const PageVersionType & version);
-    void apply(const PageEntriesEdit & edit);
+    void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
+    void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool compactLogs();
+    bool compactLogs(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
 private:
     WALStore(
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
-        const WriteLimiterPtr & write_limiter_,
         std::unique_ptr<LogWriter> && cur_log);
 
     static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         PSDiskDelegatorPtr delegator,
         const FileProviderPtr & provider,
-        const WriteLimiterPtr & write_limiter,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         Poco::Logger * logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
-    const WriteLimiterPtr write_limiter;
     std::mutex log_file_mutex;
     std::unique_ptr<LogWriter> log_file;
 

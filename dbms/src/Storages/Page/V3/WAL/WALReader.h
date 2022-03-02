@@ -33,9 +33,9 @@ class WALStoreReader
 public:
     static LogFilenameSet listAllFiles(PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files);
+    static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator);
+    static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter = nullptr);
 
     bool remained() const;
 
@@ -56,7 +56,7 @@ public:
         return reader->getLogNumber();
     }
 
-    WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_);
+    WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_ = nullptr);
 
     WALStoreReader(const WALStoreReader &) = delete;
     WALStoreReader & operator=(const WALStoreReader &) = delete;
@@ -69,6 +69,7 @@ private:
 
     const LogFilenameSet files;
     LogFilenameSet::const_iterator next_reading_file;
+    const ReadLimiterPtr read_limiter;
     std::unique_ptr<LogReader> reader;
     Poco::Logger * logger;
 };
