@@ -8,8 +8,15 @@ namespace DB
 {
 CompressionSettings::CompressionSettings(const Settings & settings)
 {
-    method = settings.dt_compression_method;
-    level = settings.dt_compression_level;
+    method = settings.network_compression_method;
+    switch (method)
+    {
+    case CompressionMethod::ZSTD:
+        level = settings.network_zstd_compression_level;
+        break;
+    default:
+        level = getDefaultLevel(method);
+    }
 }
 
 int CompressionSettings::getDefaultLevel(CompressionMethod method)

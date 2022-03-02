@@ -30,7 +30,7 @@ public:
             context.getFileProvider(),
             context.getWriteLimiter(),
             DMFileWriter::Options{
-                CompressionSettings(context.getSettingsRef()),
+                CompressionSettings(context.getSettingsRef().dt_compression_method, context.getSettingsRef().dt_compression_level),
                 context.getSettingsRef().min_compress_block_size,
                 context.getSettingsRef().max_compress_block_size,
                 flags})
