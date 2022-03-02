@@ -2250,7 +2250,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
         else
         {
-            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[Type=data, DB={}, Table={}]", db_name, table_name);
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
         }
     }
     {
@@ -2268,7 +2268,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
         else
         {
-            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[Type=log, DB={}, Table={}]", db_name, table_name);
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
         }
     }
     {
@@ -2286,7 +2286,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
         else
         {
-            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[Type=log, DB={}, Table={}]", db_name, table_name);
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
         }
     }
 
