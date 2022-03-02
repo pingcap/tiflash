@@ -46,6 +46,15 @@ FlashService::FlashService(IServer & server_)
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
+// Use executeInThreadPool to submit job to thread pool which return grpc::Status.
+grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
+{
+    std::packaged_task<grpc::Status()> task(job);
+    std::future<grpc::Status> future = task.get_future();
+    pool->schedule([&task] { task(); });
+    return future.get();
+}
+
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
     const coprocessor::Request * request,
@@ -335,15 +344,6 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
         return it->second.data();
     return default_val;
-}
-
-// Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
-{
-    std::packaged_task<grpc::Status()> task(job);
-    std::future<grpc::Status> future = task.get_future();
-    pool->schedule([&task] { task(); });
-    return future.get();
 }
 
 std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
