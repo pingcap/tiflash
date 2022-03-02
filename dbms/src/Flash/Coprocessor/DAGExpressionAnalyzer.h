@@ -126,7 +126,9 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     NamesAndTypes buildOrderColumns(
         ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);

@@ -217,8 +217,6 @@ AnalysisResult analyzeExpressions(
             // should not reach here
             throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
         }
-        //analyzer.updateWindowSourceColumns();
-        //analyzer.updateWindowSourceColumns(final_project_columns);
     }
 
     // Append final project results if needed.
@@ -844,16 +842,17 @@ void DAGQueryBlockInterpreter::executeWindow(
 
     if (pipeline.streams.size() == 1)
     {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
+        //        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
         BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
-        if (stream_with_non_joined_data)
-            inputs.push_back(stream_with_non_joined_data);
+        //        if (!pipeline.streams.empty())
+        //            inputs.push_back(pipeline.firstStream());
+        //        else
+        //            pipeline.streams.resize(1);
+        //        if (stream_with_non_joined_data)
+        //            inputs.push_back(stream_with_non_joined_data);
 
-        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs, taskLogger()), window_description);
+        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description);
+        //        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs, taskLogger()), window_description);
         recordProfileStreams(pipeline, window_description.window_name);
     }
     else

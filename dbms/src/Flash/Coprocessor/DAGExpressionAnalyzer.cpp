@@ -21,6 +21,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include <google/protobuf/util/json_util.h>
 
 namespace DB
 {
@@ -368,6 +369,12 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     ExpressionActionsChain & chain,
     const tipb::Window & window)
 {
+#ifdef DEBUG
+    std::string s;
+    google::protobuf::util::MessageToJsonString(window, &s);
+    std::cout << "window_json : " << s << std::endl;
+#endif
+
     WindowDescription window_description;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -601,6 +608,11 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
     {
         throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
+
+    std::string s;
+    google::protobuf::util::MessageToJsonString(window_sort, &s);
+    std::cout << "order_json : " << s << std::endl;
+
     std::vector<NameAndTypePair> order_columns;
     order_columns.reserve(window_sort.byitems_size());
 
