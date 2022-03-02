@@ -47,7 +47,7 @@ FlashService::FlashService(IServer & server_)
 }
 
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-static grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
+grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();

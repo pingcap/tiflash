@@ -412,8 +412,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    //{tipb::ScalarFuncSig::RegexpSig, "cast"},
-    //{tipb::ScalarFuncSig::RegexpUTF8Sig, "cast"},
+    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
