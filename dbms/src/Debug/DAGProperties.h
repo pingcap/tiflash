@@ -1,11 +1,12 @@
 #pragma once
 
+#include <Core/Defines.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
 {
 struct DAGProperties
-    {
+{
     String encode_type;
     Int64 tz_offset = 0;
     String tz_name;
@@ -15,5 +16,5 @@ struct DAGProperties
     Int32 mpp_partition_num = 1;
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
     Int32 mpp_timeout = 10;
-    };
-}
+};
+} // namespace DB
