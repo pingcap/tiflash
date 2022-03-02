@@ -79,12 +79,12 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(ASTPtr select_list)
     return *this;
 }
 
-TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::join(const TiPBDAGRequestBuilder & right, ASTPtr on_expr)
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::join(const TiPBDAGRequestBuilder & right, ASTPtr using_expr_list)
 {
     assert(root);
     assert(right.root);
     auto join_ast = std::make_shared<ASTTableJoin>();
-    join_ast->using_expression_list = on_expr;
+    join_ast->using_expression_list = using_expr_list;
     join_ast->strictness = ASTTableJoin::Strictness::All;
     root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
     return *this;
