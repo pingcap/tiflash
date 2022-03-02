@@ -2242,7 +2242,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.data()->getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        if (const auto version = concrete_snap->version(); version != nullptr)
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
         {
             stat.storage_stable_num_pages = version->numPages();
             stat.storage_stable_num_normal_pages = version->numNormalPages();
@@ -2260,7 +2260,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.log()->getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        if (const auto version = concrete_snap->version(); version != nullptr)
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
         {
             stat.storage_delta_num_pages = version->numPages();
             stat.storage_delta_num_normal_pages = version->numNormalPages();
@@ -2278,7 +2278,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.meta()->getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        if (const auto version = concrete_snap->version(); version != nullptr)
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
         {
             stat.storage_meta_num_pages = version->numPages();
             stat.storage_meta_num_normal_pages = version->numNormalPages();
