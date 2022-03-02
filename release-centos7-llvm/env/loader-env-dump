@@ -1,0 +1,4 @@
+#!/bin/bash
+WORKSPACE="$( cd "$( dirname "$0" )" && pwd )"
+
+"${WORKSPACE}/loader" dump

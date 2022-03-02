@@ -40,12 +40,14 @@ protected:
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        page_id_generator = std::make_unique<PageIdGenerator>();
         storage_pool->restore();
+        page_id_generator->restore(*storage_pool);
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         setColumns(cols);
 
-        auto segment_id = storage_pool->newMetaPageId();
+        auto segment_id = page_id_generator->newMetaPageId();
         return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
     }
 
@@ -57,6 +59,7 @@ protected:
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *path_pool,
                                                   *storage_pool,
+                                                  *page_id_generator,
                                                   0,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
@@ -73,6 +76,7 @@ private:
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
+    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context

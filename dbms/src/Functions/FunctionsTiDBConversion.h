@@ -816,31 +816,37 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, PrecType prec, ScaleType scale, const Context & context)
     {
+        // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
+        // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
+        static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
-        auto max_value = DecimalMaxValue::get(prec);
-        if (value > max_value || value < -max_value)
+        UType scale_mul = getScaleMultiplier<U>(scale);
+
+        Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
+        Int256 scaled_max_value = DecimalMaxValue::get(prec);
+
+        if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
+            if (int_value > 0)
+                return static_cast<UType>(scaled_max_value);
             else
-                return static_cast<UType>(-max_value);
+                return static_cast<UType>(-scaled_max_value);
         }
-        UType scale_mul = getScaleMultiplier<U>(scale);
-        U result = static_cast<UType>(value) * scale_mul;
-        return result;
+
+        return static_cast<UType>(scaled_value);
     }
 
     template <typename U>
     static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
+            + date_time.hour * 10000ULL + date_time.minute * 100 + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
+            Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
             return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
         }
@@ -934,9 +940,9 @@ struct TiDBConvertToDecimal
             if (need_to_round)
             {
                 if (value < 0)
-                    value--;
+                    --value;
                 else
-                    value++;
+                    ++value;
             }
         }
 
@@ -1211,6 +1217,7 @@ struct TiDBConvertToDecimal
 template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToTime
 {
+public:
     static_assert(std::is_same_v<ToDataType, DataTypeMyDate> || std::is_same_v<ToDataType, DataTypeMyDateTime>);
 
     using FromFieldType = typename FromDataType::FieldType;
@@ -1246,7 +1253,6 @@ struct TiDBConvertToTime
             col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
-
         if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             // cast string as time
@@ -1256,7 +1262,7 @@ struct TiDBConvertToTime
             const ColumnString::Offsets * offsets = &col_from->getOffsets();
 
             size_t current_offset = 0;
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 size_t next_offset = (*offsets)[i];
                 size_t string_size = next_offset - current_offset - 1;
@@ -1281,7 +1287,8 @@ struct TiDBConvertToTime
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, string_value);
                 }
                 current_offset = next_offset;
             }
@@ -1292,7 +1299,7 @@ struct TiDBConvertToTime
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(vec_from[i]);
 
@@ -1341,7 +1348,7 @@ struct TiDBConvertToTime
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 try
                 {
@@ -1362,9 +1369,8 @@ struct TiDBConvertToTime
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime(
-                        "Invalid time value: '" + toString(vec_from[i]) + "'",
-                        Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, vec_from[i]);
                 }
             }
         }
@@ -1378,7 +1384,7 @@ struct TiDBConvertToTime
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 Float64 value = vec_from[i];
                 // Convert to string and then parse to time
@@ -1387,6 +1393,7 @@ struct TiDBConvertToTime
                 if (value_str == "0")
                 {
                     (*vec_null_map_to)[i] = 1;
+                    vec_to[i] = 0;
                 }
                 else
                 {
@@ -1409,7 +1416,15 @@ struct TiDBConvertToTime
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
-                        context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
+                        vec_to[i] = 0;
+                        handleInvalidTime(context, value_str);
+                    }
+                    catch (const std::exception &)
+                    {
+                        // Fill NULL if cannot parse
+                        (*vec_null_map_to)[i] = 1;
+                        vec_to[i] = 0;
+                        handleInvalidTime(context, value_str);
                     }
                 }
             }
@@ -1440,14 +1455,15 @@ struct TiDBConvertToTime
                 catch (const Exception &)
                 {
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, value_str);
                 }
             }
         }
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -1455,6 +1471,13 @@ struct TiDBConvertToTime
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         else
             block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <typename T>
+    static void handleInvalidTime(const Context & context, const T & value)
+    {
+        context.getDAGContext()->handleInvalidTime(fmt::format("Invalid time value: '{}'", value), Errors::Types::WrongValue);
     }
 };
 

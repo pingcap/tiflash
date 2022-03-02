@@ -4,10 +4,13 @@
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include <grpcpp/server_context.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
-#include <grpcpp/server_context.h>
 
 namespace DB
 {

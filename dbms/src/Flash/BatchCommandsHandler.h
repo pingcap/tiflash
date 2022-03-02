@@ -3,9 +3,12 @@
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
-#include <grpcpp/server_context.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include <grpcpp/server_context.h>
 #include <kvproto/tikvpb.pb.h>
 #pragma GCC diagnostic pop
 

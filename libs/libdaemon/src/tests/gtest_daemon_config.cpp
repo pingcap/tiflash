@@ -200,6 +200,8 @@ size = "1"
 }
 CATCH
 
+extern "C" char ** environ;
+
 #if USE_UNWIND
 TEST(BaseDaemon, StackUnwind)
 {
@@ -237,17 +239,35 @@ level = "debug"
     auto stderr_name = fmt::format("/tmp/{}-{}.stderr", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
     auto stdout_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
     auto stderr_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+    char arg[] = "--gtest_filter=BaseDaemon.StackUnwind";
+    char * const argv[] = {abs_path, arg, nullptr};
+    std::vector<char *> envs;
+    std::string profile = "LLVM_PROFILE_FILE=default.profraw";
+    std::string child_flag = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
+    for (auto * i = environ; *i != nullptr; i++)
+    {
+        if (strstr(*i, "LLVM_PROFILE_FILE") != nullptr)
+        {
+            std::string file_path = *i;
+            auto last = file_path.rfind('/');
+            auto realpath = file_path.substr(0, last);
+            profile = fmt::format("{}/daemon-child.profraw", realpath);
+            std::cout << "LLVM profile: " << profile << std::endl;
+        }
+        else
+        {
+            envs.push_back(*i);
+        }
+    }
+    envs.push_back(child_flag.data());
+    envs.push_back(profile.data());
+    envs.push_back(nullptr);
     auto pid = ::fork();
     if (pid == 0)
     {
         ::dup2(stdout_fd, STDOUT_FILENO);
         ::dup2(stderr_fd, STDERR_FILENO);
-        char arg[] = "--gtest_filter=BaseDaemon.StackUnwind";
-        char * const argv[] = {abs_path, arg, nullptr};
-        char env0[] = "TIFLASH_DAEMON_TEST_UNWIND_CHILD=1";
-        auto env1 = std::getenv("LLVM_PROFILE_FILE");
-        char * const envp[] = {env0, env1, nullptr};
-        ::execve(abs_path, argv, envp);
+        ::execve(abs_path, argv, envs.data());
     }
     else
     {

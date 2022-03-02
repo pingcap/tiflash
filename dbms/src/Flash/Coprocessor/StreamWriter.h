@@ -1,10 +1,16 @@
 #pragma once
 
 #include <Common/Exception.h>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <grpcpp/impl/codegen/sync_stream.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <mutex>
 
 namespace mpp

@@ -6,6 +6,8 @@ set_branch
 
 set -xe
 
+check_env
+
 # run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
@@ -26,4 +28,15 @@ wait_env
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/new_collation_fullstack'
 
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
+clean_data_log
+
+# run disable_new_collation_fullstack tests
+docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
+clean_data_log
+
+docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml up -d
+wait_env
+docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_new_collation_fullstack'
+
+docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log

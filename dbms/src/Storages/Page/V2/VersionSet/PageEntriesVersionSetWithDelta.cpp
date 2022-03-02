@@ -325,15 +325,19 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     if (num_invalid_snapshot_to_clean > 0)
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
-        std::stringstream ss;
-        ss << name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
-           << " snapshots left, longest lifetime " << DB::toString(longest_living_seconds, 3) << " seconds, created from thread_id "
-           << longest_living_from_thread_id;
-        constexpr double EXIST_STALE_SNAPSHOT = 60.0;
-        if (longest_living_seconds > EXIST_STALE_SNAPSHOT)
-            LOG_WARNING(log, ss.str());
+#define STALE_SNAPSHOT_LOG_PARAMS                                                    \
+    "{} gcApply remove {} invalid snapshots, "                                       \
+    "{} snapshots left, longest lifetime {:.3f} seconds, created from thread_id {}", \
+        name,                                                                        \
+        num_invalid_snapshot_to_clean,                                               \
+        valid_snapshots.size(),                                                      \
+        longest_living_seconds,                                                      \
+        longest_living_from_thread_id
+        constexpr const double exist_stale_snapshot = 60.0;
+        if (longest_living_seconds > exist_stale_snapshot)
+            LOG_FMT_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
-            LOG_DEBUG(log, ss.str());
+            LOG_FMT_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
@@ -354,7 +358,7 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
     const PageEntriesView & view,
     std::set<PageFileIdAndLevel> & live_files,
     std::set<PageId> & live_normal_pages,
-    bool need_scan_page_ids) const
+    bool need_scan_page_ids)
 {
     std::set<PageId> normal_pages_this_snapshot = view.validNormalPageIds();
     for (auto normal_page_id : normal_pages_this_snapshot)
@@ -400,6 +404,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::PUT:
             this->applyPut(rec);
             break;
@@ -531,6 +536,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
     {
         switch (rec.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
         case WriteBatch::WriteType::PUT:
             current->put(rec.page_id, rec.entry);
             break;

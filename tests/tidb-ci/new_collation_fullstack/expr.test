@@ -61,4 +61,3 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------------+------------+-------------+-------------+
 | abc        | def        | abc         | def         |
 +------------+------------+-------------+-------------+
-

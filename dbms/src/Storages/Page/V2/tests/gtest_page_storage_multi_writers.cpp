@@ -229,7 +229,7 @@ public:
                     ++pages_read;
                     bytes_read += page.data.size();
                 };
-                storage->read(pageIds, handler, nullptr);
+                storage->read(pageIds, handler);
             }
             catch (DB::Exception & e)
             {

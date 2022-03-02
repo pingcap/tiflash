@@ -83,7 +83,7 @@ public:
 
     PageId getMaxId() override;
 
-    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) override;
+    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot() override;
 
@@ -93,25 +93,23 @@ public:
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 
-    void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) override;
+    void write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
-    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) override;
+    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
-    void traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot) override;
+    bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
-    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override;
-
-    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
@@ -179,10 +177,21 @@ public:
         std::map<PageFileIdAndLevel, PersistState> states;
     };
 
+#ifndef NDEBUG
+    // Just for tests, refactor them out later
+    void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
+    DB::PageEntry getEntry(PageId page_id) { return getEntry(page_id, nullptr); }
+    DB::Page read(PageId page_id) { return read(page_id, nullptr, nullptr); }
+    PageMap read(const std::vector<PageId> & page_ids) { return read(page_ids, nullptr, nullptr); }
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return read(page_ids, handler, nullptr, nullptr); }
+    PageMap read(const std::vector<PageReadFields> & page_fields) { return read(page_fields, nullptr, nullptr); }
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverse(acceptor, nullptr); }
+    bool gc() { return gc(false, nullptr, nullptr); }
+#endif
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-
     WriterPtr checkAndRenewWriter(PageFile & page_file,
                                   const String & parent_path_hint,
                                   WriterPtr && old_writer = nullptr,
@@ -234,14 +243,14 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPagesScanner external_pages_scanner = nullptr;
-    ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::V2ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPageCallbacks::V2ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
 
 private:
     WriterPtr checkAndRenewWriter(
-        WritingPageFile & page_file,
+        WritingPageFile & writing_file,
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
         const String & logging_msg = "");

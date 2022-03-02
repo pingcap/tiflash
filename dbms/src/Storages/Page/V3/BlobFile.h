@@ -15,8 +15,7 @@ class BlobFile
 {
 public:
     BlobFile(String path_,
-             FileProviderPtr file_provider_,
-             bool truncate_if_exists = true);
+             FileProviderPtr file_provider_);
 
     ~BlobFile();
 
@@ -37,6 +36,8 @@ public:
     void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter);
 
     void truncate(size_t size);
+
+    void remove();
 
 private:
     FileProviderPtr file_provider;

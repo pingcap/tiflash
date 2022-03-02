@@ -92,6 +92,7 @@ public:
          const String & other_eq_filter_from_in_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
+         const String & match_helper_name = "",
          const LogWithPrefixPtr & log_ = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
@@ -238,6 +239,12 @@ public:
     using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
     using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
     using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
+
+    static const String match_helper_prefix;
+    static const DataTypePtr match_helper_type;
+
+    // only use for left semi joins.
+    const String match_helper_name;
 
 private:
     friend class NonJoinedBlockInputStream;

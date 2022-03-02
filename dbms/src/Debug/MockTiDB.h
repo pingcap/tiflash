@@ -59,6 +59,8 @@ public:
         const String & handle_pk_name,
         const String & engine_type);
 
+    TableID addTable(const String & database_name, TiDB::TableInfo && table_info);
+
     static TiDB::TableInfoPtr parseColumns(
         const String & tbl_name,
         const ColumnsDescription & columns,
@@ -100,6 +102,8 @@ public:
     TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
 
     TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
+
+    std::pair<bool, DatabaseID> getDBIDByName(const String & database_name);
 
     SchemaDiff getSchemaDiff(Int64 version);
 

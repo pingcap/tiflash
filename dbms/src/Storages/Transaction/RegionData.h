@@ -59,10 +59,6 @@ public:
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
 
-public:
-    static UInt8 getWriteType(const ConstWriteCFIter & write_it);
-    static const RegionDefaultCFDataTrait::Map & getDefaultCFMap(RegionWriteCFData * write);
-
 private:
     friend class Region;
 

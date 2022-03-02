@@ -122,11 +122,11 @@ public:
 
     void serialize(WriteBatch & wb);
 
-    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
+    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 

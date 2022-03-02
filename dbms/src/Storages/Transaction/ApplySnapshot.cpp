@@ -50,20 +50,22 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         old_applied_index = old_region->appliedIndex();
         if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " already has newer index "
-                                + std::to_string(old_applied_index) + ", should not happen",
-                            ErrorCodes::LOGICAL_ERROR);
+            auto s = fmt::format("[region {}] already has newer apply-index {} than {}, should not happen",
+                                 region_id,
+                                 old_applied_index,
+                                 new_index);
+            throw Exception(s, ErrorCodes::LOGICAL_ERROR);
         }
         else if (old_applied_index == new_index)
         {
-            LOG_WARNING(log,
-                        old_region->toString(false) << " already has same applied index, just ignore next process. "
-                                                    << "Please check log whether server crashed after successfully applied snapshot.");
+            LOG_FMT_WARNING(log,
+                            "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
+                            old_region->getDebugString());
             return;
         }
 
         {
-            LOG_INFO(log, old_region->toString() << " set state to Applying");
+            LOG_FMT_INFO(log, "{} set state to `Applying`", old_region->toString());
             // Set original region state to `Applying` and any read request toward this region should be rejected because
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
@@ -76,17 +78,29 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 
     {
         const auto & new_range = new_region->getRange();
-        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
-            for (const auto & region : region_map)
+        auto task_lock = genTaskLock();
+        auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
+        for (const auto & overlapped_region : region_map)
+        {
+            if (overlapped_region.first != region_id)
             {
-                if (region.first != region_id)
+                auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
+                if (state.state() != raft_serverpb::PeerState::Tombstone)
                 {
-                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": range of region " + std::to_string(region_id)
-                                        + " is overlapped with region " + std::to_string(region.first) + ", should not happen",
+                    throw Exception(fmt::format(
+                                        "range of region {} is overlapped with {}, state: {}",
+                                        region_id,
+                                        overlapped_region.first,
+                                        state.ShortDebugString()),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
+                else
+                {
+                    LOG_FMT_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    handleDestroy(overlapped_region.first, tmt, task_lock);
+                }
             }
-        });
+        }
     }
 
     {
@@ -182,26 +196,37 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
-            throw Exception(
-                std::string(__PRETTY_FUNCTION__) + ": region " + DB::toString(region_id) + " instance changed, should not happen",
-                ErrorCodes::LOGICAL_ERROR);
+            auto s = fmt::format("{}: [region {}] instance changed, should not happen", __PRETTY_FUNCTION__, region_id);
+            throw Exception(s, ErrorCodes::LOGICAL_ERROR);
         }
 
         if (old_region != nullptr)
         {
-            LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            region_range_index.remove(old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id);
+            LOG_FMT_DEBUG(log, "{}: previous {}, new {}", __FUNCTION__, old_region->getDebugString(), new_region->getDebugString());
+            {
+                // remove index first
+                const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
+                {
+                    auto manage_lock = genRegionWriteLock(task_lock);
+                    manage_lock.index.remove(range, region_id);
+                }
+            }
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
+            {
+                // add index
+                auto manage_lock = genRegionWriteLock(task_lock);
+                manage_lock.index.add(new_region);
+            }
         }
         else
         {
-            auto manage_lock = genRegionManageLock();
-            regionsMut().emplace(region_id, new_region);
+            auto manage_lock = genRegionWriteLock(task_lock);
+            manage_lock.regions.emplace(region_id, new_region);
+            manage_lock.index.add(new_region);
         }
 
         persistRegion(*new_region, region_lock, "save current region after apply");
-        region_range_index.add(new_region);
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -233,7 +258,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
-        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
+        LOG_FMT_INFO(log, "Pre-handle snapshot {} with {} TiKV sst files", new_region->toString(false), snaps.len);
         // Iterator over all SST files and insert key-values into `new_region`
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
@@ -250,23 +275,29 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
                 sst_reader.next();
             }
 
-            LOG_INFO(log,
-                     "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
-                               << ", kv size: " << kv_size << "]");
+            LOG_FMT_INFO(log,
+                         "Decode {} got [cf: {}, kv size: {}]",
+                         std::string_view(snapshot.path.data, snapshot.path.len),
+                         CFToName(snapshot.type),
+                         kv_size);
             // Note that number of keys in different cf will be aggregated into one metrics
             GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
         {
-            LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
+            LOG_FMT_INFO(log, "Start to pre-decode {} into block", new_region->toString());
             auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
             if (block_cache)
-                LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
+            {
+                std::stringstream ss;
+                block_cache->toString(ss);
+                LOG_FMT_INFO(log, "Got pre-decode block cache {}", ss.str());
+            }
             else
-                LOG_INFO(log, "Got empty pre-decode block cache");
+                LOG_FMT_INFO(log, "Got empty pre-decode block cache");
 
             cache = std::move(block_cache);
         }
-        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " cost " << watch.elapsedMilliseconds() << "ms");
+        LOG_FMT_INFO(log, "Pre-handle snapshot {} cost {}ms", new_region->toString(false), watch.elapsedMilliseconds());
     }
 
     return cache;
@@ -402,7 +433,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 template <typename RegionPtrWrap>
 void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
+    LOG_FMT_INFO(log, "Try to apply snapshot {}", new_region->toString(true));
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
@@ -411,7 +442,7 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
+    LOG_FMT_INFO(log, "{} apply snapshot success", new_region->toString(false));
 }
 
 template void KVStore::handlePreApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
@@ -432,7 +463,9 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
         }
     }
 
-    throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+    throw Exception(
+        fmt::format("{}: [peer {}] not found in [region {}]", __PRETTY_FUNCTION__, peer_id, region.id()),
+        ErrorCodes::LOGICAL_ERROR);
 }
 
 RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
@@ -539,7 +572,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
 
     if (region->dataSize())
     {
-        LOG_INFO(log, __FUNCTION__ << ": " << region->toString(true) << " with data " << region->dataInfo() << " skip persist");
+        LOG_FMT_INFO(log, "{} with data {}, skip persist", region->toString(true), region->dataInfo());
         return EngineStoreApplyRes::None;
     }
     else

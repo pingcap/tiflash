@@ -241,7 +241,7 @@ public:
         SegmentPtr segment;
         SegmentPtr next_segment;
 
-        explicit operator bool() { return (bool)segment; }
+        explicit operator bool() const { return segment != nullptr; }
     };
 
     class MergeDeltaTaskPool
@@ -267,7 +267,7 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, Poco::Logger * log_);
 
         BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
@@ -275,7 +275,7 @@ public:
     DeltaMergeStore(Context & db_context, //
                     bool data_path_contains_database_name,
                     const String & db_name,
-                    const String & tbl_name,
+                    const String & table_name_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -303,7 +303,7 @@ public:
 
     std::tuple<String, PageId> preAllocateIngestFile();
 
-    void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
+    void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
@@ -323,7 +323,7 @@ public:
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
                               const DB::Settings & db_settings,
-                              const ColumnDefines & column_defines,
+                              const ColumnDefines & columns_to_read,
                               size_t num_streams,
                               const SegmentIdSet & read_segments = {});
 
@@ -359,11 +359,11 @@ public:
 
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //
-                     const OptionTableInfoConstRef table_info,
+                     OptionTableInfoConstRef table_info,
                      ColumnID & max_column_id_used,
                      const Context & context);
 
-    const ColumnDefinesPtr getStoreColumns() const
+    ColumnDefinesPtr getStoreColumns() const
     {
         std::shared_lock lock(read_write_mutex);
         return store_columns;
@@ -405,7 +405,7 @@ private:
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
-        const TaskRunThread thread,
+        TaskRunThread thread,
         SegmentSnapshotPtr segment_snap = nullptr);
 
     bool updateGCSafePoint();
@@ -432,6 +432,7 @@ private:
     StoragePathPool path_pool;
     Settings settings;
     StoragePool storage_pool;
+    PageIdGenerator page_id_generator;
 
     String db_name;
     String table_name;

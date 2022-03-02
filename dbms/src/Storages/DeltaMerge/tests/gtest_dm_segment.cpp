@@ -61,11 +61,13 @@ protected:
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
+        page_id_generator = std::make_unique<PageIdGenerator>();
         storage_pool->restore();
+        page_id_generator->restore(*storage_pool);
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), page_id_generator->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -76,6 +78,7 @@ protected:
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *storage_path_pool,
                                                   *storage_pool,
+                                                  *page_id_generator,
                                                   0,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
@@ -92,6 +95,7 @@ protected:
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
+    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
@@ -1232,7 +1236,7 @@ public:
     std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
-        auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto file_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
@@ -1278,12 +1282,12 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto pack = std::make_shared<DeltaPackFile>(dmContext(), file, range);
+                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestPacks(dmContext(), range, {pack}, false);
+                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
                 break;
             }
             default:

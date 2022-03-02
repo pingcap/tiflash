@@ -80,7 +80,6 @@
 # auto_tune_sec = 5
 
 [flash]
-# tidb_status_addr = "tidb0:10080"
 # service_addr = "0.0.0.0:3930"
 # compact_log_min_period = 120
 # overlap_threshold = 0.6
@@ -90,11 +89,11 @@
 # batch_read_index_timeout_ms = 10000
 # wait_index_timeout_ms = 300000
 # wait_region_ready_timeout_sec = 1200
-[flash.flash_cluster]
-# update_rule_interval = 10
-# master_ttl = 60
-# cluster_manager_path = "./flash_cluster_manager"
-# log = "[tmp_path]/flash_cluster_manager.log"
+## The number of context to run read-index worker. Set 0 to disable async read-index worker.
+# read_index_runner_count = 1
+## The minimum duration to handle read-index tasks in each worker.
+# read_index_worker_tick_ms = 10
+
 [flash.proxy]
 # addr = "0.0.0.0:20170"
 # advertise-addr = "tiflash0:20170"

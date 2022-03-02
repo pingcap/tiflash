@@ -164,25 +164,25 @@ try
         PageStorage ps("data_compact_test", delegate, config, file_provider);
         ps.restore();
         // Page 1, 2 have been migrated to PageFile_2_1
-        PageEntry entry = ps.getEntry(1);
+        PageEntry entry = ps.getEntry(1, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
-        entry = ps.getEntry(2);
+        entry = ps.getEntry(2, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
         // Page 5 -ref-> 2
-        auto entry5 = ps.getEntry(5);
+        auto entry5 = ps.getEntry(5, nullptr);
         EXPECT_EQ(entry5, entry);
 
         // Page 3, 4 are deleted
-        entry = ps.getEntry(3);
+        entry = ps.getEntry(3, nullptr);
         ASSERT_FALSE(entry.isValid());
 
-        entry = ps.getEntry(4);
+        entry = ps.getEntry(4, nullptr);
         ASSERT_FALSE(entry.isValid());
 
         // Page 6 have been migrated to PageFile_2_1
-        entry = ps.getEntry(6);
+        entry = ps.getEntry(6, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
     }
 }

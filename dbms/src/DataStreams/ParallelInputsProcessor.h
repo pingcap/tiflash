@@ -153,6 +153,11 @@ public:
         return active_threads;
     }
 
+    unsigned int getMaxThreads() const
+    {
+        return max_threads;
+    }
+
 private:
     /// Single source data
     struct InputData

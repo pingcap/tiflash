@@ -1,6 +1,6 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -62,7 +62,9 @@ struct MockReceiverContext
             return "{Request}";
         }
 
+        int source_index = 0;
         int send_task_id = 0;
+        int recv_task_id = -1;
     };
 
     struct Reader
@@ -95,22 +97,31 @@ struct MockReceiverContext
         PacketQueuePtr queue;
     };
 
-    explicit MockReceiverContext(const std::vector<PacketQueuePtr> & queues_)
+    MockReceiverContext(
+        const std::vector<PacketQueuePtr> & queues_,
+        const std::vector<tipb::FieldType> & field_types_)
         : queues(queues_)
+        , field_types(field_types_)
     {
     }
 
-    Request makeRequest(
-        int index [[maybe_unused]],
-        const tipb::ExchangeReceiver & pb_exchange_receiver [[maybe_unused]],
-        const ::mpp::TaskMeta & task_meta [[maybe_unused]]) const
+    void fillSchema(DAGSchema & schema) const
     {
-        return {index};
+        schema.clear();
+        for (size_t i = 0; i < field_types.size(); ++i)
+        {
+            String name = "exchange_receiver_" + std::to_string(i);
+            ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
+            schema.emplace_back(std::move(name), std::move(info));
+        }
     }
 
-    std::shared_ptr<Reader> makeReader(
-        const Request & request,
-        const String & target_addr [[maybe_unused]])
+    Request makeRequest(int index) const
+    {
+        return {index, index, -1};
+    }
+
+    std::shared_ptr<Reader> makeReader(const Request & request)
     {
         return std::make_shared<Reader>(queues[request.send_task_id]);
     }
@@ -121,6 +132,7 @@ struct MockReceiverContext
     }
 
     std::vector<PacketQueuePtr> queues;
+    std::vector<tipb::FieldType> field_types;
 };
 
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
@@ -404,9 +416,8 @@ struct ReceiverHelper
     MockExchangeReceiverPtr buildReceiver()
     {
         return std::make_shared<MockExchangeReceiver>(
-            std::make_shared<MockReceiverContext>(queues),
-            pb_exchange_receiver,
-            task_meta,
+            std::make_shared<MockReceiverContext>(queues, fields),
+            source_num,
             source_num * 5,
             nullptr);
     }
@@ -495,7 +506,6 @@ struct SenderHelper
                 task_meta,
                 task_meta,
                 std::chrono::seconds(60),
-                [] { return false; },
                 concurrency,
                 false);
             tunnel->connect(writer.get());
@@ -533,7 +543,7 @@ struct SenderHelper
                     -1,
                     true,
                     *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer)));
         }
 
         return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);

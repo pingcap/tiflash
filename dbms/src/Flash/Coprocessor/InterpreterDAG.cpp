@@ -3,10 +3,7 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <pingcap/coprocessor/Client.h>
 
 namespace DB
 {
@@ -42,38 +39,15 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         query_block,
         max_streams,
         dagContext().keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        subqueries_for_sets,
-        mpp_exchange_receiver_maps);
+        subqueries_for_sets);
     return query_block_interpreter.execute();
-}
-
-void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
-{
-    for (const auto & child_qb : dag_query_block.children)
-    {
-        initMPPExchangeReceiver(*child_qb);
-    }
-    if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
-    {
-        mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(
-                dag_query_block.source->exchange_receiver(),
-                dagContext().getMPPTaskMeta(),
-                context.getTMTContext().getKVCluster(),
-                context.getTMTContext().getMPPTaskManager(),
-                context.getSettingsRef().enable_local_tunnel),
-            dag_query_block.source->exchange_receiver().encoded_task_meta_size(),
-            max_streams,
-            dagContext().log);
-    }
 }
 
 BlockIO InterpreterDAG::execute()
 {
-    if (dagContext().isMPPTask())
-        /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
-        /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-        initMPPExchangeReceiver(*dag.getRootQueryBlock());
+    /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
+    /// the query plan, so we init mpp exchange receiver before executeQueryBlock
+    dagContext().initExchangeReceiverIfMPP(context, max_streams);
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
