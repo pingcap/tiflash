@@ -53,15 +53,8 @@ public:
         EncryptionPath enc{filename, ""};
         Format::LogNumberType log_num = 1;
         auto log_writer = std::make_unique<LogWriter>(
-            WriteBufferByFileProviderBuilder(
-                /*has_checksum=*/false,
-                provider,
-                filename,
-                enc,
-                true,
-                nullptr)
-                .with_buffer_size(Format::BLOCK_SIZE)
-                .build(),
+            filename,
+            provider,
             log_num,
             /*recycle*/ false,
             /*manual_flush*/ true);
