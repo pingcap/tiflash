@@ -83,6 +83,9 @@ struct MyTimeBase
 
     // returns the week day of current date(0 as sunday)
     int weekDay() const;
+    // returns the week day name of current date, return empty string if invalid
+    const String & weekDayName() const;
+    const String & monthName() const;
     // the following methods are port from TiDB
     int yearDay() const;
 
@@ -176,7 +179,6 @@ int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
-/// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
 inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
 {
     return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
