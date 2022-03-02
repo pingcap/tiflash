@@ -218,14 +218,14 @@ public:
 
     std::set<PageId> getAllPageIds();
 
-    void apply(PageEntriesEdit && edit);
+    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
-    std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids);
+    std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter = nullptr);
 
-    std::vector<PageEntriesV3> gc();
+    std::vector<PageEntriesV3> gc(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
     size_t numPages() const
     {

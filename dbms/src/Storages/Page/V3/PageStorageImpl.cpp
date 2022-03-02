@@ -35,7 +35,7 @@ void PageStorageImpl::restore()
         collapsing_directory.apply(std::move(edit));
     };
     // Restore `collapsing_directory` from disk
-    auto wal = WALStore::create(callback, file_provider, delegator, /*write_limiter*/ nullptr);
+    auto wal = WALStore::create(callback, file_provider, delegator);
     // PageId max_page_id = collapsing_directory.max_applied_page_id; // TODO: return it to outer function
 
     // TODO: Now `PageDirectory::create` and `BlobStore::restore` iterate all entries in `collapsing_directory`,
@@ -78,7 +78,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
 
     // Persist Page data to BlobStore
     auto edit = blob_store.write(write_batch, write_limiter);
-    page_directory.apply(std::move(edit));
+    page_directory.apply(std::move(edit), write_limiter);
 }
 
 DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
@@ -178,7 +178,7 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     }
 }
 
-bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limiter*/, const ReadLimiterPtr & /*read_limiter*/)
+bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -192,7 +192,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    const auto & del_entries = page_directory.gc();
+    const auto & del_entries = page_directory.gc(write_limiter, read_limiter);
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -224,7 +224,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
-    PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size);
+    PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
     if (gc_edit.empty())
     {
         throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
@@ -237,7 +237,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & /*write_limi
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr);
+    const auto & page_ids = page_directory.gcApply(std::move(gc_edit), external_pages_remover != nullptr, write_limiter);
 
     (void)page_ids;
 
