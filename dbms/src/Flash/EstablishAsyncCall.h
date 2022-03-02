@@ -47,7 +47,6 @@ public:
     }
 
     std::mutex mu;
-    std::condition_variable cv;
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 

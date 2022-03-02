@@ -91,7 +91,6 @@ void EstablishCallData::notifyReady()
 {
     std::unique_lock lk(mu);
     ready = true;
-    cv.notify_one();
 }
 
 void EstablishCallData::Proceed()
