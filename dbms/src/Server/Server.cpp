@@ -490,13 +490,10 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void HandleRpcs(grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, bool poll_which_cq)
+void HandleRpcs(grpc::ServerCompletionQueue * curcq)
 {
     void * tag; // uniquely identifies a request.
     bool ok;
-    grpc::ServerCompletionQueue * curcq = cq;
-    if (poll_which_cq)
-        curcq = notify_cq;
     while (true)
     {
         // Block waiting to read the next event from the completion queue. The
@@ -580,8 +577,8 @@ public:
             {
                 for (int j = 0; j < buf_size; j++)
                     new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get());
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get(), false); });
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get(), true); });
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get()); });
+                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(notify_cqs[i / pollers_per_cq].get()); });
             }
         }
     }
