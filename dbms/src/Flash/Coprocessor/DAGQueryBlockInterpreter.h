@@ -43,11 +43,8 @@ public:
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
-    FlashService.cpp
 #endif
-
-        void
-        executeImpl(DAGPipeline & pipeline);
+    void executeImpl(DAGPipeline & pipeline);
     void handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeCastAfterTableScan(const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
