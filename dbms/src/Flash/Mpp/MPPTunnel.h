@@ -129,7 +129,6 @@ private:
     bool is_local; // if the tunnel is used for local environment
 
     Writer * writer;
-    EstablishCallData * call_data;
 
     std::chrono::seconds timeout;
 
