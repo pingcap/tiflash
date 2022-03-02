@@ -156,10 +156,9 @@ void MinTSOScheduler::scheduleImp(UInt64 tso, MPPTaskPtr task, MPPQueryTaskSetPt
 {
     active_set.insert(tso);
     task->scheduleThisTask();
-    query_task_set->used_threads += needed_threads;
     ++query_task_set->scheduled_task;
+    query_task_set->used_threads += needed_threads;
     used_threads += needed_threads;
-    query_task_set->waiting_tasks.pop();
 }
 
 } // namespace DB
