@@ -33,7 +33,7 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manag
         return true;
     }
 
-    if (id.start_ts <= min_tso) /// must executing
+    if (id.start_ts <= min_tso) /// must execute
     {
         if (used_threads + task->getNeededThreads() <= thread_hard_limit) /// have threads under thread_hard_limit
         {

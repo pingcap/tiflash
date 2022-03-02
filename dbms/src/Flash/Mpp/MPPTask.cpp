@@ -281,13 +281,10 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    memory_tracker = current_memory_tracker;
-    if (status.load() != INITIALIZING)
+    if (!switchStatus(INITIALIZING, RUNNING))
     {
-        /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
-        /// if the task is cancelled during preprocess, sendCancelToQuery may just be ignored because the processlist of
-        /// current task is not registered yet, so need to check the task status explicitly
-        throw Exception("task not in INITIALIZING state, may be cancelled");
+        LOG_WARNING(log, "task not in initializing state, skip running");
+        return;
     }
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
@@ -300,20 +297,13 @@ void MPPTask::runImpl()
     try
     {
         LOG_INFO(log, "task starts preprocessing");
-
         preprocess();
         needed_threads = estimateCountOfNewThreads();
         LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
 
-        if (!switchStatus(INITIALIZING, RUNNING))
-        {
-            LOG_WARNING(log, "task not in initializing state, skip running");
-            return;
-        }
-        LOG_INFO(log, "task starts running");
-
         scheduleOrWait();
 
+        LOG_INFO(log, "task starts running");
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -420,6 +410,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
         {
+            scheduleThisTask();
             closeAllTunnels(reason);
             unregisterTask();
             LOG_WARNING(log, "Finish cancel task from uninitialized");
