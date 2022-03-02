@@ -266,7 +266,11 @@ RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
 {
-    std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
+    if (kvstore->getProxyHelper())
+    {
+        ori_proxy_helper = kvstore->getProxyHelper();
+        std::memcpy(&mock_proxy_helper, ori_proxy_helper, sizeof(mock_proxy_helper));
+    }
     mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
         .fn_get_sst_reader = fn_get_sst_reader,
         .fn_remained = fn_remained,
@@ -280,8 +284,8 @@ RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
 }
 RegionMockTest::~RegionMockTest()
 {
-    kvstore->proxy_helper = nullptr;
-    region->proxy_helper = nullptr;
+    kvstore->proxy_helper = ori_proxy_helper;
+    region->proxy_helper = ori_proxy_helper;
 }
 
 void GenMockSSTData(const TiDB::TableInfo & table_info,
