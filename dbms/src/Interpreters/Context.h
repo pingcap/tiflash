@@ -212,8 +212,8 @@ public:
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
       */
-    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_acccess_rights = true) const;
-    void assertDatabaseExists(const String & database_name, bool check_database_acccess_rights = true) const;
+    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_access_rights = true) const;
+    void assertDatabaseExists(const String & database_name, bool check_database_access_rights = true) const;
 
     void assertDatabaseDoesntExist(const String & database_name) const;
     void checkDatabaseAccessRights(const std::string & database_name) const;
@@ -278,12 +278,12 @@ public:
     ASTPtr getCreateExternalTableQuery(const String & table_name) const;
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
 
-    const DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr getDatabase(const String & database_name) const;
     DatabasePtr getDatabase(const String & database_name);
-    const DatabasePtr tryGetDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name) const;
     DatabasePtr tryGetDatabase(const String & database_name);
 
-    const Databases getDatabases() const;
+    Databases getDatabases() const;
     Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
@@ -384,7 +384,7 @@ public:
         const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
-    void initializeTiFlashMetrics();
+    void initializeTiFlashMetrics() const;
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
@@ -405,9 +405,6 @@ public:
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxTableSizeToDrop(size_t max_size);
     void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
-
-    /// Lets you select the compression settings according to the conditions described in the configuration file.
-    CompressionSettings chooseCompressionSettings(size_t part_size, double part_size_ratio) const;
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
