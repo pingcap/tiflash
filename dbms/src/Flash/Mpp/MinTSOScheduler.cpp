@@ -32,40 +32,32 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manag
         LOG_FMT_WARNING(log, "{} is scheduled with miss or cancellation.", id.toString());
         return true;
     }
-
+    auto needed_threads = task->getNeededThreads();
     if (id.start_ts <= min_tso) /// must execute
     {
-        if (used_threads + task->getNeededThreads() <= thread_hard_limit) /// have threads under thread_hard_limit
+        if (used_threads + needed_threads <= thread_hard_limit) /// have threads under thread_hard_limit
         {
             min_tso = id.start_ts;
-            active_set.insert(id.start_ts);
-            task->scheduleThisTask();
-            query_task_set->used_threads += task->getNeededThreads();
-            ++query_task_set->scheduled_task;
-            used_threads += task->getNeededThreads();
-            LOG_FMT_INFO(log, "{} becomes the min_tso query and is directly scheduled (active set size = {}), after apply for {} threads, used {} of the thread hard limit {}.", id.toString(), active_set.size(), task->getNeededThreads(), used_threads, thread_hard_limit);
+            scheduleImp(id.start_ts, task, query_task_set, needed_threads);
+            LOG_FMT_INFO(log, "{} becomes the min_tso query and is directly scheduled (active set size = {}), after apply for {} threads, used {} of the thread hard limit {}.", id.toString(), active_set.size(), needed_threads, used_threads, thread_hard_limit);
         }
         else
         {
-            throw Exception(fmt::format("threads are unavailable for the min_tso query {}, need {}, but used {} of the thread hard limit {}, active set size = {}, waiting set size = {}.", id.toString(), task->getNeededThreads(), used_threads, thread_hard_limit, active_set.size(), waiting_set.size()));
+            throw Exception(fmt::format("threads are unavailable for the min_tso query {}, need {}, but used {} of the thread hard limit {}, active set size = {}, waiting set size = {}.", id.toString(), needed_threads, used_threads, thread_hard_limit, active_set.size(), waiting_set.size()));
         }
     }
     else
     {
-        if (used_threads + task->getNeededThreads() <= thread_soft_limit) /// have threads under thread_soft_limit
+        if (used_threads + needed_threads <= thread_soft_limit) /// have threads under thread_soft_limit
         {
-            active_set.insert(id.start_ts);
-            task->scheduleThisTask();
-            query_task_set->used_threads += task->getNeededThreads();
-            ++query_task_set->scheduled_task;
-            used_threads += task->getNeededThreads();
-            LOG_FMT_INFO(log, "{} is directly scheduled (active set size = {}) due to available threads, after apply for {} threads, used {} of the thread soft limit {}.", id.toString(), active_set.size(), task->getNeededThreads(), used_threads, thread_soft_limit);
+            scheduleImp(id.start_ts, task, query_task_set, needed_threads);
+            LOG_FMT_INFO(log, "{} is directly scheduled (active set size = {}) due to available threads, after apply for {} threads, used {} of the thread soft limit {}.", id.toString(), active_set.size(), needed_threads, used_threads, thread_soft_limit);
         }
         else
         {
             waiting_set.insert(id.start_ts);
             query_task_set->waiting_tasks.push(task);
-            LOG_FMT_INFO(log, "{} is put into waiting set (size={}) due to unavailable threads, apply for {} threads, but used {} of the thread soft limit {}.", id.toString(), waiting_set.size(), task->getNeededThreads(), used_threads, thread_soft_limit);
+            LOG_FMT_INFO(log, "{} is put into waiting set (size={}) due to unavailable threads, apply for {} threads, but used {} of the thread soft limit {}.", id.toString(), waiting_set.size(), needed_threads, used_threads, thread_soft_limit);
             return false;
         }
     }
@@ -141,11 +133,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
             auto needed_threads = task->getNeededThreads();
             if (used_threads + needed_threads <= thread_soft_limit || (min_tso == current_query_id && used_threads + needed_threads <= thread_hard_limit))
             {
-                ++query_task_set->scheduled_task;
-                query_task_set->used_threads += needed_threads;
-                used_threads += needed_threads;
-                active_set.insert(current_query_id);
-                task->scheduleThisTask();
+                scheduleImp(current_query_id, task, query_task_set, needed_threads);
                 query_task_set->waiting_tasks.pop();
                 LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads, after applied for {} threads, used {} of the thread soft limit {} or the hard limit {} if min_tso query {}.", task->getId().toString(), active_set.size(), needed_threads, used_threads, thread_soft_limit, thread_hard_limit, min_tso == current_query_id);
             }
@@ -162,6 +150,16 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
         LOG_FMT_INFO(log, "query {} (min_tso = {}) with {} tasks are scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
         waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
     }
+}
+
+void MinTSOScheduler::scheduleImp(UInt64 tso, MPPTaskPtr task, MPPQueryTaskSetPtr query_task_set, int needed_threads)
+{
+    active_set.insert(tso);
+    task->scheduleThisTask();
+    query_task_set->used_threads += needed_threads;
+    ++query_task_set->scheduled_task;
+    used_threads += needed_threads;
+    query_task_set->waiting_tasks.pop();
 }
 
 } // namespace DB

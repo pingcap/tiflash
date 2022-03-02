@@ -26,6 +26,9 @@ using MPPTaskSchedulerPtr = std::shared_ptr<MinTSOScheduler>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
+struct MPPQueryTaskSet;
+using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
+
 class GCManager;
 using GCManagerPtr = std::shared_ptr<GCManager>;
 

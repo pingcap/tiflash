@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -18,6 +19,7 @@ public:
     void deleteAndScheduleQueries(UInt64, MPPTaskManager &);
 
 private:
+    inline void scheduleImp(UInt64, MPPTaskPtr, MPPQueryTaskSetPtr, int);
     std::set<UInt64> waiting_set;
     std::set<UInt64> active_set;
     UInt64 min_tso;
