@@ -1,0 +1,69 @@
+mysql> drop table if exists test.t
+mysql> create table test.t (data varchar(30), data_not_null varchar(30) not null, pattern varchar(30), pattern_not_null varchar(30) not null); 
+mysql> insert into test.t values ('aaaa', 'AAAA', '^a.*', '^A.*'), ('abcd', 'abcd', null, '^a..d$'), (null, 'bbb', 'bb$', 'bb$'),('中文测试','中文测试','中文','^....$'),('中English混合','中English混合','^中English','^..nglish..$');
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp '^a', data_not_null regexp '^a' from test.t;
++------------------+---------------------------+
+| data regexp '^a' | data_not_null regexp '^a' |
++------------------+---------------------------+
+|                1 |                         0 |
+|                1 |                         1 |
+|             NULL |                         0 |
+|                0 |                         0 |
+|                0 |                         0 |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp 'A$', data_not_null regexp 'A$' from test.t;
++------------------+---------------------------+
+| data regexp 'A$' | data_not_null regexp 'A$' |
++------------------+---------------------------+
+|                0 |                         1 |
+|                0 |                         0 |
+|             NULL |                         0 |
+|                0 |                         0 |
+|                0 |                         0 |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp '^....$', data_not_null regexp '^....$' from test.t;
++----------------------+-------------------------------+
+| data regexp '^....$' | data_not_null regexp '^....$' |
++----------------------+-------------------------------+
+|                    1 |                             1 |
+|                    1 |                             1 |
+|                 NULL |                             0 |
+|                    1 |                             1 |
+|                    0 |                             0 |
++----------------------+-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp null, data_not_null regexp null from test.t;
++------------------+---------------------------+
+| data regexp null | data_not_null regexp null |
++------------------+---------------------------+
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp pattern, data_not_null regexp pattern, data regexp pattern_not_null, data_not_null regexp pattern_not_null from test.t;
++---------------------+------------------------------+------------------------------+---------------------------------------+
+| data regexp pattern | data_not_null regexp pattern | data regexp pattern_not_null | data_not_null regexp pattern_not_null |
++---------------------+------------------------------+------------------------------+---------------------------------------+
+|                   1 |                            0 |                            0 |                                     1 |
+|                NULL |                         NULL |                            1 |                                     1 |
+|                NULL |                            1 |                         NULL |                                     1 |
+|                   1 |                            1 |                            1 |                                     1 |
+|                   1 |                            1 |                            1 |                                     1 |
++---------------------+------------------------------+------------------------------+---------------------------------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (data varchar(30), pattern varchar(30)); 
+mysql> insert into test.t values ('', ''), ('abcd', 'abcd');
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp pattern, data regexp '', '' regexp pattern from test.t;
++---------------------+----------------+-------------------+
+| data regexp pattern | data regexp '' | '' regexp pattern |
++---------------------+----------------+-------------------+
+|                   1 |              1 |                 1 |
+|                   1 |              1 |                 0 |
++---------------------+----------------+-------------------+

@@ -760,7 +760,6 @@ struct ToYYYYMMDDhhmmssImpl
     using FactorTransform = ZeroTransform;
 };
 
-
 template <typename FromType, typename ToType, typename Transform>
 struct Transformer
 {
@@ -773,7 +772,6 @@ struct Transformer
             vec_to[i] = Transform::execute(vec_from[i], time_zone);
     }
 };
-
 
 template <typename FromType, typename ToType, typename Transform>
 struct DateTimeTransformImpl
@@ -3147,6 +3145,101 @@ private:
     const Context & context;
 };
 
+/// Behavior differences from TiDB:
+/// for date in ['0000-01-01', '0000-03-01'), ToDayNameImpl is the same with MySQL, while TiDB is offset by one day
+/// TiDB_DayName('0000-01-01') = 'Saturday', MySQL/TiFlash_DayName('0000-01-01') = 'Sunday'
+struct ToDayNameImpl
+{
+    static constexpr auto name = "toDayName";
+    static inline size_t getMaxStringLen()
+    {
+        return 10; // Wednesday + TerminatingZero
+    }
+    static inline const String & execute(UInt64 t)
+    {
+        return MyDateTime(t).weekDayName();
+    }
+};
+
+struct ToMonthNameImpl
+{
+    static constexpr auto name = "toMonthName";
+    static inline size_t getMaxStringLen()
+    {
+        return 10; // September + TerminatingZero
+    }
+    static inline const String & execute(UInt64 t)
+    {
+        return MyDateTime(t).monthName();
+    }
+};
+
+template <typename Transform>
+class FunctionDateTimeToString : public IFunction
+{
+public:
+    static constexpr auto name = Transform::name;
+    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionDateTimeToString>(context_); };
+    explicit FunctionDateTimeToString(const Context & context_)
+        : context(context_){};
+
+    String getName() const override { return Transform::name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isMyDateOrMyDateTime())
+            throw Exception(
+                fmt::format("First argument for function {} (unit) must be MyDate or MyDateTime", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr source_col = block.getByPosition(arguments[0]).column;
+        if (const auto * sources = checkAndGetColumn<ColumnVector<DataTypeMyTimeBase::FieldType>>(source_col.get()))
+        {
+            auto col_to = ColumnString::create();
+            const auto & vec_from = sources->getData();
+            size_t size = vec_from.size();
+            ColumnUInt8::MutablePtr col_null_map_to = ColumnUInt8::create(size, 0);
+            auto & vec_null_map_to = col_null_map_to->getData();
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            data_to.resize(size * Transform::getMaxStringLen());
+            offsets_to.resize(size);
+            size_t total_str_len = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                const String & res = Transform::execute(vec_from[i]);
+                if (res.empty())
+                    vec_null_map_to[i] = 1;
+                size_t length = res.length();
+                // Following offset operations are learned from ColumnString's insertData
+                memcpy(&data_to[total_str_len], res.c_str(), length);
+                data_to[total_str_len + length] = 0; // for terminating zero
+                total_str_len += (length + 1);
+                offsets_to[i] = total_str_len;
+            }
+            data_to.resize(total_str_len);
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        }
+        else
+        {
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    const Context & context;
+};
 
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
@@ -3179,6 +3272,8 @@ using FunctionToRelativeSecondNum = FunctionDateOrDateTimeToSomething<DataTypeUI
 using FunctionToYYYYMM = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYYYYMMImpl>;
 using FunctionToYYYYMMDD = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYYYYMMDDImpl>;
 using FunctionToYYYYMMDDhhmmss = FunctionDateOrDateTimeToSomething<DataTypeUInt64, ToYYYYMMDDhhmmssImpl>;
+using FunctionToDayName = FunctionDateTimeToString<ToDayNameImpl>;
+using FunctionToMonthName = FunctionDateTimeToString<ToMonthNameImpl>;
 
 using FunctionAddSeconds = FunctionDateOrDateTimeAddInterval<AddSecondsImpl>;
 using FunctionAddMinutes = FunctionDateOrDateTimeAddInterval<AddMinutesImpl>;
