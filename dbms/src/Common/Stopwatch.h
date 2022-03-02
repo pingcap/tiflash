@@ -20,7 +20,7 @@ inline UInt64 nanoseconds(clockid_t clock_type)
 }
 inline UInt64 seconds(clockid_t clock_type)
 {
-    return nanoseconds(clock_type)/1000000000ULL;
+    return nanoseconds(clock_type) / 1000000000ULL;
 }
 } // namespace StopWatchDetail
 
