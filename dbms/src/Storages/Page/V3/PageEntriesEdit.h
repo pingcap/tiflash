@@ -57,7 +57,7 @@ public:
         records.reserve(capacity);
     }
 
-    void put(PageId page_id, const PageEntryV3 & entry)
+    void put(PageIdV3Internal page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::PUT;
@@ -66,7 +66,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    void upsertPage(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::UPSERT;
@@ -76,7 +76,7 @@ public:
         records.emplace_back(record);
     }
 
-    void del(PageId page_id)
+    void del(PageIdV3Internal page_id)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::DEL;
@@ -84,7 +84,7 @@ public:
         records.emplace_back(record);
     }
 
-    void ref(PageId ref_id, PageId page_id)
+    void ref(PageIdV3Internal ref_id, PageIdV3Internal page_id)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::REF;
@@ -93,7 +93,7 @@ public:
         records.emplace_back(record);
     }
 
-    void concate(PageEntriesEdit & rhs)
+    void concat(PageEntriesEdit & rhs)
     {
         auto rhs_records = rhs.getRecords();
         records.insert(records.end(), rhs_records.begin(), rhs_records.end());
@@ -108,8 +108,8 @@ public:
     struct EditRecord
     {
         WriteBatch::WriteType type;
-        PageId page_id;
-        PageId ori_page_id;
+        PageIdV3Internal page_id;
+        PageIdV3Internal ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
     };

@@ -118,11 +118,11 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     return done_anything;
 }
 
-void PageIdGenerator::restore(const StoragePool & storage_pool)
+void PageIdGenerator::restore(NamespaceId ns_id, const StoragePool & storage_pool)
 {
-    max_log_page_id = storage_pool.log_storage->getMaxId();
-    max_data_page_id = storage_pool.data_storage->getMaxId();
-    max_meta_page_id = storage_pool.meta_storage->getMaxId();
+    max_log_page_id = storage_pool.log_storage->getMaxId(ns_id);
+    max_data_page_id = storage_pool.data_storage->getMaxId(ns_id);
+    max_meta_page_id = storage_pool.meta_storage->getMaxId(ns_id);
 }
 
 PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)

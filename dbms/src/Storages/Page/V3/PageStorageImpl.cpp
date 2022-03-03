@@ -51,12 +51,18 @@ void PageStorageImpl::drop()
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PageId PageStorageImpl::getMaxId()
+PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
 {
-    return page_directory.getMaxId();
+    auto page_id_v3 = page_directory.getMaxIdWithinUpperBound(PageIdV3Internal(UINT64_MAX, ns_id));
+    if (page_id_v3.high == ns_id)
+    {
+        return page_id_v3.low;
+    }
+    else
+        return 0;
 }
 
-PageId PageStorageImpl::getNormalPageId(PageId /*page_id*/, SnapshotPtr /*snapshot*/)
+PageId PageStorageImpl::getNormalPageId(NamespaceId /*ns_id*/, PageId /*page_id*/, SnapshotPtr /*snapshot*/)
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -81,7 +87,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
     page_directory.apply(std::move(edit), write_limiter);
 }
 
-DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -90,7 +96,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
 
     try
     {
-        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        const auto & [id, entry] = page_directory.get(combine(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
@@ -110,40 +116,46 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
 }
 
-DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entry = page_directory.get(page_id, snapshot);
+    auto page_entry = page_directory.get(combine(ns_id, page_id), snapshot);
     return blob_store.read(page_entry, read_limiter);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory.get(page_ids, snapshot);
+    PageIdV3Internals page_id_v3s;
+    for (auto p_id : page_ids)
+        page_id_v3s.emplace_back(combine(ns_id, p_id));
+    auto page_entries = page_directory.get(page_id_v3s, snapshot);
     return blob_store.read(page_entries, read_limiter);
 }
 
-void PageStorageImpl::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory.get(page_ids, snapshot);
+    PageIdV3Internals page_id_v3s;
+    for (auto p_id : page_ids)
+        page_id_v3s.emplace_back(combine(ns_id, p_id));
+    auto page_entries = page_directory.get(page_id_v3s, snapshot);
     blob_store.read(page_entries, handler, read_limiter);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -153,9 +165,9 @@ PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, c
     BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = page_directory.get(page_id, snapshot);
+        const auto & [id, entry] = page_directory.get(combine(ns_id, page_id), snapshot);
         (void)id;
-        auto info = BlobStore::FieldReadInfo(page_id, entry, field_indices);
+        auto info = BlobStore::FieldReadInfo(combine(ns_id, page_id), entry, field_indices);
         read_infos.emplace_back(info);
     }
 

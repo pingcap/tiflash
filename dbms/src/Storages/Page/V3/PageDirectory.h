@@ -114,7 +114,7 @@ public:
      */
     PageSize getEntriesByBlobIds(
         const std::unordered_set<BlobFileId> & blob_ids,
-        PageId page_id,
+        PageIdV3Internal page_id,
         std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
 
     /**
@@ -178,10 +178,10 @@ public:
 
     void dumpTo(std::unique_ptr<LogWriter> & log_writer);
 
-    using CollapsingMapType = std::unordered_map<PageId, std::pair<PageVersionType, PageEntryV3>>;
+    using CollapsingMapType = std::unordered_map<PageIdV3Internal, std::pair<PageVersionType, PageEntryV3>>;
     CollapsingMapType table_directory;
 
-    PageId max_applied_page_id = 0;
+    PageIdV3Internal max_applied_page_id{0};
     PageVersionType max_applied_ver;
 
     // No copying
@@ -208,22 +208,22 @@ public:
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const;
-    PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
 
-    PageIDAndEntriesV3 get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
-    PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
 
-    PageId getMaxId() const;
+    PageIdV3Internal getMaxIdWithinUpperBound(PageIdV3Internal upper_bound) const;
 
-    std::set<PageId> getAllPageIds();
+    std::set<PageIdV3Internal> getAllPageIds();
 
     void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
-    std::set<PageId> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter = nullptr);
+    std::set<PageIdV3Internal> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::vector<PageEntriesV3> gc(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -262,7 +262,7 @@ private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
     // "No iterators or references are invalidated"
     // https://en.cppreference.com/w/cpp/container/map/insert
-    using MVCCMapType = std::map<PageId, VersionedPageEntriesPtr>;
+    using MVCCMapType = std::map<PageIdV3Internal, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
 
     mutable std::mutex snapshots_mutex;

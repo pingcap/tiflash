@@ -97,7 +97,7 @@ void PSWriter::fillAllPages(const PSPtr & ps)
         DB::MemHolder holder;
         DB::ReadBufferPtr buff = genRandomData(page_id, holder);
 
-        DB::WriteBatch wb;
+        DB::WriteBatch wb{DEFAULT_NAMESPACE_ID};
         wb.putPage(page_id, 0, buff, buff->buffer().size());
         ps->write(std::move(wb));
         if (page_id % 100 == 0)
@@ -110,7 +110,7 @@ bool PSWriter::runImpl()
     const DB::PageId page_id = genRandomPageId();
     updatedRandomData();
 
-    DB::WriteBatch wb;
+    DB::WriteBatch wb{DEFAULT_NAMESPACE_ID};
     wb.putPage(page_id, 0, buff_ptr, buff_ptr->buffer().size());
     ps->write(std::move(wb));
     ++pages_used;
@@ -160,7 +160,7 @@ bool PSCommonWriter::runImpl()
 {
     const DB::PageId page_id = genRandomPageId();
 
-    DB::WriteBatch wb;
+    DB::WriteBatch wb{DEFAULT_NAMESPACE_ID};
     updatedRandomData();
 
     for (auto & buffptr : buff_ptrs)
@@ -251,7 +251,7 @@ bool PSReader::runImpl()
         ++pages_used;
         bytes_used += page.data.size();
     };
-    ps->read(page_ids, handler);
+    ps->read(DEFAULT_NAMESPACE_ID, page_ids, handler);
     return true;
 }
 

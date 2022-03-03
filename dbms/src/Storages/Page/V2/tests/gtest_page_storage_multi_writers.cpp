@@ -27,6 +27,8 @@ namespace DB::PS::V2::tests
 {
 using PSPtr = std::shared_ptr<PageStorage>;
 
+constexpr static NamespaceId ns_id = 100;
+
 class PageStorageMultiWriters_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -132,7 +134,7 @@ public:
             MemHolder holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
-            WriteBatch wb;
+            WriteBatch wb{ns_id};
             wb.putPage(pageId, 0, buff, buff->buffer().size());
             storage->write(std::move(wb));
             if (pageId % 100 == 0)
@@ -151,7 +153,7 @@ public:
             MemHolder holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
-            WriteBatch wb;
+            WriteBatch wb{ns_id};
             wb.putPage(pageId, 0, buff, buff->buffer().size());
             storage->write(std::move(wb));
             ++pages_written;
@@ -229,7 +231,7 @@ public:
                     ++pages_read;
                     bytes_read += page.data.size();
                 };
-                storage->read(pageIds, handler);
+                storage->read(ns_id, pageIds, handler);
             }
             catch (DB::Exception & e)
             {
@@ -384,20 +386,20 @@ try
 
     for (const auto & page_id : old_valid_pages)
     {
-        auto old_entry = old_storage->getEntry(page_id, old_snapshot);
-        auto entry = storage->getEntry(page_id, snapshot);
+        auto old_entry = old_storage->getEntry(ns_id, page_id, old_snapshot);
+        auto entry = storage->getEntry(ns_id, page_id, snapshot);
         ASSERT_EQ(old_entry.fileIdLevel(), entry.fileIdLevel()) << "of Page[" << page_id << "]";
         ASSERT_EQ(old_entry.offset, entry.offset) << "of Page[" << page_id << "]";
         ASSERT_EQ(old_entry.size, entry.size) << "of Page[" << page_id << "]";
         ASSERT_EQ(old_entry.tag, entry.tag) << "of Page[" << page_id << "]";
         ASSERT_EQ(old_entry.checksum, entry.checksum) << "of Page[" << page_id << "]";
 
-        auto old_page = old_storage->read(page_id, nullptr, old_snapshot);
+        auto old_page = old_storage->read(ns_id, page_id, nullptr, old_snapshot);
         char * buf = old_page.data.begin();
         for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
 
-        auto page = storage->read(page_id, nullptr, snapshot);
+        auto page = storage->read(ns_id, page_id, nullptr, snapshot);
         buf = page.data.begin();
         for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);

@@ -276,6 +276,7 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    TableID table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -436,6 +437,7 @@ private:
 
     String db_name;
     String table_name;
+    TableID table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;

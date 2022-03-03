@@ -45,38 +45,41 @@ public:
 
 protected:
     PageDirectory dir;
+    NamespaceId ns_id = 100;
 };
 
 TEST_F(PageDirectoryTest, ApplyPutRead)
 try
 {
+    PageIdV3Internal page_id_1 = combine(ns_id, 1);
     auto snap0 = dir.createSnapshot();
-    EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id_1, snap0);
 
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
+        edit.put(page_id_1, entry1);
         dir.apply(std::move(edit));
     }
 
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
+    EXPECT_ENTRY_EQ(entry1, dir, page_id_1, snap1);
 
+    PageIdV3Internal page_id_2 = combine(ns_id, 2);
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(2, entry2);
+        edit.put(page_id_2, entry2);
         dir.apply(std::move(edit));
     }
 
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap1); // creating snap2 won't affect the result of snap1
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, page_id_2, snap1); // creating snap2 won't affect the result of snap1
+    EXPECT_ENTRY_EQ(entry2, dir, page_id_2, snap2);
+    EXPECT_ENTRY_EQ(entry1, dir, page_id_1, snap2);
     {
-        PageIds ids{1, 2};
-        PageIDAndEntriesV3 expected_entries{{1, entry1}, {2, entry2}};
+        PageIdV3Internals ids{page_id_1, page_id_2};
+        PageIDAndEntriesV3 expected_entries{{page_id_1, entry1}, {page_id_2, entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 }
@@ -86,7 +89,7 @@ TEST_F(PageDirectoryTest, ApplyPutWithIdenticalPages)
 try
 {
     // Put identical page in different `edit`
-    PageId page_id = 50;
+    PageIdV3Internal page_id = combine(ns_id, 50);
 
     auto snap0 = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snap0);
@@ -112,13 +115,13 @@ try
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, page_id, snap2);
     {
-        PageIds ids{page_id};
+        PageIdV3Internals ids{page_id};
         PageIDAndEntriesV3 expected_entries{{page_id, entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
     // Put identical page within one `edit`
-    page_id++;
+    page_id.low++;
     PageEntryV3 entry3{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x12345, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
@@ -131,7 +134,7 @@ try
     }
     auto snap3 = dir.createSnapshot();
 
-    PageIds ids{page_id};
+    PageIdV3Internals ids{page_id};
     PageIDAndEntriesV3 expected_entries{{page_id, entry3}};
     EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap3);
 }
@@ -144,39 +147,39 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
+    EXPECT_ENTRY_EQ(entry1, dir, combine(ns_id, 1), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
 
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.del(2);
-        edit.put(3, entry3);
-        edit.put(4, entry4);
+        edit.del(combine(ns_id, 2));
+        edit.put(combine(ns_id, 3), entry3);
+        edit.put(combine(ns_id, 4), entry4);
         dir.apply(std::move(edit));
     }
 
     auto snap2 = dir.createSnapshot();
     // sanity check for snap1
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
+    EXPECT_ENTRY_EQ(entry1, dir, combine(ns_id, 1), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 4), snap1);
     // check for snap2
-    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap2); // deleted
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
-    EXPECT_ENTRY_EQ(entry3, dir, 3, snap2);
-    EXPECT_ENTRY_EQ(entry4, dir, 4, snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 2), snap2); // deleted
+    EXPECT_ENTRY_EQ(entry1, dir, combine(ns_id, 1), snap2);
+    EXPECT_ENTRY_EQ(entry3, dir, combine(ns_id, 3), snap2);
+    EXPECT_ENTRY_EQ(entry4, dir, combine(ns_id, 4), snap2);
     {
-        PageIds ids{1, 3, 4};
-        PageIDAndEntriesV3 expected_entries{{1, entry1}, {3, entry3}, {4, entry4}};
+        PageIdV3Internals ids{combine(ns_id, 1), combine(ns_id, 3), combine(ns_id, 4)};
+        PageIDAndEntriesV3 expected_entries{{combine(ns_id, 1), entry1}, {combine(ns_id, 3), entry3}, {combine(ns_id, 4), entry4}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 }
@@ -189,47 +192,47 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
 
     // Update 3, 2 won't get updated. Update 2, 3 won't get updated.
     // Note that users should not rely on this behavior
     PageEntryV3 entry_updated{.file_id = 999, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
-        edit.put(3, entry_updated);
+        edit.put(combine(ns_id, 3), entry_updated);
         dir.apply(std::move(edit));
     }
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_EQ(entry_updated, dir, combine(ns_id, 3), snap2);
 
     PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
-        edit.put(2, entry_updated2);
+        edit.put(combine(ns_id, 2), entry_updated2);
         dir.apply(std::move(edit));
     }
     auto snap3 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap2);
-    EXPECT_ENTRY_EQ(entry_updated2, dir, 2, snap3);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap3);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_EQ(entry_updated, dir, combine(ns_id, 3), snap2);
+    EXPECT_ENTRY_EQ(entry_updated2, dir, combine(ns_id, 2), snap3);
+    EXPECT_ENTRY_EQ(entry_updated, dir, combine(ns_id, 3), snap3);
 }
 CATCH
 
@@ -240,45 +243,45 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
 
     // Delete 3, 2 won't get deleted.
     {
         PageEntriesEdit edit;
-        edit.del(3);
+        edit.del(combine(ns_id, 3));
         dir.apply(std::move(edit));
     }
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 3), snap2);
 
     // Delete 2, 3 won't get deleted.
     {
         PageEntriesEdit edit;
-        edit.del(2);
+        edit.del(combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap3 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap2);
-    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap3);
-    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap3);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 3), snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 2), snap3);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 3), snap3);
 }
 CATCH
 
@@ -290,33 +293,33 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
 
     // Ref 4 -> 3
     {
         PageEntriesEdit edit;
-        edit.ref(4, 3);
+        edit.ref(combine(ns_id, 4), combine(ns_id, 3));
         dir.apply(std::move(edit));
     }
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
-    EXPECT_ENTRY_EQ(entry2, dir, 4, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 4), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 4), snap2);
 }
 CATCH
 
@@ -328,31 +331,31 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
 
     // Ref 3 -> 2
     {
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap2);
 }
 CATCH
 
@@ -364,33 +367,33 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 3->2
         PageEntriesEdit edit;
-        edit.ref(3, 2);
+        edit.ref(combine(ns_id, 3), combine(ns_id, 2));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
 
 
     { // Ref 4 -> 3, collapse to 4 -> 2
         PageEntriesEdit edit;
-        edit.ref(4, 3);
+        edit.ref(combine(ns_id, 4), combine(ns_id, 3));
         dir.apply(std::move(edit));
     }
     auto snap2 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
-    EXPECT_ENTRY_EQ(entry2, dir, 4, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 4), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 3), snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 4), snap2);
 }
 CATCH
 
@@ -402,22 +405,22 @@ try
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
+        edit.put(combine(ns_id, 1), entry1);
+        edit.put(combine(ns_id, 2), entry2);
         dir.apply(std::move(edit));
     }
 
     { // Ref 4-> 999
         PageEntriesEdit edit;
-        edit.put(3, entry3);
-        edit.ref(4, 999);
+        edit.put(combine(ns_id, 3), entry3);
+        edit.ref(combine(ns_id, 4), combine(ns_id, 999));
         dir.apply(std::move(edit));
     }
     auto snap1 = dir.createSnapshot();
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry3, dir, 3, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
+    EXPECT_ENTRY_EQ(entry1, dir, combine(ns_id, 1), snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, combine(ns_id, 2), snap1);
+    EXPECT_ENTRY_EQ(entry3, dir, combine(ns_id, 3), snap1);
+    EXPECT_ENTRY_NOT_EXIST(dir, combine(ns_id, 4), snap1);
 
     // TODO: restore, invalid ref page is filtered
 }
@@ -429,10 +432,10 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     {
         // 1. batch.putExternal(0, 0);
         PageEntryV3 entry1;
-        edit.put(0, entry1);
+        edit.put(combine(ns_id, 0), entry1);
 
         // 2. batch.putRefPage(1, 0);
-        edit.ref(1, 0);
+        edit.ref(combine(ns_id, 1), combine(ns_id, 0));
     }
 
     dir.apply(std::move(edit));
@@ -440,10 +443,10 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     PageEntriesEdit edit2;
     {
         // 1. batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
-        edit2.ref(2, 1);
+        edit2.ref(combine(ns_id, 2), combine(ns_id, 1));
 
         // 2. batch.delPage(1); // free ref 1 -> 0
-        edit2.del(1);
+        edit2.del(combine(ns_id, 1));
     }
 
     dir.apply(std::move(edit2));
@@ -604,57 +607,58 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     INSERT_BLOBID_ENTRY(3, 8);
     INSERT_BLOBID_ENTRY(1, 11);
 
-    PageId page_id = 100;
+    NamespaceId ns_id = 50;
+    PageIdV3Internal page_id_v3 = combine(ns_id, 100);
     auto check_for_blob_id_1 = [&](const PageIdAndVersionedEntries & entries) {
         auto it = entries.begin();
 
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 1);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v1);
 
         it++;
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 2);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v2);
 
         it++;
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 5);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v5);
 
         it++;
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 11);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v11);
     };
     auto check_for_blob_id_2 = [&](const PageIdAndVersionedEntries & entries) {
         auto it = entries.begin();
 
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 3);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v3);
 
         it++;
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 4);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v4);
     };
     auto check_for_blob_id_3 = [&](const PageIdAndVersionedEntries & entries) {
         auto it = entries.begin();
 
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 6);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v6);
 
         it++;
-        ASSERT_EQ(std::get<0>(*it), page_id);
+        ASSERT_EQ(std::get<0>(*it), page_id_v3);
         ASSERT_EQ(std::get<1>(*it).sequence, 8);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v8);
     };
 
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 0);
         ASSERT_EQ(total_size, 0);
@@ -663,7 +667,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 1;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 4);
@@ -674,7 +678,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 2;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 2);
@@ -685,7 +689,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 3;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 2);
@@ -696,7 +700,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 2);
         ASSERT_EQ(blob_entries[1].size(), 4);
@@ -709,7 +713,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     // {2, 3}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 2);
         ASSERT_EQ(blob_entries[2].size(), 2);
@@ -722,7 +726,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2, 3}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 3);
         ASSERT_EQ(blob_entries[1].size(), 4);
@@ -737,7 +741,7 @@ TEST(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2, 3, 100}; blob_id 100 is not exist in actual
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, page_id, blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, page_id_v3, blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 3); // 100 not exist
         ASSERT_EQ(blob_entries.find(100), blob_entries.end());
@@ -791,7 +795,8 @@ static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
 {
-    PageId page_id = 50;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
 
     /**
      * before GC => {
@@ -846,8 +851,9 @@ try
      *   }
      *   snapshot remain: [v3, v5]
      */
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
+    PageIdV3Internal another_page_id = combine(ns_id, 512);
 
     INSERT_ENTRY(another_page_id, 1);
     INSERT_ENTRY(page_id, 2);
@@ -914,8 +920,9 @@ try
      *   }
      *   snapshot remain: [v1, v3, v5, v10]
      */
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
+    PageIdV3Internal another_page_id = combine(ns_id, 512);
 
     // Push entries
     INSERT_ENTRY_ACQ_SNAP(another_page_id, 1);
@@ -999,8 +1006,9 @@ try
      *   }
      *   snapshot remain: [v5, v8, v9]
      */
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
+    PageIdV3Internal another_page_id = combine(ns_id, 512);
 
     // Push entries
     INSERT_ENTRY(another_page_id, 1);
@@ -1095,8 +1103,9 @@ CATCH
 TEST_F(PageDirectoryGCTest, FullGCApply)
 try
 {
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
+    PageIdV3Internal another_page_id = combine(ns_id, 512);
     INSERT_ENTRY_TO(page_id, 1, 1);
     INSERT_ENTRY_TO(page_id, 2, 2);
     INSERT_ENTRY_TO(another_page_id, 3, 2);
@@ -1143,8 +1152,9 @@ CATCH
 TEST_F(PageDirectoryGCTest, MVCCAndFullGCInConcurrent)
 try
 {
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    NamespaceId ns_id = 100;
+    PageIdV3Internal page_id = combine(ns_id, 50);
+    PageIdV3Internal another_page_id = combine(ns_id, 512);
     INSERT_ENTRY_TO(page_id, 1, 1);
     INSERT_ENTRY_TO(page_id, 2, 2);
     INSERT_ENTRY_TO(page_id, 3, 2);

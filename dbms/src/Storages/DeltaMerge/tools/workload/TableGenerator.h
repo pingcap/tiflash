@@ -7,6 +7,7 @@ struct WorkloadOptions;
 
 struct TableInfo
 {
+    TableID table_id;
     std::string db_name;
     std::string table_name;
     DB::DM::ColumnDefinesPtr columns;

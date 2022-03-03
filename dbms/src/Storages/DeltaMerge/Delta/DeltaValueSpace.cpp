@@ -134,7 +134,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     ///  2. The serialized metadata of column files in DeltaValueSpace
 
     ColumnFileFlushTaskPtr flush_task;
-    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+    WriteBatches wbs(context.table_id, context.storage_pool, context.getWriteLimiter());
     DeltaIndexPtr cur_delta_index;
     {
         /// Prepare data which will be written to disk.
@@ -225,8 +225,8 @@ bool DeltaValueSpace::compact(DMContext & context)
     }
 
     // do compaction task
-    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    PageReader reader(context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
+    WriteBatches wbs(context.table_id, context.storage_pool, context.getWriteLimiter());
+    PageReader reader(context.table_id, context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
     compaction_task->prepare(context, wbs, reader);
 
     {

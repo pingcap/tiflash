@@ -44,7 +44,7 @@ void deserializePutFrom([[maybe_unused]] const WriteBatch::WriteType record_type
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
-    PageId page_id;
+    PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
     PageVersionType version;
     deserializeVersionFrom(buf, version);
@@ -93,7 +93,7 @@ void deserializeDelFrom([[maybe_unused]] const WriteBatch::WriteType record_type
 {
     assert(record_type == WriteBatch::WriteType::DEL);
 
-    PageId page_id;
+    PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
     PageVersionType version;
     deserializeVersionFrom(buf, version);

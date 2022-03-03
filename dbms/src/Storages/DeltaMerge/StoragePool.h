@@ -56,7 +56,7 @@ class PageIdGenerator : private boost::noncopyable
 public:
     PageIdGenerator() = default;
 
-    void restore(const StoragePool & storage_pool);
+    void restore(NamespaceId ns_id, const StoragePool & storage_pool);
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
@@ -73,10 +73,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
-        : log_reader(storage.log(), snapshot_read ? storage.log()->getSnapshot() : nullptr, read_limiter)
-        , data_reader(storage.data(), snapshot_read ? storage.data()->getSnapshot() : nullptr, read_limiter)
-        , meta_reader(storage.meta(), snapshot_read ? storage.meta()->getSnapshot() : nullptr, read_limiter)
+    StorageSnapshot(NamespaceId ns_id, StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
+        : log_reader(ns_id, storage.log(), snapshot_read ? storage.log()->getSnapshot() : nullptr, read_limiter)
+        , data_reader(ns_id, storage.data(), snapshot_read ? storage.data()->getSnapshot() : nullptr, read_limiter)
+        , meta_reader(ns_id, storage.meta(), snapshot_read ? storage.meta()->getSnapshot() : nullptr, read_limiter)
     {}
 
     PageReader log_reader;

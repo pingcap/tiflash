@@ -34,7 +34,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{},{}>", id_entry.first, toDebugString(id_entry.second));
+            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
         },
         ", ");
     buf.append("]");
@@ -72,7 +72,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
     const PageDirectory & dir,
-    const PageId page_id,
+    const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
     auto check_id_entry = [&](const PageIDAndEntryV3 & expected_id_entry, const PageIDAndEntryV3 & actual_id_entry) -> ::testing::AssertionResult {
@@ -80,7 +80,7 @@ inline ::testing::AssertionResult getEntryCompare(
         String err_msg;
         if (pid != expected_id_entry.first)
         {
-            err_msg = fmt::format("Try to get entry [id={}] but get [id={}]", page_id_expr, pid);
+            err_msg = fmt::format("Try to get entry [id={}] but get [id={}.{}]", page_id_expr, pid.high, pid.low);
             return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
         }
         if (isSameEntry(entry, expected_entry))
@@ -131,7 +131,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
     const PageDirectory & dir,
-    const PageIds page_ids,
+    const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
     auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries, const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
@@ -143,7 +143,7 @@ inline ::testing::AssertionResult getEntriesCompare(
                 const auto & actual_id_entry = expected_id_entries[idx];
                 if (actual_id_entry.first != expected_id_entry.first)
                 {
-                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}] at [index={}]", expected_id_entry.first, actual_id_entry.first, idx);
+                    auto err_msg = fmt::format("Try to get entry [id={}.{}] but get [id={}.{}] at [index={}]", expected_id_entry.first.high, expected_id_entry.first.low, actual_id_entry.first.high, actual_id_entry.first.low, idx);
                     return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
                 }
                 if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))
@@ -205,7 +205,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * page_id_expr,
     const char * snap_expr,
     const PageDirectory & dir,
-    const PageId page_id,
+    const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;
@@ -213,11 +213,12 @@ inline ::testing::AssertionResult getEntryNotExist(
     {
         auto id_entry = dir.get(page_id, snap);
         error = fmt::format(
-            "Expect entry [id={}] from {} with snap{} not exist, but got <{}, {}>",
+            "Expect entry [id={}] from {} with snap{} not exist, but got <{}.{}, {}>",
             page_id_expr,
             dir_expr,
             snap_expr,
-            id_entry.first,
+            id_entry.first.high,
+            id_entry.first.low,
             toDebugString(id_entry.second));
     }
     catch (DB::Exception & ex)
@@ -242,7 +243,7 @@ inline ::testing::AssertionResult getEntriesNotExist(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageDirectory & dir,
-    const PageIds page_ids,
+    const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;

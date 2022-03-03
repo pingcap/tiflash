@@ -9,6 +9,7 @@ namespace DM
 {
 struct WriteBatches : private boost::noncopyable
 {
+    NamespaceId ns_id;
     WriteBatch log;
     WriteBatch data;
     WriteBatch meta;
@@ -25,8 +26,15 @@ struct WriteBatches : private boost::noncopyable
 
     WriteLimiterPtr write_limiter;
 
-    WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : storage_pool(storage_pool_)
+    WriteBatches(NamespaceId ns_id_, StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
+        : ns_id(ns_id_)
+        , log(ns_id)
+        , data(ns_id)
+        , meta(ns_id)
+        , removed_log(ns_id)
+        , removed_data(ns_id)
+        , removed_meta(ns_id)
+        , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {
     }
@@ -103,10 +111,10 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        WriteBatch log_wb;
+        WriteBatch log_wb(ns_id);
         for (auto p : writtenLog)
             log_wb.delPage(p);
-        WriteBatch data_wb;
+        WriteBatch data_wb(ns_id);
         for (auto p : writtenData)
             data_wb.delPage(p);
 

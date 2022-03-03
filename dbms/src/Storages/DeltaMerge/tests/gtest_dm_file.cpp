@@ -115,6 +115,7 @@ public:
             0,
             settings.not_compress_columns,
             false,
+            /*table_id*/ 100,
             1,
             db_context->getSettingsRef());
     }
@@ -1120,7 +1121,9 @@ public:
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, DB::Settings());
+        storage_pool->restore();
         page_id_generator = std::make_unique<PageIdGenerator>();
+        page_id_generator->restore(table_id, *storage_pool);
         dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -1146,6 +1149,7 @@ public:
             0,
             settings.not_compress_columns,
             is_common_handle,
+            table_id,
             rowkey_column_size,
             db_context->getSettingsRef());
     }

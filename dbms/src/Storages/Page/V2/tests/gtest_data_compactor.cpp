@@ -50,7 +50,7 @@ try
     PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
-
+    NamespaceId ns_id = 1;
 #ifdef GENERATE_TEST_DATA
     // Codes to generate a directory of test data
     storage.restore();
@@ -66,13 +66,13 @@ try
         const size_t page_size = 1;
         {
             // This is written to PageFile{1, 0}
-            WriteBatch wb;
+            WriteBatch wb{ns_id};
             wb.putPage(1, 0, create_buff_ptr(page_size), page_size); // page 1, data 0
             storage.write(std::move(wb));
         }
         {
             // This is written to PageFile{2, 0}
-            WriteBatch wb;
+            WriteBatch wb{ns_id};
             wb.putPage(1, 1, create_buff_ptr(page_size), page_size); // new version of page 1, data 1
             wb.putPage(2, 0, create_buff_ptr(page_size), page_size); // page 2, data 2
             wb.putRefPage(3, 2); // page 3 -ref-> page 2
@@ -81,7 +81,7 @@ try
         }
         {
             // This is written to PageFile{1, 0}
-            WriteBatch wb;
+            WriteBatch wb{ns_id};
             wb.putPage(1, 2, create_buff_ptr(page_size), page_size); // new version of page 1, data 4
             wb.delPage(4); // del page 4
             wb.putRefPage(5, 3); // page 5 -ref-> page 3 --> page 2
@@ -164,25 +164,25 @@ try
         PageStorage ps("data_compact_test", delegate, config, file_provider);
         ps.restore();
         // Page 1, 2 have been migrated to PageFile_2_1
-        PageEntry entry = ps.getEntry(1, nullptr);
+        PageEntry entry = ps.getEntry(ns_id, 1, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
-        entry = ps.getEntry(2, nullptr);
+        entry = ps.getEntry(ns_id, 2, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
         // Page 5 -ref-> 2
-        auto entry5 = ps.getEntry(5, nullptr);
+        auto entry5 = ps.getEntry(ns_id, 5, nullptr);
         EXPECT_EQ(entry5, entry);
 
         // Page 3, 4 are deleted
-        entry = ps.getEntry(3, nullptr);
+        entry = ps.getEntry(ns_id, 3, nullptr);
         ASSERT_FALSE(entry.isValid());
 
-        entry = ps.getEntry(4, nullptr);
+        entry = ps.getEntry(ns_id, 4, nullptr);
         ASSERT_FALSE(entry.isValid());
 
         // Page 6 have been migrated to PageFile_2_1
-        entry = ps.getEntry(6, nullptr);
+        entry = ps.getEntry(ns_id, 6, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
     }
 }

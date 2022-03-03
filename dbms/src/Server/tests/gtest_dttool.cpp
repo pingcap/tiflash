@@ -69,6 +69,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             0,
             dm_settings.not_compress_columns,
             false,
+            /*table_id*/ 1,
             1,
             db_context->getSettingsRef());
         // Write

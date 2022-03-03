@@ -3,6 +3,7 @@
 #include <Poco/Runnable.h>
 #include <Storages/Page/PageDefines.h>
 
+const DB::NamespaceId DEFAULT_NAMESPACE_ID = 100;
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
 class PSRunnable : public Poco::Runnable

@@ -67,7 +67,7 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 
 PageSize VersionedPageEntries::getEntriesByBlobIds(
     const std::unordered_set<BlobFileId> & blob_ids,
-    PageId page_id,
+    PageIdV3Internal page_id,
     std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries)
 {
     // blob_file_0, [<page_id_0, ver0, entry0>,
@@ -162,7 +162,7 @@ void CollapsingPageDirectory::apply(PageEntriesEdit && edit)
             [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
         {
-            // Insert or replace with latest entry
+            // Insert or replace with the latest entry
             if (auto iter = table_directory.find(record.page_id); iter == table_directory.end())
             {
                 table_directory[record.page_id] = std::make_pair(record.version, record.entry);
@@ -310,19 +310,19 @@ toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
     return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
 {
     return get(page_id, toConcreteSnapshot(snap));
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
 {
     MVCCMapType::const_iterator iter;
     {
         std::shared_lock read_lock(table_rw_mutex);
         iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())
-            throw Exception(fmt::format("Entry [id={}] not exist!", page_id), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+            throw Exception(fmt::format("Entry [ns_id={} p_id={}] not exist!", page_id.high, page_id.low), ErrorCodes::PS_ENTRY_NOT_EXISTS);
     }
 
     if (auto entry = iter->second->getEntry(snap->sequence); entry)
@@ -330,15 +330,15 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
         return PageIDAndEntryV3(page_id, *entry);
     }
 
-    throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    throw Exception(fmt::format("Entry [ns_id={} p_id={}] [seq={}] not exist!", page_id.high, page_id.low, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const
+PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
 {
     return get(page_ids, toConcreteSnapshot(snap));
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const
 {
     std::vector<MVCCMapType::const_iterator> iters;
     iters.reserve(page_ids.size());
@@ -353,7 +353,7 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
             }
             else
             {
-                throw Exception(fmt::format("Entry [id={}] at [idx={}] not exist!", page_ids[idx], idx), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                throw Exception(fmt::format("Entry [ns_id={} p_id={}] at [idx={}] not exist!", page_ids[idx].high, page_ids[idx].low, idx), ErrorCodes::PS_ENTRY_NOT_EXISTS);
             }
         }
     }
@@ -367,28 +367,35 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
             id_entries.emplace_back(page_ids[idx], *entry);
         }
         else
-            throw Exception(fmt::format("Entry [id={}] [seq={}] at [idx={}] not exist!", page_ids[idx], snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+            throw Exception(fmt::format("Entry [ns_id={} p_id={}] [seq={}] at [idx={}] not exist!", page_ids[idx].high, page_ids[idx].low, snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
     }
 
     return id_entries;
 }
 
-PageId PageDirectory::getMaxId() const
+PageIdV3Internal PageDirectory::getMaxIdWithinUpperBound(PageIdV3Internal upper_bound) const
 {
-    PageId max_page_id = 0;
     std::shared_lock read_lock(table_rw_mutex);
 
-    for (const auto & [page_id, versioned] : mvcc_table_directory)
+    auto iter = mvcc_table_directory.upper_bound(upper_bound);
+    if (iter == mvcc_table_directory.begin())
     {
-        (void)versioned;
-        max_page_id = std::max(max_page_id, page_id);
+        // The smallest page id is greater than the target page id or mvcc_table_directory is empty,
+        // and it means no page id is less than or equal to the target page id, return 0.
+        return PageIdV3Internal(0);
     }
-    return max_page_id;
+    else
+    {
+        // iter is not at the beginning and mvcc_table_directory is not empty,
+        // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
+        iter--;
+        return iter->first;
+    }
 }
 
-std::set<PageId> PageDirectory::getAllPageIds()
+std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
-    std::set<PageId> page_ids;
+    std::set<PageIdV3Internal> page_ids;
     std::shared_lock read_lock(table_rw_mutex);
 
     for (auto & [page_id, versioned] : mvcc_table_directory)
@@ -411,7 +418,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     wal->apply(edit, PageVersionType(last_sequence + 1, 0), write_limiter);
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
-    std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
+    std::unordered_map<PageIdV3Internal, std::pair<PageLock, int>> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
     for (const auto & r : edit.getRecords())
@@ -461,7 +468,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             auto iter = mvcc_table_directory.find(r.ori_page_id);
             if (iter == mvcc_table_directory.end())
             {
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+                LOG_FMT_WARNING(log, "Trying to add ref from {}.{} to non-exist {}.{} with sequence={}", r.page_id.high, r.page_id.low, r.ori_page_id.high, r.ori_page_id.low, last_sequence + 1);
                 break;
             }
 
@@ -477,7 +484,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             }
             else
             {
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1);
+                LOG_FMT_WARNING(log, "Trying to add ref from {}.{} to non-exist {}.{} with sequence={}", r.page_id.high, r.page_id.low, r.ori_page_id.high, r.ori_page_id.low, last_sequence + 1);
             }
             break;
         }
@@ -504,7 +511,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
+std::set<PageIdV3Internal> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
 {
     for (auto & record : migrated_edit.getMutRecords())
     {
@@ -514,7 +521,7 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
             iter = mvcc_table_directory.find(record.page_id);
             if (unlikely(iter == mvcc_table_directory.end()))
             {
-                throw Exception(fmt::format("Can't found [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("Can't found [ns_id={} page_id={}] while doing gcApply", record.page_id.high, record.page_id.low), ErrorCodes::LOGICAL_ERROR);
             }
         } // release the read lock on `table_rw_mutex`
 
@@ -561,7 +568,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     {
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do scan on the version list without lock on `mvcc_table_directory`.
-        PageId page_id = iter->first;
+        auto page_id = iter->first;
         const auto & version_entries = iter->second;
         total_page_size += version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
 

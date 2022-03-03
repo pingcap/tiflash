@@ -5,6 +5,8 @@
 
 namespace DB::PS::V3
 {
+using PageIdV3Internal = UInt128;
+using PageIdV3Internals = std::vector<PageIdV3Internal>;
 struct PageEntryV3
 {
 public:
@@ -18,8 +20,14 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 };
 using PageEntriesV3 = std::vector<PageEntryV3>;
-using PageIDAndEntryV3 = std::pair<PageId, PageEntryV3>;
+using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
+
+inline PageIdV3Internal combine(NamespaceId n_id, PageId p_id)
+{
+    // low bits first
+    return PageIdV3Internal(p_id, n_id);
+}
 
 inline String toDebugString(const PageEntryV3 & entry)
 {

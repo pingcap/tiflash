@@ -31,6 +31,9 @@ static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at l
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");
 static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
 
+using NamespaceId = UInt64;
+static constexpr UInt64 INVALID_NAMESPACE_ID = UINT64_MAX;
+
 using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;

@@ -185,7 +185,7 @@ SegmentPtr Segment::newSegment(DMContext & context,
                                PageId delta_id,
                                PageId stable_id)
 {
-    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+    WriteBatches wbs(context.table_id, context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
@@ -221,7 +221,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.meta()->read(segment_id, nullptr); // not limit restore
+    Page page = context.storage_pool.meta()->read(context.table_id, segment_id, nullptr); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -294,7 +294,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(dm_context.table_id, dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
@@ -551,7 +551,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(dm_context.table_id, dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
     if (!segment_snap)
         return {};
@@ -636,7 +636,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(dm_context.table_id, dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
     if (!segment_snap)
         return {};
@@ -1115,7 +1115,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(dm_context.table_id, dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto left_snap = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);

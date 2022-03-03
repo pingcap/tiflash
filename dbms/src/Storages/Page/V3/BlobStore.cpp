@@ -64,6 +64,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                         ErrorCodes::LOGICAL_ERROR);
     }
 
+    auto ns_id = wb.getNamespaceId();
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
@@ -73,12 +74,12 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             {
             case WriteBatch::WriteType::DEL:
             {
-                edit.del(write.page_id);
+                edit.del(combine(ns_id, write.page_id));
                 break;
             }
             case WriteBatch::WriteType::REF:
             {
-                edit.ref(write.page_id, write.ori_page_id);
+                edit.ref(combine(ns_id, write.page_id), combine(ns_id, write.ori_page_id));
                 break;
             }
             case WriteBatch::WriteType::PUT_EXTERNAL:
@@ -86,7 +87,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 PageEntryV3 entry;
                 entry.tag = write.tag;
 
-                edit.put(write.page_id, entry);
+                edit.put(combine(ns_id, write.page_id), entry);
                 break;
             }
             default:
@@ -145,17 +146,17 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-            edit.put(write.page_id, entry);
+            edit.put(combine(ns_id, write.page_id), entry);
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
-            edit.del(write.page_id);
+            edit.del(combine(ns_id, write.page_id));
             break;
         }
         case WriteBatch::WriteType::REF:
         {
-            edit.ref(write.page_id, write.ori_page_id);
+            edit.ref(combine(ns_id, write.page_id), combine(ns_id, write.ori_page_id));
             break;
         }
         default:
@@ -290,7 +291,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
         free(p, buf_size);
     });
 
-    for (const auto & [page_id, entry] : entries)
+    for (const auto & [page_id_v3, entry] : entries)
     {
         read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
 
@@ -301,8 +302,9 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
+                throw Exception(fmt::format("Namespace id [{}] Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                                            page_id_v3.high,
+                                            page_id_v3.low,
                                             getBlobFilePath(entry.file_id),
                                             entry.checksum,
                                             checksum),
@@ -311,10 +313,10 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
         }
 
         Page page;
-        page.page_id = page_id;
+        page.page_id = page_id_v3.low;
         page.data = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
-        handler(page_id, page);
+        handler(page_id_v3.low, page);
     }
 }
 
@@ -344,7 +346,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     std::set<Page::FieldOffset> fields_offset_in_page;
     char * pos = data_buf;
     PageMap page_map;
-    for (const auto & [page_id, entry, fields] : to_read)
+    for (const auto & [page_id_v3, entry, fields] : to_read)
     {
         read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
@@ -356,8 +358,9 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
+                throw Exception(fmt::format("Namespace id [{}] Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                                            page_id_v3.high,
+                                            page_id_v3.low,
                                             getBlobFilePath(entry.file_id),
                                             entry.checksum,
                                             checksum),
@@ -366,13 +369,13 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         }
 
         Page page;
-        page.page_id = page_id;
+        page.page_id = page_id_v3.low;
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
 
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
-        page_map.emplace(page_id, std::move(page));
+        page_map.emplace(page_id_v3.low, std::move(page));
 
         pos += entry.size;
     }
@@ -408,7 +411,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
     char * pos = data_buf;
     PageMap page_map;
-    for (const auto & [page_id, entry] : entries)
+    for (const auto & [page_id_v3, entry] : entries)
     {
         read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
@@ -419,8 +422,9 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
+                throw Exception(fmt::format("Namespace id [{}] Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                                            page_id_v3.high,
+                                            page_id_v3.low,
                                             getBlobFilePath(entry.file_id),
                                             entry.checksum,
                                             checksum),
@@ -429,10 +433,10 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         }
 
         Page page;
-        page.page_id = page_id;
+        page.page_id = page_id_v3.low;
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id, page);
+        page_map.emplace(page_id_v3.low, page);
 
         pos += entry.size;
     }
@@ -459,7 +463,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
 
     Page page;
-    page.page_id = page_id;
+    page.page_id = page_id.low;
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 

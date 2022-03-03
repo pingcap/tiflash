@@ -98,7 +98,6 @@ private:
         edit.appendRecord(PageEntriesEdit::EditRecord{  \
             .type = WriteBatch::WriteType::PUT,         \
             .page_id = (PAGE_ID),                       \
-            .ori_page_id = 0,                           \
             .version = PageVersionType((VERSION)),      \
             .entry = entry_v##VERSION});                \
         dir.apply(std::move(edit));                     \
@@ -110,7 +109,6 @@ private:
         edit.appendRecord(PageEntriesEdit::EditRecord{ \
             .type = WriteBatch::WriteType::DEL,        \
             .page_id = (PAGE_ID),                      \
-            .ori_page_id = 0,                          \
             .version = PageVersionType((VERSION)),     \
             .entry = {}});                             \
         dir.apply(std::move(edit));                    \
@@ -119,25 +117,26 @@ private:
 TEST_F(CollapsingPageDirectoryTest, CollapseFromDifferentEdits)
 try
 {
+    NamespaceId ns_id = 100;
     // multiple-puts
-    PageId page_1 = 1;
+    PageIdV3Internal page_1 = combine(ns_id, 1);
     INSERT_ENTRY(page_1, 1);
     INSERT_ENTRY(page_1, 2);
     INSERT_ENTRY(page_1, 3);
     INSERT_ENTRY(page_1, 4);
 
     // put
-    PageId page_2 = 2;
+    PageIdV3Internal page_2 = combine(ns_id, 2);
     INSERT_ENTRY(page_2, 88);
     INSERT_ENTRY(page_2, 78); // <78,0> is applied after version <88,0>
 
     // put & del
-    PageId page_3 = 3;
+    PageIdV3Internal page_3 = combine(ns_id, 3);
     INSERT_ENTRY(page_3, 90);
     INSERT_DELETE(page_3, 91);
 
     // put & del
-    PageId page_4 = 4;
+    PageIdV3Internal page_4 = combine(ns_id, 4);
     INSERT_ENTRY(page_4, 92);
     INSERT_DELETE(page_4, 90); // <90,0> is applied after version <92,0>
 
