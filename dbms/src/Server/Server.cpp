@@ -490,7 +490,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void HandleRpcs(grpc::ServerCompletionQueue * curcq)
+void handleRpcs(grpc::ServerCompletionQueue * curcq)
 {
     void * tag = nullptr; // uniquely identifies a request.
     bool ok = false;
@@ -581,8 +581,8 @@ public:
                     // EstablishCallData will handle its lifecycle by itself.
                     EstablishCallData::spawn(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
                 }
-                thread_manager->schedule(false, "async_poller", [cq] { HandleRpcs(cq); });
-                thread_manager->schedule(false, "async_poller", [notify_cq] { HandleRpcs(notify_cq); });
+                thread_manager->schedule(false, "async_poller", [cq] { handleRpcs(cq); });
+                thread_manager->schedule(false, "async_poller", [notify_cq] { handleRpcs(notify_cq); });
             }
         }
     }
