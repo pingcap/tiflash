@@ -34,7 +34,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{},{}>", id_entry.first, toString(id_entry.second));
+            buf.fmtAppend("<{},{}>", id_entry.first, toDebugString(id_entry.second));
         },
         ", ");
     buf.append("]");
@@ -47,6 +47,23 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
     // Maybe need more fields check later
     return (lhs.file_id == rhs.file_id && lhs.offset == rhs.offset && lhs.size == rhs.size);
 }
+
+inline ::testing::AssertionResult entryCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const PageEntryV3 & lhs,
+    const PageEntryV3 & rhs)
+{
+    // Maybe need more fields check later
+    if (isSameEntry(lhs, rhs))
+    {
+        return ::testing::AssertionSuccess();
+    }
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, toDebugString(lhs), toDebugString(rhs), false);
+}
+
+#define ASSERT_SAME_ENTRY(val1, val2) ASSERT_PRED_FORMAT2(entryCompare, val1, val2)
+#define EXPECT_SAME_ENTRY(val1, val2) EXPECT_PRED_FORMAT2(entryCompare, val1, val2)
 
 inline ::testing::AssertionResult getEntryCompare(
     const char * expected_entry_expr,
@@ -75,8 +92,8 @@ inline ::testing::AssertionResult getEntryCompare(
         return testing::internal::EqFailure(
             expected_entry_expr,
             actual_expr.c_str(),
-            toString(expected_entry),
-            toString(entry),
+            toDebugString(expected_entry),
+            toDebugString(entry),
             false);
     };
     String error;
@@ -138,8 +155,8 @@ inline ::testing::AssertionResult getEntriesCompare(
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
                         actual_expr.c_str(),
-                        toString(expected_id_entry.second),
-                        toString(actual_id_entry.second),
+                        toDebugString(expected_id_entry.second),
+                        toDebugString(actual_id_entry.second),
                         false);
                 }
             }
@@ -201,7 +218,7 @@ inline ::testing::AssertionResult getEntryNotExist(
             dir_expr,
             snap_expr,
             id_entry.first,
-            toString(id_entry.second));
+            toDebugString(id_entry.second));
     }
     catch (DB::Exception & ex)
     {
