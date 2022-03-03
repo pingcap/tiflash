@@ -12,7 +12,7 @@
 class PacketWriter
 {
 public:
-    virtual ~PacketWriter(){};
+    virtual ~PacketWriter() = default;
 
     // Write a packet, if this api is called, it means the rpc is ready for writing
     // For sync writer, it is always ready for writing.
