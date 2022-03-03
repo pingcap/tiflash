@@ -81,7 +81,7 @@ class AsyncFlashService final : public FlashService
 {
 public:
     // 48 is EstablishMPPConnection API ID of GRPC
-    // note:  if the kvrpc protocal is updated, please keep consistent with the generated code.
+    // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
     const int EstablishMPPConnectionApiID = 48;
     AsyncFlashService(IServer & server)
         : FlashService(server)
