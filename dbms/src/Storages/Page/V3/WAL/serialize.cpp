@@ -62,7 +62,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
 
 void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT);
+    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY);
 
     writeIntBinary(EditRecordType::PUT, buf);
 
@@ -77,14 +77,14 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
 void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT);
+    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT || record_type == EditRecordType::VAR_ENTRY);
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
 
     // All consider as put
     PageEntriesEdit::EditRecord rec;
-    rec.type = EditRecordType::PUT;
+    rec.type = record_type;
     readIntBinary(rec.page_id, buf);
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
@@ -95,7 +95,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 
 void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::REF);
+    assert(record.type == EditRecordType::REF || record.type == EditRecordType::VAR_REF);
 
     writeIntBinary(record.type, buf);
 

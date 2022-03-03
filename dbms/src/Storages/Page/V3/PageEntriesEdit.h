@@ -75,8 +75,6 @@ struct VarEntry
     PageId origin_page_id;
     Int64 being_ref_count = 1;
 
-    std::shared_ptr<PageId> external_holder;
-
     static VarEntry newDelete()
     {
         return VarEntry{
@@ -84,7 +82,6 @@ struct VarEntry
             .entry = {}, // meaningless
             .origin_page_id = 0, // meaningless
             .being_ref_count = 1, // meaningless
-            .external_holder = nullptr, // meaningless
         };
     }
     static VarEntry newNormalEntry(const PageEntryV3 & entry)
@@ -94,7 +91,6 @@ struct VarEntry
             .entry = entry,
             .origin_page_id = 0, // meaningless
             .being_ref_count = 1,
-            .external_holder = nullptr, // meaningless
         };
     }
     static VarEntry newRepalcingEntry(const VarEntry & ori_entry, const PageEntryV3 & entry)
@@ -104,43 +100,19 @@ struct VarEntry
             .entry = entry,
             .origin_page_id = 0, // meaningless
             .being_ref_count = ori_entry.being_ref_count,
-            .external_holder = nullptr, // meaningless
-        };
-    }
-    static VarEntry newRefEntry(PageId ori_id)
-    {
-        return VarEntry{
-            .type = EditRecordType::VAR_REF,
-            .entry = {}, // meaningless
-            .origin_page_id = ori_id,
-            .being_ref_count = 1, // meaningless
-            .external_holder = nullptr, // meaningless
-        };
-    }
-    static VarEntry newExternal()
-    {
-        return VarEntry{
-            .type = EditRecordType::VAR_EXTERNAL,
-            .entry = {}, // meaningless
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1,
-            .external_holder = std::make_shared<PageId>(0),
         };
     }
 
-    static VarEntry fromRestored(EditRecordType type, PageEntryV3 entry, PageId ori_page_id, Int64 being_ref_count)
+    static VarEntry fromRestored(EditRecordType type, PageEntryV3 entry, Int64 being_ref_count)
     {
         return VarEntry{
             .type = type,
             .entry = entry,
-            .origin_page_id = ori_page_id,
             .being_ref_count = being_ref_count,
         };
     }
 
     bool isDelete() const { return type == EditRecordType::VAR_DELETE; }
-    bool isExternal() const { return type == EditRecordType::VAR_EXTERNAL; }
-    bool isRef() const { return type == EditRecordType::VAR_REF; }
     bool isEntry() const { return type == EditRecordType::VAR_ENTRY; }
 
     String toDebugString() const

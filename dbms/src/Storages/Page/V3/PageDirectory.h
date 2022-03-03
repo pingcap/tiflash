@@ -68,6 +68,15 @@ using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
 public:
+    VersionedPageEntries()
+        : type(EditRecordType::VAR_DELETE)
+        , is_deleted(false)
+        , create_ver(0)
+        , delete_ver(0)
+        , ori_page_id(0)
+        , being_ref_count(1)
+    {}
+
     [[nodiscard]] PageLock acquireLock() const
     {
         return std::make_unique<std::lock_guard<std::mutex>>(m);
@@ -79,21 +88,9 @@ public:
 
     std::shared_ptr<PageId> createNewExternal(const PageVersionType & ver);
 
-    void createDelete(const PageVersionType & ver)
-    {
-        auto page_lock = acquireLock();
-        if (entries.empty() || !entries.rbegin()->second.isDelete())
-        {
-            entries.emplace(ver, VarEntry::newDelete());
-        }
-    }
+    void createDelete(const PageVersionType & ver);
 
-    void fromRestored(const PageVersionType & ver, EditRecordType type, const PageEntryV3 & entry, PageId ori_page_id, Int64 being_ref_count)
-    {
-        auto page_lock = acquireLock();
-        assert(entries.empty());
-        entries.emplace(ver, VarEntry::fromRestored(type, entry, ori_page_id, being_ref_count));
-    }
+    void fromRestored(const PageVersionType & ver, EditRecordType type, const PageEntryV3 & entry, PageId ori_page_id, Int64 being_ref_count);
 
     enum ResolveResult
     {
@@ -175,8 +172,21 @@ public:
 
 private:
     mutable std::mutex m;
-    // Entries sorted by version
+    EditRecordType type;
+    // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
+    bool is_deleted = false;
+    // Entries sorted by version, valid when type == VAR_ENTRY
     std::multimap<PageVersionType, VarEntry> entries;
+    // The created version, valid when type == VAR_REF/VAR_EXTERNAL
+    PageVersionType create_ver;
+    // The deleted version, valid when type == VAR_REF/VAR_EXTERNAL && is_deleted = true
+    PageVersionType delete_ver;
+    // Original page id, valid when type == VAR_REF
+    PageId ori_page_id;
+    // Being ref counter, valid when type == VAR_EXTERNAL
+    Int64 being_ref_count;
+    // A shared ptr to a holder, valid when type == VAR_EXTERNAL
+    std::shared_ptr<PageId> external_holder;
 };
 
 // `PageDirectory` store multi-versions entries for the same

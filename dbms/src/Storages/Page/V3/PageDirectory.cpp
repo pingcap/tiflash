@@ -54,12 +54,23 @@ namespace PS::V3
 void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
-    if (entries.empty())
+    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_ENTRY)
     {
+        throw Exception(fmt::format(
+            "try to create new entry version on an id with invalid state "
+            "[ver={}] [num_entries={}]",
+            ver,
+            entries.size()));
+    }
+
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        type = EditRecordType::VAR_ENTRY;
         entries.emplace(ver, VarEntry::newNormalEntry(entry));
         return;
     }
 
+    // else type == EditRecordType::VAR_ENTRY
     auto last_iter = entries.rbegin();
     if (last_iter->second.isDelete())
     {
@@ -80,135 +91,203 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
         // inherit the `being_ref_count` of the last entry
         entries.emplace(ver, VarEntry::newRepalcingEntry(last_iter->second, entry));
     }
-    else if (last_iter->second.isRef())
-        throw Exception(fmt::format("Try to create new normal entry on an ref page"));
-    else if (last_iter->second.isExternal())
-        throw Exception(fmt::format("Try to create new normal entry on an ext page"));
 }
 
 std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
-    auto need_create = [this, &ver]() {
-        if (entries.empty())
-            return true;
+    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_EXTERNAL)
+    {
+        throw Exception(fmt::format(
+            "try to create new external version on an id that already has entries "
+            "[ver={}] [num_entries={}]",
+            ver,
+            entries.size()));
+    }
 
-        auto last_iter = entries.rbegin();
-        if (last_iter->second.isDelete())
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        type = EditRecordType::VAR_EXTERNAL;
+        is_deleted = false;
+        create_ver = ver;
+        delete_ver = PageVersionType(0);
+        being_ref_count = 1;
+        external_holder = std::make_shared<PageId>(0);
+        return external_holder;
+    }
+    else if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        if (is_deleted)
         {
-            return true;
+            // adding external after deleted should be ok
+            if (delete_ver <= ver)
+            {
+                is_deleted = false;
+                create_ver = ver;
+                delete_ver = PageVersionType(0);
+                being_ref_count = 1;
+                external_holder = std::make_shared<PageId>(0);
+                return external_holder;
+            }
+            else
+            {
+                // apply a external with smaller ver than delete_ver, just ignore
+                return nullptr;
+            }
         }
-        else if (last_iter->second.isExternal())
+        else
         {
-            // just ignore
+            if (ver <= create_ver)
+            {
+                // adding external should be idempotent, just ignore
+                return nullptr;
+            }
         }
-        else if (last_iter->second.isEntry())
-        {
-            throw Exception(fmt::format(
-                "try to create new external on a id that already has entry "
-                "[ver={}] [last_ver={}] [last_entry={}]",
-                ver,
-                last_iter->first,
-                last_iter->second.toDebugString()));
-        }
-        else if (last_iter->second.isRef())
-        {
-            throw Exception(fmt::format(
-                "try to create new external on a id that already has ref to another id "
-                "[ver={}] [last_ver={}] [last_entry={}]",
-                ver,
-                last_iter->first,
-                last_iter->second.toDebugString()));
-        }
-        return false;
-    }();
-
-    if (!need_create)
-        return nullptr;
-    auto var_entry = VarEntry::newExternal();
-    entries.emplace(ver, var_entry); // if the ver is already exist, just ignore
-    return var_entry.external_holder;
+    }
+    // FIXME: more info
+    throw Exception(fmt::format("try to create new external version with invalid state"));
 }
 
-bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id)
+void VersionedPageEntries::createDelete(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
-    if (entries.empty())
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        entries.emplace(ver, VarEntry::newRefEntry(ori_page_id));
-        return true;
-    }
-
-    // adding ref to the same ori id should be idempotent
-    // adding ref after deleted should be ok
-    // adding ref to replace put/external is not allowed
-    auto last_iter = entries.rbegin();
-    if (last_iter->second.isRef())
-    {
-        // duplicated ref pair, just ignore
-        if (last_iter->second.origin_page_id == ori_page_id)
+        if (entries.empty() || !entries.rbegin()->second.isDelete())
         {
-            return false;
+            entries.emplace(ver, VarEntry::newDelete());
         }
-
-        throw Exception(fmt::format(
-            "try to create new ref version on a id that already has ref to another id "
-            "[ver={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
-            ver,
-            ori_page_id,
-            last_iter->first,
-            last_iter->second.toDebugString()));
     }
-    else if (last_iter->second.isDelete())
+    else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
     {
-        // apply ref on a deleted page, ok
-        entries.emplace(ver, VarEntry::newRefEntry(ori_page_id));
+        is_deleted = true;
+        delete_ver = ver;
+    }
+}
+
+bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id_)
+{
+    auto page_lock = acquireLock();
+    // adding ref to replace put/external is not allowed
+    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_REF)
+    {
+        throw Exception(fmt::format(
+            "try to create new ref version on an id that already has entries "
+            "[ver={}] [ori_page_id={}] [num_entries={}]",
+            ver,
+            ori_page_id_,
+            entries.size()));
+    }
+
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        type = EditRecordType::VAR_REF;
+        is_deleted = false;
+        ori_page_id = ori_page_id_;
+        create_ver = ver;
         return true;
     }
+    else if (type == EditRecordType::VAR_REF)
+    {
+        if (is_deleted)
+        {
+            // adding ref after deleted should be ok
+            if (delete_ver <= ver)
+            {
+                ori_page_id = ori_page_id_;
+                create_ver = ver;
+                is_deleted = false;
+                delete_ver = PageVersionType(0);
+                return true;
+            }
+            else if (ori_page_id == ori_page_id_)
+            {
+                // apply a ref to same ori id with small ver, just ignore
+                return false;
+            }
+        }
+        else
+        {
+            if (ori_page_id == ori_page_id_)
+            {
+                // adding ref to the same ori id should be idempotent, just ignore
+                return false;
+            }
+        }
+    }
+    // FIXME: more info
+    throw Exception(fmt::format("try to create new ref version with invalid state"));
+}
 
-    // else entry or external
-    throw Exception(fmt::format(
-        "try to create new ref version on an id that already has entries "
-        "[ver={}] [ori_page_id={}] [last_ver={}] [last_entry={}]",
-        ver,
-        ori_page_id,
-        last_iter->first,
-        last_iter->second.toDebugString()));
+void VersionedPageEntries::fromRestored(const PageVersionType & ver, EditRecordType type_, const PageEntryV3 & entry, PageId ori_page_id_, Int64 being_ref_count_)
+{
+    auto page_lock = acquireLock();
+    if (type_ == EditRecordType::VAR_REF)
+    {
+        type = EditRecordType::VAR_REF;
+        is_deleted = false;
+        create_ver = ver;
+        ori_page_id = ori_page_id_;
+    }
+    else if (type_ == EditRecordType::VAR_EXTERNAL)
+    {
+        type = EditRecordType::VAR_EXTERNAL;
+        is_deleted = false;
+        create_ver = ver;
+        being_ref_count = being_ref_count_;
+    }
+    else if (type_ == EditRecordType::VAR_ENTRY)
+    {
+        type = EditRecordType::VAR_ENTRY;
+        entries.emplace(ver, VarEntry::fromRestored(type, entry, being_ref_count_));
+    }
 }
 
 std::tuple<VersionedPageEntries::ResolveResult, PageId, PageVersionType>
 VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry)
 {
     auto page_lock = acquireLock();
-    // entries are sorted by <ver, epoch>, increase the ref count of the first one less than <ver+1, 0>
-    if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
-        iter != entries.end())
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        // If we applied write batches like this: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}
-        // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
-        // when resolving 11 to 10, we need to set `check_prev` to true
-        if (iter->second.isDelete() && check_prev && iter->first.sequence == seq)
+        // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
+        if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+            iter != entries.end())
         {
-            if (iter == entries.begin())
+            // If we applied write batches like this: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}
+            // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
+            // when resolving 11 to 10, we need to set `check_prev` to true
+            if (iter->second.isDelete() && check_prev && iter->first.sequence == seq)
             {
-                return {RESOLVE_FAIL, 0, PageVersionType(0)};
+                if (iter == entries.begin())
+                {
+                    return {RESOLVE_FAIL, 0, PageVersionType(0)};
+                }
+                --iter;
+                // fallover the check the prev item
             }
-            --iter;
-            // fallover the check the prev item
-        }
 
-        if (iter->second.isEntry())
+            if (iter->second.isEntry())
+            {
+                if (entry != nullptr)
+                    *entry = iter->second.entry;
+                return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+            }
+        }
+    }
+    else if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        if (create_ver.sequence <= seq
+            && (!is_deleted || (is_deleted && (seq < delete_ver.sequence || (check_prev && seq <= delete_ver.sequence)))))
         {
-            if (entry != nullptr)
-                *entry = iter->second.entry;
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
         }
-        else if (iter->second.isExternal())
+    }
+    else if (type == EditRecordType::VAR_REF)
+    {
+        if (create_ver.sequence <= seq && (!is_deleted || (is_deleted && seq < delete_ver.sequence)))
         {
-            return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+            return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
-        else if (iter->second.isRef())
-            return {RESOLVE_TO_REF, iter->second.origin_page_id, iter->first};
     }
     return {RESOLVE_FAIL, 0, PageVersionType(0)};
 }
@@ -216,13 +295,16 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
-    // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
-    if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
-        iter != entries.end())
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        // NORMAL
-        if (iter->second.isEntry())
-            return iter->second.entry;
+        // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
+        if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+            iter != entries.end())
+        {
+            // NORMAL
+            if (iter->second.isEntry())
+                return iter->second.entry;
+        }
     }
     return std::nullopt;
 }
@@ -230,13 +312,23 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
 Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
-    if (auto iter = MapUtils::findMutLess(entries, PageVersionType(ver.sequence + 1));
-        iter != entries.end())
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        if (iter->second.isEntry() || iter->second.isExternal())
-            return ++iter->second.being_ref_count;
-        else
-            throw Exception(fmt::format("The entry to be added ref count is not normal/external entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
+        if (auto iter = MapUtils::findMutLess(entries, PageVersionType(ver.sequence + 1));
+            iter != entries.end())
+        {
+            if (iter->second.isEntry())
+                return ++iter->second.being_ref_count;
+            else
+                throw Exception(fmt::format("The entry to be added ref count is not normal/external entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
+        }
+    }
+    else if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        if (create_ver <= ver && (!is_deleted || (is_deleted && ver < delete_ver)))
+        {
+            return ++being_ref_count;
+        }
     }
     throw Exception(fmt::format("The entry to be added ref count is not found [ver={}]", ver));
 }
@@ -254,18 +346,21 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     // the total entries size taken out
     PageSize total_entries_size = 0;
     auto page_lock = acquireLock();
-    for (const auto & [versioned_type, entry_or_del] : entries)
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        if (!entry_or_del.isEntry())
+        for (const auto & [versioned_type, entry_or_del] : entries)
         {
-            continue;
-        }
+            if (!entry_or_del.isEntry())
+            {
+                continue;
+            }
 
-        const auto & entry = entry_or_del.entry;
-        if (blob_ids.count(entry.file_id) > 0)
-        {
-            blob_versioned_entries[entry.file_id].emplace_back(page_id, versioned_type, entry);
-            total_entries_size += entry.size;
+            const auto & entry = entry_or_del.entry;
+            if (blob_ids.count(entry.file_id) > 0)
+            {
+                blob_versioned_entries[entry.file_id].emplace_back(page_id, versioned_type, entry);
+                total_entries_size += entry.size;
+            }
         }
     }
     return total_entries_size;
@@ -278,6 +373,45 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     PageEntriesV3 & entries_removed,
     const PageLock & /*page_lock*/)
 {
+    if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        return (being_ref_count == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
+    }
+    else if (type == EditRecordType::VAR_REF)
+    {
+        if (!is_deleted || lowest_seq < delete_ver.sequence)
+            return false;
+
+        if (normal_entries_to_deref != nullptr)
+        {
+            // need to decrease the ref count by <id=iter->second.origin_page_id, ver=iter->first, num=1>
+            if (auto [deref_counter, new_created] = normal_entries_to_deref->emplace(std::make_pair(ori_page_id, std::make_pair(/*ver=*/create_ver, /*count=*/1))); !new_created)
+            {
+                if (deref_counter->second.first.sequence != create_ver.sequence)
+                {
+                    throw Exception(fmt::format(
+                        "There exist two different version of ref, should not happen [page_id={}] [ori_page_id={}] [ver={}] [another_ver={}]",
+                        page_id,
+                        ori_page_id,
+                        create_ver,
+                        deref_counter->second.first));
+                }
+                // the id is already exist in deref map, increase the num to decrease ref count
+                deref_counter->second.second += 1;
+            }
+        }
+        return true;
+    }
+    else if (type == EditRecordType::VAR_DELETE)
+    {
+        return true;
+    }
+    else if (type != EditRecordType::VAR_ENTRY)
+    {
+        throw Exception("Invalid state");
+    }
+
+    // type == EditRecordType::VAR_ENTRY
     if (entries.empty())
     {
         return true;
@@ -293,7 +427,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
 
     // If the first version less than <lowest_seq+1, 0> is entry / external,
     // then we can remove those entries prev of it
-    bool keep_if_being_ref = !(iter->second.isEntry() || iter->second.isExternal());
+    bool keep_if_being_ref = !iter->second.isEntry();
     --iter; // keep the first version less than <lowest_seq+1, 0>
     while (true)
     {
@@ -302,38 +436,13 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             // Already deleted
             iter = entries.erase(iter);
         }
-        else if (iter->second.isRef())
-        {
-            if (normal_entries_to_deref != nullptr)
-            {
-                // need to decrease the ref count by <id=iter->second.origin_page_id, ver=iter->first, num=1>
-                if (auto [deref_counter, new_created] = normal_entries_to_deref->emplace(std::make_pair(iter->second.origin_page_id, std::make_pair(/*ver=*/iter->first, /*count=*/1))); !new_created)
-                {
-                    if (deref_counter->second.first.sequence != iter->first.epoch)
-                    {
-                        throw Exception(fmt::format(
-                            "There exist two different version of ref, should not happen [page_id={}] [ori_page_id={}] [ver={}] [another_ver={}]",
-                            page_id,
-                            iter->second.origin_page_id,
-                            iter->first,
-                            deref_counter->second.first));
-                    }
-                    // the id is already exist in deref map, increase the num to decrease ref count
-                    deref_counter->second.second += 1;
-                }
-                iter = entries.erase(iter);
-            }
-        }
-        else if (iter->second.isEntry() || iter->second.isExternal())
+        else if (iter->second.isEntry())
         {
             if (keep_if_being_ref)
             {
                 if (iter->second.being_ref_count == 1)
                 {
-                    if (iter->second.isEntry())
-                    {
-                        entries_removed.emplace_back(iter->second.entry);
-                    }
+                    entries_removed.emplace_back(iter->second.entry);
                     iter = entries.erase(iter);
                 }
                 // The `being_ref_count` for this version is valid. While for older versions,
@@ -359,57 +468,100 @@ bool VersionedPageEntries::cleanOutdatedEntries(
 bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed)
 {
     auto page_lock = acquireLock();
-
-    // decrease the ref-counter
-    auto iter = MapUtils::findMutLess(entries, PageVersionType(deref_ver.sequence + 1, 0));
-    if (iter == entries.end())
+    if (type == EditRecordType::VAR_EXTERNAL)
     {
-        throw Exception(fmt::format("Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
+        if (being_ref_count <= deref_count)
+        {
+            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
+        }
+        being_ref_count -= deref_count;
+        return (is_deleted && delete_ver.sequence <= lowest_seq && being_ref_count == 1);
     }
-    if (iter->second.isDelete())
+    else if (type == EditRecordType::VAR_ENTRY)
     {
-        if (iter == entries.begin())
+        // decrease the ref-counter
+        auto iter = MapUtils::findMutLess(entries, PageVersionType(deref_ver.sequence + 1, 0));
+        if (iter == entries.end())
         {
             throw Exception(fmt::format("Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
-        --iter; // move to the previous entry
-    }
-    if (iter->second.being_ref_count <= deref_count)
-    {
-        throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
-    }
-    iter->second.being_ref_count -= deref_count;
+        if (iter->second.isDelete())
+        {
+            if (iter == entries.begin())
+            {
+                throw Exception(fmt::format("Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
+            }
+            --iter; // move to the previous entry
+        }
+        if (iter->second.being_ref_count <= deref_count)
+        {
+            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
+        }
+        iter->second.being_ref_count -= deref_count;
 
-    // Clean outdated entries after decreased the ref-counter
-    // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-    return cleanOutdatedEntries(lowest_seq, page_id, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
+        // Clean outdated entries after decreased the ref-counter
+        // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
+        return cleanOutdatedEntries(lowest_seq, page_id, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
+    }
+    throw Exception("Invalid state");
 }
 
 void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, PageEntriesEdit & edit)
 {
     auto page_lock = acquireLock();
-    // dump the latest entry if it is not a "delete"
-    auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
-    if (last_iter->second.isExternal() || last_iter->second.isEntry() || last_iter->second.isRef())
+    if (type == EditRecordType::VAR_REF)
     {
-        edit.varEntry(page_id, last_iter->first, last_iter->second);
-    }
-    else if (last_iter->second.isDelete())
-    {
-        if (last_iter == entries.begin())
+        if (create_ver.sequence > seq)
+            return;
+        if (!is_deleted || (is_deleted && seq < delete_ver.sequence))
         {
-            // only delete left, then we don't need to keep this
+            VarEntry var;
+            var.type = type;
+            var.origin_page_id = ori_page_id;
+            edit.varEntry(page_id, create_ver, var);
+        }
+        return;
+    }
+    else if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        if (create_ver.sequence > seq)
+            return;
+        if (!is_deleted || (is_deleted && seq < delete_ver.sequence))
+        {
+            VarEntry var;
+            var.type = type;
+            var.being_ref_count = being_ref_count;
+            edit.varEntry(page_id, create_ver, var);
+        }
+        return;
+    }
+    else if (type == EditRecordType::VAR_ENTRY)
+    {
+        // dump the latest entry if it is not a "delete"
+        auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+        if (last_iter->second.isEntry())
+        {
+            edit.varEntry(page_id, last_iter->first, last_iter->second);
             return;
         }
-        auto prev_iter = --last_iter;
-        if (prev_iter->second.isEntry() || prev_iter->second.isExternal())
+        else if (last_iter->second.isDelete())
         {
-            if (prev_iter->second.being_ref_count == 1)
+            if (last_iter == entries.begin())
+            {
+                // only delete left, then we don't need to keep this
                 return;
-            // It is being ref by another id, should persist the item and delete
-            edit.varEntry(page_id, prev_iter->first, prev_iter->second);
-            edit.varEntry(page_id, last_iter->first, last_iter->second);
+            }
+            auto prev_iter = --last_iter;
+            if (prev_iter->second.isEntry())
+            {
+                if (prev_iter->second.being_ref_count == 1)
+                    return;
+                // It is being ref by another id, should persist the item and delete
+                edit.varEntry(page_id, prev_iter->first, prev_iter->second);
+                edit.varEntry(page_id, last_iter->first, last_iter->second);
+            }
         }
+        return;
     }
 }
 
