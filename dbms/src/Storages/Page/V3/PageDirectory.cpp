@@ -67,10 +67,12 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
     }
     else if (last_iter->second.isEntry())
     {
-        if (last_iter->second.being_ref_count != 1 && last_iter->first < ver)
+        // It is ok to replace the entry with same sequence and newer epoch, but not valid
+        // to replace the entry with newer sequence.
+        if (last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence)
         {
             throw Exception(fmt::format(
-                "Try to replace normal entry with an newer version [ver={}] [prev_ver={}] [lady_entry={}]",
+                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                 ver,
                 last_iter->first,
                 last_iter->second.toDebugString()));
@@ -90,6 +92,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
     auto need_create = [this, &ver]() {
         if (entries.empty())
             return true;
+
         auto last_iter = entries.rbegin();
         if (last_iter->second.isDelete())
         {
@@ -123,7 +126,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
     if (!need_create)
         return nullptr;
     auto var_entry = VarEntry::newExternal();
-    entries.emplace(ver, var_entry);
+    entries.emplace(ver, var_entry); // if the ver is already exist, just ignore
     return var_entry.external_holder;
 }
 
@@ -212,7 +215,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
         if (iter->second.isEntry() || iter->second.isExternal())
             return ++iter->second.being_ref_count;
         else
-            throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
+            throw Exception(fmt::format("The entry to be added ref count is not normal/external entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
     }
     throw Exception(fmt::format("The entry to be added ref count is not found [ver={}]", ver));
 }
@@ -247,17 +250,16 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     return total_entries_size;
 }
 
-std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
+bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
     PageId page_id,
     std::map<PageId, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+    PageEntriesV3 & entries_removed,
     const PageLock & /*page_lock*/)
 {
-    PageEntriesV3 outdated_entries;
-
     if (entries.empty())
     {
-        return std::make_pair(outdated_entries, true);
+        return true;
     }
 
     auto iter = MapUtils::findLess(entries, PageVersionType(lowest_seq + 1));
@@ -265,23 +267,25 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
     // all version in this list don't need gc.
     if (iter == entries.begin() || iter == entries.end())
     {
-        return std::make_pair(outdated_entries, false);
+        return false;
     }
 
+    // If the first version less than <lowest_seq+1, 0> is entry / external,
+    // then we can remove those entries prev of it
     bool keep_if_being_ref = !(iter->second.isEntry() || iter->second.isExternal());
     --iter; // keep the first version less than <lowest_seq+1, 0>
     while (true)
     {
         if (iter->second.isDelete())
         {
-            // Already deleted, no need put in `del_entries`
+            // Already deleted
             iter = entries.erase(iter);
         }
         else if (iter->second.isRef())
         {
             if (normal_entries_to_deref != nullptr)
             {
-                // need to decrease the ref count by <ver=iter->first, ori_page_id=iter->second.origin_page_id;>
+                // need to decrease the ref count by <id=iter->second.origin_page_id, ver=iter->first, num=1>
                 if (auto [deref_counter, new_created] = normal_entries_to_deref->emplace(std::make_pair(iter->second.origin_page_id, std::make_pair(/*ver=*/iter->first, /*count=*/1))); !new_created)
                 {
                     if (deref_counter->second.first.sequence != iter->first.epoch)
@@ -293,6 +297,7 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
                             iter->first,
                             deref_counter->second.first));
                     }
+                    // the id is already exist in deref map, increase the num to decrease ref count
                     deref_counter->second.second += 1;
                 }
                 iter = entries.erase(iter);
@@ -304,7 +309,10 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
             {
                 if (iter->second.being_ref_count == 1)
                 {
-                    outdated_entries.emplace_back(iter->second.entry);
+                    if (iter->second.isEntry())
+                    {
+                        entries_removed.emplace_back(iter->second.entry);
+                    }
                     iter = entries.erase(iter);
                 }
                 // The `being_ref_count` for this version is valid. While for older versions,
@@ -313,7 +321,8 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
             }
             else
             {
-                outdated_entries.emplace_back(iter->second.entry);
+                // else there are newer "entry" in the version list, the outdated entries should be removed
+                entries_removed.emplace_back(iter->second.entry);
                 iter = entries.erase(iter);
             }
         }
@@ -323,10 +332,10 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::cleanOutdatedEntries(
         --iter;
     }
 
-    return std::make_pair(std::move(outdated_entries), entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete()));
+    return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-std::pair<PageEntriesV3, bool> VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, const Int64 deref_count)
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed)
 {
     auto page_lock = acquireLock();
 
@@ -351,7 +360,8 @@ std::pair<PageEntriesV3, bool> VersionedPageEntries::derefAndClean(UInt64 lowest
     iter->second.being_ref_count -= deref_count;
 
     // Clean outdated entries after decreased the ref-counter
-    return cleanOutdatedEntries(lowest_seq, page_id, nullptr, page_lock);
+    // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
+    return cleanOutdatedEntries(lowest_seq, page_id, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
 }
 
 void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, PageEntriesEdit & edit)
@@ -800,18 +810,19 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
 }
 
 
-std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+PageEntriesV3 PageDirectory::gc(const WriteLimiterPtr & write_limiter)
 {
-    [[maybe_unused]] bool done_anything = false;
+    [[maybe_unused]] bool done_any_io = false;
     UInt64 lowest_seq = sequence.load();
 
     {
         // In order not to make read amplification too high, only apply compact logs when ...
-        auto files_snap = wal->prepareCompactLogs();
+        auto files_snap = wal->getFilesSnapshot();
         if (files_snap.needSave())
         {
-            auto edit = dump();
-            done_anything |= wal->compactLogs(std::move(files_snap), std::move(edit), write_limiter, read_limiter);
+            // The records persisted in `files_snap` is older than or equal to all records in `edit`
+            auto edit = dumpSnapshotToEdit();
+            done_any_io |= wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
         }
     }
 
@@ -830,7 +841,7 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
         }
     }
 
-    std::vector<PageEntriesV3> all_del_entries;
+    PageEntriesV3 all_del_entries;
     MVCCMapType::iterator iter;
     {
         std::shared_lock read_lock(table_rw_mutex);
@@ -839,20 +850,20 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
             return all_del_entries;
     }
 
+    // The page_id that we need to decrease ref count
+    // { id_0: <version, num to decrease>, id_1: <...>, ... }
     std::map<PageId, std::pair<PageVersionType, Int64>> normal_entries_to_deref;
+    // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do gc on the version list without lock on `mvcc_table_directory`.
-        const auto & [del_entries, all_deleted] = iter->second->cleanOutdatedEntries(
+        const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             /*page_id=*/iter->first,
             &normal_entries_to_deref,
+            all_del_entries,
             iter->second->acquireLock());
-        if (!del_entries.empty())
-        {
-            all_del_entries.emplace_back(std::move(del_entries));
-        }
 
         {
             std::unique_lock write_lock(table_rw_mutex);
@@ -870,6 +881,7 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
         }
     }
 
+    // Iterate all page_id that need to decrease ref count of specified version.
     for (const auto & [page_id, deref_counter] : normal_entries_to_deref)
     {
         MVCCMapType::iterator iter;
@@ -880,11 +892,12 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
                 continue;
         }
 
-        const auto & [del_entries, all_deleted] = iter->second->derefAndClean(lowest_seq, page_id, deref_counter.first, deref_counter.second);
-        if (!del_entries.empty())
-        {
-            all_del_entries.emplace_back(std::move(del_entries));
-        }
+        const bool all_deleted = iter->second->derefAndClean(
+            lowest_seq,
+            page_id,
+            deref_counter.first,
+            deref_counter.second,
+            all_del_entries);
 
         if (all_deleted)
         {
@@ -896,7 +909,7 @@ std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limit
     return all_del_entries;
 }
 
-PageEntriesEdit PageDirectory::dump()
+PageEntriesEdit PageDirectory::dumpSnapshotToEdit()
 {
     auto snap = createSnapshot();
     PageEntriesEdit edit;
@@ -918,6 +931,7 @@ PageEntriesEdit PageDirectory::dump()
                 break;
         }
     }
+    // TODO: log down the sequence and time elapsed
     return edit;
 }
 

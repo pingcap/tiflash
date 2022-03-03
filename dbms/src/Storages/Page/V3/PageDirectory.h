@@ -152,12 +152,18 @@ public:
      *    lowest_seq : 1
      *    Then no entry should be delete.
      */
-    std::pair<PageEntriesV3, bool> cleanOutdatedEntries(
+    bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         PageId page_id,
         std::map<PageId, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+        PageEntriesV3 & entries_removed,
         const PageLock & page_lock);
-    std::pair<PageEntriesV3, bool> derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, Int64 deref_count);
+    bool derefAndClean(
+        UInt64 lowest_seq,
+        PageId page_id,
+        const PageVersionType & deref_ver,
+        Int64 deref_count,
+        PageEntriesV3 & entries_removed);
 
     void collapseTo(UInt64 seq, PageId page_id, PageEntriesEdit & edit);
 
@@ -220,11 +226,11 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    std::vector<PageEntriesV3> gc(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    PageEntriesV3 gc(const WriteLimiterPtr & write_limiter = nullptr);
 
     std::set<PageId> getAliveExternalIds() const;
 
-    PageEntriesEdit dump();
+    PageEntriesEdit dumpSnapshotToEdit();
 
     size_t numPages() const
     {

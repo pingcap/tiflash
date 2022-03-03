@@ -507,9 +507,36 @@ CATCH
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
     entries.createNewEntry(PageVersionType((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
-TEST(VersionedEntriesTest, InsertGet)
+class VersionedEntriesTest : public ::testing::Test
 {
+public:
+    void SetUp() override
+    {
+    }
+
+    using DerefCounter = std::map<PageId, std::pair<PageVersionType, Int64>>;
+    std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
+    {
+        DerefCounter deref_counter;
+        PageEntriesV3 removed_entries;
+        bool all_removed = entries.cleanOutdatedEntries(seq, page_id, &deref_counter, removed_entries, entries.acquireLock());
+        return {all_removed, removed_entries, deref_counter};
+    }
+
+    std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersionType ver, Int64 decrease_num)
+    {
+        PageEntriesV3 removed_entries;
+        bool all_removed = entries.derefAndClean(seq, page_id, ver, decrease_num, removed_entries);
+        return {all_removed, removed_entries};
+    }
+
+protected:
+    const PageId page_id = 100;
     VersionedPageEntries entries;
+};
+
+TEST_F(VersionedEntriesTest, InsertGet)
+{
     INSERT_ENTRY(2);
     INSERT_ENTRY(5);
     INSERT_ENTRY(10);
@@ -566,10 +593,9 @@ TEST(VersionedEntriesTest, InsertGet)
     }
 }
 
-TEST(VersionedEntriesTest, GC)
+TEST_F(VersionedEntriesTest, GC)
 try
 {
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
     INSERT_ENTRY(5);
@@ -579,36 +605,33 @@ try
     INSERT_ENTRY(11);
     entries.createDelete(PageVersionType(15));
 
-    PageId page_id = 100;
-    std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
-
     // noting to be removed
-    auto removed_entries = entries.cleanOutdatedEntries(1, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 0);
+    auto [all_removed, removed_entries, deref_counter] = runClean(1);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_EQ(deref_counter.size(), 0);
 
     // <2,0> get removed.
-    removed_entries = entries.cleanOutdatedEntries(2, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    auto iter = removed_entries.first.begin();
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(2);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 1);
+    auto iter = removed_entries.begin();
     ASSERT_SAME_ENTRY(entry_v2, *iter);
     ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // nothing get removed.
-    removed_entries = entries.cleanOutdatedEntries(4, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 0);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(4);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(4));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // <2,1>, <5,0>, <5,1>, <5,2>, <10,0> get removed.
-    removed_entries = entries.cleanOutdatedEntries(11, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 5);
-    iter = removed_entries.first.begin();
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(11);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 5);
+    iter = removed_entries.begin();
     ASSERT_SAME_ENTRY(entry_v10, *iter);
     iter++;
     ASSERT_SAME_ENTRY(entry_gc_v5_2, *iter);
@@ -622,18 +645,17 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // <11,0> get removed, all cleared.
-    removed_entries = entries.cleanOutdatedEntries(20, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_TRUE(removed_entries.second); // should remove this chain
-    ASSERT_EQ(removed_entries.first.size(), 1);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(20);
+    ASSERT_TRUE(all_removed); // should remove this chain
+    ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_FALSE(entries.getEntry(20));
     ASSERT_EQ(deref_counter.size(), 0);
 }
 CATCH
 
-TEST(VersionedEntriesTest, DeleteMultiTime)
+TEST_F(VersionedEntriesTest, DeleteMultiTime)
 try
 {
-    VersionedPageEntries entries;
     entries.createDelete(PageVersionType(1));
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
@@ -641,34 +663,35 @@ try
     entries.createDelete(PageVersionType(17));
     entries.createDelete(PageVersionType(16));
 
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
     // <2,0> get removed.
-    auto removed_entries = entries.cleanOutdatedEntries(2, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    auto iter = removed_entries.first.begin();
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(2);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 1);
+    auto iter = removed_entries.begin();
     ASSERT_SAME_ENTRY(entry_v2, *iter);
     ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    removed_entries = entries.cleanOutdatedEntries(20, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    ASSERT_TRUE(removed_entries.second); // should remove this chain
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(20);
+    ASSERT_EQ(removed_entries.size(), 1);
+    ASSERT_TRUE(all_removed); // should remove this chain
     ASSERT_FALSE(entries.getEntry(20));
     ASSERT_EQ(deref_counter.size(), 0);
 }
 CATCH
 
-TEST(VersionedEntriesTest, DontCleanWhenBeingRef)
+TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef)
 try
 {
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
@@ -679,34 +702,34 @@ try
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 0> is not removed since it's being ref
-    auto removed_entries = entries.cleanOutdatedEntries(5, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 0);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(5);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(entries.getEntry(5));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // decrease 1 ref counting
-    removed_entries = entries.derefAndClean(5, page_id, PageVersionType(2), 1);
-    ASSERT_EQ(removed_entries.first.size(), 0);
-    ASSERT_FALSE(removed_entries.second); // should not remove this chain
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    ASSERT_EQ(removed_entries.size(), 0);
+    ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 
     // clear all
-    removed_entries = entries.derefAndClean(5, page_id, PageVersionType(2), 1);
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    ASSERT_SAME_ENTRY(removed_entries.first[0], entry_v2);
-    ASSERT_TRUE(removed_entries.second); // should remove this chain
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    ASSERT_EQ(removed_entries.size(), 1);
+    ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
+    ASSERT_TRUE(all_removed); // should remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 }
 CATCH
 
-TEST(VersionedEntriesTest, DontCleanWhenBeingRef2)
+TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef2)
 try
 {
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
@@ -717,28 +740,28 @@ try
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 0> is not removed since it's being ref
-    auto removed_entries = entries.cleanOutdatedEntries(5, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 0);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(5);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(entries.getEntry(5));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    removed_entries = entries.derefAndClean(5, page_id, PageVersionType(2), 2);
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    ASSERT_SAME_ENTRY(removed_entries.first[0], entry_v2);
-    ASSERT_TRUE(removed_entries.second); // should remove this chain
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    ASSERT_EQ(removed_entries.size(), 1);
+    ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
+    ASSERT_TRUE(all_removed); // should remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 }
 CATCH
 
-TEST(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert)
+TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert)
 try
 {
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
@@ -749,29 +772,29 @@ try
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
 
     // <2, 2> is not removed since it's being ref, but <2,0> <2,1> is removed since they are replaced by newer version
-    auto removed_entries = entries.cleanOutdatedEntries(5, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 2);
-    ASSERT_SAME_ENTRY(removed_entries.first[0], entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(removed_entries.first[1], entry_v2);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(5);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 2);
+    ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(removed_entries[1], entry_v2);
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    removed_entries = entries.derefAndClean(5, page_id, PageVersionType(2), 2);
-    ASSERT_EQ(removed_entries.first.size(), 0);
-    ASSERT_FALSE(removed_entries.second); // should not remove this chain
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    ASSERT_EQ(removed_entries.size(), 0);
+    ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
 }
 CATCH
 
-TEST(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert2)
+TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert2)
 try
 {
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     entries.incrRefCount(PageVersionType(2));
     entries.incrRefCount(PageVersionType(2));
@@ -784,30 +807,30 @@ try
     ASSERT_FALSE(entries.getEntry(5));
 
     // <2, 2> is not removed since it's being ref, but <2,0> <2,1> is removed since they are replaced by newer version
-    auto removed_entries = entries.cleanOutdatedEntries(5, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_FALSE(removed_entries.second);
-    ASSERT_EQ(removed_entries.first.size(), 2);
-    ASSERT_SAME_ENTRY(removed_entries.first[0], entry_gc_v2_1);
-    ASSERT_SAME_ENTRY(removed_entries.first[1], entry_v2);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(5);
+    ASSERT_FALSE(all_removed);
+    ASSERT_EQ(removed_entries.size(), 2);
+    ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_1);
+    ASSERT_SAME_ENTRY(removed_entries[1], entry_v2);
     ASSERT_FALSE(entries.getEntry(5));
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    removed_entries = entries.derefAndClean(5, page_id, PageVersionType(2), 2);
-    ASSERT_EQ(removed_entries.first.size(), 1);
-    ASSERT_SAME_ENTRY(removed_entries.first[0], entry_gc_v2_2);
-    ASSERT_TRUE(removed_entries.second); // should remove this chain
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    ASSERT_EQ(removed_entries.size(), 1);
+    ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_2);
+    ASSERT_TRUE(all_removed); // should remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 }
 CATCH
 
-TEST(VersionedEntriesTest, ReadAfterGcApplied)
+TEST_F(VersionedEntriesTest, ReadAfterGcApplied)
 try
 {
-    PageId page_id = 100;
+    bool all_removed;
     std::map<PageId, std::pair<PageVersionType, Int64>> deref_counter;
+    PageEntriesV3 removed_entries;
 
-    VersionedPageEntries entries;
     INSERT_ENTRY(2);
     INSERT_ENTRY(3);
     INSERT_ENTRY(5);
@@ -822,15 +845,13 @@ try
     ASSERT_SAME_ENTRY(entry_gc_v2_1, *entries.getEntry(2));
 
     // <2,0> get removed
-    auto removed_entries = entries.cleanOutdatedEntries(2, page_id, &deref_counter, entries.acquireLock());
-    ASSERT_EQ(removed_entries.first.size(), 1);
+    std::tie(all_removed, removed_entries, deref_counter) = runClean(2);
+    ASSERT_EQ(removed_entries.size(), 1);
 }
 CATCH
 
-TEST(VersionedEntriesTest, getEntriesByBlobId)
+TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 {
-    VersionedPageEntries entries;
-
     INSERT_BLOBID_ENTRY(1, 1);
     INSERT_BLOBID_ENTRY(1, 2);
     INSERT_BLOBID_ENTRY(2, 3);
@@ -1016,14 +1037,6 @@ class PageDirectoryGCTest : public PageDirectoryTest
         dir->apply(std::move(edit)); \
     }
 
-static size_t getNumEntries(const std::vector<PageEntriesV3> & entries)
-{
-    size_t num = 0;
-    for (const auto & es : entries)
-        num += es.size();
-    return num;
-}
-
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
 {
@@ -1051,9 +1064,8 @@ try
      *   snapshot remain: [v3,v5]
      */
     auto del_entries = dir->gc();
-    EXPECT_EQ(del_entries.size(), 1);
     // v1, v2 have been removed.
-    ASSERT_EQ(getNumEntries(del_entries), 2);
+    ASSERT_EQ(del_entries.size(), 2);
 
     EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
     EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot5);
@@ -1063,7 +1075,7 @@ try
     snapshot3.reset();
     snapshot5.reset();
     del_entries = dir->gc();
-    ASSERT_EQ(getNumEntries(del_entries), 2);
+    ASSERT_EQ(del_entries.size(), 2);
 
     auto snapshot_after_gc = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry_v5, dir, page_id, snapshot_after_gc);
@@ -1106,7 +1118,7 @@ try
          */
         const auto & del_entries = dir->gc();
         // page_id: []; another_page_id: v1 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 1);
+        EXPECT_EQ(del_entries.size(), 1);
     }
 
     {
@@ -1120,7 +1132,7 @@ try
          */
         const auto & del_entries = dir->gc();
         // page_id: v2; another_page_id: v3 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 2);
+        EXPECT_EQ(del_entries.size(), 2);
     }
 
     {
@@ -1134,7 +1146,7 @@ try
          */
         const auto & del_entries = dir->gc();
         // page_id: v5; another_page_id: v6,v7,v8 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 5);
+        EXPECT_EQ(del_entries.size(), 5);
     }
 }
 CATCH
@@ -1179,7 +1191,7 @@ try
          *   snapshot remain: [v1,v3,v5,v10]
          */
         auto removed_entries = dir->gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
-        EXPECT_EQ(getNumEntries(removed_entries), 0);
+        EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
         EXPECT_ENTRY_EQ(entry_v3, dir, page_id, snapshot3);
@@ -1200,7 +1212,7 @@ try
         snapshot5.reset();
         snapshot10.reset();
         auto removed_entries = dir->gc();
-        EXPECT_EQ(getNumEntries(removed_entries), 0);
+        EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
     }
@@ -1216,7 +1228,7 @@ try
         snapshot1.reset();
         auto removed_entries = dir->gc(); // this will compact all versions
         // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
-        EXPECT_EQ(getNumEntries(removed_entries), 8);
+        EXPECT_EQ(removed_entries.size(), 8);
 
         auto snap_after_gc = dir->createSnapshot();
         EXPECT_ENTRY_EQ(entry_v10, dir, page_id, snap_after_gc);
@@ -1273,7 +1285,7 @@ try
          */
         auto del_entries = dir->gc();
         // page_id: v3; another_page_id: v1,v2 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 3);
+        EXPECT_EQ(del_entries.size(), 3);
         ASSERT_EQ(dir->numPages(), 2);
     }
 
@@ -1291,7 +1303,7 @@ try
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
         auto del_entries = dir->gc();
         // page_id: v5; another_page_id: v4,v6,v7 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 4);
+        EXPECT_EQ(del_entries.size(), 4);
         ASSERT_EQ(dir->numPages(), 1); // page_id should be removed.
     }
 
@@ -1307,7 +1319,7 @@ try
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
         auto del_entries = dir->gc();
         // another_page_id: v8 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 1);
+        EXPECT_EQ(del_entries.size(), 1);
     }
 
     {
@@ -1318,7 +1330,7 @@ try
         snapshot9.reset();
         auto del_entries = dir->gc();
         // another_page_id: v9 have been removed.
-        EXPECT_EQ(getNumEntries(del_entries), 1);
+        EXPECT_EQ(del_entries.size(), 1);
         ASSERT_EQ(dir->numPages(), 0); // all should be removed.
     }
 
@@ -1463,8 +1475,48 @@ try
     // entry1 get removed
     {
         auto outdated_entries = dir->gc();
-        EXPECT_EQ(1, getNumEntries(outdated_entries));
-        // EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
+        EXPECT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCOnRefedExternalEntries)
+try
+{
+    // 10->ext, 11->10=>11->ext; del 10->ext
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        edit.del(10);
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gc();
+        EXPECT_TRUE(outdated_entries.empty());
+        auto alive_ex_id = dir->getAliveExternalIds();
+        ASSERT_EQ(alive_ex_id.size(), 1);
+        ASSERT_EQ(*alive_ex_id.begin(), 10);
+    }
+
+    // del 11->ext
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir->apply(std::move(edit));
+    }
+    // entry1 get removed
+    {
+        auto outdated_entries = dir->gc();
+        EXPECT_EQ(0, outdated_entries.size());
+        auto alive_ex_id = dir->getAliveExternalIds();
+        ASSERT_EQ(alive_ex_id.size(), 0);
     }
 }
 CATCH

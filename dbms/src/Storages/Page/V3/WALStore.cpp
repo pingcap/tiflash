@@ -112,40 +112,42 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         log_filename};
 }
 
-WALStore::CheckpointSnapshot WALStore::prepareCompactLogs() const
+WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
 {
     const auto current_writting_log_num = [this]() {
         std::lock_guard lock(log_file_mutex);
         return log_file->logNumber();
     }();
 
-    LogFilenameSet compact_log_files = WALStoreReader::listAllFiles(delegator, logger);
-    for (auto iter = compact_log_files.begin(); iter != compact_log_files.end(); /*empty*/)
+    // Only those files are totally persisted
+    LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
+    for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
     {
         if (iter->log_num >= current_writting_log_num)
-            iter = compact_log_files.erase(iter);
+            iter = persisted_log_files.erase(iter);
         else
             ++iter;
     }
-    return WALStore::CheckpointSnapshot{
+    return WALStore::FilesSnapshot{
         .current_writting_log_num = current_writting_log_num,
-        .compact_log_files = std::move(compact_log_files),
+        .persisted_log_files = std::move(persisted_log_files),
     };
 }
 
 // In order to make `restore` in a reasonable time, we need to compact
 // log files.
-bool WALStore::compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & /*read_limiter*/)
+bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && directory_snap, const WriteLimiterPtr & write_limiter)
 {
-    if (!snapshot.needSave() || snapshot.compact_log_files.empty())
+    if (files_snap.persisted_log_files.empty())
         return false;
 
     {
-        const auto log_num = snapshot.compact_log_files.rbegin()->log_num;
-        // Create a temporary file for compacting log files.
+        // Use {largest_log_num + 1, 1} to save the `edit`
+        const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+        // Create a temporary file for saving directory snapshot
         auto [compact_log, log_filename] = createLogWriter(delegator, provider, {log_num, 1}, logger, /*manual_flush*/ true);
         {
-            const String serialized = ser::serializeTo(edit);
+            const String serialized = ser::serializeTo(directory_snap);
             ReadBufferFromString payload(serialized);
             compact_log->addRecord(payload, serialized.size());
         }
@@ -162,7 +164,7 @@ bool WALStore::compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && ed
     }
 
     // Remove compacted log files.
-    for (const auto & filename : snapshot.compact_log_files)
+    for (const auto & filename : files_snap.persisted_log_files)
     {
         if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
         {
@@ -170,7 +172,7 @@ bool WALStore::compactLogs(CheckpointSnapshot && snapshot, PageEntriesEdit && ed
         }
     }
     // TODO: Log more information. duration, num entries, size of compact log file...
-    LOG_FMT_INFO(logger, "Compact logs done [num_compacts={}]", snapshot.compact_log_files.size());
+    LOG_FMT_INFO(logger, "Save directory snapshot to log file done [num_compacts={}]", files_snap.persisted_log_files.size());
     return true;
 }
 

@@ -205,15 +205,12 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    const auto & del_entries = page_directory->gc(write_limiter, read_limiter);
+    const auto & del_entries = page_directory->gc(write_limiter);
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
-    for (const auto & del_version_entry : del_entries)
-    {
-        blob_store.remove(del_version_entry);
-    }
+    blob_store.remove(del_entries);
 
     // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
     // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.
