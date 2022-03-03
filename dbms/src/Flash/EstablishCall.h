@@ -20,6 +20,7 @@ public:
 
     bool Write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
 
+private:
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 };
 
@@ -29,6 +30,7 @@ public:
     // A state machine used for async grpc api EstablishMPPConnection. When a relative grpc event arrives,
     // it reacts base on current state. The completion queue "cq" and "notify_cq"
     // used for asynchronous communication with the gRPC runtime.
+    // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
     bool Write(const mpp::MPPDataPacket & packet) override;
@@ -41,35 +43,35 @@ public:
 
     void Proceed();
 
-    ::mpp::EstablishMPPConnectionRequest * getRequest()
-    {
-        return &request_;
-    }
+//    ::mpp::EstablishMPPConnectionRequest * getRequest()
+//    {
+//        return &request;
+//    }
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
 private:
     void notifyReady();
 
-    void rpcInitOp();
+    void initRpc();
 
     std::mutex mu;
     // server instance
-    AsyncFlashService * service_;
+    AsyncFlashService * service;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    ::grpc::ServerCompletionQueue * cq_;
-    ::grpc::ServerCompletionQueue * notify_cq_;
-    ::grpc::ServerContext ctx_;
-    ::grpc::Status status4err;
+    ::grpc::ServerCompletionQueue * cq;
+    ::grpc::ServerCompletionQueue * notify_cq;
+    ::grpc::ServerContext ctx;
+    ::grpc::Status err_status;
 
     // What we get from the client.
-    ::mpp::EstablishMPPConnectionRequest request_;
+    ::mpp::EstablishMPPConnectionRequest request;
 
     // The means to get back to the client.
-    ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder_;
+    ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
-    // If the CallData is ready to write a msg.
+    // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     bool ready = false;
 
     // Let's implement a state machine with the following states.
@@ -80,9 +82,8 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    std::atomic<CallStatus> state_; // The current serving state.
-    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * send_queue_ = nullptr;
-    std::shared_ptr<DB::MPPTunnel> mpptunnel_ = nullptr;
+    std::atomic<CallStatus> state; // The current serving state.
+    std::shared_ptr<DB::MPPTunnel> mpptunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB

@@ -500,7 +500,7 @@ void HandleRpcs(grpc::ServerCompletionQueue * curcq)
         // event is uniquely identified by its tag, which in this case is the
         // memory address of a EstablishCallData instance.
         // The return value of Next should always be checked. This return value
-        // tells us whether there is any kind of event or cq_ is shutting down.
+        // tells us whether there is any kind of event or cq is shutting down.
         if (!curcq->Next(&tag, &ok))
         {
             LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");

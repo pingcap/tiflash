@@ -101,16 +101,13 @@ public:
 
     void consumerFinish(const String & err_msg, bool need_lock = true);
 
+    bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }
+
     std::atomic<bool> is_async{false};
 
     // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
     // In sync mode, as a background task to keep sending until done.
     void sendJob(bool need_lock = true);
-
-    MPMCQueue<std::shared_ptr<mpp::MPPDataPacket>> * getSendQueue()
-    {
-        return &send_queue;
-    }
 
 private:
     void finishSendQueue();

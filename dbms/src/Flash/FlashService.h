@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
-#include <Flash/EstablishAsyncCall.h>
+#include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -30,7 +30,7 @@ class FlashService : public tikvpb::Tikv::Service
 public:
     explicit FlashService(IServer & server_);
 
-    virtual ~FlashService() = default.
+    virtual ~FlashService() = default;
 
     grpc::Status Coprocessor(
         grpc::ServerContext * grpc_context,
