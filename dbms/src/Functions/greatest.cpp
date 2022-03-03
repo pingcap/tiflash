@@ -1,17 +1,20 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <Functions/LeastGreatest.h>
 
 namespace DB
 {
 template <typename A, typename B>
-struct GreatestBaseImpl<A, B, false>
+struct BinaryGreatestBaseImpl<A, B, false>
 {
-    using ResultType = NumberTraits::ResultOfGreatest<A, B>;
+    using ResultType = typename NumberTraits::ResultOfBinaryLeastGreatest<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        return accurate::greaterOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -21,7 +24,7 @@ struct GreatestBaseImpl<A, B, false>
 };
 
 template <typename A, typename B>
-struct GreatestBaseImpl<A, B, true>
+struct BinaryGreatestBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -29,25 +32,9 @@ struct GreatestBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
-    }
-    template <typename Result = ResultType>
-    static Result apply(A, B, UInt8 &)
-    {
-        throw Exception("Should not reach here");
-    }
-};
-
-template <typename A, typename B>
-struct GreatestSpecialImpl
-{
-    using ResultType = std::make_unsigned_t<A>;
-
-    template <typename Result = ResultType>
-    static Result apply(A a, B b)
-    {
-        static_assert(std::is_same_v<Result, ResultType>, "ResultType != Result");
-        return accurate::greaterOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        return tmp_a > tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -62,13 +49,14 @@ namespace
 struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
-using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
+using FunctionBinaryGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
+using FunctionTiDBGreatest = FunctionVectorizedLeastGreatest<GreatestImpl, FunctionBinaryGreatest>;
 
 } // namespace
 
 void registerFunctionGreatest(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionGreatest>();
+    factory.registerFunction<FunctionTiDBGreatest>();
 }
 
 } // namespace DB

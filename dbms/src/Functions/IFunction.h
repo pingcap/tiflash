@@ -204,7 +204,7 @@ protected:
         throw Exception("getReturnType is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    /** If useDefaultImplementationForNulls() is true, than change arguments for getReturnType() and buildImpl():
+    /** If useDefaultImplementationForNulls() is true, then change arguments for getReturnType() and buildImpl():
       *  if some of arguments are Nullable(Nothing) then don't call getReturnType(), call buildImpl() with return_type = Nullable(Nothing),
       *  if some of arguments are Nullable, then:
       *   - Nullable types are substituted with nested types for getReturnType() function
