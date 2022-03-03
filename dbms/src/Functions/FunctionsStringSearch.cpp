@@ -1943,8 +1943,8 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        Int64 pos,
-        Int64 occ,
+        Int64 pos [[maybe_unused]],
+        Int64 occ [[maybe_unused]],
         const String & match_type,
         ColumnWithTypeAndName & column_result) const
     {
@@ -1981,8 +1981,8 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        Int64 pos,
-        Int64 occ,
+        Int64 pos [[maybe_unused]],
+        Int64 occ [[maybe_unused]],
         const String & match_type,
         ColumnWithTypeAndName & column_result) const
     {
@@ -2019,8 +2019,8 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        Int64 pos,
-        Int64 occ,
+        Int64 pos [[maybe_unused]],
+        Int64 occ [[maybe_unused]],
         const String & match_type,
         ColumnWithTypeAndName & column_result) const
     {

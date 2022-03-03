@@ -397,6 +397,7 @@ typename TypeTraits<T>::FieldType parseDecimal(
 
     auto [parsed_value, prec, scale] = parsed.value();
 
+    (void)prec;
     max_prec = std::min(max_prec, maxDecimalPrecision<DecimalType>());
     if (scale != expected_scale)
     {
