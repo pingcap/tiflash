@@ -570,13 +570,13 @@ public:
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
         {
-            int buf_size = server.context().getSettingsRef().async_buf_size_per_poller;
+            int preallocated_request_count_per_poller = server.context().getSettingsRef().preallocated_request_count_per_poller;
             int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
             for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
             {
                 auto * cq = cqs[i / pollers_per_cq].get();
                 auto * notify_cq = notify_cqs[i / pollers_per_cq].get();
-                for (int j = 0; j < buf_size; ++j)
+                for (int j = 0; j < preallocated_request_count_per_poller; ++j)
                 {
                     // EstablishCallData will handle its lifecycle by itself.
                     EstablishCallData::spawn(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);

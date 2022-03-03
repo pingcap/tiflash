@@ -341,7 +341,7 @@ struct Settings
     M(SettingBool, enable_async_server, true, "Enable async rpc server.")                                                                                                                                                               \
     M(SettingUInt64, async_pollers_per_cq, 4, "grpc async pollers per cqs")                                                                                                                                                             \
     M(SettingUInt64, async_cqs, 20, "grpc async cqs")                                                                                                                                                                                   \
-    M(SettingUInt64, async_buf_size_per_poller, 200, "grpc async_buf_size_per_poller")
+    M(SettingUInt64, preallocated_request_count_per_poller, 200, "grpc preallocated_request_count_per_poller")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
