@@ -69,6 +69,7 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
+        bool is_async_ = false,
         const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
@@ -103,8 +104,6 @@ public:
 
     bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }
 
-    std::atomic<bool> is_async{false};
-
     // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
     // In sync mode, as a background task to keep sending until done.
     void sendJob(bool need_lock = true);
@@ -124,6 +123,8 @@ private:
     bool finished; // if the tunnel has finished its connection.
 
     bool is_local; // if the tunnel is used for local environment
+
+    bool is_async; // if the tunnel is used for async server.
 
     Writer * writer;
 

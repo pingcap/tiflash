@@ -21,10 +21,12 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const std::chrono::seconds timeout_,
     int input_steams_num_,
     bool is_local_,
+    bool is_async_,
     const LogWithPrefixPtr & log_)
     : connected(false)
     , finished(false)
     , is_local(is_local_)
+    , is_async(is_async_)
     , timeout(timeout_)
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
@@ -133,8 +135,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
     assert(!is_local);
-    bool async = is_async.load();
-    if (!async)
+    if (!is_async)
     {
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
@@ -153,7 +154,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
             }
             else
             {
-                if (async)
+                if (is_async)
                     return;
             }
         }
@@ -173,7 +174,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
     if (!err_msg.empty())
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg, need_lock);
-    if (async)
+    if (is_async)
         writer->WriteDone(grpc::Status::OK);
     else
     {
@@ -212,6 +213,7 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
+    assert(!(is_local && is_async));
     {
         std::unique_lock lk(mu);
         if (connected)
