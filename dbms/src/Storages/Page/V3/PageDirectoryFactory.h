@@ -35,7 +35,6 @@ public:
     PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
 private:
-
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
 
     BlobStore::BlobStats * blob_stats = nullptr;

@@ -177,15 +177,36 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
 }
 
 std::tuple<VersionedPageEntries::ResolveResult, PageId, PageVersionType>
-VersionedPageEntries::resolveToPageId(UInt64 seq)
+VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry)
 {
     auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, increase the ref count of the first one less than <ver+1, 0>
-    if (auto iter = MapUtils::findMutLess(entries, PageVersionType(seq + 1));
+    if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
     {
-        if (iter->second.isEntry() || iter->second.isExternal())
+        // If we applied write batches like this: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}
+        // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
+        // when resolving 11 to 10, we need to set `check_prev` to true
+        if (iter->second.isDelete() && check_prev && iter->first.sequence == seq)
+        {
+            if (iter == entries.begin())
+            {
+                return {RESOLVE_FAIL, 0, PageVersionType(0)};
+            }
+            --iter;
+            // fallover the check the prev item
+        }
+
+        if (iter->second.isEntry())
+        {
+            if (entry != nullptr)
+                *entry = iter->second.entry;
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+        }
+        else if (iter->second.isExternal())
+        {
+            return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+        }
         else if (iter->second.isRef())
             return {RESOLVE_TO_REF, iter->second.origin_page_id, iter->first};
     }
@@ -458,52 +479,91 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 
 PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
 {
-    MVCCMapType::const_iterator iter;
-    {
-        std::shared_lock read_lock(table_rw_mutex);
-        iter = mvcc_table_directory.find(page_id);
-        if (iter == mvcc_table_directory.end())
-            throw Exception(fmt::format("Entry [id={}] not exist!", page_id), ErrorCodes::PS_ENTRY_NOT_EXISTS);
-    }
+    PageEntryV3 entry_got;
 
-    if (auto entry = iter->second->getEntry(snap->sequence); entry)
+    PageId id_to_resolve = page_id;
+    PageVersionType ver_to_resolve(snap->sequence, 0);
+    bool ok = true;
+    while (ok)
     {
-        return PageIDAndEntryV3(page_id, *entry);
+        MVCCMapType::const_iterator iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(id_to_resolve);
+            if (iter == mvcc_table_directory.end())
+            {
+                throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+            }
+        }
+        auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
+        switch (need_collapse)
+        {
+        case VersionedPageEntries::RESOLVE_TO_NORMAL:
+            return PageIDAndEntryV3(page_id, entry_got);
+        case VersionedPageEntries::RESOLVE_FAIL:
+            ok = false;
+            break;
+        case VersionedPageEntries::RESOLVE_TO_REF:
+            if (id_to_resolve == next_id_to_resolve)
+            {
+                ok = false;
+                break;
+            }
+            id_to_resolve = next_id_to_resolve;
+            ver_to_resolve = next_ver_to_resolve;
+            break; // continue the resolving
+        }
     }
-
-    throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
 PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
 {
-    std::vector<MVCCMapType::const_iterator> iters;
-    iters.reserve(page_ids.size());
-    {
-        std::shared_lock read_lock(table_rw_mutex);
-        for (size_t idx = 0; idx < page_ids.size(); ++idx)
+    PageEntryV3 entry_got;
+    const PageVersionType init_ver_to_resolve(snap->sequence, 0);
+    auto get_one = [&entry_got, init_ver_to_resolve, this](PageId page_id, PageVersionType ver_to_resolve, size_t idx) {
+        PageId id_to_resolve = page_id;
+        bool ok = true;
+        while (ok)
         {
-            if (auto iter = mvcc_table_directory.find(page_ids[idx]);
-                iter != mvcc_table_directory.end())
+            MVCCMapType::const_iterator iter;
             {
-                iters.emplace_back(iter);
+                std::shared_lock read_lock(table_rw_mutex);
+                iter = mvcc_table_directory.find(id_to_resolve);
+                if (iter == mvcc_table_directory.end())
+                {
+                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                }
             }
-            else
+            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
+            switch (need_collapse)
             {
-                throw Exception(fmt::format("Entry [id={}] at [idx={}] not exist!", page_ids[idx], idx), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+            case VersionedPageEntries::RESOLVE_TO_NORMAL:
+                return true;
+            case VersionedPageEntries::RESOLVE_FAIL:
+                ok = false;
+                break;
+            case VersionedPageEntries::RESOLVE_TO_REF:
+                if (id_to_resolve == next_id_to_resolve)
+                {
+                    ok = false;
+                    break;
+                }
+                id_to_resolve = next_id_to_resolve;
+                ver_to_resolve = next_ver_to_resolve;
+                break; // continue the resolving
             }
         }
-    }
+        throw Exception(fmt::format("Fail to get entry [page_id={}] [ver={}] [resolve_id={}] [resolve_ver={}] [idx={}]", page_id, init_ver_to_resolve, id_to_resolve, ver_to_resolve, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    };
 
     PageIDAndEntriesV3 id_entries;
     for (size_t idx = 0; idx < page_ids.size(); ++idx)
     {
-        const auto & iter = iters[idx];
-        if (auto entry = iter->second->getEntry(snap->sequence); entry)
+        if (auto ok = get_one(page_ids[idx], init_ver_to_resolve, idx); ok)
         {
-            id_entries.emplace_back(page_ids[idx], *entry);
+            id_entries.emplace_back(page_ids[idx], entry_got);
         }
-        else
-            throw Exception(fmt::format("Entry [id={}] [seq={}] at [idx={}] not exist!", page_ids[idx], snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
     }
 
     return id_entries;
@@ -522,10 +582,10 @@ PageId PageDirectory::getNormalPageId(PageId page_id, const PageDirectorySnapsho
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid external page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
             }
         }
-        auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence);
+        auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, nullptr);
         switch (need_collapse)
         {
         case VersionedPageEntries::RESOLVE_TO_NORMAL:
@@ -597,7 +657,7 @@ void PageDirectory::applyRefEditRecord(
             const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
             // If we already hold the lock from `id_to_resolve`, then we should not request it again.
             // This can happen when `id_to_resolve` have other operating in current writebatch
-            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(ver_to_resolve.sequence);
+            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(ver_to_resolve.sequence, false, nullptr);
             switch (need_collapse)
             {
             case VersionedPageEntries::RESOLVE_FAIL:

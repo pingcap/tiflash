@@ -102,7 +102,7 @@ public:
         RESOLVE_TO_NORMAL,
     };
     std::tuple<ResolveResult, PageId, PageVersionType>
-    resolveToPageId(UInt64 seq);
+    resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersionType & ver);
 
@@ -176,7 +176,7 @@ public:
 private:
     mutable std::mutex m;
     // Entries sorted by version
-    std::map<PageVersionType, VarEntry> entries;
+    std::multimap<PageVersionType, VarEntry> entries;
 };
 
 // `PageDirectory` store multi-versions entries for the same

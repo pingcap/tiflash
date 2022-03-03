@@ -203,33 +203,20 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
-    // Update 3, 2 won't get updated. Update 2, 3 won't get updated.
-    // Note that users should not rely on this behavior
+    // Update on ref page is not allowed
     PageEntryV3 entry_updated{.file_id = 999, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(3, entry_updated);
-        dir->apply(std::move(edit));
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
-    auto snap2 = dir->createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap2);
 
     PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(2, entry_updated2);
-        dir->apply(std::move(edit));
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
-    auto snap3 = dir->createSnapshot();
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap2);
-    EXPECT_ENTRY_EQ(entry_updated2, dir, 2, snap3);
-    EXPECT_ENTRY_EQ(entry_updated, dir, 3, snap3);
 }
 CATCH
 
@@ -407,19 +394,13 @@ try
         dir->apply(std::move(edit));
     }
 
+    // Applying ref to not exist entry is not allowed
     { // Ref 4-> 999
         PageEntriesEdit edit;
         edit.put(3, entry3);
         edit.ref(4, 999);
-        dir->apply(std::move(edit));
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
-    auto snap1 = dir->createSnapshot();
-    EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
-    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
-    EXPECT_ENTRY_EQ(entry3, dir, 3, snap1);
-    EXPECT_ENTRY_NOT_EXIST(dir, 4, snap1);
-
-    // TODO: restore, invalid ref page is filtered
 }
 CATCH
 
@@ -459,11 +440,11 @@ try
         dir->apply(std::move(edit));
     }
     auto s0 = dir->createSnapshot();
-    // calling getNormalPageId on non-external-page is not acceptable
-    EXPECT_ANY_THROW(dir->getNormalPageId(9, s0));
+    // calling getNormalPageId on non-external-page will return itself
+    EXPECT_EQ(9, dir->getNormalPageId(9, s0));
     EXPECT_EQ(10, dir->getNormalPageId(10, s0));
-    EXPECT_ANY_THROW(dir->getNormalPageId(11, s0));
-    EXPECT_ANY_THROW(dir->getNormalPageId(12, s0));
+    EXPECT_ANY_THROW(dir->getNormalPageId(11, s0)); // not exist at all
+    EXPECT_ANY_THROW(dir->getNormalPageId(12, s0)); // not exist at all
 
     {
         PageEntriesEdit edit;

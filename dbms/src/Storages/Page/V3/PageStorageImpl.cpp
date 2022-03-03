@@ -31,9 +31,6 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
-    // Restore `collapsing_directory` from disk
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
-
     // TODO: Speedup restoring
     // TODO: After restored ends, set the last offset of log file for `wal`
     PageDirectoryFactory factory;

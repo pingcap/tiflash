@@ -79,7 +79,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 break;
             }
             case WriteBatch::WriteType::PUT_EXTERNAL:
-            { 
+            {
                 // putExternal won't have data.
                 edit.putExternal(write.page_id);
                 break;

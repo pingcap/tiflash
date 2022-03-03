@@ -343,6 +343,38 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, IngestFile)
+{
+    WriteBatch wb;
+    {
+        wb.putExternal(100, 0);
+        wb.putRefPage(101, 100);
+        wb.putRefPage(102, 100);
+        wb.delPage(100);
+        page_storage->write(std::move(wb));
+    }
+
+    auto snapshot = page_storage->getSnapshot();
+
+    EXPECT_ANY_THROW(page_storage->getNormalPageId(100, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(101, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(102, snapshot));
+
+    size_t times_remover_called = 0;
+    ExternalPageCallbacks callbacks;
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+        return {};
+    };
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+        times_remover_called += 1;
+        EXPECT_EQ(living_page_ids.size(), 1);
+        EXPECT_GT(living_page_ids.count(100), 0);
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 1);
+}
+
 // TBD : enable after wal apply and restore
 TEST_F(PageStorageTest, DISABLED_IgnoreIncompleteWriteBatch1)
 try

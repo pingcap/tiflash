@@ -293,13 +293,7 @@ try
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
-        // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = EditRecordType::REF,
-            .page_id = 4,
-            .ori_page_id = 3,
-            .version = {},
-            .entry = entry_p3});
+        edit.ref(4, 3);
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
@@ -390,13 +384,7 @@ try
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
-        // Mock for edit.ref(4, 3);
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = EditRecordType::REF,
-            .page_id = 4,
-            .ori_page_id = 3,
-            .version = {},
-            .entry = entry_p3});
+        edit.ref(4, 3);
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
