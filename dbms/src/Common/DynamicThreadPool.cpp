@@ -1,8 +1,6 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/TiFlashMetrics.h>
 
-#include <ext/scope_guard.h>
-
 namespace DB
 {
 DynamicThreadPool::~DynamicThreadPool()

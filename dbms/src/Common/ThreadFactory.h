@@ -5,7 +5,6 @@
 #include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
 
-#include <ext/scope_guard.h>
 #include <thread>
 
 namespace DB

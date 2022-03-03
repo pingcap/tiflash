@@ -7,8 +7,6 @@
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
 
-#include <ext/scope_guard.h>
-
 namespace DB
 {
 namespace FailPoints

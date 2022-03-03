@@ -8,6 +8,8 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+#include <ext/scope_guard.h>
+
 // to make GCC 11 happy
 #include <cassert>
 
@@ -329,10 +331,10 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
     (__VA_ARGS__)
 
-#define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max) \
-    GET_METRIC(family, metric).Increment(); \
+#define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \
+    GET_METRIC(family, metric).Increment();                                                                                   \
     GET_METRIC(family, metric_max).Set(std::max(GET_METRIC(family, metric_max).Value(), GET_METRIC(family, metric).Value())); \
-    SCOPE_EXIT({ \
-        GET_METRIC(family, metric).Decrement(); \
+    SCOPE_EXIT({                                                                                                              \
+        GET_METRIC(family, metric).Decrement();                                                                               \
     })
 } // namespace DB
