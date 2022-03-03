@@ -46,15 +46,13 @@ public:
         return &request_;
     }
 
-    std::mutex mu;
-
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
-
 private:
     void notifyReady();
 
     void rpcInitOp();
 
+    std::mutex mu;
     // server instance
     AsyncFlashService * service_;
 
