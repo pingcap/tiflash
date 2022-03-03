@@ -37,7 +37,7 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnection0(&ctx, &request, nullptr, this);
+        service->EstablishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)
     {
@@ -96,6 +96,7 @@ void EstablishCallData::Proceed()
         state = JOIN;
         // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
         // The instance will deallocate itself as part of its FINISH state.
+        // EstablishCallData will handle its lifecycle by itself.
         new EstablishCallData(service, cq, notify_cq);
         notifyReady();
         initRpc();

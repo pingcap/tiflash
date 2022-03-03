@@ -137,7 +137,7 @@ private:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
 
-    std::shared_ptr<ThreadManager> thd_manager;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     /// Consumer can be sendLoop or local receiver.
     class ConsumerState

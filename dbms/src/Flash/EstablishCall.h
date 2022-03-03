@@ -43,11 +43,6 @@ public:
 
     void Proceed();
 
-//    ::mpp::EstablishMPPConnectionRequest * getRequest()
-//    {
-//        return &request;
-//    }
-
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 
 private:

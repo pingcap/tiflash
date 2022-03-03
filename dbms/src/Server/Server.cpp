@@ -492,8 +492,8 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 
 void HandleRpcs(grpc::ServerCompletionQueue * curcq)
 {
-    void * tag; // uniquely identifies a request.
-    bool ok;
+    void * tag = nullptr; // uniquely identifies a request.
+    bool ok = false;
     while (true)
     {
         // Block waiting to read the next event from the completion queue. The
@@ -506,8 +506,8 @@ void HandleRpcs(grpc::ServerCompletionQueue * curcq)
             LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
             break;
         }
-        if (ok)
-            static_cast<EstablishCallData *>(tag)->Proceed();
+        assert(ok);
+        static_cast<EstablishCallData *>(tag)->Proceed();
     }
 }
 
@@ -574,10 +574,12 @@ public:
             int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
             for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
             {
+                auto *cq = cqs[i / pollers_per_cq].get();
+                auto *notify_cq = notify_cqs[i / pollers_per_cq].get();
                 for (int j = 0; j < buf_size; ++j)
-                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get());
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get()); });
-                thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(notify_cqs[i / pollers_per_cq].get()); });
+                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
+                thread_manager->schedule(false, "async_poller", [cq] { HandleRpcs(cq); });
+                thread_manager->schedule(false, "async_poller", [notify_cq] { HandleRpcs(notify_cq); });
             }
         }
     }
@@ -609,7 +611,9 @@ private:
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs, notify_cqs;
+    // cqs and notify_cqs are used in async mode for processing rpc events.
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
     std::shared_ptr<ThreadManager> thread_manager;
 };
 

@@ -29,7 +29,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
-    , thd_manager(newThreadManager())
+    , thread_manager(newThreadManager())
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -53,7 +53,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    thd_manager->wait();
+    thread_manager->wait();
 }
 
 template <typename Writer>
@@ -227,7 +227,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
             {
                 // communicate send_thread through `consumer_state`
                 // NOTE: if the thread creation failed, `connected` will still be `false`.
-                thd_manager->schedule(true, "MPPTunnel", [this] {
+                thread_manager->schedule(true, "MPPTunnel", [this] {
                     sendJob();
                 });
             }

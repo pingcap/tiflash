@@ -188,7 +188,7 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-::grpc::Status FlashService::EstablishMPPConnection0(::grpc::ServerContext * grpc_context,
+::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
                                                      const ::mpp::EstablishMPPConnectionRequest * request,
                                                      ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
                                                      EstablishCallData * calldata)
@@ -249,6 +249,8 @@ grpc::Status FlashService::Coprocessor(
             if (calldata)
             {
                 LOG_ERROR(log, err_msg);
+                // In Async version, writer::Write() return void.
+                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
                 calldata->WriteErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
@@ -272,6 +274,7 @@ grpc::Status FlashService::Coprocessor(
     {
         tunnel->is_async = true;
         calldata->attachTunnel(tunnel);
+        // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
