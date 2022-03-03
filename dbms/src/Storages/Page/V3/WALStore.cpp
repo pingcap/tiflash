@@ -34,8 +34,7 @@ namespace DB::PS::V3
 WALStorePtr WALStore::create(
     std::function<void(PageEntriesEdit &&)> && restore_callback,
     FileProviderPtr & provider,
-    PSDiskDelegatorPtr & delegator,
-    const WriteLimiterPtr & write_limiter)
+    PSDiskDelegatorPtr & delegator)
 {
     auto reader = WALStoreReader::create(provider, delegator);
     while (reader->remained())
@@ -57,48 +56,46 @@ WALStorePtr WALStore::create(
     // Create a new LogFile for writing new logs
     auto log_num = reader->logNum() + 1; // TODO: Reuse old log file
     auto * logger = &Poco::Logger::get("WALStore");
-    auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
+    auto [log_file, filename] = WALStore::createLogWriter(delegator, provider, {log_num, 0}, logger, false);
     (void)filename;
-    return std::unique_ptr<WALStore>(new WALStore(delegator, provider, write_limiter, std::move(log_file)));
+    return std::unique_ptr<WALStore>(new WALStore(delegator, provider, std::move(log_file)));
 }
 
 WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
-    const WriteLimiterPtr & write_limiter_,
     std::unique_ptr<LogWriter> && cur_log)
     : delegator(delegator_)
     , provider(provider_)
-    , write_limiter(write_limiter_)
     , log_file(std::move(cur_log))
     , logger(&Poco::Logger::get("WALStore"))
 {
 }
 
-void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version)
+void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter)
 {
     for (auto & r : edit.getMutRecords())
     {
         r.version = version;
     }
-    apply(edit);
+    apply(edit, write_limiter);
 }
 
-void WALStore::apply(const PageEntriesEdit & edit)
+void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     const String serialized = ser::serializeTo(edit);
     ReadBufferFromString payload(serialized);
 
     {
         std::lock_guard lock(log_file_mutex);
-        log_file->addRecord(payload, serialized.size());
+        log_file->addRecord(payload, serialized.size(), write_limiter);
 
         // Roll to a new log file
         // TODO: Make it configurable
         if (log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
         {
             auto log_num = log_file->logNumber() + 1;
-            auto [new_log_file, filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 0}, logger, false);
+            auto [new_log_file, filename] = createLogWriter(delegator, provider, {log_num, 0}, logger, false);
             (void)filename;
             log_file.swap(new_log_file);
         }
@@ -108,7 +105,6 @@ void WALStore::apply(const PageEntriesEdit & edit)
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     PSDiskDelegatorPtr delegator,
     const FileProviderPtr & provider,
-    const WriteLimiterPtr & write_limiter,
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
     Poco::Logger * logger,
     bool manual_flush)
@@ -123,15 +119,8 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto fullname = log_filename.fullname(log_filename.stage);
     LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
     auto log_writer = std::make_unique<LogWriter>(
-        WriteBufferByFileProviderBuilder(
-            /*has_checksum=*/false,
-            provider,
-            fullname,
-            EncryptionPath{path, filename},
-            true,
-            write_limiter)
-            .with_buffer_size(Format::BLOCK_SIZE) // Must be `BLOCK_SIZE`
-            .build(),
+        fullname,
+        provider,
         new_log_lvl.first,
         /*recycle*/ true,
         /*manual_flush*/ manual_flush);
@@ -142,7 +131,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 
 // In order to make `restore` in a reasonable time, we need to compact
 // log files.
-bool WALStore::compactLogs()
+bool WALStore::compactLogs(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     const auto current_writting_log_num = [this]() {
         std::lock_guard lock(log_file_mutex);
@@ -162,7 +151,7 @@ bool WALStore::compactLogs()
         return false;
 
     CollapsingPageDirectory collapsing_directory;
-    auto reader = WALStoreReader::create(provider, compact_log_files);
+    auto reader = WALStoreReader::create(provider, compact_log_files, read_limiter);
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
@@ -179,9 +168,9 @@ bool WALStore::compactLogs()
     {
         const auto log_num = reader->logNum();
         // Create a temporary file for compacting log files.
-        auto [compact_log, log_filename] = createLogWriter(delegator, provider, write_limiter, {log_num, 1}, logger, /*manual_flush*/ true);
+        auto [compact_log, log_filename] = createLogWriter(delegator, provider, {log_num, 1}, logger, /*manual_flush*/ true);
         collapsing_directory.dumpTo(compact_log);
-        compact_log->flush();
+        compact_log->flush(write_limiter);
         compact_log.reset(); // close fd explictly before renaming file.
 
         // Rename it to be a normal log file.

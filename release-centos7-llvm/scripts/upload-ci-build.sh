@@ -13,6 +13,9 @@ SRCPATH=${1:-$(
 
 source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 
+TIFLASH_CI_BUILD_URI_PREFIX="builds/pingcap/tiflash/ci-cache/tmp/pr-build"
+TIFLASH_CI_BUILD_PRE_FIX="http://fileserver.pingcap.net/download/${TIFLASH_CI_BUILD_URI_PREFIX}"
+
 TAR_BIN_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/tiflash.tar.gz"
 COMMIT_HASH_FILE_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/commit-hash"
 
