@@ -195,7 +195,7 @@ Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFla
 If your toolchain is set up using [TiFlash Env](#tiflash-env), and you may not want to add those libs to your system loader config, you can pass the following CMake options to your IDE:
 
 ```
--DTIFLASH_ENABLE_LLVM_DEVELOPMENT=ON -DCMAKE_PREFIX_PATH=$TIFLASH_ENV
+-DCMAKE_PREFIX_PATH=$TIFLASH_ENV
 ```
 
 Remember that `$TIFLASH_ENV` is a placeholder mentioned in [TiFlash Env](#tiflash-env).

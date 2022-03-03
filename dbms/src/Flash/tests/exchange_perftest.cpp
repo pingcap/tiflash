@@ -1,6 +1,6 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -543,7 +543,7 @@ struct SenderHelper
                     -1,
                     true,
                     *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer)));
         }
 
         return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);

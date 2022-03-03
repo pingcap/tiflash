@@ -71,6 +71,8 @@ public:
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
+        , collected(false)
+        , concurrency_(concurrency)
     {
         resp_iter.open();
     }
@@ -154,5 +156,24 @@ public:
     }
 
     size_t getSourceNum() const { return 1; }
+
+    int computeNewThreadCount() const { return concurrency_; }
+
+    void collectNewThreadCount(int & cnt)
+    {
+        if (!collected)
+        {
+            collected = true;
+            cnt += computeNewThreadCount();
+        }
+    }
+
+    void resetNewThreadCountCompute()
+    {
+        collected = false;
+    }
+
+    bool collected = false;
+    int concurrency_;
 };
 } // namespace DB

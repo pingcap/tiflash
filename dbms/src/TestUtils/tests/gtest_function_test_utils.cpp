@@ -2,10 +2,8 @@
 
 namespace DB
 {
-
 namespace tests
 {
-
 class TestFunctionTestUtils : public ::testing::Test
 {
 };
@@ -15,13 +13,16 @@ try
 {
     using DecimalField64 = DecimalField<Decimal64>;
 
-    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt), std::nullopt);
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt, 3, 0), std::nullopt);
     ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123", 3, 0), DecimalField64(123, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.4", 3, 0), DecimalField64(123, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.5", 3, 0), DecimalField64(124, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.4", 5, 2), DecimalField64(12340, 2));
 
     constexpr auto parse = parseDecimal<Decimal64>;
     ASSERT_EQ(parse("123.123", 6, 3), DecimalField64(123123, 3));
     ASSERT_THROW(parse("123.123", 3, 3), TiFlashTestException);
-    ASSERT_THROW(parse("123.123", 6, 0), TiFlashTestException);
+    ASSERT_EQ(parse("123.123", 6, 0), DecimalField64(123, 0));
     ASSERT_NO_THROW(parse("123.123", 10, 3));
     ASSERT_THROW(parse(" 123.123", 6, 3), TiFlashTestException);
     ASSERT_NO_THROW(parse("123.123", 60, 3));
