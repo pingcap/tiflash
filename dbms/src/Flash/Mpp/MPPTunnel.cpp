@@ -122,11 +122,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
     assert(!is_local);
-    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
-    GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
-    });
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp, type_max_threads_of_establish_mpp);
     String err_msg;
     try
     {
