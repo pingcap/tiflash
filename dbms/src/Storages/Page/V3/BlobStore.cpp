@@ -581,7 +581,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             written_blobs.emplace_back(file_id, file_offset, data_size);
             LOG_FMT_INFO(
                 log,
-                "BlobStore gc write (partially) done [blobid={}] [file_offset={}] [size={}] [total_size={}]",
+                "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
                 file_id,
                 file_offset,
                 data_size,
@@ -605,62 +605,60 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     };
 
-    // Although this is a three-layer loop
-    // the amount of data can be seen as linear and fixed
-    // If it is changed to a single-layer loop, the parameters will change.
-    // which will bring more memory waste, and the execution speed will not be faster
+    // blob_file_0, [<page_id_0, ver0, entry0>,
+    //               <page_id_0, ver1, entry1>,
+    //               <page_id_1, ver1, entry1>, ... ]
+    // blob_file_1, [...]
+    // ...
     for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
     {
-        for (const auto & [page_id, versioned_entry] : versioned_pageid_entry_list)
+        for (const auto & [page_id, versioned, entry] : versioned_pageid_entry_list)
         {
-            for (const auto & [versioned, entry] : versioned_entry)
+            // When we can't load the remaining data.
+            // we will use the original buffer to find an area to load the remaining data
+            if (offset_in_data + entry.size > config_file_limit)
             {
-                // When we can't load the remaining data.
-                // we will use the original buffer to find an area to load the remaining data
-                if (offset_in_data + entry.size > config_file_limit)
+                assert(file_offset_beg == 0);
+                // Remove the span that is not actually used
+                if (offset_in_data != alloc_size)
                 {
-                    assert(file_offset_beg == 0);
-                    // Remove the span that is not actually used
-                    if (offset_in_data != alloc_size)
-                    {
-                        removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
-                    }
-                    remaining_page_size += alloc_size - offset_in_data;
-
-                    // Write data into Blob.
-                    write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
-
-                    // Reset the position to reuse the buffer allocated
-                    data_pos = data_buf;
-                    offset_in_data = 0;
-
-                    // Acquire a span from stats for remaining data
-                    auto next_alloc_size = (remaining_page_size > config_file_limit ? config_file_limit : remaining_page_size);
-                    remaining_page_size -= next_alloc_size;
-                    std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
+                    removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
                 }
+                remaining_page_size += alloc_size - offset_in_data;
 
-                PageEntryV3 new_entry;
+                // Write data into Blob.
+                write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
 
-                read(file_id, entry.offset, data_pos, entry.size, read_limiter);
+                // Reset the position to reuse the buffer allocated
+                data_pos = data_buf;
+                offset_in_data = 0;
 
-                // No need do crc again, crc won't be changed.
-                new_entry.checksum = entry.checksum;
-
-                // Need copy the field_offsets
-                new_entry.field_offsets = entry.field_offsets;
-
-                // Entry size won't be changed.
-                new_entry.size = entry.size;
-
-                new_entry.file_id = blobfile_id;
-                new_entry.offset = file_offset_beg + offset_in_data;
-
-                offset_in_data += new_entry.size;
-                data_pos += new_entry.size;
-
-                edit.upsertPage(page_id, versioned, new_entry);
+                // Acquire a span from stats for remaining data
+                auto next_alloc_size = (remaining_page_size > config_file_limit ? config_file_limit : remaining_page_size);
+                remaining_page_size -= next_alloc_size;
+                std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
             }
+
+            PageEntryV3 new_entry;
+
+            read(file_id, entry.offset, data_pos, entry.size, read_limiter);
+
+            // No need do crc again, crc won't be changed.
+            new_entry.checksum = entry.checksum;
+
+            // Need copy the field_offsets
+            new_entry.field_offsets = entry.field_offsets;
+
+            // Entry size won't be changed.
+            new_entry.size = entry.size;
+
+            new_entry.file_id = blobfile_id;
+            new_entry.offset = file_offset_beg + offset_in_data;
+
+            offset_in_data += new_entry.size;
+            data_pos += new_entry.size;
+
+            edit.upsertPage(page_id, versioned, new_entry);
         }
     }
 
