@@ -8,9 +8,7 @@
 
 #include <unordered_map>
 
-namespace DB
-{
-namespace JoinInterpreterHelper
+namespace DB::JoinInterpreterHelper
 {
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
 {
@@ -73,6 +71,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
 
 DataTypes getJoinKeyTypes(const tipb::Join & join)
 {
+    /// ClickHouse require join key to be exactly the same type
+    /// TiDB only require the join key to be the same category
+    /// for example decimal(10,2) join decimal(20,0) is allowed in
+    /// TiDB and will throw exception in ClickHouse
     DataTypes key_types;
     for (int i = 0; i < join.left_join_keys().size(); ++i)
     {
@@ -119,5 +121,4 @@ String genMatchHelperNameForLeftSemiFamily(const Block & left_header, const Bloc
     }
     return match_helper_name;
 }
-}
-} // namespace DB
+} // namespace DB::JoinInterpreterHelper
