@@ -503,7 +503,7 @@ void HandleRpcs(grpc::ServerCompletionQueue * curcq)
         // tells us whether there is any kind of event or cq_ is shutting down.
         if (!curcq->Next(&tag, &ok))
         {
-            LOG_INFO(grpc_log, "CQ is fully drained and shut down");
+            LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
             break;
         }
         if (ok)
