@@ -565,8 +565,7 @@ public:
                 notify_cqs.emplace_back(builder.AddCompletionQueue());
             }
         }
-        flash_grpc_server
-            = builder.BuildAndStart();
+        flash_grpc_server = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
