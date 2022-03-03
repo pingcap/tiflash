@@ -21,15 +21,15 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 
 bool EstablishCallData::TryWrite()
 {
-    //check whether there is a valid msg to write
+    // check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
-        if (ready && (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)) //not ready or no packet
+        if (mpptunnel_ && send_queue_ && ready && send_queue_->isNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
             return false;
     }
-    //there is a valid msg, do single write operation
+    // there is a valid msg, do single write operation
     mpptunnel_->sendJob(false);
     return true;
 }
@@ -70,8 +70,7 @@ bool EstablishCallData::Write(const mpp::MPPDataPacket & packet)
 void EstablishCallData::WriteErr(const mpp::MPPDataPacket & packet)
 {
     state_ = ERR_HANDLE;
-    bool ret = Write(packet);
-    if (ret)
+    if (Write(packet))
         status4err = grpc::Status::OK;
     else
         status4err = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
@@ -106,7 +105,7 @@ void EstablishCallData::Proceed()
     }
     else if (state_ == JOIN)
     {
-        if (send_queue_ && send_queue_->isNextPopNonBlocking() && mpptunnel_)
+        if (send_queue_ && mpptunnel_ && send_queue_->isNextPopNonBlocking())
         {
             {
                 std::unique_lock lk(mu);
@@ -124,7 +123,7 @@ void EstablishCallData::Proceed()
     }
     else
     {
-        GPR_ASSERT(state_ == FINISH);
+        assert(state_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         delete this;
         return;

@@ -61,8 +61,7 @@ public:
         return EstablishMPPConnection0(context, request, sync_writer, nullptr);
     }
 
-    ::grpc::Status
-    CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
+    ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 
 protected:
@@ -82,8 +81,8 @@ class AsyncFlashService final : public FlashService
 public:
     // 48 is EstablishMPPConnection API ID of GRPC
     // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
-    const int EstablishMPPConnectionApiID = 48;
-    AsyncFlashService(IServer & server)
+    static constexpr int EstablishMPPConnectionApiID = 48;
+    explicit AsyncFlashService(IServer & server)
         : FlashService(server)
     {
         ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);

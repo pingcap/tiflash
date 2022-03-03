@@ -14,7 +14,7 @@ class AsyncFlashService;
 class SyncPacketWriter : public PacketWriter
 {
 public:
-    SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
+    explicit SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
         : writer(writer)
     {}
 
@@ -58,8 +58,9 @@ private:
     AsyncFlashService * service_;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    grpc::ServerCompletionQueue *cq_, *notify_cq_;
-    grpc::ServerContext ctx_;
+    ::grpc::ServerCompletionQueue * cq_;
+    ::grpc::ServerCompletionQueue * notify_cq_;
+    ::grpc::ServerContext ctx_;
     ::grpc::Status status4err;
 
     // What we get from the client.
