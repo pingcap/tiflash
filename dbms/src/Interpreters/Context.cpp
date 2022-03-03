@@ -37,7 +37,6 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IStorage.h>
@@ -140,8 +139,6 @@ struct ContextShared
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
-    /// Rules for selecting the compression settings, depending on the size of the part.
-    mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -191,7 +188,7 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
     {
         /// TODO: make it singleton (?)
@@ -308,7 +305,7 @@ const ProcessList & Context::getProcessList() const
 }
 
 
-const Databases Context::getDatabases() const
+Databases Context::getDatabases() const
 {
     auto lock = getLock();
     return shared->databases;
@@ -323,7 +320,7 @@ Databases Context::getDatabases()
 
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
-    auto & user_name = client_info.current_user;
+    const auto & user_name = client_info.current_user;
 
     if (user_name.empty())
         throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
@@ -438,7 +435,7 @@ static String resolveDatabase(const String & database_name, const String & curre
 }
 
 
-const DatabasePtr Context::getDatabase(const String & database_name) const
+DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -454,7 +451,7 @@ DatabasePtr Context::getDatabase(const String & database_name)
     return shared->databases[db];
 }
 
-const DatabasePtr Context::tryGetDatabase(const String & database_name) const
+DatabasePtr Context::tryGetDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -818,7 +815,7 @@ Tables Context::getExternalTables() const
     auto lock = getLock();
 
     Tables res;
-    for (auto & table : external_tables)
+    for (const auto & table : external_tables)
         res[table.first] = table.second.first;
 
     if (session_context && session_context != this)
@@ -850,7 +847,7 @@ StoragePtr Context::getTable(const String & database_name, const String & table_
     Exception exc;
     auto res = getTableImpl(database_name, table_name, &exc);
     if (!res)
-        throw exc;
+        throw Exception(exc);
     return res;
 }
 
@@ -1516,7 +1513,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
     return shared->schema_sync_service;
 }
 
-void Context::initializeTiFlashMetrics()
+void Context::initializeTiFlashMetrics() const
 {
     auto lock = getLock();
     (void)TiFlashMetrics::instance();
@@ -1615,25 +1612,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-CompressionSettings Context::chooseCompressionSettings(size_t part_size, double part_size_ratio) const
-{
-    auto lock = getLock();
-
-    if (!shared->compression_settings_selector)
-    {
-        constexpr auto config_name = "compression";
-        auto & config = getConfigRef();
-
-        if (config.has(config_name))
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>(config, "compression");
-        else
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>();
-    }
-
-    return shared->compression_settings_selector->choose(part_size, part_size_ratio);
 }
 
 

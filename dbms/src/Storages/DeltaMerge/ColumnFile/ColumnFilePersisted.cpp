@@ -49,11 +49,9 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     return schema;
 }
 
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress)
+void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
 {
-    CompressionMethod method = compress ? CompressionMethod::LZ4 : CompressionMethod::NONE;
-
-    CompressedWriteBuffer compressed(buf, CompressionSettings(method));
+    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
     type->serializeBinaryBulkWithMultipleStreams(column, //
                                                  [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                  offset,
