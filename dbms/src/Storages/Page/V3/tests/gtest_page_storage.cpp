@@ -1,4 +1,6 @@
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/RandomAccessFile.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -12,7 +14,6 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 
 namespace DB
 {
@@ -110,7 +111,7 @@ try
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
     const auto enc_file_provider = std::make_shared<FileProvider>(key_manager, true);
     auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
-    auto page_storage_enc = std::make_shared<PageStorageImpl>("test.t2", delegator, config, enc_file_provider);
+    auto page_storage_enc = std::make_shared<PageStorageImpl>("test.t", delegator, config, enc_file_provider);
     page_storage_enc->restore();
     {
         WriteBatch batch;
@@ -120,6 +121,21 @@ try
         batch.putPage(1, tag, buff, buf_sz);
         page_storage_enc->write(std::move(batch));
     }
+
+    // Make sure that we can't restore from no-enc pagestore.
+    // Because WALStore can't get any record from it.
+    try
+    {
+        page_storage->restore();
+        page_storage->read(0);
+        ASSERT_FALSE(true); // Should not come here.
+    }
+    catch (DB::Exception & e)
+    {
+    }
+
+    page_storage_enc = std::make_shared<PageStorageImpl>("test.t", delegator, config, enc_file_provider);
+    page_storage_enc->restore();
 
     DB::Page page0 = page_storage_enc->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
@@ -135,6 +151,17 @@ try
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
+
+    char c_buff_read[buf_sz] = {0};
+
+    // Make sure in-disk data is encrypted.
+    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(page_storage_enc->blob_store.getBlobFilePath(1),
+                                                                            -1,
+                                                                            nullptr);
+    file_read->pread(c_buff_read, buf_sz, 0);
+    ASSERT_NE(c_buff_read, c_buff);
+    file_read->pread(c_buff_read, buf_sz, buf_sz);
+    ASSERT_NE(c_buff_read, c_buff);
 }
 CATCH
 
