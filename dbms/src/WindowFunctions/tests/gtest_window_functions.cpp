@@ -114,11 +114,45 @@ protected:
             ASSERT_CHECK_BLOCK(expect_blocks[i], actual_blocks[i]);
         }
     }
+
+    Block mergeBlocks(Blocks blocks)
+    {
+        Block sample_block;
+        std::vector<MutableColumnPtr> actual_cols;
+
+        for (const auto & block : blocks)
+        {
+            if (!sample_block)
+            {
+                sample_block = block;
+                for (const auto & column : block.getColumnsWithTypeAndName())
+                {
+                    actual_cols.push_back(column.type->createColumn());
+                }
+            }
+
+            for (size_t i = 0; i < block.columns(); ++i)
+            {
+                for (size_t j = 0; j < block.rows(); j++)
+                {
+                    actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
+                }
+            }
+        }
+
+        ColumnsWithTypeAndName actual_columns;
+
+        for (size_t i = 0; i < actual_cols.size(); ++i)
+        {
+            actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
+        }
+        return Block(actual_columns);
+    }
 };
 TEST_F(WindowFunction, allTests)
 {
     registerAggregateFunctions();
-    setMaxBlockSize(9);
+    setMaxBlockSize(3);
 
     std::vector<NameAndTypePair> source_columns;
     source_columns.emplace_back(NameAndTypePair("empid", std::make_shared<DataTypeInt64>()));
@@ -150,15 +184,15 @@ TEST_F(WindowFunction, allTests)
     mockExecuteWindow(chain, pipeline, window_json_str);
 
     auto stream = pipeline.firstStream();
-    Block actual_block;
+
+    Blocks actual_blocks;
     while (Block block = stream->read())
     {
-        for (auto column : block.getColumnsWithTypeAndName())
-        {
-            actual_block.insert(column);
-        }
+        actual_blocks.push_back(block);
     }
 
+    Block actual_block = mergeBlocks(actual_blocks);
+    ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.getSettingsRef().max_block_size + 1);
     ASSERT_CHECK_BLOCK(except_block, actual_block);
 }
 } // namespace DB::tests
