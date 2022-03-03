@@ -12,8 +12,8 @@ struct BinaryGreatestBaseImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        const Result tmp_a = static_cast<Result>(a);
-        const Result tmp_b = static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return accurate::greaterOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
@@ -32,8 +32,8 @@ struct BinaryGreatestBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        const Result tmp_a = static_cast<Result>(a);
-        const Result tmp_b = static_cast<Result>(b);
+        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return tmp_a > tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
