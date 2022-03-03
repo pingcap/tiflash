@@ -188,10 +188,19 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
+::grpc::Status returnStatus(EstablishCallData * calldata, const grpc::Status & status)
+{
+    if (calldata)
+    {
+        calldata->WriteDone(status);
+    }
+    return status;
+}
+
 ::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
-                                                     const ::mpp::EstablishMPPConnectionRequest * request,
-                                                     ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                     EstablishCallData * calldata)
+                                                               const ::mpp::EstablishMPPConnectionRequest * request,
+                                                               ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                               EstablishCallData * calldata)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
@@ -200,12 +209,7 @@ grpc::Status FlashService::Coprocessor(
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
-        auto status = grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-        if (calldata)
-        {
-            calldata->WriteDone(status);
-        }
-        return status;
+        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -228,9 +232,7 @@ grpc::Status FlashService::Coprocessor(
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        if (calldata)
-            calldata->WriteDone(status);
-        return status;
+        return returnStatus(calldata, status);
     }
 
     auto & tmt_context = context->getTMTContext();
