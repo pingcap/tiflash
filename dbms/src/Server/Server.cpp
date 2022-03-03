@@ -574,7 +574,7 @@ public:
             int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
             for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
             {
-                for (int j = 0; j < buf_size; j++)
+                for (int j = 0; j < buf_size; ++j)
                     new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cqs[i / pollers_per_cq].get(), notify_cqs[i / pollers_per_cq].get());
                 thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(cqs[i / pollers_per_cq].get()); });
                 thread_manager->scheduleThenDetach(false, "async_poller", [this, i, pollers_per_cq] { HandleRpcs(notify_cqs[i / pollers_per_cq].get()); });
