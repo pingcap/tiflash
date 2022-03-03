@@ -5,9 +5,16 @@ SCRIPTPATH="$(
   cd "$(dirname "$0")"
   pwd -P
 )"
+SRCPATH=${1:-$(
+  cd ${SCRIPTPATH}/../..
+  pwd -P
+)}
 
-SRCPATH=/build/tics
-BUILD_DIR=/build/release-centos7-llvm/build-release
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+
+SRCPATH=${CI_CCACHE_USED_SRCPATH}
+BUILD_DIR={BUILD_UT_DIR}
+
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
 llvm-profdata merge -sparse /tiflash/profile/*.profraw -o /tiflash/profile/merged.profdata 

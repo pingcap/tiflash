@@ -12,7 +12,7 @@ using ColumnInMemoryFilePtr = std::shared_ptr<ColumnFileInMemory>;
 /// A column file which is only resides in memory
 class ColumnFileInMemory : public ColumnFile
 {
-    friend class ColumnInMemoryFileReader;
+    friend class ColumnFileInMemoryReader;
 
 private:
     BlockPtr schema;
@@ -80,11 +80,6 @@ public:
 
     Block readDataForFlush() const;
 
-    void serializeMetadata(WriteBuffer & /*buf*/, bool /*save_schema*/) const override
-    {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
-    }
-
     String toString() const override
     {
         String s = "{in_memory_file,rows:" + DB::toString(rows) //
@@ -97,7 +92,7 @@ public:
 };
 
 
-class ColumnInMemoryFileReader : public ColumnFileReader
+class ColumnFileInMemoryReader : public ColumnFileReader
 {
 private:
     const ColumnFileInMemory & memory_file;
@@ -107,7 +102,7 @@ private:
     bool read_done = false;
 
 public:
-    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_,
+    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_,
                              const ColumnDefinesPtr & col_defs_,
                              const Columns & cols_data_cache_)
         : memory_file(memory_file_)
@@ -116,7 +111,7 @@ public:
     {
     }
 
-    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
     {

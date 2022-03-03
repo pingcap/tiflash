@@ -29,9 +29,9 @@ struct RegionQueryInfo
 
 struct MvccQueryInfo
 {
-    const bool resolve_locks;
-
     const UInt64 read_tso;
+
+    const bool resolve_locks;
 
     Float32 concurrent = 1.0;
 
@@ -42,7 +42,7 @@ struct MvccQueryInfo
     ReadIndexRes read_index_res;
 
 public:
-    MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0) : resolve_locks(resolve_locks_), read_tso(read_tso_) {}
+    explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0);
 };
 
 } // namespace DB
