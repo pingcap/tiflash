@@ -719,6 +719,8 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 }
 } // namespace
 
+String LOCAL_HOST = "127.0.0.1:3930";
+
 namespace Debug
 {
 void setServiceAddr(const std::string & addr)

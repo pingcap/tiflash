@@ -50,6 +50,15 @@ extern const int LOGICAL_ERROR;
 extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
+static const String ENCODE_TYPE_NAME = "encode_type";
+static const String TZ_OFFSET_NAME = "tz_offset";
+static const String TZ_NAME_NAME = "tz_name";
+static const String COLLATOR_NAME = "collator";
+static const String MPP_QUERY = "mpp_query";
+static const String USE_BROADCAST_JOIN = "use_broadcast_join";
+static const String MPP_PARTITION_NUM = "mpp_partition_num";
+static const String MPP_TIMEOUT = "mpp_timeout";
+
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
 {
 public:

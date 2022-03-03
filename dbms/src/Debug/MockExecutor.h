@@ -25,15 +25,8 @@ extern const int NO_SUCH_COLUMN_IN_TABLE;
 
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
-static const String ENCODE_TYPE_NAME = "encode_type";
-static const String TZ_OFFSET_NAME = "tz_offset";
-static const String TZ_NAME_NAME = "tz_name";
-static const String COLLATOR_NAME = "collator";
-static const String MPP_QUERY = "mpp_query";
-static const String USE_BROADCAST_JOIN = "use_broadcast_join";
-static const String MPP_PARTITION_NUM = "mpp_partition_num";
-static const String MPP_TIMEOUT = "mpp_timeout";
-static String LOCAL_HOST = "127.0.0.1:3930";
+
+extern String LOCAL_HOST;
 
 namespace Debug
 {
