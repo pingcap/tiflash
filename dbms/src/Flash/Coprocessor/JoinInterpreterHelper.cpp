@@ -2,7 +2,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/HandleJoinHelper.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -10,7 +10,9 @@
 
 namespace DB
 {
-std::pair<ASTTableJoin::Kind, size_t> HandleJoinHelper::getJoinKindAndBuildSideIndex(const tipb::Join & join)
+namespace JoinInterpreterHelper
+{
+std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
 {
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
@@ -69,7 +71,7 @@ std::pair<ASTTableJoin::Kind, size_t> HandleJoinHelper::getJoinKindAndBuildSideI
     return {kind, build_side_index};
 }
 
-DataTypes HandleJoinHelper::getJoinKeyTypes(const tipb::Join & join)
+DataTypes getJoinKeyTypes(const tipb::Join & join)
 {
     DataTypes key_types;
     for (int i = 0; i < join.left_join_keys().size(); ++i)
@@ -85,7 +87,7 @@ DataTypes HandleJoinHelper::getJoinKeyTypes(const tipb::Join & join)
     return key_types;
 }
 
-TiDB::TiDBCollators HandleJoinHelper::getJoinKeyCollators(const tipb::Join & join, const DataTypes & join_key_types)
+TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes & join_key_types)
 {
     TiDB::TiDBCollators collators;
     size_t join_key_size = join_key_types.size();
@@ -108,7 +110,7 @@ TiDB::TiDBCollators HandleJoinHelper::getJoinKeyCollators(const tipb::Join & joi
     return collators;
 }
 
-String HandleJoinHelper::genMatchHelperNameForLeftSemiFamily(const Block & left_header, const Block & right_header)
+String genMatchHelperNameForLeftSemiFamily(const Block & left_header, const Block & right_header)
 {
     String match_helper_name = Join::match_helper_prefix;
     for (int i = 1; left_header.has(match_helper_name) || right_header.has(match_helper_name); ++i)
@@ -116,5 +118,6 @@ String HandleJoinHelper::genMatchHelperNameForLeftSemiFamily(const Block & left_
         match_helper_name = Join::match_helper_prefix + std::to_string(i);
     }
     return match_helper_name;
+}
 }
 } // namespace DB

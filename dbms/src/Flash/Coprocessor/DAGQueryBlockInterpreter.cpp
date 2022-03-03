@@ -15,14 +15,13 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/HandleJoinHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
@@ -474,7 +473,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
-    auto [kind, build_side_index] = HandleJoinHelper::getJoinKindAndBuildSideIndex(join);
+    auto [kind, build_side_index] = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(join);
     assert(build_side_index <= 1);
     bool swap_join_side = build_side_index != 1;
 
@@ -536,14 +535,14 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     String match_helper_name;
     if (is_left_semi_family)
     {
-        match_helper_name = HandleJoinHelper::genMatchHelperNameForLeftSemiFamily(input_streams_vec[0][0]->getHeader(), input_streams_vec[1][0]->getHeader());
+        match_helper_name = JoinInterpreterHelper::genMatchHelperNameForLeftSemiFamily(input_streams_vec[0][0]->getHeader(), input_streams_vec[1][0]->getHeader());
         assert(!match_helper_name.empty());
         columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
         join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
     }
 
-    DataTypes join_key_types = HandleJoinHelper::getJoinKeyTypes(join);
-    TiDB::TiDBCollators collators = HandleJoinHelper::getJoinKeyCollators(join, join_key_types);
+    DataTypes join_key_types = JoinInterpreterHelper::getJoinKeyTypes(join);
+    TiDB::TiDBCollators collators = JoinInterpreterHelper::getJoinKeyCollators(join, join_key_types);
 
     Names left_key_names, right_key_names;
     String left_filter_column_name, right_filter_column_name;
