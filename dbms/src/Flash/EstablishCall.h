@@ -35,7 +35,7 @@ public:
 
     bool Write(const mpp::MPPDataPacket & packet) override;
 
-    bool TryWrite() override;
+    void TryWrite() override;
 
     void WriteDone(const ::grpc::Status & status) override;
 

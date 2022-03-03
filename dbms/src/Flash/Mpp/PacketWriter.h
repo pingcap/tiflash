@@ -26,7 +26,7 @@ public:
     // Because for async writer,
     // the caller can't know if the rpc session is ready for writing.
     // If it is not ready, caller can't write a packet.
-    virtual bool TryWrite() { return false; }
+    virtual void TryWrite() {}
 
 
     // Finish rpc with a status. Needed by async writer. For sync writer it is useless but not harmful.

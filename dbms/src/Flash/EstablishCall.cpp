@@ -21,7 +21,7 @@ EstablishCallData* EstablishCallData::spawn(AsyncFlashService * service, grpc::S
     return new EstablishCallData(service, cq, notify_cq);
 }
 
-bool EstablishCallData::TryWrite()
+void EstablishCallData::TryWrite()
 {
     // check whether there is a valid msg to write
     {
@@ -29,11 +29,10 @@ bool EstablishCallData::TryWrite()
         if (mpptunnel && ready && mpptunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
-            return false;
+            return;
     }
     // there is a valid msg, do single write operation
     mpptunnel->sendJob(false);
-    return true;
 }
 
 void EstablishCallData::initRpc()
