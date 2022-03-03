@@ -17,6 +17,10 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
+EstablishCallData* EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq) {
+    return new EstablishCallData(service, cq, notify_cq);
+}
+
 bool EstablishCallData::TryWrite()
 {
     // check whether there is a valid msg to write
@@ -94,10 +98,8 @@ void EstablishCallData::Proceed()
     if (state == PROCESS)
     {
         state = JOIN;
-        // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
-        // The instance will deallocate itself as part of its FINISH state.
-        // EstablishCallData will handle its lifecycle by itself.
-        new EstablishCallData(service, cq, notify_cq);
+
+        spawn(service, cq, notify_cq);
         notifyReady();
         initRpc();
     }

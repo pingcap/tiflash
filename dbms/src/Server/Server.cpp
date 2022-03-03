@@ -579,7 +579,7 @@ public:
                 for (int j = 0; j < buf_size; ++j)
                 {
                     // EstablishCallData will handle its lifecycle by itself.
-                    new EstablishCallData(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
+                    EstablishCallData::spawn(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
                 }
                 thread_manager->schedule(false, "async_poller", [cq] { HandleRpcs(cq); });
                 thread_manager->schedule(false, "async_poller", [notify_cq] { HandleRpcs(notify_cq); });
