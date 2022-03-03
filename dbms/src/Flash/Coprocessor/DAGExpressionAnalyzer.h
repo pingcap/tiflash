@@ -53,6 +53,7 @@ public:
         const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// May change the source columns.
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
@@ -160,6 +161,13 @@ private:
         std::unordered_set<String> & agg_key_set,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
+
+    void fillAggArgumentDetail(
+        const ExpressionActionsPtr & actions,
+        const tipb::Expr & arg,
+        Names & arg_names,
+        DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
