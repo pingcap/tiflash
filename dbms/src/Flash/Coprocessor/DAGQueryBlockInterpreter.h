@@ -41,7 +41,9 @@ public:
 
     BlockInputStreams execute();
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     void executeImpl(DAGPipeline & pipeline);
     void handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeCastAfterTableScan(const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
@@ -65,8 +67,12 @@ private:
         String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
+    void executeWindow(
+        DAGPipeline & pipeline,
+        WindowDescription & window_description);
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,

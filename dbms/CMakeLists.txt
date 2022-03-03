@@ -110,6 +110,14 @@ list (APPEND dbms_headers
     src/AggregateFunctions/FactoryHelpers.h
     src/AggregateFunctions/parseAggregateFunctionParameters.h)
 
+list (APPEND dbms_sources
+        src/WindowFunctions/WindowFunctionFactory.cpp
+        src/WindowFunctions/WindowFunction.cpp)
+
+list (APPEND dbms_headers
+        src/WindowFunctions/WindowFunctionFactory.h
+        src/WindowFunctions/WindowFunction.h)
+
 list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
@@ -272,7 +280,7 @@ if (ENABLE_TESTS)
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions clickhouse_aggregate_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
