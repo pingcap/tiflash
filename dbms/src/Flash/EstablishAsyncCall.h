@@ -47,6 +47,7 @@ public:
     }
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
+
 private:
     void notifyReady();
 

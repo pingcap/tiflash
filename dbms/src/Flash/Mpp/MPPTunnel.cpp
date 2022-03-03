@@ -134,9 +134,10 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
     assert(!is_local);
     bool async = is_async.load();
-    if (!async) 
+    if (!async)
     {
-        UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp, type_max_threads_of_establish_mpp);
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
     }
     String err_msg;
     try
@@ -174,6 +175,10 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
     consumerFinish(err_msg, need_lock);
     if (async)
         writer->WriteDone(grpc::Status::OK);
+    else
+    {
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
+    }
 }
 
 
