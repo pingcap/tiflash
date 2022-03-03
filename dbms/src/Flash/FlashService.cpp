@@ -1,5 +1,6 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
@@ -139,8 +140,18 @@ grpc::Status FlashService::Coprocessor(
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    if (!tryToResetMaxThreadsMetrics())
+    {
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value()));
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value()));
+    }
+
     Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
@@ -198,8 +209,17 @@ grpc::Status FlashService::Coprocessor(
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    if (!tryToResetMaxThreadsMetrics())
+    {
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value()));
+    }
     Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.

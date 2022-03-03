@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -133,6 +134,10 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
     assert(!is_local);
     bool async = is_async.load();
+    if (!async) 
+    {
+        UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp, type_max_threads_of_establish_mpp);
+    }
     String err_msg;
     try
     {

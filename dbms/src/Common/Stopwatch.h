@@ -18,6 +18,10 @@ inline UInt64 nanoseconds(clockid_t clock_type)
     clock_gettime(clock_type, &ts);
     return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
+inline UInt64 seconds(clockid_t clock_type)
+{
+    return nanoseconds(clock_type) / 1000000000ULL;
+}
 } // namespace StopWatchDetail
 
 
