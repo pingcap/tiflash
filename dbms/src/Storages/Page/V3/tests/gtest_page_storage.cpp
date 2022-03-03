@@ -101,8 +101,10 @@ CATCH
 TEST_F(PageStorageTest, WriteReadWithIOLimiter)
 try
 {
-    PageId page_id = 50;
+    // In this case, WalStore throput is very low.
+    // Because we only have 10 record to write.
     size_t wb_nums = 10;
+    PageId page_id = 50;
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
 
@@ -177,6 +179,177 @@ try
         EXPECT_GE(read_actual_rate / rate_target, 0.70);
         EXPECT_LE(read_actual_rate / rate_target, 1.30);
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithReadLimiter)
+try
+{
+    // In this case, BlobStore throput is very low.
+    // Because we only need 10bytes to new blob.
+    const size_t buff_size = 10;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 1024 * 150ul;
+    PageId pid = 1;
+
+    // repeated put page1
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(pid, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    const size_t rate_target = DB::PAGE_META_ROLL_SIZE - 1;
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
+
+    AtomicStopwatch read_watch;
+    page_storage->gc(/*not_skip*/ false, nullptr, read_limiter);
+
+    auto elapsed = read_watch.elapsedSeconds();
+    auto read_actual_rate = read_limiter->getTotalBytesThrough() / elapsed;
+    EXPECT_GE(read_actual_rate / rate_target, 0.70);
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithReadLimiter2)
+try
+{
+    // In this case, WALStore throput is very low.
+    // Because we only have 10 record to write.
+    const size_t buff_size = 100ul * 1024;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 8;
+
+    // put page [1,num_repeat]
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // put page [num_repeat + 1, num_repeat * 6]
+    for (size_t n = num_repeat + 1; n <= num_repeat * 6; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    const size_t rate_target = buff_size - 1;
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
+
+    AtomicStopwatch read_watch;
+    page_storage->gc(/*not_skip*/ false, nullptr, read_limiter);
+
+    auto elapsed = read_watch.elapsedSeconds();
+    auto read_actual_rate = read_limiter->getTotalBytesThrough() / elapsed;
+    EXPECT_GE(read_actual_rate / rate_target, 0.70);
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithWriteLimiter)
+try
+{
+    // In this case, BlobStore throput is very low.
+    // Because we only need 1024* 150bytes to new blob.
+    const size_t buff_size = 10;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 1024 * 300ul;
+
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n <= num_repeat / 2 ? n : 1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    const size_t rate_target = DB::PAGE_META_ROLL_SIZE - 1;
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    page_storage->gc(/*not_skip*/ false, write_limiter, nullptr);
+
+    auto elapsed = write_watch.elapsedSeconds();
+    auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
+
+    EXPECT_GE(read_actual_rate / rate_target, 0.70);
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithWriteLimiter2)
+try
+{
+    // In this case, BlobStore throput is very low.
+    // Because we only need 1bytes * to new blob.
+    const size_t buff_size = 1024 * 300ul;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 8;
+
+    // put page [1,num_repeat]
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // put page [num_repeat + 1, num_repeat * 6]
+    for (size_t n = num_repeat + 1; n <= num_repeat * 6; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // It is meanless, Because in GC, BlobStore will compact all data(<512M) in single IO
+    // But we still can make sure through is corrent.
+    const size_t rate_target = buff_size - 1;
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    page_storage->gc(/*not_skip*/ false, write_limiter, nullptr);
+
+    auto elapsed = write_watch.elapsedSeconds();
+    auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
+    EXPECT_GE(read_actual_rate / rate_target, 0.70);
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
 }
 CATCH
 
