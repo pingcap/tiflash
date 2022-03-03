@@ -76,7 +76,7 @@ protected:
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
 
-//a copy of WithAsyncMethod_EstablishMPPConnection, since we want both sync & async server, we need copy it and inherit from FlashServer
+// a copy of WithAsyncMethod_EstablishMPPConnection, since we want both sync & async server, we need copy it and inherit from FlashService.
 class AsyncFlashService final : public FlashService
 {
 public:
