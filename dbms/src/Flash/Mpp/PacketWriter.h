@@ -11,16 +11,15 @@
 
 namespace DB
 {
-// Writer used by MPPTunnel, to wrap both async & sync RPC writer.
+// PacketWriter is a common interface of both sync and async gRPC writer.
+// It is used as the template parameter of `MPPTunnel`.
 class PacketWriter
 {
 public:
     virtual ~PacketWriter() = default;
 
-    // Write a packet, if this api is called, it means the rpc is ready for writing
-    // For sync writer, it is always ready for writing.
-    // For async writer, it is judged and called by "TryWrite".
-    // If fail to write, it will return false.
+    // Write a packet and return false if any error occurs.
+    // Note: in async mode the end of `Write` doesn't mean the `packet` is actually written done.
     virtual bool Write(const mpp::MPPDataPacket & packet) = 0;
 
     // Check if the rpc is ready for writing. If true, it will write a packet.
@@ -30,7 +29,7 @@ public:
     virtual bool TryWrite() { return false; }
 
 
-    // Finish rpc with a status. Used in async mode in most cases. In sync mode, it will return Status directly.
+    // Finish rpc with a status. Needed by async writer. For sync writer it is useless but not harmful.
     virtual void WriteDone(const ::grpc::Status & /*status*/) {}
 };
 }; // namespace DB

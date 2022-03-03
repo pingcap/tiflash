@@ -614,7 +614,7 @@ private:
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    // cqs and notify_cqs are used in async mode for processing rpc events.
+    // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
     std::shared_ptr<ThreadManager> thread_manager;
