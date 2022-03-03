@@ -23,15 +23,14 @@ public:
     DMFileBlockOutputStream(const Context & context,
                             const DMFilePtr & dmfile,
                             const ColumnDefines & write_columns,
-                            const Flags flags = Flags(),
-                            const CompressionSettings compression_settings = CompressionMethod::LZ4)
+                            const Flags flags = Flags())
         : writer(
             dmfile,
             write_columns,
             context.getFileProvider(),
             context.getWriteLimiter(),
             DMFileWriter::Options{
-                compression_settings,
+                CompressionSettings(context.getSettingsRef().dt_compression_method, context.getSettingsRef().dt_compression_level),
                 context.getSettingsRef().min_compress_block_size,
                 context.getSettingsRef().max_compress_block_size,
                 flags})

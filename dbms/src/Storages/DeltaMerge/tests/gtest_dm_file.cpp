@@ -91,6 +91,7 @@ public:
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        page_id_generator = std::make_unique<PageIdGenerator>();
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -109,6 +110,7 @@ public:
             *db_context,
             *path_pool,
             *storage_pool,
+            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             settings.not_compress_columns,
@@ -136,6 +138,7 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
+    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DeltaMergeStore::Settings settings;
 
@@ -1117,6 +1120,7 @@ public:
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, DB::Settings());
+        page_id_generator = std::make_unique<PageIdGenerator>();
         dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -1137,6 +1141,7 @@ public:
             *db_context,
             *path_pool,
             *storage_pool,
+            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             settings.not_compress_columns,
@@ -1156,6 +1161,7 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
+    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DeltaMergeStore::Settings settings;
 
