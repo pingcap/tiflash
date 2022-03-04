@@ -146,7 +146,7 @@ void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
     insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, v_tag);
     std::vector<UInt64> v_balance(ids.size(), 1024);
     insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, v_balance);
-    std::string s("C", 128);
+    std::string s(128, 'C');
     std::vector<String> v_s(ids.size(), s);
     insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, v_s);
 }
