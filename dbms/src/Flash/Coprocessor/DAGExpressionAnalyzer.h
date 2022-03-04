@@ -63,6 +63,8 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
 
+    ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
+
     void appendJoin(
         ExpressionActionsChain & chain,
         SubqueryForSet & join_query,
