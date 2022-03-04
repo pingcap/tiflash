@@ -24,13 +24,32 @@ public:
     using Duration = Clock::duration;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
+    StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
 
     void restore();
+
+    NamespaceId getNamespaceId() const { return ns_id; }
 
     PageStoragePtr log() { return log_storage; }
     PageStoragePtr data() { return data_storage; }
     PageStoragePtr meta() { return meta_storage; }
+
+    PageReader & logReader() { return log_storage_reader; }
+    PageReader & dataReader() { return data_storage_reader; }
+    PageReader & metaReader() { return meta_storage_reader; }
+
+    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    {
+        return PageReader(ns_id, log_storage, snapshot_read ? log_storage->getSnapshot() : nullptr, read_limiter);
+    }
+    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    {
+        return PageReader(ns_id, data_storage, snapshot_read ? data_storage->getSnapshot() : nullptr, read_limiter);
+    }
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    {
+        return PageReader(ns_id, meta_storage, snapshot_read ? meta_storage->getSnapshot() : nullptr, read_limiter);
+    }
 
     // Caller must cancel gc tasks before drop
     void drop();
@@ -38,9 +57,15 @@ public:
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
+    NamespaceId ns_id;
+
     PageStoragePtr log_storage;
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;
+
+    PageReader log_storage_reader;
+    PageReader data_storage_reader;
+    PageReader meta_storage_reader;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
@@ -56,7 +81,7 @@ class PageIdGenerator : private boost::noncopyable
 public:
     PageIdGenerator() = default;
 
-    void restore(NamespaceId ns_id, const StoragePool & storage_pool);
+    void restore(const StoragePool & storage_pool);
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
@@ -73,10 +98,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(NamespaceId ns_id, StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
-        : log_reader(ns_id, storage.log(), snapshot_read ? storage.log()->getSnapshot() : nullptr, read_limiter)
-        , data_reader(ns_id, storage.data(), snapshot_read ? storage.data()->getSnapshot() : nullptr, read_limiter)
-        , meta_reader(ns_id, storage.meta(), snapshot_read ? storage.meta()->getSnapshot() : nullptr, read_limiter)
+    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
+        : log_reader(storage.newLogReader(read_limiter, snapshot_read))
+        , data_reader(storage.newDataReader(read_limiter, snapshot_read))
+        , meta_reader(storage.newMetaReader(read_limiter, snapshot_read))
     {}
 
     PageReader log_reader;

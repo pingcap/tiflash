@@ -322,7 +322,7 @@ int benchEntry(const std::vector<std::string> & opts)
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", /*table_id*/ 1, *path_pool, *db_context, db_context->getSettingsRef());
         auto page_id_generator = std::make_unique<DB::DM::PageIdGenerator>();
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
@@ -334,7 +334,6 @@ int benchEntry(const std::vector<std::string> & opts)
             0,
             dm_settings.not_compress_columns,
             false,
-            /*table_id*/ 1,
             1,
             db_context->getSettingsRef());
         DB::DM::DMFilePtr dmfile = nullptr;

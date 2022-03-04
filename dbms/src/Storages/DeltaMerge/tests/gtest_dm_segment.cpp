@@ -60,10 +60,10 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *storage_path_pool, *db_context, db_context->getSettingsRef());
         page_id_generator = std::make_unique<PageIdGenerator>();
         storage_pool->restore();
-        page_id_generator->restore(table_id, *storage_pool);
+        page_id_generator->restore(*storage_pool);
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
@@ -83,7 +83,6 @@ protected:
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   false,
-                                                  table_id,
                                                   1,
                                                   db_context->getSettingsRef());
     }
@@ -101,8 +100,6 @@ protected:
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
     std::unique_ptr<DMContext> dm_context_;
-
-    static constexpr TableID table_id = 100;
 
     // the segment we are going to test
     SegmentPtr segment;
@@ -1286,7 +1283,7 @@ try
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
-                WriteBatches wbs(table_id, *storage_pool);
+                WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
@@ -1318,7 +1315,7 @@ try
     // Test split
     SegmentPtr other_segment;
     {
-        WriteBatches wbs(dmContext().table_id, dmContext().storage_pool);
+        WriteBatches wbs(dmContext().storage_pool);
         auto segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         ASSERT_FALSE(!segment_snap);
 
@@ -1346,7 +1343,7 @@ try
 
     // Test merge
     {
-        WriteBatches wbs(dmContext().table_id, dmContext().storage_pool);
+        WriteBatches wbs(dmContext().storage_pool);
 
         auto left_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
         auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);

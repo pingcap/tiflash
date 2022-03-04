@@ -39,10 +39,10 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *path_pool, *db_context, db_context->getSettingsRef());
         page_id_generator = std::make_unique<PageIdGenerator>();
         storage_pool->restore();
-        page_id_generator->restore(table_id, *storage_pool);
+        page_id_generator->restore(*storage_pool);
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         setColumns(cols);
@@ -64,7 +64,6 @@ protected:
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   is_common_handle,
-                                                  table_id,
                                                   rowkey_column_size,
                                                   db_context->getSettingsRef());
     }
@@ -86,7 +85,6 @@ private:
 protected:
     // the segment we are going to test
     SegmentPtr segment;
-    static constexpr TableID table_id = 100;
     bool is_common_handle = true;
     size_t rowkey_column_size = 2;
 };

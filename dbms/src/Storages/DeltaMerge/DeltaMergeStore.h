@@ -437,7 +437,6 @@ private:
 
     String db_name;
     String table_name;
-    TableID table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;

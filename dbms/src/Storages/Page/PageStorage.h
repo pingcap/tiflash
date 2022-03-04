@@ -252,6 +252,11 @@ public:
         return storage->read(ns_id, page_fields, read_limiter, snap);
     }
 
+    PageId getMaxId() const
+    {
+        return storage->getMaxId(ns_id);
+    }
+
     PageId getNormalPageId(PageId page_id) const
     {
         return storage->getNormalPageId(ns_id, page_id, snap);
