@@ -148,8 +148,8 @@ int main(int argc, char * argv[])
         {
             try
             {
-                // sleep(dist(generator));
-                sleep(300);
+                sleep(dist(generator));
+                // sleep(300);
                 kill(fpid, SIGKILL);
                 int status;
                 wait(&status);
