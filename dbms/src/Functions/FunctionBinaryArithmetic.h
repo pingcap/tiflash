@@ -636,7 +636,7 @@ struct DateBinaryOperationTraits
                                          Else<InvalidType>>>>>,
                            Else<InvalidType>>>,
                     Else<
-                        If<std::is_same_v<T0, T1> && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
+                        If<std::is_same_v<T0, T1> && (std::is_same_v<Op, BinaryLeastBaseImpl<T0, T1>> || std::is_same_v<Op, BinaryGreatestBaseImpl<T0, T1>>),
                            Then<LeftDataType>,
                            Else<InvalidType>>>>>>;
 };
