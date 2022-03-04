@@ -7,17 +7,13 @@ namespace DB
 {
 namespace DM
 {
-void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
 {
-    size_t saved_packs = std::find_if(column_files.begin(), column_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); }) - column_files.begin();
-
-    writeIntBinary(saved_packs, buf);
+    writeIntBinary(column_files.size(), buf);
     BlockPtr last_schema;
 
     for (const auto & column_file : column_files)
     {
-        if (!column_file->isSaved())
-            break;
         // Do not encode the schema if it is the same as previous one.
         writeIntBinary(column_file->getType(), buf);
 
@@ -50,17 +46,17 @@ void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFiles & 
     }
 }
 
-ColumnFiles deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
+ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 /*version*/)
 {
     size_t column_file_count;
     readIntBinary(column_file_count, buf);
-    ColumnFiles column_files;
+    ColumnFilePersisteds column_files;
     BlockPtr last_schema;
     for (size_t i = 0; i < column_file_count; ++i)
     {
         std::underlying_type<ColumnFile::Type>::type column_file_type;
         readIntBinary(column_file_type, buf);
-        ColumnFilePtr column_file;
+        ColumnFilePersistedPtr column_file;
         switch (column_file_type)
         {
         case ColumnFile::Type::DELETE_RANGE:

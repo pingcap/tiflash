@@ -60,24 +60,25 @@ LogFilenameSet WALStoreReader::listAllFiles(
     return log_files;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter)
 {
-    auto reader = std::make_shared<WALStoreReader>(provider, std::move(files));
+    auto reader = std::make_shared<WALStoreReader>(provider, std::move(files), read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
 {
     Poco::Logger * logger = &Poco::Logger::get("WALStore");
     LogFilenameSet log_files = listAllFiles(delegator, logger);
-    return create(provider, std::move(log_files));
+    return create(provider, std::move(log_files), read_limiter);
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_)
+WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , files(std::move(files_))
     , next_reading_file(files.begin())
+    , read_limiter(read_limiter_)
     , logger(&Poco::Logger::get("LogReader"))
 {}
 
@@ -135,7 +136,7 @@ bool WALStoreReader::openNextFile()
             EncryptionPath{parent_path, filename},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
-            /*read_limiter*/ nullptr,
+            /*read_limiter*/ read_limiter,
             /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
         );
         reader = std::make_unique<LogReader>(

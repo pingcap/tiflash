@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
+#include <fmt/format.h>
 
 namespace DB::PS::V3
 {
@@ -19,5 +20,10 @@ public:
 using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageId, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
+
+inline String toDebugString(const PageEntryV3 & entry)
+{
+    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
+}
 
 } // namespace DB::PS::V3

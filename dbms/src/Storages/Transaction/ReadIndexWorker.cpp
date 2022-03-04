@@ -260,7 +260,7 @@ RawRustPtr TiFlashRaftProxyHelper::makeAsyncWaker(void (*wake_fn)(RawVoidPtr), R
 std::optional<ReadIndexTask> TiFlashRaftProxyHelper::makeReadIndexTask(const kvrpcpb::ReadIndexRequest & req) const
 {
     thread_local std::string buff_cache;
-    req.SerializePartialToString(&buff_cache);
+    req.SerializeToString(&buff_cache);
     auto req_view = strIntoView(&buff_cache);
     if (RawRustPtr ptr = fn_make_read_index_task(proxy_ptr, req_view); ptr.ptr)
     {
@@ -286,13 +286,6 @@ bool TiFlashRaftProxyHelper::pollTimerTask(TimerTask & task, RawVoidPtr waker) c
 {
     return fn_poll_timer_task(task.ptr, waker);
 }
-
-void SetReadIndexResp(RawVoidPtr resp, BaseBuffView view)
-{
-    auto * res = reinterpret_cast<kvrpcpb::ReadIndexResponse *>(resp);
-    res->ParseFromArray(view.data, view.len);
-}
-
 
 struct ReadIndexNotifyCtrl : MutexLockWrap
 {
@@ -569,7 +562,8 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             waiting_tasks.size(),
             running_tasks.size());
 
-        if (history_success_tasks && history_success_tasks->first >= max_ts)
+        // start-ts `0` will be used to only get the latest index, do not use history
+        if (history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
 

@@ -147,14 +147,14 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GTDuration, "greater"},
     {tipb::ScalarFuncSig::GTJson, "greater"},
 
-    {tipb::ScalarFuncSig::GreatestInt, "greatest"},
-    {tipb::ScalarFuncSig::GreatestReal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
+    {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestString, "greatest"},
     {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "least"},
-    {tipb::ScalarFuncSig::LeastReal, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
+    {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
     {tipb::ScalarFuncSig::LeastString, "least"},
     {tipb::ScalarFuncSig::LeastDecimal, "least"},
     {tipb::ScalarFuncSig::LeastTime, "least"},
@@ -412,8 +412,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    //{tipb::ScalarFuncSig::RegexpSig, "cast"},
-    //{tipb::ScalarFuncSig::RegexpUTF8Sig, "cast"},
+    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
@@ -477,12 +477,12 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Second, "second"},
     {tipb::ScalarFuncSig::MicroSecond, "microSecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
-    //{tipb::ScalarFuncSig::MonthName, "cast"},
+    {tipb::ScalarFuncSig::MonthName, "toMonthName"},
 
     //{tipb::ScalarFuncSig::NowWithArg, "cast"},
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
-    //{tipb::ScalarFuncSig::DayName, "cast"},
+    {tipb::ScalarFuncSig::DayName, "toDayName"},
     {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},

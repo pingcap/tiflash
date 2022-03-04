@@ -15,7 +15,8 @@ set -x
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 OUTPUT_XML=${OUTPUT_XML:-false}
 
-INSTALL_DIR=${INSTALL_DIR:-"/build/release-centos7-llvm/tiflash"}
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
+INSTALL_DIR=${INSTALL_UT_DIR}
 
 rm -rf /tests && ln -s ${SRCPATH}/tests /tests
 rm -rf /tiflash && ln -s ${INSTALL_DIR} /tiflash

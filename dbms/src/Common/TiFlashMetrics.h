@@ -8,6 +8,8 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+#include <ext/scope_guard.h>
+
 // to make GCC 11 happy
 #include <cassert>
 
@@ -151,7 +153,18 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_thread_count, "Number of threads", Gauge,                                                                                   \
+        F(type_max_threads_of_thdpool, {"type", "thread_pool_total_max"}),                                                                \
+        F(type_active_threads_of_thdpool, {"type", "thread_pool_active"}),                                                                \
+        F(type_max_active_threads_of_thdpool, {"type", "thread_pool_active_max"}),                                                        \
+        F(type_total_threads_of_thdpool, {"type", "thread_pool_total"}),                                                                  \
+        F(type_max_threads_of_raw, {"type", "total_max"}),                                                                                \
+        F(type_total_threads_of_raw, {"type", "total"}),                                                                                  \
+        F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
+        F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
+        F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
+        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}))
 // clang-format on
 
 struct ExpBuckets
@@ -318,4 +331,10 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
     (__VA_ARGS__)
 
+#define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \
+    GET_METRIC(family, metric).Increment();                                                                                   \
+    GET_METRIC(family, metric_max).Set(std::max(GET_METRIC(family, metric_max).Value(), GET_METRIC(family, metric).Value())); \
+    SCOPE_EXIT({                                                                                                              \
+        GET_METRIC(family, metric).Decrement();                                                                               \
+    })
 } // namespace DB

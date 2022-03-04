@@ -262,10 +262,21 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
 template <bool thread_safe>
 OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(const std::string & regexp_, int options)
 {
-    analyze(regexp_, required_substring, is_trivial, required_substring_is_prefix);
+    if (options & RE_NO_OPTIMIZE)
+    {
+        /// query from TiDB, currently, since analyze does not handle all the cases, skip the optimization
+        /// to avoid im-compatible issues
+        is_trivial = false;
+        required_substring.clear();
+        required_substring_is_prefix = false;
+    }
+    else
+    {
+        analyze(regexp_, required_substring, is_trivial, required_substring_is_prefix);
+    }
 
-    /// Just three following options are supported
-    if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL)))
+    /// Just four following options are supported
+    if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL | RE_NO_OPTIMIZE)))
         throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
 
     is_case_insensitive = options & RE_CASELESS;
