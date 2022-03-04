@@ -5,8 +5,6 @@
 
 namespace DB::PS::V3
 {
-using PageIdV3Internal = UInt128;
-using PageIdV3Internals = std::vector<PageIdV3Internal>;
 struct PageEntryV3
 {
 public:

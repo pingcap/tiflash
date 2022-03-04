@@ -38,6 +38,9 @@ using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;
 
+using PageIdV3Internal = UInt128;
+using PageIdV3Internals = std::vector<PageIdV3Internal>;
+
 using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes = std::vector<UInt64>;
