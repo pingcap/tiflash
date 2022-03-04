@@ -43,7 +43,7 @@ public:
 
     void proceed();
 
-    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
+    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -77,13 +77,13 @@ private:
     // Let's implement a state machine with the following states.
     enum CallStatus
     {
-        PROCESS,
-        JOIN,
+        NEW_REQUEST,
+        PROCESSING,
         ERR_HANDLE,
         FINISH
     };
     std::atomic<CallStatus> state; // The current serving state.
-    std::shared_ptr<DB::MPPTunnel> mpptunnel = nullptr;
+    std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB

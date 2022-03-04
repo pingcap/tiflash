@@ -9,7 +9,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , cq(cq)
     , notify_cq(notify_cq)
     , responder(&ctx)
-    , state(PROCESS)
+    , state(NEW_REQUEST)
 {
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
@@ -17,7 +17,8 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
-EstablishCallData* EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq) {
+EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
+{
     return new EstablishCallData(service, cq, notify_cq);
 }
 
@@ -26,13 +27,13 @@ void EstablishCallData::tryFlushOne()
     // check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
-        if (mpptunnel && ready && mpptunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
+        if (ready && mpp_tunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
             return;
     }
     // there is a valid msg, do single write operation
-    mpptunnel->sendJob(false);
+    mpp_tunnel->sendJob(false);
 }
 
 void EstablishCallData::initRpc()
@@ -56,15 +57,8 @@ void EstablishCallData::initRpc()
 
 bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
-    try
-    {
-        responder.Write(packet, this);
-        return true;
-    }
-    catch (...)
-    {
-        return false;
-    }
+    responder.Write(packet, this);
+    return true;
 }
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
@@ -81,7 +75,7 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     state = FINISH;
     if (stopwatch)
     {
-        LOG_FMT_INFO(mpptunnel->getLogger(), "connection for {} cost {} ms.", mpptunnel->id(), stopwatch->elapsedMilliseconds());
+        LOG_FMT_INFO(mpp_tunnel->getLogger(), "connection for {} cost {} ms.", mpp_tunnel->id(), stopwatch->elapsedMilliseconds());
     }
     responder.Finish(status, this);
 }
@@ -94,23 +88,23 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::proceed()
 {
-    if (state == PROCESS)
+    if (state == NEW_REQUEST)
     {
-        state = JOIN;
+        state = PROCESSING;
 
         spawn(service, cq, notify_cq);
         notifyReady();
         initRpc();
     }
-    else if (state == JOIN)
+    else if (state == PROCESSING)
     {
-        if (mpptunnel && mpptunnel->isSendQueueNextPopNonBlocking())
+        if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
             {
                 std::unique_lock lk(mu);
                 ready = false;
             }
-            mpptunnel->sendJob(true);
+            mpp_tunnel->sendJob(true);
         }
         else
             notifyReady();
@@ -130,9 +124,9 @@ void EstablishCallData::proceed()
     }
 }
 
-void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel)
+void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_)
 {
     stopwatch = std::make_shared<Stopwatch>();
-    this->mpptunnel = mpptunnel;
+    this->mpp_tunnel = mpp_tunnel_;
 }
 } // namespace DB
