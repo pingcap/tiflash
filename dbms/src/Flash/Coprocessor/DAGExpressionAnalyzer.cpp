@@ -365,19 +365,28 @@ SortDescription DAGExpressionAnalyzer::getWindowSortDescription(const ::google::
     return getSortDescription(byItem_columns, byItems);
 }
 
+
+void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step)
+{
+    for (auto col : getCurrentInputColumns())
+    {
+        step.required_output.push_back(col.name);
+    }
+}
+
 WindowDescription DAGExpressionAnalyzer::appendWindow(
     ExpressionActionsChain & chain,
     const tipb::Window & window)
 {
-#ifdef DEBUG
+    // For test, remove when reviewed
     std::string s;
     google::protobuf::util::MessageToJsonString(window, &s);
     std::cout << "window_json : " << s << std::endl;
-#endif
 
     WindowDescription window_description;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
+    appendSourceColumnsToRequireOutput(step);
 
     if (window.partition_by_size() == 0 || window.func_desc_size() == 0)
     {
@@ -473,7 +482,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     window_description.before_window = chain.getLastActions();
     window_description.partition_by = getWindowSortDescription(window.partition_by(), step);
     window_description.order_by = getWindowSortDescription(window.order_by(), step);
-    chain.finalize(true);
+    chain.finalize();
     chain.clear();
 
     appendWindowSelect(chain, window, window_columns);
@@ -484,6 +493,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
 
     return window_description;
 }
+
 
 bool isUInt8Type(const DataTypePtr & type)
 {
@@ -609,6 +619,7 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
         throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
 
+    // For test, remove when reviewed
     std::string s;
     google::protobuf::util::MessageToJsonString(window_sort, &s);
     std::cout << "order_json : " << s << std::endl;
@@ -874,6 +885,7 @@ void DAGExpressionAnalyzer::appendWindowSelect(
     bool need_update_source_columns = false;
     std::vector<NameAndTypePair> updated_after_window_columns;
     ExpressionActionsChain::Step & step = chain.steps.back();
+
     for (Int32 i = 0; i < window.func_desc_size(); i++)
     {
         const String & name = after_window_columns[i].name;

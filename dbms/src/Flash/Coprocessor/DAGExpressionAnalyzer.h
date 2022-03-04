@@ -226,6 +226,8 @@ private:
         ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
 
+    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
