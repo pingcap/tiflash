@@ -19,7 +19,7 @@ public:
     void deleteAndScheduleQueries(UInt64, MPPTaskManager &);
 
 private:
-    inline void scheduleImp(UInt64, MPPTaskPtr, MPPQueryTaskSetPtr, int);
+    inline void scheduleImp(UInt64, MPPQueryTaskSetPtr, int);
     std::set<UInt64> waiting_set;
     std::set<UInt64> active_set;
     UInt64 min_tso;
