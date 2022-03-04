@@ -30,8 +30,6 @@ class FlashService : public tikvpb::Tikv::Service
 public:
     explicit FlashService(IServer & server_);
 
-    virtual ~FlashService() = default;
-
     grpc::Status Coprocessor(
         grpc::ServerContext * grpc_context,
         const coprocessor::Request * request,

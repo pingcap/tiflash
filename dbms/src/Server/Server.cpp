@@ -579,7 +579,7 @@ public:
                 for (int j = 0; j < preallocated_request_count_per_poller; ++j)
                 {
                     // EstablishCallData will handle its lifecycle by itself.
-                    EstablishCallData::spawn(static_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
+                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
                 }
                 thread_manager->schedule(false, "async_poller", [cq] { handleRpcs(cq); });
                 thread_manager->schedule(false, "async_poller", [notify_cq] { handleRpcs(notify_cq); });

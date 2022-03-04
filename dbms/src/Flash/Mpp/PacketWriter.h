@@ -28,7 +28,6 @@ public:
     // If it is not ready, caller can't write a packet.
     virtual void TryWrite() {}
 
-
     // Finish rpc with a status. Needed by async writer. For sync writer it is useless but not harmful.
     virtual void WriteDone(const ::grpc::Status & /*status*/) {}
 };
