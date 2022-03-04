@@ -397,13 +397,13 @@ private:
 
 // In some case, getScaleMultiplier and its callee may not be auto inline by the compiler.
 // This may hurt performance. __attribute__((flatten)) tells compliler to inline the callee of this function.
-template <typename T>
+template <typename T, std::enable_if_t<IsDecimal<T>> * = nullptr>
 __attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
     return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
 }
 
-template <typename T, std::enable_if_t<std::is_integral_v<T> || std::is_same_v<T, Int128> || std::is_same_v<T, Int256> || std::is_same_v<T, Int512>> * = nullptr>
+template <typename T, std::enable_if_t<is_integer_v<T>> * = nullptr>
 __attribute__((flatten)) inline T getScaleMultiplier(ScaleType scale)
 {
     return static_cast<T>(DecimalMaxValue::get(scale) + 1);

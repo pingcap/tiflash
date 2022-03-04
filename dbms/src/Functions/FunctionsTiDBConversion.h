@@ -59,7 +59,10 @@ enum CastError
     OVERFLOW_ERR,
 };
 
+namespace
+{
 constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+}
 
 /// cast int/real/decimal/time as string
 template <typename FromDataType, bool return_nullable>
@@ -925,7 +928,7 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        auto value = CastInternalType(v.value);
+        CastInternalType value = static_cast<CastInternalType>(v.value);
 
         if (v_scale < scale)
         {
@@ -1176,7 +1179,7 @@ struct TiDBConvertToDecimal
             else
             {
                 // Treat datetime(fsp) as decimal(20, 6).
-                const ScaleType from_scale = 6;
+                static constexpr ScaleType from_scale = 6;
                 const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
                 for (size_t i = 0; i < size; ++i)
                 {
@@ -1244,7 +1247,7 @@ struct TiDBConvertToDecimal
         }
         else
         {
-            return CastInternalType(0);
+            return 0;
         }
     }
 
@@ -1798,7 +1801,7 @@ public:
     {
         const bool zero_scale_diff = false;
         const PrecType from_scaled_prec = getFromScaledPrec<FromDataType>(from_type, to_decimal_scale, zero_scale_diff);
-        return (from_scaled_prec <= to_decimal_prec);
+        return from_scaled_prec <= to_decimal_prec;
     }
 
 private:
@@ -1869,7 +1872,7 @@ private:
             if (fsp > 0)
             {
                 // We treat datetime(fsp) as decimal(20, 6) instead of decimal(14 + fsp, fsp).
-                // Because the internal fraction is always aligmented to 6 valid digits, so we can avoid division for fsp.
+                // Because the internal fraction is always aligned to 6 valid digits, so we can avoid division for fsp.
                 from_scaled_prec = getFromScaledPrecDecimalInternal(20, 6, to_decimal_scale, zero_scale_diff);
             }
             else
