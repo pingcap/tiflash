@@ -1,6 +1,13 @@
 // ------------------------------------------------------------------
+<<<<<<< HEAD
 // NOTICE file corresponding to the section 4d of The Apache License,
 // Version 2.0, in this case for
+=======
+// NOTICE file corresponding to the section 4d of The Apache License
+Revision: 
+// Version 2.0
+Revision:  in this case for
+>>>>>>> 22b9c3e0d (Add notice according to Apache license 2.0 4d)
 // ------------------------------------------------------------------
 
 abseil-cpp
