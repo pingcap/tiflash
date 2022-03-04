@@ -98,28 +98,42 @@ void DMStressProxy::genMultiThread()
 
 void DMStressProxy::genData(UInt32 id, UInt64 rows)
 {
-    std::string thread_name = "dm_gen_" + std::to_string(id);
-    setThreadName(thread_name.c_str());
-    UInt64 generated_count = 0;
-    while (generated_count < rows)
+    try
     {
-        auto c = std::min(opts.gen_rows_per_block, rows - generated_count);
-        auto ids = pk.get(c);
-        write(ids);
-        generated_count += c;
+        std::string thread_name = "dm_gen_" + std::to_string(id);
+        setThreadName(thread_name.c_str());
+        UInt64 generated_count = 0;
+        while (generated_count < rows)
+        {
+            auto c = std::min(opts.gen_rows_per_block, rows - generated_count);
+            auto ids = pk.get(c);
+            write(ids);
+            generated_count += c;
+        }
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException("genData fail");
     }
 }
 
 void DMStressProxy::write(const std::vector<Int64> & ids)
 {
-    Block block;
-    genBlock(block, ids);
-
-    auto locks = key_lock.getLocks(ids);
-    store->write(*context, context->getSettingsRef(), std::move(block));
-    if (opts.verify)
+    try
     {
-        pks.insert(ids);
+        Block block;
+        genBlock(block, ids);
+
+        auto locks = key_lock.getLocks(ids);
+        store->write(*context, context->getSettingsRef(), block);
+        if (opts.verify)
+        {
+            pks.insert(ids);
+        }
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException("runProxy fail");
     }
 }
 
@@ -140,11 +154,18 @@ void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
 void DMStressProxy::readMultiThread()
 {
     auto work = [&](UInt32 id) {
-        std::string thread_name = "dm_read_" + std::to_string(id);
-        setThreadName(thread_name.c_str());
-        while (!stop)
+        try
         {
-            countRows(rnd() % 100);
+            std::string thread_name = "dm_read_" + std::to_string(id);
+            setThreadName(thread_name.c_str());
+            while (!stop)
+            {
+                countRows(rnd() % 100);
+            }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("readMultiThread fail");
         }
     };
 
@@ -188,15 +209,22 @@ UInt64 DMStressProxy::countRows(UInt32 rnd_break_prob)
 void DMStressProxy::insertMultiThread()
 {
     auto work = [&](UInt32 id) {
-        std::string thread_name = "dm_insert_" + std::to_string(id);
-        setThreadName(thread_name.c_str());
-        while (!stop)
+        try
         {
-            insert();
-            if (opts.write_sleep_us > 0)
+            std::string thread_name = "dm_insert_" + std::to_string(id);
+            setThreadName(thread_name.c_str());
+            while (!stop)
             {
-                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                insert();
+                if (opts.write_sleep_us > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                }
             }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("insertMultiThread fail");
         }
     };
 
@@ -210,15 +238,22 @@ void DMStressProxy::insertMultiThread()
 void DMStressProxy::updateMultiThread()
 {
     auto work = [&](UInt32 id) {
-        std::string thread_name = "dm_update_" + std::to_string(id);
-        setThreadName(thread_name.c_str());
-        while (!stop)
+        try
         {
-            update();
-            if (opts.write_sleep_us > 0)
+            std::string thread_name = "dm_update_" + std::to_string(id);
+            setThreadName(thread_name.c_str());
+            while (!stop)
             {
-                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                update();
+                if (opts.write_sleep_us > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                }
             }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("updateMultiThread fail");
         }
     };
 
@@ -232,15 +267,22 @@ void DMStressProxy::updateMultiThread()
 void DMStressProxy::deleteMultiThread()
 {
     auto work = [&](UInt32 id) {
-        std::string thread_name = "dm_delete_" + std::to_string(id);
-        setThreadName(thread_name.c_str());
-        while (!stop)
+        try
         {
-            deleteRange();
-            if (opts.write_sleep_us > 0)
+            std::string thread_name = "dm_delete_" + std::to_string(id);
+            setThreadName(thread_name.c_str());
+            while (!stop)
             {
-                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                deleteRange();
+                if (opts.write_sleep_us > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+                }
             }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("deleteMultiThread fail");
         }
     };
 
@@ -338,11 +380,18 @@ void DMStressProxy::joinThreads(std::vector<std::thread> & threads)
 void DMStressProxy::verifySingleThread()
 {
     auto work = [&]() {
-        setThreadName("verify");
-        while (!stop)
+        try
         {
-            verify();
-            sleep(opts.verify_sleep_sec);
+            setThreadName("verify");
+            while (!stop)
+            {
+                verify();
+                sleep(opts.verify_sleep_sec);
+            }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("verifySingleThread fail");
         }
     };
     verify_thread = std::thread(work);
@@ -411,7 +460,7 @@ void DMStressProxy::verify()
 
 void DMStressProxy::run()
 {
-    genMultiThread(); // Run the gennerate data threads with other read-write thread concurrently
+    genMultiThread(); // Run the generate data threads with other read-write thread concurrently
     readMultiThread();
     insertMultiThread();
     updateMultiThread();
