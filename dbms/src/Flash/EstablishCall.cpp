@@ -21,7 +21,7 @@ EstablishCallData* EstablishCallData::spawn(AsyncFlashService * service, grpc::S
     return new EstablishCallData(service, cq, notify_cq);
 }
 
-void EstablishCallData::TryWrite()
+void EstablishCallData::tryFlushOne()
 {
     // check whether there is a valid msg to write
     {
@@ -54,7 +54,7 @@ void EstablishCallData::initRpc()
     }
 }
 
-bool EstablishCallData::Write(const mpp::MPPDataPacket & packet)
+bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
     try
     {
@@ -67,16 +67,16 @@ bool EstablishCallData::Write(const mpp::MPPDataPacket & packet)
     }
 }
 
-void EstablishCallData::WriteErr(const mpp::MPPDataPacket & packet)
+void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
-    if (Write(packet))
+    if (write(packet))
         err_status = grpc::Status::OK;
     else
         err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
 }
 
-void EstablishCallData::WriteDone(const ::grpc::Status & status)
+void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
     state = FINISH;
     if (stopwatch)
@@ -92,7 +92,7 @@ void EstablishCallData::notifyReady()
     ready = true;
 }
 
-void EstablishCallData::Proceed()
+void EstablishCallData::proceed()
 {
     if (state == PROCESS)
     {
@@ -118,7 +118,7 @@ void EstablishCallData::Proceed()
     else if (state == ERR_HANDLE)
     {
         state = FINISH;
-        WriteDone(err_status);
+        writeDone(err_status);
     }
     else
     {

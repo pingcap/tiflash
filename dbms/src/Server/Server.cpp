@@ -13,6 +13,7 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -507,7 +508,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq)
             break;
         }
         assert(ok);
-        static_cast<EstablishCallData *>(tag)->Proceed();
+        static_cast<EstablishCallData *>(tag)->proceed();
     }
 }
 

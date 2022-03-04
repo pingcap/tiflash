@@ -100,6 +100,7 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
+    // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
     void consumerFinish(const String & err_msg, bool need_lock = true);
 
     bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }

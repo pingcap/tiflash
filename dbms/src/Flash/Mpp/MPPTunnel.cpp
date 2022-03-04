@@ -61,9 +61,9 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 template <typename Writer>
 void MPPTunnelBase<Writer>::finishSendQueue()
 {
-    bool fg = send_queue.finish();
-    if (fg && !is_local && is_async)
-        writer->TryWrite();
+    bool flag = send_queue.finish();
+    if (flag && !is_local && is_async)
+        writer->tryFlushOne();
 }
 
 /// exit abnormally, such as being cancelled.
@@ -83,7 +83,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
                     send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
                     if (!is_local && is_async)
-                        writer->TryWrite();
+                        writer->tryFlushOne();
                 }
                 catch (...)
                 {
@@ -118,7 +118,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
             if (!is_local && is_async)
-                writer->TryWrite();
+                writer->tryFlushOne();
             if (close_after_write)
             {
                 finishSendQueue();
@@ -147,7 +147,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
-            if (!writer->Write(*res))
+            if (!writer->write(*res))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -175,7 +175,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         LOG_ERROR(log, err_msg);
     consumerFinish(err_msg, need_lock);
     if (is_async)
-        writer->WriteDone(grpc::Status::OK);
+        writer->writeDone(grpc::Status::OK);
     else
     {
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();

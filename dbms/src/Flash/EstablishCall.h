@@ -18,7 +18,7 @@ public:
         : writer(writer)
     {}
 
-    bool Write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
+    bool write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
 
 private:
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
@@ -33,15 +33,15 @@ public:
     // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
-    bool Write(const mpp::MPPDataPacket & packet) override;
+    bool write(const mpp::MPPDataPacket & packet) override;
 
-    void TryWrite() override;
+    void tryFlushOne() override;
 
-    void WriteDone(const ::grpc::Status & status) override;
+    void writeDone(const ::grpc::Status & status) override;
 
-    void WriteErr(const mpp::MPPDataPacket & packet);
+    void writeErr(const mpp::MPPDataPacket & packet);
 
-    void Proceed();
+    void proceed();
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpptunnel);
 

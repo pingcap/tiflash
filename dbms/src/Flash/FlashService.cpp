@@ -192,7 +192,7 @@ grpc::Status FlashService::Coprocessor(
 {
     if (calldata)
     {
-        calldata->WriteDone(status);
+        calldata->writeDone(status);
     }
     return status;
 }
@@ -253,7 +253,7 @@ grpc::Status FlashService::Coprocessor(
                 LOG_ERROR(log, err_msg);
                 // In Async version, writer::Write() return void.
                 // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
-                calldata->WriteErr(getPacketWithError(err_msg));
+                calldata->writeErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
             else
