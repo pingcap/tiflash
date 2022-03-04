@@ -72,6 +72,7 @@ private:
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
+    // It's protected by mu.
     bool ready = false;
 
     // Let's implement a state machine with the following states.
@@ -82,7 +83,7 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    std::atomic<CallStatus> state; // The current serving state.
+    CallStatus state; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
 };
