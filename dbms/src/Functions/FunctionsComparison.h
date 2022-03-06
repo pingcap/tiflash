@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/assert_cast.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
@@ -47,6 +48,11 @@ namespace DB
   *
   * TODO Arrays.
   */
+
+namespace ErrorCodes
+{
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+}
 
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
@@ -1267,6 +1273,129 @@ public:
     }
 };
 
+template <bool with_null_>
+struct IsTrueTrait
+{
+    static constexpr bool with_null = with_null_;
+    static constexpr auto name = with_null ? "isTrueWithNull" : "isTrue";
+
+    template <typename T>
+    static constexpr Int64 apply(T value)
+    {
+        if constexpr (IsDecimal<T>)
+            return value.value == 0 ? 0 : 1;
+        else
+            return value == 0 ? 0 : 1;
+    }
+};
+
+template <bool with_null_>
+struct IsFalseTrait
+{
+    static constexpr bool with_null = with_null_;
+    static constexpr auto name = with_null ? "isFalseWithNull" : "isFalse";
+
+    template <typename T>
+    static constexpr Int64 apply(T value)
+    {
+        if constexpr (IsDecimal<T>)
+            return value.value == 0 ? 1 : 0;
+        else
+            return value == 0 ? 1 : 0;
+    }
+};
+
+/// Implements the function isTrue/isTrueWithNull/isFalse/isFalseWithNull.
+template <typename Trait>
+class FunctionIsTrueFalse: public IFunction
+{
+public:
+    static constexpr auto name = Trait::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsTrueFalse<Trait>>(); };
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto type = std::make_shared<DataTypeInt64>();
+        if (Trait::with_null && arguments[0]->isNullable())
+            return makeNullable(type);
+        return type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnWithTypeAndName & src = block.getByPosition(arguments[0]);
+
+        auto & result_col = block.getByPosition(result);
+        if (src.column->onlyNull())
+        {
+            if (result_col.type->isNullable())
+                result_col.column = result_col.type->createColumnConst(src.column->size(), Null());
+            else
+                result_col.column = result_col.type->createColumnConst(src.column->size(), Int64(0));
+            return;
+        }
+
+        auto src_type = removeNullable(src.type);
+        ColumnPtr res_col;
+        switch (src_type->getTypeId())
+        {
+        case TypeIndex::UInt8: res_col = executeVec<ColumnVector<UInt8>>(src.column); break;
+        case TypeIndex::Int8: res_col = executeVec<ColumnVector<Int8>>(src.column); break;
+        case TypeIndex::UInt16: res_col = executeVec<ColumnVector<UInt16>>(src.column); break;
+        case TypeIndex::Int16: res_col = executeVec<ColumnVector<Int16>>(src.column); break;
+        case TypeIndex::UInt32: res_col = executeVec<ColumnVector<UInt32>>(src.column); break;
+        case TypeIndex::Int32: res_col = executeVec<ColumnVector<Int32>>(src.column); break;
+        case TypeIndex::UInt64: res_col = executeVec<ColumnVector<UInt64>>(src.column); break;
+        case TypeIndex::Int64: res_col = executeVec<ColumnVector<Int64>>(src.column); break;
+        case TypeIndex::Float32: res_col = executeVec<ColumnVector<Float32>>(src.column); break;
+        case TypeIndex::Float64: res_col = executeVec<ColumnVector<Float64>>(src.column); break;
+        case TypeIndex::Decimal32: res_col = executeVec<ColumnDecimal<Decimal32>>(src.column); break;
+        case TypeIndex::Decimal64: res_col = executeVec<ColumnDecimal<Decimal64>>(src.column); break;
+        case TypeIndex::Decimal128: res_col = executeVec<ColumnDecimal<Decimal128>>(src.column); break;
+        case TypeIndex::Decimal256: res_col = executeVec<ColumnDecimal<Decimal256>>(src.column); break;
+        default: throw Exception(
+            fmt::format("Illegal type {} of function {}", src.type->getName(), getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        if (result_col.type->isNullable())
+        {
+            res_col = ColumnNullable::create(res_col, static_cast<const ColumnNullable &>(*src.column).getNullMapColumnPtr());
+        }
+
+        result_col.column = res_col;
+    }
+private:
+    template <typename VecT>
+    static ColumnPtr executeVec(const ColumnPtr & src)
+    {
+        auto [src_col, src_nullmap] = removeNullable(src.get());
+        const auto & src_vec_col = assert_cast<const VecT &>(*src_col);
+        const auto & src_vec = src_vec_col.getData();
+        size_t rows = src_vec.size();
+
+        auto res_col = ColumnInt64::create();
+        ColumnInt64::Container & res_vec = res_col->getData();
+        res_vec.resize(rows);
+
+        for (size_t i = 0; i < rows; ++i)
+            res_vec[i] = Trait::apply(src_vec[i]);
+        
+        if (src_nullmap)
+        {
+            assert(src_nullmap->size() == rows);
+            for (size_t i = 0; i < rows; ++i)
+                res_vec[i] &= !(*src_nullmap)[i];
+        }
+
+        return res_col;
+    }
+};
 
 using FunctionEquals = FunctionComparison<EqualsOp, NameEquals>;
 using FunctionNotEquals = FunctionComparison<NotEqualsOp, NameNotEquals>;
@@ -1274,5 +1403,9 @@ using FunctionLess = FunctionComparison<LessOp, NameLess>;
 using FunctionGreater = FunctionComparison<GreaterOp, NameGreater>;
 using FunctionLessOrEquals = FunctionComparison<LessOrEqualsOp, NameLessOrEquals>;
 using FunctionGreaterOrEquals = FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>;
+using FunctionIsTrue = FunctionIsTrueFalse<IsTrueTrait<false>>;
+using FunctionIsTrueWithNull = FunctionIsTrueFalse<IsTrueTrait<true>>;
+using FunctionIsFalse = FunctionIsTrueFalse<IsFalseTrait<false>>;
+using FunctionIsFalseWithNull = FunctionIsTrueFalse<IsFalseTrait<true>>;
 
 } // namespace DB
