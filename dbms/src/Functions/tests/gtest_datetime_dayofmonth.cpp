@@ -13,7 +13,6 @@ namespace DB
 {
 namespace tests
 {
-
 class TestDayOfMonth : public DB::tests::FunctionTest
 {
 };
@@ -25,34 +24,34 @@ try
 
     // nullable column test
     ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Int64>>({10, {}}),
-            executeFunction(func_name,
-                {createColumn<Nullable<MyDate>>({MyDate(2020, 10, 10).toPackedUInt(), {}})}));
+        createColumn<Nullable<Int64>>({10, {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<MyDate>>({MyDate(2020, 10, 10).toPackedUInt(), {}})}));
 
     ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Int64>>({10, {}}),
-            executeFunction(func_name,
-                {createColumn<Nullable<MyDateTime>>({MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt(), {}})}));
+        createColumn<Nullable<Int64>>({10, {}}),
+        executeFunction(func_name,
+                        {createColumn<Nullable<MyDateTime>>({MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt(), {}})}));
 
     // not-null column test
     ASSERT_COLUMN_EQ(
-            createColumn<Int64>({10}),
-            executeFunction(func_name,
-                {createColumn<MyDate>({MyDate(2020, 10, 10).toPackedUInt()})}));
+        createColumn<Int64>({10}),
+        executeFunction(func_name,
+                        {createColumn<MyDate>({MyDate(2020, 10, 10).toPackedUInt()})}));
 
     ASSERT_COLUMN_EQ(
-            createColumn<Int64>({10}),
-            executeFunction(func_name,
-                {createColumn<MyDateTime>({MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt()})}));
+        createColumn<Int64>({10}),
+        executeFunction(func_name,
+                        {createColumn<MyDateTime>({MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt()})}));
 
     // const test
     ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(1, 10),
-            executeFunction(func_name, {createConstColumn<MyDate>(1, {MyDate(2020, 10, 10).toPackedUInt()})}));
+        createConstColumn<Int64>(1, 10),
+        executeFunction(func_name, {createConstColumn<MyDate>(1, {MyDate(2020, 10, 10).toPackedUInt()})}));
 
     ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(1, 10),
-            executeFunction(func_name, {createConstColumn<MyDateTime>(1, {MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt()})}));
+        createConstColumn<Int64>(1, 10),
+        executeFunction(func_name, {createConstColumn<MyDateTime>(1, {MyDateTime(2020, 10, 10, 10, 10, 10, 0).toPackedUInt()})}));
 
     // null test
     ASSERT_COLUMN_EQ(
