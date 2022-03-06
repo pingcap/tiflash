@@ -1,12 +1,12 @@
 #pragma once
 
-#include <Common/assert_cast.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/assert_cast.h>
 #include <Core/DecimalComparison.h>
 #include <Core/callOnTypeIndex.h>
 #include <DataTypes/DataTypeDate.h>
@@ -1307,7 +1307,7 @@ struct IsFalseTrait
 
 /// Implements the function isTrue/isTrueWithNull/isFalse/isFalseWithNull.
 template <typename Trait>
-class FunctionIsTrueFalse: public IFunction
+class FunctionIsTrueFalse : public IFunction
 {
 public:
     static constexpr auto name = Trait::name;
@@ -1344,23 +1344,52 @@ public:
         ColumnPtr res_col;
         switch (src_type->getTypeId())
         {
-        case TypeIndex::UInt8: res_col = executeVec<ColumnVector<UInt8>>(src.column); break;
-        case TypeIndex::Int8: res_col = executeVec<ColumnVector<Int8>>(src.column); break;
-        case TypeIndex::UInt16: res_col = executeVec<ColumnVector<UInt16>>(src.column); break;
-        case TypeIndex::Int16: res_col = executeVec<ColumnVector<Int16>>(src.column); break;
-        case TypeIndex::UInt32: res_col = executeVec<ColumnVector<UInt32>>(src.column); break;
-        case TypeIndex::Int32: res_col = executeVec<ColumnVector<Int32>>(src.column); break;
-        case TypeIndex::UInt64: res_col = executeVec<ColumnVector<UInt64>>(src.column); break;
-        case TypeIndex::Int64: res_col = executeVec<ColumnVector<Int64>>(src.column); break;
-        case TypeIndex::Float32: res_col = executeVec<ColumnVector<Float32>>(src.column); break;
-        case TypeIndex::Float64: res_col = executeVec<ColumnVector<Float64>>(src.column); break;
-        case TypeIndex::Decimal32: res_col = executeVec<ColumnDecimal<Decimal32>>(src.column); break;
-        case TypeIndex::Decimal64: res_col = executeVec<ColumnDecimal<Decimal64>>(src.column); break;
-        case TypeIndex::Decimal128: res_col = executeVec<ColumnDecimal<Decimal128>>(src.column); break;
-        case TypeIndex::Decimal256: res_col = executeVec<ColumnDecimal<Decimal256>>(src.column); break;
-        default: throw Exception(
-            fmt::format("Illegal type {} of function {}", src.type->getName(), getName()),
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        case TypeIndex::UInt8:
+            res_col = executeVec<ColumnVector<UInt8>>(src.column);
+            break;
+        case TypeIndex::Int8:
+            res_col = executeVec<ColumnVector<Int8>>(src.column);
+            break;
+        case TypeIndex::UInt16:
+            res_col = executeVec<ColumnVector<UInt16>>(src.column);
+            break;
+        case TypeIndex::Int16:
+            res_col = executeVec<ColumnVector<Int16>>(src.column);
+            break;
+        case TypeIndex::UInt32:
+            res_col = executeVec<ColumnVector<UInt32>>(src.column);
+            break;
+        case TypeIndex::Int32:
+            res_col = executeVec<ColumnVector<Int32>>(src.column);
+            break;
+        case TypeIndex::UInt64:
+            res_col = executeVec<ColumnVector<UInt64>>(src.column);
+            break;
+        case TypeIndex::Int64:
+            res_col = executeVec<ColumnVector<Int64>>(src.column);
+            break;
+        case TypeIndex::Float32:
+            res_col = executeVec<ColumnVector<Float32>>(src.column);
+            break;
+        case TypeIndex::Float64:
+            res_col = executeVec<ColumnVector<Float64>>(src.column);
+            break;
+        case TypeIndex::Decimal32:
+            res_col = executeVec<ColumnDecimal<Decimal32>>(src.column);
+            break;
+        case TypeIndex::Decimal64:
+            res_col = executeVec<ColumnDecimal<Decimal64>>(src.column);
+            break;
+        case TypeIndex::Decimal128:
+            res_col = executeVec<ColumnDecimal<Decimal128>>(src.column);
+            break;
+        case TypeIndex::Decimal256:
+            res_col = executeVec<ColumnDecimal<Decimal256>>(src.column);
+            break;
+        default:
+            throw Exception(
+                fmt::format("Illegal type {} of function {}", src.type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         if (result_col.type->isNullable())
@@ -1370,6 +1399,7 @@ public:
 
         result_col.column = res_col;
     }
+
 private:
     template <typename VecT>
     static ColumnPtr executeVec(const ColumnPtr & src)
@@ -1385,7 +1415,7 @@ private:
 
         for (size_t i = 0; i < rows; ++i)
             res_vec[i] = Trait::apply(src_vec[i]);
-        
+
         if (src_nullmap)
         {
             assert(src_nullmap->size() == rows);
