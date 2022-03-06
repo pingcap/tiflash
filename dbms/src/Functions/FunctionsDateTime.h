@@ -3241,18 +3241,6 @@ private:
     const Context & context;
 };
 
-template <typename ToFieldType>
-struct TiDBDayOfMonthTransformerImpl
-{
-    static_assert(std::is_same_v<ToFieldType, Int64>);
-    static constexpr auto name = "tidbDayOfMonth";
-
-    static ToFieldType execute(const Context &, const DataTypePtr &, const MyTimeBase & val)
-    {
-        return val.day;
-    }
-};
-
 inline bool isInvalidDateForLastDay(const Context & context, const DataTypePtr & from_type, const MyTimeBase & val, const String & func_name);
 
 template <typename ToFieldType>
@@ -3321,6 +3309,7 @@ struct MyDateOrMyDateTimeTransformer
     }
 };
 
+// Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
 template <typename ToDataType, template<typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
 {
@@ -3374,7 +3363,7 @@ public:
         {
             using FromFieldType = typename DataTypeMyTimeBase::FieldType;
 
-            const ColumnVector<FromFieldType> * col_from 
+            const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
@@ -3408,7 +3397,7 @@ static constexpr bool return_not_null = false;
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
 using FunctionToMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMonthImpl>;
-using FunctionToDayOfMonth = FunctionMyDateOrMyDateTimeToSomething<DataTypeInt64, TiDBDayOfMonthTransformerImpl, return_not_null>;
+using FunctionToDayOfMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfMonthImpl>;
 using FunctionToDayOfWeek = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
 using FunctionToHour = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToHourImpl>;
 using FunctionToMinute = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMinuteImpl>;

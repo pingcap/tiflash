@@ -483,7 +483,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
     {tipb::ScalarFuncSig::DayName, "toDayName"},
-    {tipb::ScalarFuncSig::DayOfMonth, "tidbDayOfMonth"},
+    {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},
 
