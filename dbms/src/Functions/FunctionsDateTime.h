@@ -3290,13 +3290,13 @@ struct TiDBLastDayTransformerImpl
     }
 };
 
-template <typename ToFieldType, template<typename> class Transformer>
+template <typename ToFieldType, template <typename> class Transformer>
 struct MyDateOrMyDateTimeTransformer
 {
     static void execute(const Context & context,
-            const DataTypePtr & from_type,
-            const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
-            typename ColumnVector<ToFieldType>::Container & vec_to)
+                        const DataTypePtr & from_type,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to)
     {
         for (size_t i = 0; i < vec_from.size(); ++i)
         {
@@ -3306,10 +3306,10 @@ struct MyDateOrMyDateTimeTransformer
     }
 
     static void execute(const Context & context,
-            const DataTypePtr & from_type,
-            const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
-            typename ColumnVector<ToFieldType>::Container & vec_to,
-            typename ColumnVector<UInt8>::Container & vec_null_map)
+                        const DataTypePtr & from_type,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
     {
         for (size_t i = 0; i < vec_from.size(); ++i)
         {
@@ -3321,7 +3321,7 @@ struct MyDateOrMyDateTimeTransformer
     }
 };
 
-template <typename ToDataType, template<typename> class Transformer, bool return_nullable>
+template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
 {
 private:
@@ -3374,7 +3374,7 @@ public:
         {
             using FromFieldType = typename DataTypeMyTimeBase::FieldType;
 
-            const ColumnVector<FromFieldType> * col_from 
+            const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
