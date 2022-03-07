@@ -462,7 +462,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                 [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
                 const PageMap pages = data_reader->read(entries, read_limiter);
                 // namespace id in v2 is useless
-                WriteBatch wb{INVALID_NAMESPACE_ID};
+                WriteBatch wb{MAX_NAMESPACE_ID};
                 wb.setSequence(compact_sequence);
                 for (const auto & [page_id, entry] : entries)
                 {

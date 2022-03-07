@@ -245,7 +245,7 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(
     const WriteBatch::SequenceID wb_sequence)
 {
     // namespace in v2 is useless
-    WriteBatch wb{INVALID_NAMESPACE_ID};
+    WriteBatch wb{MAX_NAMESPACE_ID};
     // First Ingest exists pages with normal_id
     auto normal_ids = snapshot->version()->validNormalPageIds();
     for (const auto & page_id : normal_ids)

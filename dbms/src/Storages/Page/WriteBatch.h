@@ -60,6 +60,11 @@ private:
     using Writes = std::vector<Write>;
 
 public:
+#ifdef DBMS_PUBLIC_GTEST
+    WriteBatch()
+        : namespace_id(TEST_NAMESPACE_ID)
+    {}
+#endif
     explicit WriteBatch(NamespaceId namespace_id_)
         : namespace_id(namespace_id_)
     {}

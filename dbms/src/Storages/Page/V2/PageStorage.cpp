@@ -742,7 +742,7 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
     for (const auto & p : file_and_pages)
     {
         // namespace id is not used in V2, so it's value is not important here
-        auto pages = read(INVALID_NAMESPACE_ID, p.second, nullptr, snapshot);
+        auto pages = read(MAX_NAMESPACE_ID, p.second, nullptr, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);

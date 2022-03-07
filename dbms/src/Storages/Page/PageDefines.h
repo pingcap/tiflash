@@ -32,11 +32,16 @@ static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP shou
 static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
 
 using NamespaceId = UInt64;
-static constexpr UInt64 INVALID_NAMESPACE_ID = UINT64_MAX;
+static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
+// just a random namespace id for test, the value doesn't matter
+static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
 using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;
+
+using PageIdV3Internal = UInt128;
+using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
 using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
