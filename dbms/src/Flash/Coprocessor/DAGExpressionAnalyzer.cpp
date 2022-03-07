@@ -932,15 +932,17 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
 
+    auto & step = initAndGetLastStep(chain);
+
     if (need_append_timezone_cast || need_append_type_cast)
     {
-        initChain(chain, getCurrentInputColumns());
-        appendCastForRootFinalProjection(chain.steps.back().actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+        // after appendCastForRootFinalProjection, source_columns has been modified.
+        appendCastForRootFinalProjection(step.actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
     }
 
+    // generate project aliases from source_columns.
     NamesWithAliases final_project = genRootFinalProjectAliases(column_prefix, output_offsets);
 
-    auto & step = initAndGetLastStep(chain);
     for (const auto & name : final_project)
     {
         step.required_output.push_back(name.first);
