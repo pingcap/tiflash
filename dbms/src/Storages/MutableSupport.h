@@ -54,11 +54,13 @@ public:
     static const String tidb_pk_column_name;
     static const String version_column_name;
     static const String delmark_column_name;
+    static const String extra_phys_tblid_column_name;
 
     static const DataTypePtr tidb_pk_column_int_type;
     static const DataTypePtr tidb_pk_column_string_type;
     static const DataTypePtr version_column_type;
     static const DataTypePtr delmark_column_type;
+    static const DataTypePtr extra_phys_tblid_column_type;
 
     /// mark that ColumnId of those columns are defined in dbms/src/Storages/Transaction/Types.h
 

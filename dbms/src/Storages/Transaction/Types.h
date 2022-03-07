@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 using TableID = Int64;
 using TableIDSet = std::unordered_set<TableID>;
 
@@ -26,6 +25,7 @@ enum : ColumnID
     TiDBPkColumnID = -1,
     VersionColumnID = -1024,
     DelMarkColumnID = -1025,
+    ExtraTblColumnID = -1026,
     InvalidColumnID = -10000,
 };
 

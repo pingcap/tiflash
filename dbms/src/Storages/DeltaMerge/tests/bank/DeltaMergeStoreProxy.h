@@ -41,6 +41,7 @@ public:
             true,
             "test",
             name,
+            1,
             *table_column_defines,
             handle_column_define,
             false,

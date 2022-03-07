@@ -563,18 +563,24 @@ BlockInputStreams StorageDeltaMerge::read(
     // failed to parsed.
     ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    for (const auto & n : column_names)
+    size_t extra_table_id_index = InvalidColumnID;
+    for (size_t i = 0; i < column_names.size(); i++)
     {
         ColumnDefine col_define;
-        if (n == EXTRA_HANDLE_COLUMN_NAME)
+        if (column_names[i] == EXTRA_HANDLE_COLUMN_NAME)
             col_define = store->getHandle();
-        else if (n == VERSION_COLUMN_NAME)
+        else if (column_names[i] == VERSION_COLUMN_NAME)
             col_define = getVersionColumnDefine();
-        else if (n == TAG_COLUMN_NAME)
+        else if (column_names[i] == TAG_COLUMN_NAME)
             col_define = getTagColumnDefine();
+        else if (column_names[i] == EXTRA_PHYS_TBLID_COLUMN_NAME)
+        {
+            extra_table_id_index = i;
+            continue;
+        }
         else
         {
-            auto & column = header->getByName(n);
+            auto & column = header->getByName(column_names[i]);
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
@@ -592,7 +598,8 @@ BlockInputStreams StorageDeltaMerge::read(
             context.getSettingsRef(),
             columns_to_read,
             num_streams,
-            parseSegmentSet(select_query.segment_expression_list));
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
     }
 
     // Read with MVCC filtering
@@ -714,7 +721,8 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         max_block_size,
-        parseSegmentSet(select_query.segment_expression_list));
+        parseSegmentSet(select_query.segment_expression_list),
+        extra_table_id_index);
 
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
@@ -1175,6 +1183,7 @@ void StorageDeltaMerge::rename(
         data_path_contains_database_name,
         new_database_name,
         new_table_name,
+        tidb_table_info.id,
         std::move(table_column_defines),
         std::move(handle_column_define),
         is_common_handle,
@@ -1486,6 +1495,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             data_path_contains_database_name,
             table_column_info->db_name,
             table_column_info->table_name,
+            tidb_table_info.id,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
             is_common_handle,

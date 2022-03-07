@@ -98,15 +98,18 @@ inline static const UInt64 INITIAL_EPOCH = 0;
 #define EXTRA_HANDLE_COLUMN_NAME ::DB::MutableSupport::tidb_pk_column_name
 #define VERSION_COLUMN_NAME ::DB::MutableSupport::version_column_name
 #define TAG_COLUMN_NAME ::DB::MutableSupport::delmark_column_name
+#define EXTRA_PHYS_TBLID_COLUMN_NAME ::DB::MutableSupport::extra_phys_tblid_column_name
 
 #define EXTRA_HANDLE_COLUMN_ID ::DB::TiDBPkColumnID
 #define VERSION_COLUMN_ID ::DB::VersionColumnID
 #define TAG_COLUMN_ID ::DB::DelMarkColumnID
+#define EXTRA_PHYS_TBLID_COLUMN_ID ::DB::ExtraTblColumnID
 
 #define EXTRA_HANDLE_COLUMN_INT_TYPE ::DB::MutableSupport::tidb_pk_column_int_type
 #define EXTRA_HANDLE_COLUMN_STRING_TYPE ::DB::MutableSupport::tidb_pk_column_string_type
 #define VERSION_COLUMN_TYPE ::DB::MutableSupport::version_column_type
 #define TAG_COLUMN_TYPE ::DB::MutableSupport::delmark_column_type
+#define EXTRA_PHYS_TBLID_COLUMN_TYPE ::DB::MutableSupport::extra_phys_tblid_column_type
 
 inline const ColumnDefine & getExtraIntHandleColumnDefine()
 {
@@ -133,6 +136,11 @@ inline const ColumnDefine & getTagColumnDefine()
 {
     static ColumnDefine TAG_COLUMN_DEFINE_{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
     return TAG_COLUMN_DEFINE_;
+}
+inline const ColumnDefine & getExtraTblIDColumnDefine()
+{
+    static ColumnDefine EXTRA_TABLE_COLUMN_DEFINE_{EXTRA_PHYS_TBLID_COLUMN_ID, EXTRA_PHYS_TBLID_COLUMN_NAME, EXTRA_PHYS_TBLID_COLUMN_TYPE};
+    return EXTRA_TABLE_COLUMN_DEFINE_;
 }
 
 static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
