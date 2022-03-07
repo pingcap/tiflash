@@ -37,9 +37,13 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manag
     {
         if (used_threads + needed_threads <= thread_hard_limit) /// have threads under thread_hard_limit
         {
-            min_tso = id.start_ts;
+            if (id.start_ts < min_tso)
+            {
+                LOG_FMT_INFO(log, "min_tso query is updated from {} to {} when scheduling it.", min_tso, id.start_ts);
+                min_tso = id.start_ts;
+            }
             scheduleImp(id.start_ts, query_task_set, needed_threads);
-            LOG_FMT_INFO(log, "{} becomes the min_tso query and is directly scheduled (active set size = {}), after apply for {} threads, used {} of the thread hard limit {}.", id.toString(), active_set.size(), needed_threads, used_threads, thread_hard_limit);
+            LOG_FMT_INFO(log, "{} is directly scheduled (active set size = {}) as it is the min_tso query, after apply for {} threads, used {} of the thread hard limit {}.", id.toString(), active_set.size(), needed_threads, used_threads, thread_hard_limit);
         }
         else
         {
@@ -72,6 +76,7 @@ void MinTSOScheduler::deleteQueryIfCancelled(UInt64 query_id, MPPTaskManager & t
     if (query_id == min_tso)
     {
         min_tso = active_set.empty() ? MAX_UINT64 : *active_set.begin();
+        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} in active set when cancelling it.", query_id, min_tso);
     }
     waiting_set.erase(query_id);
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id);
@@ -98,7 +103,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
     /// delete from working set and return threads for finished or cancelled queries
     active_set.erase(query_id);
     waiting_set.erase(query_id);
-    LOG_FMT_INFO(log, "query {} is deleted from active set {} left {} or waiting set {} left {}.", query_id, active_set.find(query_id) != active_set.end(), active_set.size(), waiting_set.find(query_id) != waiting_set.end(), waiting_set.size());
+    LOG_FMT_INFO(log, "query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", query_id, query_id == min_tso, active_set.find(query_id) != active_set.end(), active_set.size(), waiting_set.find(query_id) != waiting_set.end(), waiting_set.size());
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id);
     if (nullptr != query_task_set)
     {
@@ -110,7 +115,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
     if (query_id == min_tso)
     {
         min_tso = active_set.empty() ? MAX_UINT64 : *active_set.begin();
-        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} in active set.", query_id, min_tso);
+        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} in active set as it is deleted.", query_id, min_tso);
     }
 
     /// schedule new tasks
@@ -121,10 +126,15 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
         if (nullptr == query_task_set)
         {
             min_tso = current_query_id == min_tso ? MAX_UINT64 : min_tso;
+            LOG_FMT_ERROR(log, "min_tso query is updated from {} to {} as it is invalid.", current_query_id, min_tso);
             throw Exception(fmt::format("the waiting query {} is not in the task manager.", current_query_id));
         }
-        min_tso = current_query_id < min_tso ? current_query_id : min_tso;
-        LOG_FMT_INFO(log, "query {} (min_tso = {}) with {} tasks is to be scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
+        if (current_query_id < min_tso)
+        {
+            LOG_FMT_INFO(log, "min_tso query is updated from {} to {} in the waiting set.", min_tso, current_query_id);
+            min_tso = current_query_id;
+        }
+        LOG_FMT_INFO(log, "query {} (is min = {}) with {} tasks is to be scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
 
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
@@ -136,7 +146,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
                 scheduleImp(current_query_id, query_task_set, needed_threads);
                 task->scheduleThisTask();
                 query_task_set->waiting_tasks.pop();
-                LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads, after applied for {} threads, used {} of the thread soft limit {} or the hard limit {} by {}.", task->getId().toString(), active_set.size(), needed_threads, used_threads, thread_soft_limit, thread_hard_limit, min_tso == current_query_id);
+                LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), needed_threads, used_threads, min_tso == current_query_id ? "hard" : "soft", min_tso == current_query_id ? thread_hard_limit : thread_soft_limit);
             }
             else
             {
@@ -148,7 +158,7 @@ void MinTSOScheduler::deleteAndScheduleQueries(UInt64 query_id, MPPTaskManager &
                 return;
             }
         }
-        LOG_FMT_INFO(log, "query {} (min tso = {}) with {} tasks are scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
+        LOG_FMT_INFO(log, "query {} (is min = {}) with {} tasks are scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
         waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
     }
 }
