@@ -123,12 +123,6 @@ public:
         records.emplace_back(record);
     }
 
-    void concate(PageEntriesEdit & rhs)
-    {
-        auto rhs_records = rhs.getRecords();
-        records.insert(records.end(), rhs_records.begin(), rhs_records.end());
-    }
-
     void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id)
     {
         EditRecord record{};

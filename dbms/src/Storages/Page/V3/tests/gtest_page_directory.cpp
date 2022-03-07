@@ -75,6 +75,16 @@ try
         PageIDAndEntriesV3 expected_entries{{1, entry1}, {2, entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
+
+    PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        edit.put(2, entry2_v2);
+        dir->apply(std::move(edit));
+    }
+    auto snap3 = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry2_v2, dir, 2, snap3);
 }
 CATCH
 
@@ -325,8 +335,8 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
-    // Ref 3 -> 2
-    {
+
+    { // Ref 3 -> 2 again, should be idempotent
         PageEntriesEdit edit;
         edit.ref(3, 2);
         dir->apply(std::move(edit));
@@ -336,6 +346,37 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(3);
+        edit.del(2);
+        dir->apply(std::move(edit));
+    }
+    auto snap3 = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
+    EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap3);
+    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap3);
+
+    {
+        // Adding ref after deleted.
+        // It will invalid snap1 and snap2
+        PageEntriesEdit edit;
+        edit.ref(3, 1);
+        dir->apply(std::move(edit));
+    }
+    auto snap4 = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
+    // EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
+    EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
+    // EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
+    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap3);
+    EXPECT_ENTRY_NOT_EXIST(dir, 3, snap3);
+    EXPECT_ENTRY_NOT_EXIST(dir, 2, snap4);
+    EXPECT_ENTRY_EQ(entry1, dir, 3, snap4);
 }
 CATCH
 
@@ -424,6 +465,47 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     }
 
     dir->apply(std::move(edit2));
+}
+
+TEST_F(PageDirectoryTest, NewRefAfterDel)
+{
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10); // should be idempotent
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(10);
+        dir->apply(std::move(edit));
+        dir->gcInMemEntries(); // clean in memory
+        auto alive_ids = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids.size(), 0);
+        EXPECT_EQ(alive_ids.count(10), 0); // removed
+    }
+
+    {
+        // Add again after deleted
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
 }
 
 TEST_F(PageDirectoryTest, NormalPageId)
