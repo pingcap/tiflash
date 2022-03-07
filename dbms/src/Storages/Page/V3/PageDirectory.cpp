@@ -65,29 +65,34 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
     return getEntryNotSafe(seq);
 }
 
-std::pair<VersionedEntries, PageSize> VersionedPageEntries::getEntriesByBlobId(BlobFileId blob_id)
+PageSize VersionedPageEntries::getEntriesByBlobIds(
+    const std::unordered_set<BlobFileId> & blob_ids,
+    PageId page_id,
+    std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries)
 {
-    PageSize single_page_size = 0;
-    VersionedEntries versioned_entries;
-
+    // blob_file_0, [<page_id_0, ver0, entry0>,
+    //               <page_id_0, ver1, entry1>,
+    //               <page_id_1, ver1, entry1> ]
+    // blob_file_1, [...]
+    // ...
+    // the total entries size taken out
+    PageSize total_entries_size = 0;
     auto page_lock = acquireLock();
-    for (const auto & [versioned_type, entry_del] : entries)
+    for (const auto & [versioned_type, entry_or_del] : entries)
     {
-        if (entry_del.is_delete)
+        if (entry_or_del.is_delete)
         {
             continue;
         }
 
-        const auto & entry = entry_del.entry;
-
-        if (entry.file_id == blob_id)
+        const auto & entry = entry_or_del.entry;
+        if (blob_ids.count(entry.file_id) > 0)
         {
-            single_page_size += entry.size;
-            versioned_entries.emplace_back(std::make_pair(versioned_type, entry_del.entry));
+            blob_versioned_entries[entry.file_id].emplace_back(page_id, versioned_type, entry);
+            total_entries_size += entry.size;
         }
     }
-
-    return std::make_pair(std::move(versioned_entries), single_page_size);
+    return total_entries_size;
 }
 
 std::pair<PageEntriesV3, bool> VersionedPageEntries::deleteAndGC(UInt64 lowest_seq)
@@ -394,13 +399,16 @@ std::set<PageId> PageDirectory::getAllPageIds()
     return page_ids;
 }
 
-void PageDirectory::apply(PageEntriesEdit && edit)
+void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
-    std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
+    // Note that we need to make sure increasing `sequence` in order, so it
+    // also needs to be protected by `write_lock` throughout the `apply`
+    // TODO: It is totally serialized, make it a pipeline
+    std::unique_lock write_lock(table_rw_mutex);
     UInt64 last_sequence = sequence.load();
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, PageVersionType(last_sequence + 1, 0));
+    wal->apply(edit, PageVersionType(last_sequence + 1, 0), write_limiter);
 
     // stage 2, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, std::pair<PageLock, int>> updating_locks;
@@ -496,30 +504,31 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
-std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids)
+std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter)
 {
+    for (auto & record : migrated_edit.getMutRecords())
     {
-        std::shared_lock read_lock(table_rw_mutex);
-        for (auto & record : migrated_edit.getMutRecords())
+        MVCCMapType::const_iterator iter;
         {
-            auto iter = mvcc_table_directory.find(record.page_id);
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(record.page_id);
             if (unlikely(iter == mvcc_table_directory.end()))
             {
-                throw Exception(fmt::format("Can't found [pageid={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("Can't found [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
             }
+        } // release the read lock on `table_rw_mutex`
 
-            // Increase the epoch for migrated record.
-            record.version.epoch += 1;
+        // Increase the epoch for migrated record.
+        record.version.epoch += 1;
 
-            // Append the gc version to version list
-            auto & versioned_entries = iter->second;
-            auto page_lock = versioned_entries->acquireLock();
-            versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
-        }
-    } // Then we should release the read lock on `table_rw_mutex`
+        // Append the gc version to version list
+        const auto & versioned_entries = iter->second;
+        auto page_lock = versioned_entries->acquireLock();
+        versioned_entries->createNewVersion(record.version.sequence, record.version.epoch, record.entry);
+    }
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit);
+    wal->apply(migrated_edit, write_limiter);
 
     if (!need_scan_page_ids)
     {
@@ -530,49 +539,56 @@ std::set<PageId> PageDirectory::gcApply(PageEntriesEdit && migrated_edit, bool n
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
-PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_need_gc)
+PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const
 {
-    std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
+    std::unordered_set<BlobFileId> blob_id_set;
+    for (const auto blob_id : blob_ids)
+        blob_id_set.insert(blob_id);
+    assert(blob_id_set.size() == blob_ids.size());
 
+    std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
     PageSize total_page_size = 0;
+
+    MVCCMapType::const_iterator iter;
     {
         std::shared_lock read_lock(table_rw_mutex);
+        iter = mvcc_table_directory.cbegin();
+        if (iter == mvcc_table_directory.end())
+            return {blob_versioned_entries, total_page_size};
+    }
 
-        for (const auto & blob_id : blob_need_gc)
+    while (true)
+    {
+        // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
+        // do scan on the version list without lock on `mvcc_table_directory`.
+        PageId page_id = iter->first;
+        const auto & version_entries = iter->second;
+        total_page_size += version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
+
         {
-            PageIdAndVersionedEntries versioned_pageid_entries;
-
-            for (const auto & [page_id, version_entries] : mvcc_table_directory)
-            {
-                VersionedEntries versioned_entries;
-                PageSize page_size;
-                std::tie(versioned_entries, page_size) = version_entries->getEntriesByBlobId(blob_id);
-                if (page_size != 0)
-                {
-                    versioned_pageid_entries.emplace_back(
-                        std::make_pair(page_id, std::move(versioned_entries)));
-                    total_page_size += page_size;
-                }
-            }
-
-            if (versioned_pageid_entries.empty())
-            {
-                throw Exception(fmt::format("Can't get any entries from [BlobFileId={}]", blob_id));
-            }
-
-            blob_versioned_entries[blob_id] = std::move(versioned_pageid_entries);
+            std::shared_lock read_lock(table_rw_mutex);
+            iter++;
+            if (iter == mvcc_table_directory.end())
+                break;
+        }
+    }
+    for (const auto blob_id : blob_ids)
+    {
+        if (blob_versioned_entries.find(blob_id) == blob_versioned_entries.end())
+        {
+            throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
         }
     }
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
 
-std::vector<PageEntriesV3> PageDirectory::gc()
+std::vector<PageEntriesV3> PageDirectory::gc(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     [[maybe_unused]] bool done_anything = false;
     UInt64 lowest_seq = sequence.load();
 
-    done_anything |= wal->compactLogs();
+    done_anything |= wal->compactLogs(write_limiter, read_limiter);
 
     {
         // Cleanup released snapshots
@@ -590,16 +606,26 @@ std::vector<PageEntriesV3> PageDirectory::gc()
     }
 
     std::vector<PageEntriesV3> all_del_entries;
+    MVCCMapType::iterator iter;
     {
-        std::unique_lock write_lock(table_rw_mutex);
-        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); /*empty*/)
-        {
-            const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
-            if (!del_entries.empty())
-            {
-                all_del_entries.emplace_back(std::move(del_entries));
-            }
+        std::shared_lock read_lock(table_rw_mutex);
+        iter = mvcc_table_directory.begin();
+        if (iter == mvcc_table_directory.end())
+            return all_del_entries;
+    }
 
+    while (true)
+    {
+        // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
+        // do gc on the version list without lock on `mvcc_table_directory`.
+        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(lowest_seq);
+        if (!del_entries.empty())
+        {
+            all_del_entries.emplace_back(std::move(del_entries));
+        }
+
+        {
+            std::unique_lock write_lock(table_rw_mutex);
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
@@ -608,6 +634,9 @@ std::vector<PageEntriesV3> PageDirectory::gc()
             {
                 iter++;
             }
+
+            if (iter == mvcc_table_directory.end())
+                break;
         }
     }
 

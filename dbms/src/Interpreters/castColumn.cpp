@@ -6,7 +6,7 @@
 
 namespace DB
 {
-ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context)
+ColumnPtr castColumnImpl(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context, const String & func_name)
 {
     if (arg.type->equals(*type))
         return arg.column;
@@ -20,7 +20,7 @@ ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type
          type,
          ""}};
 
-    FunctionBuilderPtr func_builder_cast = FunctionFactory::instance().get("CAST", context);
+    FunctionBuilderPtr func_builder_cast = FunctionFactory::instance().get(func_name, context);
 
     ColumnsWithTypeAndName arguments{temporary_block.getByPosition(0), temporary_block.getByPosition(1)};
     auto func_cast = func_builder_cast->build(arguments);
@@ -28,5 +28,16 @@ ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type
     func_cast->execute(temporary_block, {0, 1}, 2);
     return temporary_block.getByPosition(2).column;
 }
+
+ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context)
+{
+    return castColumnImpl(arg, type, context, "CAST");
+}
+
+ColumnPtr tiDBCastColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context)
+{
+    return castColumnImpl(arg, type, context, "tidb_cast");
+}
+
 
 } // namespace DB

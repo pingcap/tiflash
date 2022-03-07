@@ -53,6 +53,7 @@ public:
         const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// May change the source columns.
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
@@ -61,6 +62,8 @@ public:
     void initChain(
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
+
+    ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
     void appendJoin(
         ExpressionActionsChain & chain,
@@ -124,7 +127,7 @@ private:
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
     void appendCastAfterAgg(
-        ExpressionActionsChain & chain,
+        const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -136,7 +139,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -144,11 +147,34 @@ private:
 
     void buildCommonAggFunc(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
+
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    void fillAggArgumentDetail(
+        const ExpressionActionsPtr & actions,
+        const tipb::Expr & arg,
+        Names & arg_names,
+        DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators);
 
     void makeExplicitSet(
         const tipb::Expr & expr,

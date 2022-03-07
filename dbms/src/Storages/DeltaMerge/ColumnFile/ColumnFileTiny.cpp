@@ -194,7 +194,7 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
     for (const auto & col : block)
     {
         auto last_buf_size = write_buf.count();
-        serializeColumn(write_buf, *col.column, col.type, offset, limit, true);
+        serializeColumn(write_buf, *col.column, col.type, offset, limit, context.db_context.getSettingsRef().dt_compression_method, context.db_context.getSettingsRef().dt_compression_level);
         col_data_sizes.push_back(write_buf.count() - last_buf_size);
     }
 
