@@ -821,13 +821,14 @@ struct TiDBConvertToFloat
 // CastInternalType: The type we use in the multiplication of from_int_val and scale_mul.
 //                   The original implementation always use Int256, which is not necessary in some situations.
 //                   Such as cast(tiny_int_val as decimal(10, 2)), Int32 is enough.
+// The above two optimizations only take effects when from type is int/decimal/date/dateimte, real and string is not implemented.
 template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T int_value, const CastInternalType & max_value [[maybe_unused]], const CastInternalType & scale_mul, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
         // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
@@ -835,19 +836,7 @@ struct TiDBConvertToDecimal
         using UType = typename U::NativeType;
 
         CastInternalType scaled_value = static_cast<CastInternalType>(int_value) * scale_mul;
-        if constexpr (!can_skip_check_overflow)
-        {
-            if (scaled_value > max_value || scaled_value < -max_value)
-            {
-                context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-                if (int_value > 0)
-                    return static_cast<UType>(max_value);
-                else
-                    return static_cast<UType>(-max_value);
-            }
-        }
-
-        return static_cast<UType>(scaled_value);
+        return handleOverflowErrorForIntAndDecimal<UType>(context, scaled_value, max_value, "cast to decimal");
     }
 
     template <typename U>
@@ -927,13 +916,13 @@ struct TiDBConvertToDecimal
     static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
         const T & v,
         ScaleType v_scale,
-        const CastInternalType & max_value [[maybe_unused]],
+        const CastInternalType & max_value,
         ScaleType scale,
         const CastInternalType & scale_mul,
         const Context & context)
     {
         using UType = typename U::NativeType;
-        CastInternalType value = v.value;
+        CastInternalType value = static_cast<CastInternalType>(v.value);
 
         if (v_scale < scale)
         {
@@ -958,18 +947,7 @@ struct TiDBConvertToDecimal
             assert(scale_mul == 1);
         }
 
-        if constexpr (!can_skip_check_overflow)
-        {
-            if (value > max_value || value < -max_value)
-            {
-                context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
-                if (value > 0)
-                    return static_cast<UType>(max_value);
-                else
-                    return static_cast<UType>(-max_value);
-            }
-        }
-        return static_cast<UType>(value);
+        return handleOverflowErrorForIntAndDecimal<UType>(context, value, max_value, "cast decimal to decimal");
     }
 
     struct DecimalParts
@@ -1189,6 +1167,7 @@ struct TiDBConvertToDecimal
             else
             {
                 // Treat datetime(fsp) as decimal(20, 6).
+                // Because the internal fraction is always aligned to 6 valid digits, so we can avoid division for fsp.
                 static constexpr ScaleType from_scale = 6;
                 const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
                 for (size_t i = 0; i < size; ++i)
@@ -1246,6 +1225,26 @@ struct TiDBConvertToDecimal
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         else
             block.getByPosition(result).column = std::move(col_to);
+    }
+
+    template<typename ReturnType>
+    static ReturnType handleOverflowErrorForIntAndDecimal(const Context & context,
+            const CastInternalType & to_value,
+            const CastInternalType & max_value [[maybe_unused]],
+            const String & msg)
+    {
+        if constexpr (!can_skip_check_overflow)
+        {
+            if (to_value > max_value || to_value < -max_value)
+            {
+                context.getDAGContext()->handleOverflowError(msg, Errors::Types::Truncated);
+                if (to_value > 0)
+                    return static_cast<ReturnType>(max_value);
+                else
+                    return static_cast<ReturnType>(-max_value);
+            }
+        }
+        return static_cast<ReturnType>(to_value);
     }
 
     // max_value is useless if can_skip_check_overflow is true.
@@ -1869,7 +1868,7 @@ private:
             if (avoid_truncate_from_value)
                 scale_diff = 0;
             else
-                scale_diff += 1;
+                ++scale_diff;
         }
         return from_prec + scale_diff;
     }
