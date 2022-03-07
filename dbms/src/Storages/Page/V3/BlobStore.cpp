@@ -476,7 +476,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    const auto & [page_id, entry] = id_entry;
+    const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -493,8 +493,9 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         if (unlikely(entry.size != 0 && checksum != entry.checksum))
         {
             throw Exception(
-                fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                            page_id,
+                fmt::format("Reading with entries meet checksum not match [page_id={}.{}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                            page_id_v3.high,
+                            page_id_v3.low,
                             entry.checksum,
                             checksum,
                             toDebugString(entry),
@@ -504,7 +505,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     }
 
     Page page;
-    page.page_id = page_id.low;
+    page.page_id = page_id_v3.low;
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
