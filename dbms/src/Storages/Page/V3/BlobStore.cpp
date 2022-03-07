@@ -155,6 +155,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             break;
         }
         case WriteBatch::WriteType::PUT_EXTERNAL:
+            edit.putExternal(write.page_id);
+            break;
         case WriteBatch::WriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
