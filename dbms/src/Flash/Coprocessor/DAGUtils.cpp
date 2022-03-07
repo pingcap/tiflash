@@ -1155,6 +1155,25 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
     return order_descr;
 }
 
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators)
+{
+    assert(!collators.empty());
+    FmtBuffer buf;
+    buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
+    for (const auto & collator : collators)
+    {
+        if (collator)
+            buf.fmtAppend("_{}", collator->getCollatorId());
+        else
+            buf.append("_0");
+    }
+    buf.append(" ");
+    return buf.toString();
+}
+
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
 {
     if (field_type.collate() < 0)
