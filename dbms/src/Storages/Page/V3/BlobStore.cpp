@@ -5,6 +5,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -301,12 +302,14 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
-                                            getBlobFilePath(entry.file_id),
-                                            entry.checksum,
-                                            checksum),
-                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception(
+                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                                page_id,
+                                entry.checksum,
+                                checksum,
+                                toDebugString(entry),
+                                getBlobFilePath(entry.file_id)),
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
@@ -346,30 +349,49 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
     PageMap page_map;
     for (const auto & [page_id, entry, fields] : to_read)
     {
-        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
-
-        // TODO : This could lead to allocating a large buffer than we actually required when the table contains large amount of columns.
-        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+        size_t read_size_this_entry = 0;
+        char * write_offset = pos;
+        for (const auto field_index : fields)
         {
-            ChecksumClass digest;
-            digest.update(pos, entry.size);
-            auto checksum = digest.checksum();
-            if (unlikely(entry.size != 0 && checksum != entry.checksum))
+            // TODO: Continuously fields can read by one system call.
+            const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
+            const auto size_to_read = end_offset - beg_offset;
+            read(entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+            fields_offset_in_page.emplace(field_index, read_size_this_entry);
+
+            if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
-                                            getBlobFilePath(entry.file_id),
-                                            entry.checksum,
-                                            checksum),
-                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                const auto expect_checksum = entry.field_offsets[field_index].second;
+                ChecksumClass digest;
+                digest.update(write_offset, size_to_read);
+                auto field_checksum = digest.checksum();
+                if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
+                {
+                    throw Exception(
+                        fmt::format("Reading with fields meet checksum not match "
+                                    "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
+                                    "[field_index={}] [field_offset={}] [field_size={}] "
+                                    "[entry={}] [file={}]",
+                                    page_id,
+                                    expect_checksum,
+                                    field_checksum,
+                                    field_index,
+                                    beg_offset,
+                                    size_to_read,
+                                    toDebugString(entry),
+                                    getBlobFilePath(entry.file_id)),
+                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                }
             }
+
+            read_size_this_entry += size_to_read;
+            write_offset += size_to_read;
         }
 
         Page page;
         page.page_id = page_id;
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id, std::move(page));
@@ -419,12 +441,14 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             auto checksum = digest.checksum();
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception(fmt::format("Page id [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
-                                            page_id,
-                                            getBlobFilePath(entry.file_id),
-                                            entry.checksum,
-                                            checksum),
-                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception(
+                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                                page_id,
+                                entry.checksum,
+                                checksum,
+                                toDebugString(entry),
+                                getBlobFilePath(entry.file_id)),
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
@@ -449,7 +473,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
     const auto & [page_id, entry] = id_entry;
-    size_t buf_size = entry.size;
+    const size_t buf_size = entry.size;
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
@@ -457,6 +481,23 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     });
 
     read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+    {
+        ChecksumClass digest;
+        digest.update(data_buf, entry.size);
+        auto checksum = digest.checksum();
+        if (unlikely(entry.size != 0 && checksum != entry.checksum))
+        {
+            throw Exception(
+                fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                            page_id,
+                            entry.checksum,
+                            checksum,
+                            toDebugString(entry),
+                            getBlobFilePath(entry.file_id)),
+                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+        }
+    }
 
     Page page;
     page.page_id = page_id;
