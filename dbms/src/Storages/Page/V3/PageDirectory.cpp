@@ -291,7 +291,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
         // If we applied write batches like this: [ver=1]{putExternal 10}, [ver=2]{ref 11->10, del 10}
         // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
         // when resolving 11 to 10, we need to set `check_prev` to true
-        bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq == delete_ver.sequence)));
+        bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq < delete_ver.sequence)));
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
