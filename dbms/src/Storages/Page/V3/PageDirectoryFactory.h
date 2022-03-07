@@ -34,8 +34,12 @@ public:
 
     PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+    // just for test
+    PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
+    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
 
     BlobStore::BlobStats * blob_stats = nullptr;
 };

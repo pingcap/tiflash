@@ -142,7 +142,7 @@ public:
     void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count)
     {
         EditRecord record{};
-        record.type = EditRecordType::VAR_REF;
+        record.type = EditRecordType::VAR_EXTERNAL;
         record.page_id = page_id;
         record.version = create_ver;
         record.being_ref_count = being_ref_count;

@@ -237,7 +237,7 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
         toDebugString()));
 }
 
-void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
+std::shared_ptr<PageId> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
     if (rec.type == EditRecordType::VAR_REF)
@@ -246,6 +246,7 @@ void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
         is_deleted = false;
         create_ver = rec.version;
         ori_page_id = rec.ori_page_id;
+        return nullptr;
     }
     else if (rec.type == EditRecordType::VAR_EXTERNAL)
     {
@@ -253,11 +254,14 @@ void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
         is_deleted = false;
         create_ver = rec.version;
         being_ref_count = rec.being_ref_count;
+        external_holder = std::make_shared<PageId>(rec.page_id);
+        return external_holder;
     }
     else if (rec.type == EditRecordType::VAR_ENTRY)
     {
         type = EditRecordType::VAR_ENTRY;
         entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
+        return nullptr;
     }
     else
     {
@@ -528,7 +532,8 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, cons
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
         return cleanOutdatedEntries(lowest_seq, page_id, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
     }
-    throw Exception("Invalid state");
+
+    throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
 }
 
 void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, PageEntriesEdit & edit)
@@ -538,27 +543,36 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
     {
         if (create_ver.sequence > seq)
             return;
-        if (!is_deleted || (is_deleted && seq < delete_ver.sequence))
-        {
-            edit.varRef(page_id, create_ver, ori_page_id);
-        }
-        return;
-    }
-    else if (type == EditRecordType::VAR_EXTERNAL)
-    {
-        if (create_ver.sequence > seq)
-            return;
-        edit.varExternal(page_id, create_ver, being_ref_count);
-        if (is_deleted && delete_ver.sequence < seq)
+        // We need to keep the VAR_REF once create_ver > seq,
+        // or the being-ref entry/external won't be able to be clean
+        // after restore.
+        edit.varRef(page_id, create_ver, ori_page_id);
+        if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
         }
         return;
     }
-    else if (type == EditRecordType::VAR_ENTRY)
+
+    if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        if (create_ver.sequence > seq)
+            return;
+        edit.varExternal(page_id, create_ver, being_ref_count);
+        if (is_deleted && delete_ver.sequence <= seq)
+        {
+            edit.varDel(page_id, delete_ver);
+        }
+        return;
+    }
+
+    if (type == EditRecordType::VAR_ENTRY)
     {
         // dump the latest entry if it is not a "delete"
         auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+        if (last_iter == entries.end())
+            return;
+
         if (last_iter->second.isEntry())
         {
             const auto & entry = last_iter->second;
@@ -572,7 +586,8 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
                 // only delete left, then we don't need to keep this
                 return;
             }
-            auto prev_iter = --last_iter;
+            auto last_version = last_iter->first;
+            auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
             if (prev_iter->second.isEntry())
             {
                 if (prev_iter->second.being_ref_count == 1)
@@ -580,11 +595,19 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
                 // It is being ref by another id, should persist the item and delete
                 const auto & entry = prev_iter->second;
                 edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
-                edit.varDel(page_id, last_iter->first);
+                edit.varDel(page_id, last_version);
             }
         }
         return;
     }
+
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        // just ignore
+        return;
+    }
+
+    throw Exception(fmt::format("Calling collapseTo with invalid state [state={}]", toDebugString()));
 }
 
 /**************************
@@ -1142,9 +1165,13 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
     return all_del_entries;
 }
 
-PageEntriesEdit PageDirectory::dumpSnapshotToEdit()
+PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
 {
-    auto snap = createSnapshot();
+    if (!snap)
+    {
+        snap = createSnapshot();
+    }
+
     PageEntriesEdit edit;
     MVCCMapType::iterator iter;
     {

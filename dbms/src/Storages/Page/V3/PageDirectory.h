@@ -144,7 +144,7 @@ public:
 
     void createDelete(const PageVersionType & ver);
 
-    void fromRestored(const PageEntriesEdit::EditRecord & rec);
+    std::shared_ptr<PageId> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
     enum ResolveResult
     {
@@ -312,7 +312,7 @@ public:
 
     std::set<PageId> getAliveExternalIds() const;
 
-    PageEntriesEdit dumpSnapshotToEdit();
+    PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
     size_t numPages() const
     {
