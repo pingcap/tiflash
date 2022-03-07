@@ -116,7 +116,7 @@ struct EntryOrDelete
 
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
-using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
+using PageLock = std::lock_guard<std::mutex>;
 class VersionedPageEntries
 {
 public:
@@ -131,7 +131,7 @@ public:
 
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::make_unique<std::lock_guard<std::mutex>>(m);
+        return std::lock_guard<std::mutex>(m);
     }
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
