@@ -283,13 +283,16 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
                 if (entry != nullptr)
                     *entry = iter->second.entry;
                 return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
-            }
+            } // fallover to FAIL
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        if (create_ver.sequence <= seq
-            && (!is_deleted || (is_deleted && (seq < delete_ver.sequence || (check_prev && seq <= delete_ver.sequence)))))
+        // If we applied write batches like this: [ver=1]{putExternal 10}, [ver=2]{ref 11->10, del 10}
+        // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
+        // when resolving 11 to 10, we need to set `check_prev` to true
+        bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq == delete_ver.sequence)));
+        if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
         }
@@ -900,6 +903,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 auto holder = version_list->createNewExternal(new_version);
                 if (holder)
                 {
+                    // put the new created holder into `external_ids`
                     *holder = r.page_id;
                     std::lock_guard guard(external_ids_mutex);
                     external_ids.emplace_back(std::weak_ptr<PageId>(holder));
@@ -916,12 +920,11 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 applyRefEditRecord(mvcc_table_directory, version_list, r, new_version);
                 break;
             case EditRecordType::UPSERT:
-                throw Exception(fmt::format("should not handle upsert edit"));
             case EditRecordType::VAR_DELETE:
             case EditRecordType::VAR_ENTRY:
             case EditRecordType::VAR_EXTERNAL:
             case EditRecordType::VAR_REF:
-                throw Exception(fmt::format("should not handle var_* edit"));
+                throw Exception(fmt::format("should not handle {} edit", r.type));
             }
         }
         catch (DB::Exception & e)
