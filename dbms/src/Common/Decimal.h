@@ -20,6 +20,12 @@ using ScaleType = UInt32;
 constexpr PrecType decimal_max_prec = 65;
 constexpr ScaleType decimal_max_scale = 30;
 
+// IntPrec indicates the max precision of different integer types.
+// For now, the binary arithmetic functions use it to calculate result precision.
+// And cast function use it to do some optimizations, such as skipping overflow check.
+// But in TiDB the signed types will plus 1, for example IntPrec<int8_t>::prec is 4.
+// This is a little confusing because we will add 1 when return result to client.
+// Here we make sure TiFlash code is clean and will fix TiDB later.
 template <typename T>
 struct IntPrec
 {
@@ -285,7 +291,6 @@ using Decimal32 = Decimal<Int32>;
 using Decimal64 = Decimal<Int64>;
 using Decimal128 = Decimal<Int128>;
 using Decimal256 = Decimal<Int256>;
-using Decimal512 = Decimal<Int512>;
 
 static constexpr PrecType minDecimalPrecision()
 {

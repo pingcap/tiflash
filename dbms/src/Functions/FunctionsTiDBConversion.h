@@ -816,6 +816,11 @@ struct TiDBConvertToFloat
 
 /// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
+// can_skip_check_overflow: we can avoid overflow check in some situations, such as cast(tiny_int_val as decimal(10, 0)).
+//                          Because max_tiny_int(256) < to_max_val(10^9).
+// CastInternalType: The type we use in the multiplication of from_int_val and scale_mul.
+//                   The original implementation always use Int256, which is not necessary in some situations.
+//                   Such as cast(tiny_int_val as decimal(10, 2)), Int32 is enough.
 template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
@@ -829,7 +834,7 @@ struct TiDBConvertToDecimal
         static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
 
-        CastInternalType scaled_value = static_cast<CastInternalType>(int_value) * static_cast<CastInternalType>(scale_mul);
+        CastInternalType scaled_value = static_cast<CastInternalType>(int_value) * scale_mul;
         if constexpr (!can_skip_check_overflow)
         {
             if (scaled_value > max_value || scaled_value < -max_value)
@@ -928,7 +933,7 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        CastInternalType value = static_cast<CastInternalType>(v.value);
+        CastInternalType value = v.value;
 
         if (v_scale < scale)
         {
@@ -946,6 +951,11 @@ struct TiDBConvertToDecimal
                 else
                     ++value;
             }
+        }
+        else
+        {
+            // If v_scale == scale, then scale_mul must be 1, no need to touch value.
+            assert(scale_mul == 1);
         }
 
         if constexpr (!can_skip_check_overflow)
@@ -1799,8 +1809,8 @@ public:
     template <typename FromDataType>
     static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
     {
-        const bool zero_scale_diff = false;
-        const PrecType from_scaled_prec = getFromScaledPrec<FromDataType>(from_type, to_decimal_scale, zero_scale_diff);
+        const bool avoid_truncate_from_value = false;
+        const PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, to_decimal_scale, avoid_truncate_from_value);
         return from_scaled_prec <= to_decimal_prec;
     }
 
@@ -1816,7 +1826,7 @@ private:
     const tipb::FieldType & tidb_tp;
 
     template <typename FromDataType>
-    static bool getFromScaledPrecInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
     {
         const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
             using FromFieldType = typename FromDataType::FieldType;
@@ -1828,7 +1838,7 @@ private:
             else
             {
                 // Cannot reach here. castTypeToEither will return false directly.
-                assert(0);
+                __builtin_unreachable();
                 (void)from_scaled_prec;
                 (void)to_decimal_scale;
             }
@@ -1848,7 +1858,7 @@ private:
             DataTypeEnum16>(from_type.get(), f);
     }
 
-    static PrecType getFromScaledPrecDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool zero_scale_diff)
+    static PrecType getMinPrecForHoldingDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool avoid_truncate_from_value)
     {
         Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
         if (scale_diff < 0)
@@ -1856,7 +1866,7 @@ private:
             // During cast(decimal as decimal), we will use from_int_val/(10^abs(scale_diff)) as the to_int.
             // Why plus 1: need do rounding during division, such as cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
             // Why zero: should not minus from_prec when determining CastInternalType to avoid truncating from_int_val.
-            if (zero_scale_diff)
+            if (avoid_truncate_from_value)
                 scale_diff = 0;
             else
                 scale_diff += 1;
@@ -1864,7 +1874,7 @@ private:
         return from_prec + scale_diff;
     }
 
-    static bool getFromScaledPrecDatetime(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingDatetime(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
     {
         if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
         {
@@ -1873,10 +1883,11 @@ private:
             {
                 // We treat datetime(fsp) as decimal(20, 6) instead of decimal(14 + fsp, fsp).
                 // Because the internal fraction is always aligned to 6 valid digits, so we can avoid division for fsp.
-                from_scaled_prec = getFromScaledPrecDecimalInternal(20, 6, to_decimal_scale, zero_scale_diff);
+                from_scaled_prec = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
             }
             else
             {
+                assert(fsp == 0);
                 from_scaled_prec = 14 + to_decimal_scale;
             }
             return true;
@@ -1884,63 +1895,78 @@ private:
         return false;
     }
 
-    static bool getFromScaledPrecDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
     {
         return castTypeToEither<
             DataTypeDecimal32,
             DataTypeDecimal64,
             DataTypeDecimal128,
-            DataTypeDecimal256>(from_type.get(), [to_decimal_scale, zero_scale_diff, &from_scaled_prec](const auto & from_type_ptr, bool) {
-            from_scaled_prec = getFromScaledPrecDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, zero_scale_diff);
+            DataTypeDecimal256>(from_type.get(), [to_decimal_scale, avoid_truncate_from_value, &from_scaled_prec](const auto & from_type_ptr, bool) {
+            from_scaled_prec = getMinPrecForHoldingDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, avoid_truncate_from_value);
             return true;
         });
     }
 
-    // Get the prec of from value after scaled, which is from_prec + scale_diff.
-    // Becase the internal store of Decimal is the multipiler of 10^scale_diff.
-    // zero_scale_diff: true when used to determine CastInternalType, false when used to determine if can skip overflow check.
+    // Cast optimization doesn't handle float/string/duration for now, so return a max prec value.
+    static bool getMinPrecForHoldingOtherTypes(DataTypePtr from_type, PrecType & from_scaled_prec)
+    {
+        return castTypeToEither<
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeString,
+            DataTypeMyDuration>(from_type.get(), [&from_scaled_prec](const auto &, bool) {
+            from_scaled_prec = std::numeric_limits<PrecType>::max();
+            return true;
+        });
+    }
+
+    // Get the minimum prec that can holding the value of from type, which is from_prec + scale_diff.
+    // Because the internal store of Decimal is the multipiler of 10^scale_diff.
+    // avoid_truncate_from_value:
+    //      true when determine CastInternalType to avoid truncating from_int_val when static_cast it to CastInternalType.
+    //      false when determine if can skip overflow check.
     template <typename FromDataType>
-    static PrecType getFromScaledPrec(DataTypePtr from_type, ScaleType to_decimal_scale, bool zero_scale_diff)
+    static PrecType getMinPrecForHoldingFromValue(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value)
     {
         PrecType from_scaled_prec = std::numeric_limits<PrecType>::max();
 
-        // cast(int/enum as decimal)
-        if (getFromScaledPrecInteger<FromDataType>(from_type, to_decimal_scale, from_scaled_prec))
+        if (getMinPrecForHoldingInteger<FromDataType>(from_type, to_decimal_scale, from_scaled_prec))
         {
-            return from_scaled_prec;
+            // cast(int/enum as decimal)
         }
-
-        // cast(date as decimal)
-        if (checkDataType<DataTypeMyDate>(from_type.get()))
+        else if (checkDataType<DataTypeMyDate>(from_type.get()))
         {
-            return 8 + to_decimal_scale;
+            // cast(date as decimal)
+            from_scaled_prec = 8 + to_decimal_scale;
         }
-
-        // cast(datetime as decimal)
-        if (getFromScaledPrecDatetime(from_type, to_decimal_scale, zero_scale_diff, from_scaled_prec))
+        else if (getMinPrecForHoldingDatetime(from_type, to_decimal_scale, avoid_truncate_from_value, from_scaled_prec))
         {
-            return from_scaled_prec;
+            // cast(datetime as decimal)
         }
-
-        // cast(decimal as decimal)
-        if (getFromScaledPrecDecimal(from_type, to_decimal_scale, zero_scale_diff, from_scaled_prec))
+        else if (getMinPrecForHoldingDecimal(from_type, to_decimal_scale, avoid_truncate_from_value, from_scaled_prec))
         {
-            return from_scaled_prec;
+            // cast(decimal as decimal)
         }
-
-        // cast(float/string as decimal); cast duration to decimal not pushed down for now.
+        else if (getMinPrecForHoldingOtherTypes(from_type, from_scaled_prec))
+        {
+            // cast(float/string as decimal); cast duration to decimal not pushed down for now.
+        }
+        else
+        {
+            __builtin_unreachable();
+        }
         return from_scaled_prec;
     }
 
-    // Determine CastInternalType template argument.
+    // Determine CastInternalType template argument, which is used as the type in the multiplication of from_int_val and scale_mul.
     // rule: from_scaled_prec <= (Intxxx::prec - 1)
-    // from_scaled_prec is the scale for result of max_from_val * 10^to_scale, e.g. from_val_prec + scale_diff.
-    // NOTE: CastInternalType only works for cast(int/enum/decimal as decimal). cast(real/string as decimal) will ignore it.
+    //       from_scaled_prec is the scale for result of max_from_val * 10^to_scale, e.g. from_val_prec + scale_diff.
+    //       Why minus 1: the same reason why maxDecimalPrecision<Decimal32> is 9 instead of 10.
     template <typename FromDataType, typename ToDataType, bool return_nullable>
     WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
     {
-        const bool zero_scale_diff = true;
-        PrecType from_scaled_prec = getFromScaledPrec<FromDataType>(from_type, decimal_type->getScale(), zero_scale_diff);
+        const bool avoid_truncate_from_value = true;
+        PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, decimal_type->getScale(), avoid_truncate_from_value);
         const bool can_skip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, decimal_type->getPrec(), decimal_type->getScale());
         if (!can_skip)
         {
