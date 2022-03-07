@@ -799,10 +799,9 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
     ExpressionActionsChain & chain,
     const String & column_prefix) const
 {
-    const auto & current_columns = getCurrentInputColumns();
     NamesWithAliases final_project;
     UniqueNameGenerator unique_name_generator;
-    for (const auto & element : current_columns)
+    for (const auto & element : getCurrentInputColumns())
         final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
 
     auto & step = initAndGetLastStep(chain);
