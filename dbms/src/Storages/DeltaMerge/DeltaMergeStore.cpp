@@ -2241,17 +2241,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
                  stat.storage_stable_oldest_snapshot_thread_id)
             = storage_pool.data()->getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
-        // const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        // if (const auto * const version = concrete_snap->version(); version != nullptr)
-        // {
-        //     stat.storage_stable_num_pages = version->numPages();
-        //     stat.storage_stable_num_normal_pages = version->numNormalPages();
-        //     stat.storage_stable_max_page_id = version->maxId();
-        // }
-        // else
-        // {
-        //     LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
-        // }
+        const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_stable_num_pages = version->numPages();
+            stat.storage_stable_num_normal_pages = version->numNormalPages();
+            stat.storage_stable_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_delta_num_snapshots, //
@@ -2259,17 +2259,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
                  stat.storage_delta_oldest_snapshot_thread_id)
             = storage_pool.log()->getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
-        // const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        // if (const auto * const version = concrete_snap->version(); version != nullptr)
-        // {
-        //     stat.storage_delta_num_pages = version->numPages();
-        //     stat.storage_delta_num_normal_pages = version->numNormalPages();
-        //     stat.storage_delta_max_page_id = version->maxId();
-        // }
-        // else
-        // {
-        //     LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
-        // }
+        const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_delta_num_pages = version->numPages();
+            stat.storage_delta_num_normal_pages = version->numNormalPages();
+            stat.storage_delta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_meta_num_snapshots, //
@@ -2277,17 +2277,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
                  stat.storage_meta_oldest_snapshot_thread_id)
             = storage_pool.meta()->getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
-        // const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        // if (const auto * const version = concrete_snap->version(); version != nullptr)
-        // {
-        //     stat.storage_meta_num_pages = version->numPages();
-        //     stat.storage_meta_num_normal_pages = version->numNormalPages();
-        //     stat.storage_meta_max_page_id = version->maxId();
-        // }
-        // else
-        // {
-        //     LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
-        // }
+        const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_meta_num_pages = version->numPages();
+            stat.storage_meta_num_normal_pages = version->numNormalPages();
+            stat.storage_meta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
+        }
     }
 
     stat.background_tasks_length = background_tasks.length();
