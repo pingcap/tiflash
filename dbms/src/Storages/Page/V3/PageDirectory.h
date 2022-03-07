@@ -222,11 +222,27 @@ public:
         return entries.size();
     }
 
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{"
+            "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
+            "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
+            "}}",
+            type,
+            create_ver,
+            is_deleted,
+            delete_ver,
+            ori_page_id,
+            being_ref_count,
+            entries.size());
+    }
+
 private:
     mutable std::mutex m;
     EditRecordType type;
     // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
-    bool is_deleted = false;
+    bool is_deleted;
     // Entries sorted by version, valid when type == VAR_ENTRY
     std::multimap<PageVersionType, EntryOrDelete> entries;
     // The created version, valid when type == VAR_REF/VAR_EXTERNAL

@@ -54,15 +54,6 @@ namespace PS::V3
 void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
-    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_ENTRY)
-    {
-        throw Exception(fmt::format(
-            "try to create new entry version on an id with invalid state "
-            "[ver={}] [num_entries={}]",
-            ver,
-            entries.size()));
-    }
-
     if (type == EditRecordType::VAR_DELETE)
     {
         type = EditRecordType::VAR_ENTRY;
@@ -70,41 +61,42 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
         return;
     }
 
-    // else type == EditRecordType::VAR_ENTRY
-    auto last_iter = entries.rbegin();
-    if (last_iter->second.isDelete())
+    if (type == EditRecordType::VAR_ENTRY)
     {
-        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
-    }
-    else if (last_iter->second.isEntry())
-    {
-        // It is ok to replace the entry with same sequence and newer epoch, but not valid
-        // to replace the entry with newer sequence.
-        if (last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence)
+        auto last_iter = entries.rbegin();
+        if (last_iter->second.isDelete())
         {
-            throw Exception(fmt::format(
-                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
-                ver,
-                last_iter->first,
-                last_iter->second.toDebugString()));
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         }
-        // inherit the `being_ref_count` of the last entry
-        entries.emplace(ver, EntryOrDelete::newRepalcingEntry(last_iter->second, entry));
+        else if (last_iter->second.isEntry())
+        {
+            // It is ok to replace the entry with same sequence and newer epoch, but not valid
+            // to replace the entry with newer sequence.
+            if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
+            {
+                throw Exception(fmt::format(
+                    "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                    ver,
+                    last_iter->first,
+                    last_iter->second.toDebugString()));
+            }
+            // create a new version that inherit the `being_ref_count` of the last entry
+            entries.emplace(ver, EntryOrDelete::newRepalcingEntry(last_iter->second, entry));
+        }
+        return;
     }
+
+    throw Exception(fmt::format(
+        "try to create entry version with invalid state "
+        "[ver={}] [entry={}] [state={}]",
+        ver,
+        ::DB::PS::V3::toDebugString(entry),
+        toDebugString()));
 }
 
 std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
-    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_EXTERNAL)
-    {
-        throw Exception(fmt::format(
-            "try to create new external version on an id that already has entries "
-            "[ver={}] [num_entries={}]",
-            ver,
-            entries.size()));
-    }
-
     if (type == EditRecordType::VAR_DELETE)
     {
         type = EditRecordType::VAR_EXTERNAL;
@@ -115,7 +107,8 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
         external_holder = std::make_shared<PageId>(0);
         return external_holder;
     }
-    else if (type == EditRecordType::VAR_EXTERNAL)
+
+    if (type == EditRecordType::VAR_EXTERNAL)
     {
         if (is_deleted)
         {
@@ -137,15 +130,17 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
         }
         else
         {
-            if (ver <= create_ver)
-            {
-                // adding external should be idempotent, just ignore
-                return nullptr;
-            }
+            // adding external should be idempotent, just ignore
+            // don't care about the `ver`
+            return nullptr;
         }
     }
-    // FIXME: more info
-    throw Exception(fmt::format("try to create new external version with invalid state"));
+
+    throw Exception(fmt::format(
+        "try to create external version with invalid state "
+        "[ver={}] [state={}]",
+        ver,
+        toDebugString()));
 }
 
 void VersionedPageEntries::createDelete(const PageVersionType & ver)
@@ -157,28 +152,32 @@ void VersionedPageEntries::createDelete(const PageVersionType & ver)
         {
             entries.emplace(ver, EntryOrDelete::newDelete());
         }
+        return;
     }
-    else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
+
+    if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
     {
         is_deleted = true;
         delete_ver = ver;
+        return;
     }
+
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        // just ignore
+        return;
+    }
+
+    throw Exception(fmt::format(
+        "try to create delete version with invalid state "
+        "[ver={}] [state={}]",
+        ver,
+        toDebugString()));
 }
 
 bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id_)
 {
     auto page_lock = acquireLock();
-    // adding ref to replace put/external is not allowed
-    if (type != EditRecordType::VAR_DELETE && type != EditRecordType::VAR_REF)
-    {
-        throw Exception(fmt::format(
-            "try to create new ref version on an id that already has entries "
-            "[ver={}] [ori_page_id={}] [num_entries={}]",
-            ver,
-            ori_page_id_,
-            entries.size()));
-    }
-
     if (type == EditRecordType::VAR_DELETE)
     {
         type = EditRecordType::VAR_REF;
@@ -187,7 +186,8 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
         create_ver = ver;
         return true;
     }
-    else if (type == EditRecordType::VAR_REF)
+
+    if (type == EditRecordType::VAR_REF)
     {
         if (is_deleted)
         {
@@ -205,6 +205,7 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
                 // apply a ref to same ori id with small ver, just ignore
                 return false;
             }
+            // else adding ref to another ori id is not allow, just fallover
         }
         else
         {
@@ -213,10 +214,17 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
                 // adding ref to the same ori id should be idempotent, just ignore
                 return false;
             }
+            // else adding ref to another ori id is not allow, just fallover
         }
     }
-    // FIXME: more info
-    throw Exception(fmt::format("try to create new ref version with invalid state"));
+
+    // adding ref to replace put/external is not allowed
+    throw Exception(fmt::format(
+        "try to create ref version with invalid state "
+        "[ver={}] [ori_page_id={}] [state={}]",
+        ver,
+        ori_page_id_,
+        toDebugString()));
 }
 
 void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
@@ -324,7 +332,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
             if (iter->second.isEntry())
                 return ++iter->second.being_ref_count;
             else
-                throw Exception(fmt::format("The entry to be added ref count is not normal/external entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
+                throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
@@ -893,10 +901,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 if (holder)
                 {
                     *holder = r.page_id;
-                    {
-                        std::lock_guard guard(external_ids_mutex);
-                        external_ids.emplace_back(std::weak_ptr<PageId>(holder));
-                    }
+                    std::lock_guard guard(external_ids_mutex);
+                    external_ids.emplace_back(std::weak_ptr<PageId>(holder));
                 }
                 break;
             }
