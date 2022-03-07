@@ -708,7 +708,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     size_t idx = 0;
     PageEntriesV3 entries_del1, entries_del2;
-    for (auto & record : edit.getRecords())
+    for (const auto & record : edit.getRecords())
     {
         for (size_t index : remove_entries_idx1)
         {
@@ -791,7 +791,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     size_t idx = 0;
     PageEntriesV3 entries_del;
-    for (auto & record : edit.getRecords())
+    for (const auto & record : edit.getRecords())
     {
         for (size_t index : remove_entries_idx)
         {
@@ -850,14 +850,11 @@ TEST_F(BlobStoreTest, GC)
     PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
-    VersionedEntries versioned_entries;
+    PageIdAndVersionedEntries versioned_pageid_entries;
     for (const auto & record : edit.getRecords())
     {
-        versioned_entries.emplace_back(1, record.entry);
+        versioned_pageid_entries.emplace_back(page_id, 1, record.entry);
     }
-
-    PageIdAndVersionedEntries versioned_pageid_entries;
-    versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
     std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
     gc_context[1] = versioned_pageid_entries;
 
@@ -869,13 +866,14 @@ TEST_F(BlobStoreTest, GC)
 
     // Check copy_list which will apply fo Mvcc
     ASSERT_EQ(gc_edit.size(), buff_nums);
-    auto it = versioned_entries.begin();
+    auto it = versioned_pageid_entries.begin();
     for (const auto & record : gc_edit.getRecords())
     {
         ASSERT_EQ(record.page_id, page_id);
+        auto it_entry = std::get<2>(*it);
         ASSERT_EQ(record.entry.file_id, 2);
-        ASSERT_EQ(record.entry.checksum, it->second.checksum);
-        ASSERT_EQ(record.entry.size, it->second.size);
+        ASSERT_EQ(record.entry.checksum, it_entry.checksum);
+        ASSERT_EQ(record.entry.size, it_entry.size);
         it++;
     }
 
@@ -919,17 +917,15 @@ try
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        VersionedEntries versioned_entries;
-        versioned_entries.emplace_back(1, records[0].entry);
         if (gc_context.find(records[0].entry.file_id) == gc_context.end())
         {
             PageIdAndVersionedEntries versioned_pageid_entries;
-            versioned_pageid_entries.emplace_back(std::make_pair(page_id, versioned_entries));
+            versioned_pageid_entries.emplace_back(page_id, 1, records[0].entry);
             gc_context[records[0].entry.file_id] = std::move(versioned_pageid_entries);
         }
         else
         {
-            gc_context[records[0].entry.file_id].emplace_back(std::make_pair(page_id, versioned_entries));
+            gc_context[records[0].entry.file_id].emplace_back(page_id, 1, records[0].entry);
         }
 
         page_id++;
@@ -941,4 +937,50 @@ try
 }
 CATCH
 
+TEST_F(BlobStoreTest, ReadByFieldReadInfos)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
+    size_t buff_nums = 20;
+    size_t buff_size = 20;
+
+    BlobStore::Config config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 100;
+    auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
+    char c_buff[buff_size * buff_nums];
+
+    WriteBatch wb;
+
+    BlobStore::FieldReadInfos read_infos;
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>(page_id + j);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
+        wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        read_infos.emplace_back(BlobStore::FieldReadInfo(page_id, records[0].entry, {0, 1, 2, 3, 4}));
+
+        page_id++;
+        wb.clear();
+    }
+
+    auto page_map = blob_store.read(read_infos);
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        PageId reading_id = fixed_page_id + i;
+        Page page = page_map[reading_id];
+        ASSERT_EQ(page.fieldSize(), 5);
+    }
+}
+CATCH
 } // namespace DB::PS::V3::tests
