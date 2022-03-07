@@ -4,7 +4,6 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
-#include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -32,7 +31,6 @@ PageStorageImpl::~PageStorageImpl() = default;
 void PageStorageImpl::restore()
 {
     // TODO: Speedup restoring
-    // TODO: After restored ends, set the last offset of log file for `wal`
     PageDirectoryFactory factory;
     page_directory = factory
                          .setBlobStore(blob_store)
@@ -189,9 +187,8 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    const bool need_scan_external_page = external_pages_scanner && external_pages_remover;
-    auto clean_external_page = [need_scan_external_page, this]() {
-        if (need_scan_external_page)
+    auto clean_external_page = [this]() {
+        if (external_pages_scanner && external_pages_remover)
         {
             auto pending_external_pages = external_pages_scanner();
             auto alive_external_ids = page_directory->getAliveExternalIds();
@@ -202,7 +199,8 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    const auto & del_entries = page_directory->gc(write_limiter);
+    [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
+    const auto & del_entries = page_directory->gcInMemEntries();
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.

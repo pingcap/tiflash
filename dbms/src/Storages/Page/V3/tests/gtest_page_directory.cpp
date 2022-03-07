@@ -1044,7 +1044,7 @@ try
      *   }
      *   snapshot remain: [v3,v5]
      */
-    auto del_entries = dir->gc();
+    auto del_entries = dir->gcInMemEntries();
     // v1, v2 have been removed.
     ASSERT_EQ(del_entries.size(), 2);
 
@@ -1055,7 +1055,7 @@ try
     // all versions get compacted.
     snapshot3.reset();
     snapshot5.reset();
-    del_entries = dir->gc();
+    del_entries = dir->gcInMemEntries();
     ASSERT_EQ(del_entries.size(), 2);
 
     auto snapshot_after_gc = dir->createSnapshot();
@@ -1097,7 +1097,7 @@ try
          *   }
          *   snapshot remain: [v3, v5]
          */
-        const auto & del_entries = dir->gc();
+        const auto & del_entries = dir->gcInMemEntries();
         // page_id: []; another_page_id: v1 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
     }
@@ -1111,7 +1111,7 @@ try
          *   }
          *   snapshot remain: [v5]
          */
-        const auto & del_entries = dir->gc();
+        const auto & del_entries = dir->gcInMemEntries();
         // page_id: v2; another_page_id: v3 have been removed.
         EXPECT_EQ(del_entries.size(), 2);
     }
@@ -1125,7 +1125,7 @@ try
          *   }
          *   snapshot remain: []
          */
-        const auto & del_entries = dir->gc();
+        const auto & del_entries = dir->gcInMemEntries();
         // page_id: v5; another_page_id: v6,v7,v8 have been removed.
         EXPECT_EQ(del_entries.size(), 5);
     }
@@ -1171,7 +1171,7 @@ try
          *   }
          *   snapshot remain: [v1,v3,v5,v10]
          */
-        auto removed_entries = dir->gc(); // The GC on page_id=50 is blocked by previous `snapshot1`
+        auto removed_entries = dir->gcInMemEntries(); // The GC on page_id=50 is blocked by previous `snapshot1`
         EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1192,7 +1192,7 @@ try
         snapshot3.reset();
         snapshot5.reset();
         snapshot10.reset();
-        auto removed_entries = dir->gc();
+        auto removed_entries = dir->gcInMemEntries();
         EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1207,7 +1207,7 @@ try
          *   snapshot remain: []
          */
         snapshot1.reset();
-        auto removed_entries = dir->gc(); // this will compact all versions
+        auto removed_entries = dir->gcInMemEntries(); // this will compact all versions
         // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
         EXPECT_EQ(removed_entries.size(), 8);
 
@@ -1264,7 +1264,7 @@ try
          *   }
          *   snapshot remain: [v5,v8,v9]
          */
-        auto del_entries = dir->gc();
+        auto del_entries = dir->gcInMemEntries();
         // page_id: v3; another_page_id: v1,v2 have been removed.
         EXPECT_EQ(del_entries.size(), 3);
         ASSERT_EQ(dir->numPages(), 2);
@@ -1282,7 +1282,7 @@ try
         EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir->gc();
+        auto del_entries = dir->gcInMemEntries();
         // page_id: v5; another_page_id: v4,v6,v7 have been removed.
         EXPECT_EQ(del_entries.size(), 4);
         ASSERT_EQ(dir->numPages(), 1); // page_id should be removed.
@@ -1298,7 +1298,7 @@ try
         snapshot8.reset();
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir->gc();
+        auto del_entries = dir->gcInMemEntries();
         // another_page_id: v8 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
     }
@@ -1309,7 +1309,7 @@ try
          *   snapshot remain: []
          */
         snapshot9.reset();
-        auto del_entries = dir->gc();
+        auto del_entries = dir->gcInMemEntries();
         // another_page_id: v9 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
         ASSERT_EQ(dir->numPages(), 0); // all should be removed.
@@ -1398,7 +1398,7 @@ try
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 entry for 1 page_id
 
     // 2.1 Execute GC
-    dir->gc();
+    dir->gcInMemEntries();
     // `page_id` get removed
     EXPECT_EQ(dir->numPages(), 1);
 
@@ -1443,7 +1443,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gc();
+        auto outdated_entries = dir->gcInMemEntries();
         EXPECT_TRUE(outdated_entries.empty());
     }
 
@@ -1455,7 +1455,7 @@ try
     }
     // entry1 get removed
     {
-        auto outdated_entries = dir->gc();
+        auto outdated_entries = dir->gcInMemEntries();
         EXPECT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
     }
@@ -1479,7 +1479,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gc();
+        auto outdated_entries = dir->gcInMemEntries();
         EXPECT_TRUE(outdated_entries.empty());
         auto alive_ex_id = dir->getAliveExternalIds();
         ASSERT_EQ(alive_ex_id.size(), 1);
@@ -1494,7 +1494,7 @@ try
     }
     // entry1 get removed
     {
-        auto outdated_entries = dir->gc();
+        auto outdated_entries = dir->gcInMemEntries();
         EXPECT_EQ(0, outdated_entries.size());
         auto alive_ex_id = dir->getAliveExternalIds();
         ASSERT_EQ(alive_ex_id.size(), 0);

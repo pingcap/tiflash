@@ -1031,22 +1031,23 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
-
-PageEntriesV3 PageDirectory::gc(const WriteLimiterPtr & write_limiter)
+bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
 {
-    [[maybe_unused]] bool done_any_io = false;
-    UInt64 lowest_seq = sequence.load();
-
+    bool done_any_io = false;
+    // In order not to make read amplification too high, only apply compact logs when ...
+    auto files_snap = wal->getFilesSnapshot();
+    if (files_snap.needSave())
     {
-        // In order not to make read amplification too high, only apply compact logs when ...
-        auto files_snap = wal->getFilesSnapshot();
-        if (files_snap.needSave())
-        {
-            // The records persisted in `files_snap` is older than or equal to all records in `edit`
-            auto edit = dumpSnapshotToEdit();
-            done_any_io |= wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
-        }
+        // The records persisted in `files_snap` is older than or equal to all records in `edit`
+        auto edit = dumpSnapshotToEdit();
+        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
     }
+    return done_any_io;
+}
+
+PageEntriesV3 PageDirectory::gcInMemEntries()
+{
+    UInt64 lowest_seq = sequence.load();
 
     {
         // Cleanup released snapshots

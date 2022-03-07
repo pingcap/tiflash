@@ -16,6 +16,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
+#include "Encryption/FileProvider.h"
 
 namespace CurrentMetrics
 {
@@ -304,7 +305,9 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    PageEntriesV3 gc(const WriteLimiterPtr & write_limiter = nullptr);
+    bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr);
+
+    PageEntriesV3 gcInMemEntries();
 
     std::set<PageId> getAliveExternalIds() const;
 

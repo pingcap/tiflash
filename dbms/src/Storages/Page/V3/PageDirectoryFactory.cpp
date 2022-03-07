@@ -11,6 +11,7 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     auto [wal, reader] = WALStore::create(file_provider, delegator);
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadFromDisk(dir, std::move(reader));
+    // TODO: After restored ends, set the last offset of log file for `wal`
     if (blob_stats)
         blob_stats->restore();
     // Reset the `sequence` to the maximum of persisted.
