@@ -952,4 +952,50 @@ try
 }
 CATCH
 
+TEST_F(BlobStoreTest, ReadByFieldReadInfos)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
+    size_t buff_nums = 20;
+    size_t buff_size = 20;
+
+    BlobStore::Config config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 100;
+    auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
+    char c_buff[buff_size * buff_nums];
+
+    WriteBatch wb;
+
+    BlobStore::FieldReadInfos read_infos;
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>(page_id + j);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
+        wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        read_infos.emplace_back(BlobStore::FieldReadInfo(page_id, records[0].entry, {0, 1, 2, 3, 4}));
+
+        page_id++;
+        wb.clear();
+    }
+
+    auto page_map = blob_store.read(read_infos);
+    for (size_t i = 0; i < buff_nums; ++i)
+    {
+        PageId reading_id = fixed_page_id + i;
+        Page page = page_map[reading_id];
+        ASSERT_EQ(page.fieldSize(), 5);
+    }
+}
+CATCH
 } // namespace DB::PS::V3::tests

@@ -47,7 +47,7 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::LZ4);
 
         if (compression_settings.method == CompressionMethod::LZ4)
-            compressed_size = header_size + LZ4_compress_default(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size));
+            compressed_size = header_size + LZ4_compress_fast(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
         else
             compressed_size = header_size + LZ4_compress_HC(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
 

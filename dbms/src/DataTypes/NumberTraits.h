@@ -337,24 +337,22 @@ struct ToInteger<Int128>
     using Type = Int128;
 };
 
-
-// CLICKHOUSE-29. The same depth, different signs
-// NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
+// For greatest/least of TiDB:
+// float + int/float/decimal = double
+// tinyint/smallint/mediumint unsigned + tinyint/smallint/mediumint = bigint
+// bigint unsigned + bigint = decimal(20, 0), TiDB will add cast for this situation, so no need handle in tiflash.
 template <typename A, typename B>
-constexpr bool LeastGreatestSpecialCase
-    = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B)) && (std::is_signed_v<A> ^ std::is_signed_v<B>);
-
-template <typename A, typename B>
-using ResultOfLeast = std::conditional_t<
-    LeastGreatestSpecialCase<A, B>,
-    typename Construct<true, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
-
-template <typename A, typename B>
-using ResultOfGreatest = std::conditional_t<
-    LeastGreatestSpecialCase<A, B>,
-    typename Construct<false, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
+struct ResultOfBinaryLeastGreatest
+{
+    static_assert(is_arithmetic_v<A> && is_arithmetic_v<B>);
+    using Type = std::conditional_t<
+        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        std::conditional_t<
+            std::is_unsigned_v<A> && std::is_unsigned_v<B>,
+            UInt64,
+            Int64>>;
+};
 
 } // namespace NumberTraits
 
