@@ -68,8 +68,9 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
         {
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         }
-        else if (last_iter->second.isEntry())
+        else
         {
+            assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
             if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
@@ -94,6 +95,9 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
         toDebugString()));
 }
 
+// Create a new external version with version=`ver`.
+// If create success, then return a shared_ptr as a holder for page_id. The holder
+// will be release when this external version is totally removed.
 std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
@@ -104,6 +108,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
         create_ver = ver;
         delete_ver = PageVersionType(0);
         being_ref_count = 1;
+        // return the new created holder to caller to set the page_id
         external_holder = std::make_shared<PageId>(0);
         return external_holder;
     }
@@ -119,6 +124,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
                 create_ver = ver;
                 delete_ver = PageVersionType(0);
                 being_ref_count = 1;
+                // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<PageId>(0);
                 return external_holder;
             }
@@ -143,11 +149,13 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
         toDebugString()));
 }
 
+// Create a new delete version with version=`ver`.
 void VersionedPageEntries::createDelete(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
+        // ignore if the last item is already "delete"
         if (entries.empty() || !entries.rbegin()->second.isDelete())
         {
             entries.emplace(ver, EntryOrDelete::newDelete());
@@ -175,6 +183,8 @@ void VersionedPageEntries::createDelete(const PageVersionType & ver)
         toDebugString()));
 }
 
+// Create a new reference version with version=`ver` and `ori_page_id_`.
+// If create success, then return true, otherwise return false.
 bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id_)
 {
     auto page_lock = acquireLock();
@@ -242,7 +252,7 @@ void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
         create_ver = rec.version;
-        being_ref_count = rec.ori_page_id;
+        being_ref_count = rec.being_ref_count;
     }
     else if (rec.type == EditRecordType::VAR_ENTRY)
     {

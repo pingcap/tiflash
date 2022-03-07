@@ -451,32 +451,46 @@ try
         edit.ref(11, 10);
         edit.ref(12, 10);
         edit.del(10);
+        edit.ref(13, 9);
+        edit.ref(14, 9);
+        edit.del(9);
         dir->apply(std::move(edit));
     }
     auto s1 = dir->createSnapshot();
     EXPECT_ANY_THROW(dir->getNormalPageId(10, s1));
     EXPECT_EQ(10, dir->getNormalPageId(11, s1));
     EXPECT_EQ(10, dir->getNormalPageId(12, s1));
+    EXPECT_ANY_THROW(dir->getNormalPageId(9, s1));
+    EXPECT_EQ(9, dir->getNormalPageId(13, s1));
+    EXPECT_EQ(9, dir->getNormalPageId(14, s1));
 
     {
         PageEntriesEdit edit;
         edit.del(11);
+        edit.del(14);
         dir->apply(std::move(edit));
     }
     auto s2 = dir->createSnapshot();
     EXPECT_ANY_THROW(dir->getNormalPageId(10, s2));
     EXPECT_ANY_THROW(dir->getNormalPageId(11, s2));
     EXPECT_EQ(10, dir->getNormalPageId(12, s2));
+    EXPECT_ANY_THROW(dir->getNormalPageId(9, s2));
+    EXPECT_EQ(9, dir->getNormalPageId(13, s2));
+    EXPECT_ANY_THROW(dir->getNormalPageId(14, s2));
 
     {
         PageEntriesEdit edit;
         edit.del(12);
+        edit.del(13);
         dir->apply(std::move(edit));
     }
     auto s3 = dir->createSnapshot();
     EXPECT_ANY_THROW(dir->getNormalPageId(10, s3));
     EXPECT_ANY_THROW(dir->getNormalPageId(11, s3));
     EXPECT_ANY_THROW(dir->getNormalPageId(12, s3));
+    EXPECT_ANY_THROW(dir->getNormalPageId(9, s3));
+    EXPECT_ANY_THROW(dir->getNormalPageId(13, s3));
+    EXPECT_ANY_THROW(dir->getNormalPageId(14, s3));
 }
 CATCH
 
