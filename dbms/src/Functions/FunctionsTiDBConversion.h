@@ -1227,11 +1227,11 @@ struct TiDBConvertToDecimal
             block.getByPosition(result).column = std::move(col_to);
     }
 
-    template<typename ReturnType>
+    template <typename ReturnType>
     static ReturnType handleOverflowErrorForIntAndDecimal(const Context & context,
-            const CastInternalType & to_value,
-            const CastInternalType & max_value [[maybe_unused]],
-            const String & msg)
+                                                          const CastInternalType & to_value,
+                                                          const CastInternalType & max_value [[maybe_unused]],
+                                                          const String & msg)
     {
         if constexpr (!can_skip_check_overflow)
         {
