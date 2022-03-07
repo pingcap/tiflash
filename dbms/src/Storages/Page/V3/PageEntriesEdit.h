@@ -68,65 +68,6 @@ enum class EditRecordType
     VAR_DELETE,
 };
 
-struct VarEntry
-{
-    EditRecordType type;
-    PageEntryV3 entry;
-    PageId origin_page_id;
-    Int64 being_ref_count = 1;
-
-    static VarEntry newDelete()
-    {
-        return VarEntry{
-            .type = EditRecordType::VAR_DELETE,
-            .entry = {}, // meaningless
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1, // meaningless
-        };
-    }
-    static VarEntry newNormalEntry(const PageEntryV3 & entry)
-    {
-        return VarEntry{
-            .type = EditRecordType::VAR_ENTRY,
-            .entry = entry,
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = 1,
-        };
-    }
-    static VarEntry newRepalcingEntry(const VarEntry & ori_entry, const PageEntryV3 & entry)
-    {
-        return VarEntry{
-            .type = EditRecordType::VAR_ENTRY,
-            .entry = entry,
-            .origin_page_id = 0, // meaningless
-            .being_ref_count = ori_entry.being_ref_count,
-        };
-    }
-
-    static VarEntry fromRestored(EditRecordType type, PageEntryV3 entry, Int64 being_ref_count)
-    {
-        return VarEntry{
-            .type = type,
-            .entry = entry,
-            .being_ref_count = being_ref_count,
-        };
-    }
-
-    bool isDelete() const { return type == EditRecordType::VAR_DELETE; }
-    bool isEntry() const { return type == EditRecordType::VAR_ENTRY; }
-
-    String toDebugString() const
-    {
-        return fmt::format(
-            "{{type:{}, entry:{}, ori_page_id:{}, being_ref_count:{}}}",
-            static_cast<Int32>(type),
-            ::DB::PS::V3::toDebugString(entry),
-            origin_page_id,
-            being_ref_count);
-    }
-};
-
-
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
 {
@@ -188,16 +129,43 @@ public:
         records.insert(records.end(), rhs_records.begin(), rhs_records.end());
     }
 
-
-    void varEntry(PageId page_id, const PageVersionType & ver, const VarEntry & var)
+    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id)
     {
         EditRecord record{};
-        record.type = var.type;
-        record.page_id = page_id;
-        record.ori_page_id = var.origin_page_id;
+        record.type = EditRecordType::VAR_REF;
+        record.page_id = ref_id;
         record.version = ver;
-        record.entry = var.entry;
-        record.being_ref_count = var.being_ref_count;
+        record.ori_page_id = ori_page_id;
+        records.emplace_back(record);
+    }
+
+    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_REF;
+        record.page_id = page_id;
+        record.version = create_ver;
+        record.being_ref_count = being_ref_count;
+        records.emplace_back(record);
+    }
+
+    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_ENTRY;
+        record.page_id = page_id;
+        record.version = ver;
+        record.entry = entry;
+        record.being_ref_count = being_ref_count;
+        records.emplace_back(record);
+    }
+
+    void varDel(PageId page_id, const PageVersionType & delete_ver)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_DELETE;
+        record.page_id = page_id;
+        record.version = delete_ver;
         records.emplace_back(record);
     }
 
@@ -214,7 +182,7 @@ public:
         PageId ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
-        Int64 being_ref_count;
+        Int64 being_ref_count = 1;
     };
     using EditRecords = std::vector<EditRecord>;
 

@@ -55,10 +55,10 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
                 {
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
-                    version_list->fromRestored(r.version, r.type, r.entry, r.ori_page_id, r.being_ref_count);
+                    version_list->fromRestored(r);
                     break;
                 case EditRecordType::VAR_ENTRY:
-                    version_list->fromRestored(r.version, r.type, r.entry, r.ori_page_id, r.being_ref_count);
+                    version_list->fromRestored(r);
                     if (blob_stats)
                         blob_stats->restoreByEntry(r.entry);
                     break;

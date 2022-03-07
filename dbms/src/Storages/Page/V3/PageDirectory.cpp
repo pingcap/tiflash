@@ -66,7 +66,7 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
     if (type == EditRecordType::VAR_DELETE)
     {
         type = EditRecordType::VAR_ENTRY;
-        entries.emplace(ver, VarEntry::newNormalEntry(entry));
+        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         return;
     }
 
@@ -74,7 +74,7 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
     auto last_iter = entries.rbegin();
     if (last_iter->second.isDelete())
     {
-        entries.emplace(ver, VarEntry::newNormalEntry(entry));
+        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
     }
     else if (last_iter->second.isEntry())
     {
@@ -89,7 +89,7 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
                 last_iter->second.toDebugString()));
         }
         // inherit the `being_ref_count` of the last entry
-        entries.emplace(ver, VarEntry::newRepalcingEntry(last_iter->second, entry));
+        entries.emplace(ver, EntryOrDelete::newRepalcingEntry(last_iter->second, entry));
     }
 }
 
@@ -155,7 +155,7 @@ void VersionedPageEntries::createDelete(const PageVersionType & ver)
     {
         if (entries.empty() || !entries.rbegin()->second.isDelete())
         {
-            entries.emplace(ver, VarEntry::newDelete());
+            entries.emplace(ver, EntryOrDelete::newDelete());
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
@@ -219,27 +219,31 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
     throw Exception(fmt::format("try to create new ref version with invalid state"));
 }
 
-void VersionedPageEntries::fromRestored(const PageVersionType & ver, EditRecordType type_, const PageEntryV3 & entry, PageId ori_page_id_, Int64 being_ref_count_)
+void VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
-    if (type_ == EditRecordType::VAR_REF)
+    if (rec.type == EditRecordType::VAR_REF)
     {
         type = EditRecordType::VAR_REF;
         is_deleted = false;
-        create_ver = ver;
-        ori_page_id = ori_page_id_;
+        create_ver = rec.version;
+        ori_page_id = rec.ori_page_id;
     }
-    else if (type_ == EditRecordType::VAR_EXTERNAL)
+    else if (rec.type == EditRecordType::VAR_EXTERNAL)
     {
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
-        create_ver = ver;
-        being_ref_count = being_ref_count_;
+        create_ver = rec.version;
+        being_ref_count = rec.ori_page_id;
     }
-    else if (type_ == EditRecordType::VAR_ENTRY)
+    else if (rec.type == EditRecordType::VAR_ENTRY)
     {
         type = EditRecordType::VAR_ENTRY;
-        entries.emplace(ver, VarEntry::fromRestored(type, entry, being_ref_count_));
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
+    }
+    else
+    {
+        throw Exception(fmt::format("Calling VersionedPageEntries::fromRestored with unknown type: {}", rec.type));
     }
 }
 
@@ -515,10 +519,7 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
             return;
         if (!is_deleted || (is_deleted && seq < delete_ver.sequence))
         {
-            VarEntry var;
-            var.type = type;
-            var.origin_page_id = ori_page_id;
-            edit.varEntry(page_id, create_ver, var);
+            edit.varRef(page_id, create_ver, ori_page_id);
         }
         return;
     }
@@ -526,12 +527,10 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
     {
         if (create_ver.sequence > seq)
             return;
-        if (!is_deleted || (is_deleted && seq < delete_ver.sequence))
+        edit.varExternal(page_id, create_ver, being_ref_count);
+        if (is_deleted && delete_ver.sequence < seq)
         {
-            VarEntry var;
-            var.type = type;
-            var.being_ref_count = being_ref_count;
-            edit.varEntry(page_id, create_ver, var);
+            edit.varDel(page_id, delete_ver);
         }
         return;
     }
@@ -541,7 +540,8 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
         auto last_iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
         if (last_iter->second.isEntry())
         {
-            edit.varEntry(page_id, last_iter->first, last_iter->second);
+            const auto & entry = last_iter->second;
+            edit.varEntry(page_id, /*ver*/ last_iter->first, entry.entry, entry.being_ref_count);
             return;
         }
         else if (last_iter->second.isDelete())
@@ -557,8 +557,9 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, Pa
                 if (prev_iter->second.being_ref_count == 1)
                     return;
                 // It is being ref by another id, should persist the item and delete
-                edit.varEntry(page_id, prev_iter->first, prev_iter->second);
-                edit.varEntry(page_id, last_iter->first, last_iter->second);
+                const auto & entry = prev_iter->second;
+                edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
+                edit.varDel(page_id, last_iter->first);
             }
         }
         return;

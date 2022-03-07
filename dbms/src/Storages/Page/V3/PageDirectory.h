@@ -61,9 +61,61 @@ private:
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
+struct EntryOrDelete
+{
+    bool is_delete;
+    Int64 being_ref_count = 1;
+    PageEntryV3 entry;
+
+    static EntryOrDelete newDelete()
+    {
+        return EntryOrDelete{
+            .is_delete = true,
+            .being_ref_count = 1, // meaningless
+            .entry = {}, // meaningless
+        };
+    }
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = 1,
+            .entry = entry,
+        };
+    }
+    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = ori_entry.being_ref_count,
+            .entry = entry,
+        };
+    }
+
+    static EntryOrDelete newFromRestored(PageEntryV3 entry, Int64 being_ref_count)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = being_ref_count,
+            .entry = entry,
+        };
+    }
+
+    bool isDelete() const { return is_delete; }
+    bool isEntry() const { return !is_delete; }
+
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
+            is_delete,
+            ::DB::PS::V3::toDebugString(entry),
+            being_ref_count);
+    }
+};
+
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
-
 using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
 class VersionedPageEntries
 {
@@ -90,7 +142,7 @@ public:
 
     void createDelete(const PageVersionType & ver);
 
-    void fromRestored(const PageVersionType & ver, EditRecordType type, const PageEntryV3 & entry, PageId ori_page_id, Int64 being_ref_count);
+    void fromRestored(const PageEntriesEdit::EditRecord & rec);
 
     enum ResolveResult
     {
@@ -176,7 +228,7 @@ private:
     // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
     bool is_deleted = false;
     // Entries sorted by version, valid when type == VAR_ENTRY
-    std::multimap<PageVersionType, VarEntry> entries;
+    std::multimap<PageVersionType, EntryOrDelete> entries;
     // The created version, valid when type == VAR_REF/VAR_EXTERNAL
     PageVersionType create_ver;
     // The deleted version, valid when type == VAR_REF/VAR_EXTERNAL && is_deleted = true
