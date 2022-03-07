@@ -49,7 +49,7 @@ public:
     {
         auto iter = field_offsets.find(FieldOffset(index));
         if (unlikely(iter == field_offsets.end()))
-            throw Exception("Try to getFieldData of Page" + DB::toString(page_id) + " with invalid field index: " + DB::toString(index),
+            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
                             ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;
@@ -112,9 +112,9 @@ public:
     std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
-            throw Exception("Try to getFieldData with invalid index: " + DB::toString(index)
-                                + ", fields size: " + DB::toString(field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
             return {field_offsets.back().first, size};
         else
