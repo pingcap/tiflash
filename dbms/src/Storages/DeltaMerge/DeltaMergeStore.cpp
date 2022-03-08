@@ -266,7 +266,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     ExternalPageCallbacks callbacks;
     // V2 callbacks for cleaning DTFiles
-    callbacks.v2_scanner = [this]() {
+    callbacks.scanner = [this]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
         auto delegate = path_pool.getStableDiskDelegator();
         DMFile::ListOptions options;
@@ -281,7 +281,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
         return path_and_ids_vec;
     };
-    callbacks.v2_remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+    callbacks.remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
         auto delegate = path_pool.getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
@@ -302,8 +302,6 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    // TODO: callbacks for cleaning DTFiles
-    callbacks.v3_remover = nullptr;
     storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
