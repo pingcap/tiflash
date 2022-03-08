@@ -33,6 +33,11 @@ public:
     // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
+    EstablishCallData(EstablishCallData * p)
+        : responder(nullptr)
+        , parent(p)
+    {}
+
     bool write(const mpp::MPPDataPacket & packet) override;
 
     void tryFlushOne() override;
@@ -42,6 +47,8 @@ public:
     void writeErr(const mpp::MPPDataPacket & packet);
 
     void proceed();
+
+    void cancel();
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
 
@@ -71,9 +78,13 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
+    EstablishCallData * parent = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
+
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
     bool ready = false;
+
+    bool canceled = false;
 
     // Let's implement a state machine with the following states.
     enum CallStatus

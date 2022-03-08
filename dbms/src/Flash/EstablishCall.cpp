@@ -14,6 +14,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
+    ctx.AsyncNotifyWhenDone(new EstablishCallData(this));
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
@@ -24,6 +25,8 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
 
 void EstablishCallData::tryFlushOne()
 {
+    if (canceled)
+        return;
     // check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
@@ -57,6 +60,8 @@ void EstablishCallData::initRpc()
 
 bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
+    if (canceled)
+        return false;
     responder.Write(packet, this);
     return true;
 }
@@ -72,6 +77,8 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
+    if (canceled)
+        return;
     state = FINISH;
     if (stopwatch)
     {
@@ -86,8 +93,25 @@ void EstablishCallData::notifyReady()
     ready = true;
 }
 
+void EstablishCallData::cancel()
+{
+    canceled = true;
+    if (mpp_tunnel)
+        mpp_tunnel->sendJob(true); //trigger mpp tunnel finish work
+}
+
 void EstablishCallData::proceed()
 {
+    if (parent) // handle cancel case, which is triggered by AsyncNotifyWhenDone. parent is the canceled EstablishCallData. "this" is the monitor.
+    {
+        if (parent->ctx.IsCancelled())
+        {
+            parent->cancel();
+            delete parent;
+        }
+        delete this;
+        return;
+    }
     if (state == NEW_REQUEST)
     {
         state = PROCESSING;
