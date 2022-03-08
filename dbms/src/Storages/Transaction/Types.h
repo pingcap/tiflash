@@ -23,9 +23,9 @@ enum : ColumnID
 {
     // Prevent conflict with TiDB.
     TiDBPkColumnID = -1,
+    ExtraTblColumnID = -3,
     VersionColumnID = -1024,
     DelMarkColumnID = -1025,
-    ExtraTblColumnID = -1026,
     InvalidColumnID = -10000,
 };
 

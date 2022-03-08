@@ -493,11 +493,25 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
         auto const & ci = table_scan.columns(i);
         ColumnID cid = ci.column_id();
 
-        // Column ID -1 return the handle column
-        String name = cid == -1 ? handle_column_name_ : storage->getTableInfo().getColumnName(cid);
-        auto pair = storage->getColumns().getPhysical(name);
+        // Column ID -1 return the handle column, -3 return the extra physical table id column
+        String name;
+        if (cid == TiDBPkColumnID)
+            name = handle_column_name_;
+        else if (cid == ExtraTblColumnID)
+            name = MutableSupport::extra_phys_tblid_column_name;
+        else
+            name = storage->getTableInfo().getColumnName(cid);
+        if (cid == ExtraTblColumnID)
+        {
+            NameAndTypePair extra_tbl_column_pair = {name, MutableSupport::extra_phys_tblid_column_type};
+            source_columns_.emplace_back(std::move(extra_tbl_column_pair));
+        }
+        else
+        {
+            auto pair = storage->getColumns().getPhysical(name);
+            source_columns_.emplace_back(std::move(pair));
+        }
         required_columns_.emplace_back(std::move(name));
-        source_columns_.emplace_back(std::move(pair));
         if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
         else if (cid != -1 && ci.tp() == TiDB::TypeTime)
