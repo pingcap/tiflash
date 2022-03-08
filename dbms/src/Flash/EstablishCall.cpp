@@ -99,7 +99,7 @@ void EstablishCallData::cancel()
 {
     canceled = true;
     if (mpp_tunnel)
-        mpp_tunnel->sendJob(true); //trigger mpp tunnel finish work
+        mpp_tunnel->consumerFinish("grpc canceled.", true); //trigger mpp tunnel finish work
 }
 
 void EstablishCallData::proceed()
