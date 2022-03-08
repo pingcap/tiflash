@@ -339,7 +339,7 @@ struct Settings
     M(SettingUInt64, elastic_threadpool_shrink_period_ms, 300000, "The shrink period(ms) of elastic thread pool.")                                                                                                                      \
     M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")                                                                                                                                    \
     M(SettingBool, enable_async_server, true, "Enable async rpc server.")                                                                                                                                                               \
-    M(SettingUInt64, async_pollers_per_cq, 4, "grpc async pollers per cqs")                                                                                                                                                             \
+    M(SettingUInt64, async_pollers_per_cq, 10, "grpc async pollers per cqs")                                                                                                                                                             \
     M(SettingUInt64, async_cqs, 20, "grpc async cqs")                                                                                                                                                                                   \
     M(SettingUInt64, preallocated_request_count_per_poller, 200, "grpc preallocated_request_count_per_poller")
 // clang-format on
