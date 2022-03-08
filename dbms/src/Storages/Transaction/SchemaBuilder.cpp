@@ -419,12 +419,15 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     if (diff.type == SchemaActionType::CreateTables) {
         for (auto && opt : diff.affected_opts) {
-            AffectedOption aff;
-            aff.schema_id = opt.schema_id;
-            aff.table_id = opt.table_id;
-            aff.old_schema_id = opt.old_schema_id;
-            aff.old_table_id = opt.old_table_id;
-            applyDiff(diff);
+            SchemaDiff new_diff;
+            new_diff.type = SchemaActionType::CreateTable;
+            new_diff.version = diff.version;
+            new_diff.schema_id = opt.schema_id;
+            new_diff.table_id = opt.table_id;
+            new_diff.old_schema_id = opt.old_schema_id;
+            new_diff.old_table_id = opt.old_table_id;
+            LOG_FMT_WARNING(log, "find CreateTables of version {} schema {} table {}", new_diff.version, opt.schema_id, opt.table_id);
+            applyDiff(new_diff);
         }
         return;
     }
