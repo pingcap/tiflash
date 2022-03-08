@@ -69,11 +69,6 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
-    static String genFuncString(
-        const String & func_name,
-        const Names & argument_names,
-        const TiDB::TiDBCollators & collators);
-
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
