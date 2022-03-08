@@ -180,6 +180,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
+            return false;
         }
 
         /// Update delta tree
