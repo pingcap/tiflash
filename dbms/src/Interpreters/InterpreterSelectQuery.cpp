@@ -208,21 +208,21 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
-        if (!storage_)
+        auto storage_tmp = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
+        if (!storage_tmp)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
-        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_);
+        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
         if (!managed_storage
             || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DT))
         {
-            throw Exception("Specifying schema_version for storage: " + storage_->getName()
+            throw Exception("Specifying schema_version for storage: " + storage_tmp->getName()
                                 + ", table: " + qualified_name + " is not allowed",
                             ErrorCodes::LOGICAL_ERROR);
         }
 
         /// Lock storage.
-        auto lock = storage_->lockForShare(context.getCurrentQueryId());
+        auto lock = storage_tmp->lockForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -238,20 +238,20 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
         // From now on the schema was not synced.
         // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
         // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
         // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
         if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
         // From now on we have global < query.
         // Return false for outer to sync and retry.
         return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
     };
 
     /// Try get storage and lock once.
-    StoragePtr storage_;
+    StoragePtr storage_tmp;
     TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
@@ -260,11 +260,11 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     };
     bool ok;
     {
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(false);
+        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(false);
         if (ok)
         {
             log_schema_version("OK, no syncing required.");
-            storage = storage_;
+            storage = storage_tmp;
             table_lock = lock;
             return;
         }
@@ -278,11 +278,11 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema sync cost " << schema_sync_cost << "ms.");
 
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
+        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)
         {
             log_schema_version("OK after syncing.");
-            storage = storage_;
+            storage = storage_tmp;
             table_lock = lock;
             return;
         }
@@ -683,7 +683,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         subquery_settings.max_result_rows = 0;
         subquery_settings.max_result_bytes = 0;
         /// The calculation of extremes does not make sense and is not necessary (if you do it, then the extremes of the subquery can be taken for whole query).
-        subquery_settings.extremes = 0;
+        subquery_settings.extremes = false;
         subquery_context.setSettings(subquery_settings);
 
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
@@ -1243,7 +1243,7 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
 }
 
 
-void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline)
+void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) const
 {
     if (!query.limit_by_value || !query.limit_by_expression_list)
         return;
@@ -1272,7 +1272,7 @@ bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
     auto query_table = query.table();
     if (query_table)
     {
-        auto ast_union = typeid_cast<const ASTSelectWithUnionQuery *>(query_table.get());
+        const auto * ast_union = typeid_cast<const ASTSelectWithUnionQuery *>(query_table.get());
         if (ast_union)
         {
             for (const auto & elem : ast_union->list_of_selects->children)
