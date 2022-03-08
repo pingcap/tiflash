@@ -17,6 +17,8 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include "Encryption/FileProvider.h"
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
@@ -61,51 +63,101 @@ private:
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
-class VersionedPageEntries;
-using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
-
 struct EntryOrDelete
 {
     bool is_delete;
+    Int64 being_ref_count = 1;
     PageEntryV3 entry;
 
-    explicit EntryOrDelete(bool del)
-        : is_delete(del)
+    static EntryOrDelete newDelete()
     {
-        assert(del == true);
+        return EntryOrDelete{
+            .is_delete = true,
+            .being_ref_count = 1, // meaningless
+            .entry = {}, // meaningless
+        };
     }
-    explicit EntryOrDelete(const PageEntryV3 & entry_)
-        : is_delete(false)
-        , entry(entry_)
-    {}
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = 1,
+            .entry = entry,
+        };
+    }
+    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = ori_entry.being_ref_count,
+            .entry = entry,
+        };
+    }
+
+    static EntryOrDelete newFromRestored(PageEntryV3 entry, Int64 being_ref_count)
+    {
+        return EntryOrDelete{
+            .is_delete = false,
+            .being_ref_count = being_ref_count,
+            .entry = entry,
+        };
+    }
+
+    bool isDelete() const { return is_delete; }
+    bool isEntry() const { return !is_delete; }
+
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
+            is_delete,
+            ::DB::PS::V3::toDebugString(entry),
+            being_ref_count);
+    }
 };
-using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
+
+class VersionedPageEntries;
+using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
+using PageLock = std::lock_guard<std::mutex>;
 class VersionedPageEntries
 {
 public:
+    VersionedPageEntries()
+        : type(EditRecordType::VAR_DELETE)
+        , is_deleted(false)
+        , create_ver(0)
+        , delete_ver(0)
+        , ori_page_id(0)
+        , being_ref_count(1)
+    {}
+
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::make_unique<std::lock_guard<std::mutex>>(m);
+        return std::lock_guard<std::mutex>(m);
     }
 
-    void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
-    {
-        entries.emplace(PageVersionType(seq), entry);
-    }
+    void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
 
-    void createNewVersion(UInt64 seq, UInt64 epoch, const PageEntryV3 & entry)
-    {
-        entries.emplace(PageVersionType(seq, epoch), entry);
-    }
+    bool createNewRef(const PageVersionType & ver, PageIdV3Internal ori_page_id);
 
-    void createDelete(UInt64 seq)
+    std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersionType & ver);
+
+    void createDelete(const PageVersionType & ver);
+
+    std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
+
+    enum ResolveResult
     {
-        entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
-    }
+        RESOLVE_FAIL,
+        RESOLVE_TO_REF,
+        RESOLVE_TO_NORMAL,
+    };
+    std::tuple<ResolveResult, PageIdV3Internal, PageVersionType>
+    resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
+
+    Int64 incrRefCount(const PageVersionType & ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
-
-    std::optional<PageEntryV3> getEntryNotSafe(UInt64 seq) const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
@@ -151,7 +203,20 @@ public:
      *    lowest_seq : 1
      *    Then no entry should be delete.
      */
-    std::pair<PageEntriesV3, bool> deleteAndGC(UInt64 lowest_seq);
+    bool cleanOutdatedEntries(
+        UInt64 lowest_seq,
+        PageIdV3Internal page_id,
+        std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+        PageEntriesV3 & entries_removed,
+        const PageLock & page_lock);
+    bool derefAndClean(
+        UInt64 lowest_seq,
+        PageIdV3Internal page_id,
+        const PageVersionType & deref_ver,
+        Int64 deref_count,
+        PageEntriesV3 & entries_removed);
+
+    void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
     size_t size() const
     {
@@ -159,34 +224,41 @@ public:
         return entries.size();
     }
 
+    String toDebugString() const
+    {
+        return fmt::format(
+            "{{"
+            "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
+            "ori_page_id: {}.{}, being_ref_count: {}, num_entries: {}"
+            "}}",
+            type,
+            create_ver,
+            is_deleted,
+            delete_ver,
+            ori_page_id.high,
+            ori_page_id.low,
+            being_ref_count,
+            entries.size());
+    }
+
 private:
     mutable std::mutex m;
-    // Entries sorted by version
-    std::map<PageVersionType, EntryOrDelete> entries;
-};
 
-// `CollapsingPageDirectory` only store the latest version
-// of entry for the same page id. It is a util class for
-// restoring from persisted logs and compacting logs.
-// There is no concurrent security guarantee for this class.
-class CollapsingPageDirectory
-{
-public:
-    CollapsingPageDirectory();
-
-    void apply(PageEntriesEdit && edit);
-
-    void dumpTo(std::unique_ptr<LogWriter> & log_writer);
-
-    using CollapsingMapType = std::unordered_map<PageIdV3Internal, std::pair<PageVersionType, PageEntryV3>>;
-    CollapsingMapType table_directory;
-
-    PageIdV3Internal max_applied_page_id{0};
-    PageVersionType max_applied_ver;
-
-    // No copying
-    CollapsingPageDirectory(const CollapsingPageDirectory &) = delete;
-    CollapsingPageDirectory & operator=(const CollapsingPageDirectory &) = delete;
+    EditRecordType type;
+    // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
+    bool is_deleted;
+    // Entries sorted by version, valid when type == VAR_ENTRY
+    std::multimap<PageVersionType, EntryOrDelete> entries;
+    // The created version, valid when type == VAR_REF/VAR_EXTERNAL
+    PageVersionType create_ver;
+    // The deleted version, valid when type == VAR_REF/VAR_EXTERNAL && is_deleted = true
+    PageVersionType delete_ver;
+    // Original page id, valid when type == VAR_REF
+    PageIdV3Internal ori_page_id;
+    // Being ref counter, valid when type == VAR_EXTERNAL
+    Int64 being_ref_count;
+    // A shared ptr to a holder, valid when type == VAR_EXTERNAL
+    std::shared_ptr<PageIdV3Internal> external_holder;
 };
 
 // `PageDirectory` store multi-versions entries for the same
@@ -196,25 +268,36 @@ public:
 // User should call `gc` periodic to remove outdated version
 // of entries in order to keep the memory consumption as well
 // as the restoring time in a reasonable level.
+class PageDirectory;
+using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    PageDirectory();
-    PageDirectory(UInt64 init_seq, WALStorePtr && wal);
-
-    static PageDirectory create(const CollapsingPageDirectory & collapsing_directory, WALStorePtr && wal);
+    explicit PageDirectory(WALStorePtr && wal);
 
     PageDirectorySnapshotPtr createSnapshot() const;
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_id, toConcreteSnapshot(snap));
+    }
 
-    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const;
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_ids, toConcreteSnapshot(snap));
+    }
 
-    PageIdV3Internal getMaxIdWithinUpperBound(PageIdV3Internal upper_bound) const;
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return getNormalPageId(page_id, toConcreteSnapshot(snap));
+    }
+
+    PageId getMaxId(NamespaceId ns_id) const;
 
     std::set<PageIdV3Internal> getAllPageIds();
 
@@ -223,9 +306,15 @@ public:
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
-    std::set<PageIdV3Internal> gcApply(PageEntriesEdit && migrated_edit, bool need_scan_page_ids, const WriteLimiterPtr & write_limiter = nullptr);
+    void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    std::vector<PageEntriesV3> gc(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr);
+
+    PageEntriesV3 gcInMemEntries();
+
+    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
+
+    PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
     size_t numPages() const
     {
@@ -236,37 +325,40 @@ public:
     // No copying
     PageDirectory(const PageDirectory &) = delete;
     PageDirectory & operator=(const PageDirectory &) = delete;
-    // Only moving
-    PageDirectory(PageDirectory && rhs) noexcept
+    // No moving
+    PageDirectory(PageDirectory && rhs) = delete;
+    PageDirectory & operator=(PageDirectory && rhs) = delete;
+
+    friend class PageDirectoryFactory;
+
+private:
+    // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
+    // "No iterators or references are invalidated"
+    // https://en.cppreference.com/w/cpp/container/map/insert
+    using MVCCMapType = std::map<PageIdV3Internal, VersionedPageEntriesPtr>;
+
+    static void applyRefEditRecord(
+        MVCCMapType & mvcc_table_directory,
+        const VersionedPageEntriesPtr & version_list,
+        const PageEntriesEdit::EditRecord & rec,
+        const PageVersionType & version);
+
+    static inline PageDirectorySnapshotPtr
+    toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
     {
-        *this = std::move(rhs);
-    }
-    PageDirectory & operator=(PageDirectory && rhs) noexcept
-    {
-        if (this != &rhs)
-        {
-            // Note: Not making it thread safe for moving, don't
-            // care about `table_rw_mutex` and `snapshots_mutex`
-            sequence.store(rhs.sequence.load());
-            mvcc_table_directory = std::move(rhs.mvcc_table_directory);
-            snapshots = std::move(rhs.snapshots);
-            wal = std::move(rhs.wal);
-            log = std::move(rhs.log);
-        }
-        return *this;
+        return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
 
 private:
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
-    // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
-    // "No iterators or references are invalidated"
-    // https://en.cppreference.com/w/cpp/container/map/insert
-    using MVCCMapType = std::map<PageIdV3Internal, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
 
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
+
+    mutable std::mutex external_ids_mutex;
+    mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
 
     WALStorePtr wal;
 

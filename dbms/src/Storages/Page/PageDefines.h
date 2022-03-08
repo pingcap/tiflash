@@ -2,6 +2,7 @@
 
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <fmt/format.h>
 
 #include <chrono>
 #include <unordered_set>
@@ -87,3 +88,19 @@ inline size_t alignPage(size_t n)
 }
 
 } // namespace DB
+
+// https://github.com/fmtlib/fmt/blob/master/doc/api.rst#formatting-user-defined-types
+template <>
+struct fmt::formatter<DB::PageIdV3Internal>
+{
+    constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}.{}", value.high, value.low);
+    }
+};

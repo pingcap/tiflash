@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -19,25 +20,19 @@ class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     BlobStoreStatsTest()
-        : logger(&Poco::Logger::get("BlobStoreStatsTest"))
+        : logger(getLogWithPrefix(nullptr, "BlobStoreStatsTest"))
     {}
 
 protected:
     BlobStore::Config config;
-    NamespaceId ns_id = 100;
-    Poco::Logger * logger;
+    LogWithPrefixPtr logger;
 };
 
 TEST_F(BlobStoreStatsTest, RestoreEmpty)
 {
     BlobStats stats(logger, config);
 
-    CollapsingPageDirectory dir;
-    {
-        PageEntriesEdit edit;
-        dir.apply(std::move(edit));
-    }
-    stats.restore(dir);
+    stats.restore();
 
     auto stats_copy = stats.getStats();
     ASSERT_TRUE(stats_copy.empty());
@@ -56,48 +51,30 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
-    CollapsingPageDirectory dir;
     {
-        PageEntriesEdit edit;
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 1),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id1,
-                .size = 128,
-                .tag = 0,
-                .offset = 1024,
-                .checksum = 0x4567,
-            }});
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 2),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id1,
-                .size = 512,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            }});
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 3),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id2,
-                .size = 512,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            }});
-        dir.apply(std::move(edit));
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 128,
+            .tag = 0,
+            .offset = 1024,
+            .checksum = 0x4567,
+        });
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 512,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id2,
+            .size = 512,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        stats.restore();
     }
-    stats.restore(dir);
 
     auto stats_copy = stats.getStats();
     ASSERT_EQ(stats_copy.size(), 2);
@@ -293,7 +270,6 @@ public:
 
 protected:
     BlobStore::Config config;
-    NamespaceId ns_id = 100;
     String path{};
 };
 
@@ -306,48 +282,30 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
-    CollapsingPageDirectory dir;
     {
-        PageEntriesEdit edit;
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 1),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id1,
-                .size = 128,
-                .tag = 0,
-                .offset = 1024,
-                .checksum = 0x4567,
-            }});
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 2),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id1,
-                .size = 512,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            }});
-        edit.appendRecord(PageEntriesEdit::EditRecord{
-            .type = WriteBatch::WriteType::PUT,
-            .page_id = combine(ns_id, 3),
-            .ori_page_id = combine(ns_id, 0),
-            .version = PageVersionType(678),
-            .entry = PageEntryV3{
-                .file_id = file_id2,
-                .size = 512,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            }});
-        dir.apply(std::move(edit));
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 128,
+            .tag = 0,
+            .offset = 1024,
+            .checksum = 0x4567,
+        });
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 512,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id2,
+            .size = 512,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        blob_store.blob_stats.restore();
     }
-    blob_store.restore(dir);
 
     auto blob_need_gc = blob_store.getGCStats();
     ASSERT_EQ(blob_need_gc.size(), 1);
@@ -366,7 +324,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     auto blob_store = BlobStore(file_provider, path, config);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
 
     for (size_t i = 0; i < buff_nums; ++i)
     {
@@ -388,7 +346,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     size_t index = 0;
     for (const auto & record : edit.getRecords())
     {
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -458,7 +416,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     auto blob_store = BlobStore(file_provider, path, config);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
 
     for (size_t i = 0; i < buff_nums; ++i)
     {
@@ -480,7 +438,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     size_t index = 0;
     for (const auto & record : edit.getRecords())
     {
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.entry.offset, index * buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -515,7 +473,7 @@ try
 
     PageId page_id = 50;
     const size_t buff_size = 1024;
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
     {
         char c_buff1[buff_size];
         char c_buff2[buff_size];
@@ -538,17 +496,15 @@ try
         auto records = edit.getRecords();
         auto record = records[0];
 
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.entry.offset, buff_size);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -567,21 +523,17 @@ try
         auto records = edit.getRecords();
         auto record = records[0];
 
-        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.type, EditRecordType::REF);
         ASSERT_EQ(record.page_id.low, page_id + 1);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.ori_page_id.low, page_id);
-        ASSERT_EQ(record.ori_page_id.high, ns_id);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id.low, page_id + 1);
-        ASSERT_EQ(record.page_id.high, ns_id);
 
         record = records[2];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
     }
 
     wb.clear();
@@ -602,24 +554,20 @@ try
         auto records = edit.getRecords();
 
         auto record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.entry.offset, buff_size * 2);
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 1);
 
         record = records[1];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.type, EditRecordType::REF);
         ASSERT_EQ(record.page_id.low, page_id + 1);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.ori_page_id.low, page_id);
-        ASSERT_EQ(record.ori_page_id.high, ns_id);
 
         record = records[2];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
     }
 }
 CATCH
@@ -633,7 +581,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         config.file_limit_size = buff_size - 1;
         auto blob_store = BlobStore(file_provider, path, config);
 
-        WriteBatch wb{ns_id};
+        WriteBatch wb;
         char c_buff[buff_size];
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
         wb.putPage(50, /*tag*/ 0, buff, buff_size);
@@ -657,7 +605,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     {
         auto blob_store = BlobStore(file_provider, path, config);
 
-        WriteBatch wb{ns_id};
+        WriteBatch wb;
         char c_buff1[buf_size];
         char c_buff2[buf_size];
 
@@ -671,9 +619,8 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         auto records = edit.getRecords();
         auto record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id.low, 50);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
         ASSERT_EQ(record.entry.file_id, 1);
@@ -685,9 +632,8 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
         records = edit.getRecords();
         record = records[0];
-        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.type, EditRecordType::PUT);
         ASSERT_EQ(record.page_id.low, 51);
-        ASSERT_EQ(record.page_id.high, ns_id);
         ASSERT_EQ(record.entry.offset, 0);
         ASSERT_EQ(record.entry.size, buf_size);
         ASSERT_EQ(record.entry.file_id, 2);
@@ -704,7 +650,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
     char c_buff[buff_size * buff_nums];
     {
         for (size_t i = 0; i < buff_nums; ++i)
@@ -787,7 +733,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     auto blob_store = BlobStore(file_provider, path, config);
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
     char c_buff[buff_size * buff_nums];
     {
         for (size_t i = 0; i < buff_nums; ++i)
@@ -847,7 +793,7 @@ TEST_F(BlobStoreTest, GC)
     auto blob_store = BlobStore(file_provider, path, config);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
 
     for (size_t i = 0; i < buff_nums; ++i)
     {
@@ -867,7 +813,7 @@ TEST_F(BlobStoreTest, GC)
     PageIdAndVersionedEntries versioned_pageid_entries;
     for (const auto & record : edit.getRecords())
     {
-        versioned_pageid_entries.emplace_back(combine(ns_id, page_id), 1, record.entry);
+        versioned_pageid_entries.emplace_back(combine(TEST_NAMESPACE_ID, page_id), 1, record.entry);
     }
     std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
     gc_context[1] = versioned_pageid_entries;
@@ -884,7 +830,6 @@ TEST_F(BlobStoreTest, GC)
     for (const auto & record : gc_edit.getRecords())
     {
         ASSERT_EQ(record.page_id.low, page_id);
-        ASSERT_EQ(record.page_id.high, ns_id);
         auto it_entry = std::get<2>(*it);
         ASSERT_EQ(record.entry.file_id, 2);
         ASSERT_EQ(record.entry.checksum, it_entry.checksum);
@@ -915,7 +860,7 @@ try
     auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb{ns_id};
+    WriteBatch wb;
 
     std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
 
@@ -956,8 +901,8 @@ TEST_F(BlobStoreTest, ReadByFieldReadInfos)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-    PageIdV3Internal fixed_page_id = combine(ns_id, 50);
-    PageIdV3Internal page_id = fixed_page_id;
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
     size_t buff_nums = 20;
     size_t buff_size = 20;
 
@@ -973,26 +918,26 @@ try
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = static_cast<char>(combine(ns_id, page_id.low + j));
+            c_buff[j + i * buff_size] = static_cast<char>(combine(TEST_NAMESPACE_ID, page_id + j));
         }
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
-        wb.putPage(page_id.low, /* tag */ 0, buff, buff_size, field_sizes);
+        wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
         PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        read_infos.emplace_back(BlobStore::FieldReadInfo(page_id, records[0].entry, {0, 1, 2, 3, 4}));
+        read_infos.emplace_back(BlobStore::FieldReadInfo(combine(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
 
-        page_id.low++;
+        page_id++;
         wb.clear();
     }
 
     auto page_map = blob_store.read(read_infos);
     for (size_t i = 0; i < buff_nums; ++i)
     {
-        PageId reading_id = fixed_page_id.low + i;
+        PageId reading_id = fixed_page_id + i;
         Page page = page_map[reading_id];
         ASSERT_EQ(page.fieldSize(), 5);
     }

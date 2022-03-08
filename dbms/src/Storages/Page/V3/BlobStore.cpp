@@ -1,5 +1,6 @@
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -40,15 +41,10 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     : file_provider(file_provider_)
     , path(path_)
     , config(config_)
-    , log(&Poco::Logger::get("BlobStore"))
+    , log(getLogWithPrefix(nullptr, "BlobStore"))
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {
-}
-
-void BlobStore::restore(const CollapsingPageDirectory & entries)
-{
-    blob_stats.restore(entries);
 }
 
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -84,14 +80,13 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 break;
             }
             case WriteBatch::WriteType::PUT_EXTERNAL:
-            { // Only putExternal won't have data.
-                PageEntryV3 entry;
-                entry.tag = write.tag;
-
-                edit.put(combine(ns_id, write.page_id), entry);
+            {
+                // putExternal won't have data.
+                edit.putExternal(combine(ns_id, write.page_id));
                 break;
             }
-            default:
+            case WriteBatch::WriteType::PUT:
+            case WriteBatch::WriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
@@ -160,7 +155,10 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.ref(combine(ns_id, write.page_id), combine(ns_id, write.ori_page_id));
             break;
         }
-        default:
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            edit.putExternal(combine(ns_id, write.page_id));
+            break;
+        case WriteBatch::WriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
     }
@@ -445,9 +443,8 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 throw Exception(
-                    fmt::format("Reading with entries meet checksum not match [page_id={}.{}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                                page_id_v3.high,
-                                page_id_v3.low,
+                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                                page_id_v3,
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
@@ -493,9 +490,8 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         if (unlikely(entry.size != 0 && checksum != entry.checksum))
         {
             throw Exception(
-                fmt::format("Reading with entries meet checksum not match [page_id={}.{}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                            page_id_v3.high,
-                            page_id_v3.low,
+                fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                            page_id_v3,
                             entry.checksum,
                             checksum,
                             toDebugString(entry),
@@ -734,23 +730,20 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
-    : log(log_)
+BlobStore::BlobStats::BlobStats(LogWithPrefixPtr log_, BlobStore::Config config_)
+    : log(std::move(log_))
     , config(config_)
 {
 }
 
-void BlobStore::BlobStats::restore(const CollapsingPageDirectory & entries)
+void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
-    for (const auto & [page_id, versioned_entry] : entries.table_directory)
-    {
-        (void)page_id;
-        const auto & [ver, entry] = versioned_entry;
-        (void)ver;
-        auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
-        stat->restoreSpaceMap(entry.offset, entry.size);
-    }
+    auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
+    stat->restoreSpaceMap(entry.offset, entry.size);
+}
 
+void BlobStore::BlobStats::restore()
+{
     BlobFileId max_restored_file_id = 0;
     std::set<BlobFileId> existing_file_ids;
     for (const auto & stat : stats_map)

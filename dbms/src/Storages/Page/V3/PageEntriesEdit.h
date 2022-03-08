@@ -4,6 +4,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/types.h>
 #include <fmt/format.h>
 
 namespace DB::PS::V3
@@ -41,10 +42,31 @@ struct PageVersionType
     {
         return (sequence == rhs.sequence) && (epoch == rhs.epoch);
     }
+
+    bool operator<=(const PageVersionType & rhs) const
+    {
+        if (sequence == rhs.sequence)
+            return epoch <= rhs.epoch;
+        return sequence <= rhs.sequence;
+    }
 };
 using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
+enum class EditRecordType
+{
+    PUT,
+    PUT_EXTERNAL,
+    REF,
+    DEL,
+    //
+    UPSERT,
+    //
+    VAR_ENTRY,
+    VAR_REF,
+    VAR_EXTERNAL,
+    VAR_DELETE,
+};
 
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
@@ -60,16 +82,25 @@ public:
     void put(PageIdV3Internal page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::PUT;
+        record.type = EditRecordType::PUT;
         record.page_id = page_id;
         record.entry = entry;
+        records.emplace_back(record);
+    }
+
+
+    void putExternal(PageIdV3Internal page_id)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::PUT_EXTERNAL;
+        record.page_id = page_id;
         records.emplace_back(record);
     }
 
     void upsertPage(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::UPSERT;
+        record.type = EditRecordType::UPSERT;
         record.page_id = page_id;
         record.version = ver;
         record.entry = entry;
@@ -79,7 +110,7 @@ public:
     void del(PageIdV3Internal page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::DEL;
+        record.type = EditRecordType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
@@ -87,16 +118,50 @@ public:
     void ref(PageIdV3Internal ref_id, PageIdV3Internal page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::REF;
+        record.type = EditRecordType::REF;
         record.page_id = ref_id;
         record.ori_page_id = page_id;
         records.emplace_back(record);
     }
 
-    void concat(PageEntriesEdit & rhs)
+    void varRef(PageIdV3Internal ref_id, const PageVersionType & ver, PageIdV3Internal ori_page_id)
     {
-        auto rhs_records = rhs.getRecords();
-        records.insert(records.end(), rhs_records.begin(), rhs_records.end());
+        EditRecord record{};
+        record.type = EditRecordType::VAR_REF;
+        record.page_id = ref_id;
+        record.version = ver;
+        record.ori_page_id = ori_page_id;
+        records.emplace_back(record);
+    }
+
+    void varExternal(PageIdV3Internal page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_EXTERNAL;
+        record.page_id = page_id;
+        record.version = create_ver;
+        record.being_ref_count = being_ref_count;
+        records.emplace_back(record);
+    }
+
+    void varEntry(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_ENTRY;
+        record.page_id = page_id;
+        record.version = ver;
+        record.entry = entry;
+        record.being_ref_count = being_ref_count;
+        records.emplace_back(record);
+    }
+
+    void varDel(PageIdV3Internal page_id, const PageVersionType & delete_ver)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::VAR_DELETE;
+        record.page_id = page_id;
+        record.version = delete_ver;
+        records.emplace_back(record);
     }
 
     void clear() { records.clear(); }
@@ -107,11 +172,12 @@ public:
 
     struct EditRecord
     {
-        WriteBatch::WriteType type;
+        EditRecordType type;
         PageIdV3Internal page_id;
         PageIdV3Internal ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
+        Int64 being_ref_count = 1;
     };
     using EditRecords = std::vector<EditRecord>;
 

@@ -752,10 +752,10 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
 
 void PageStorage::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
-    assert(callbacks.v2_scanner != nullptr);
-    assert(callbacks.v2_remover != nullptr);
-    external_pages_scanner = callbacks.v2_scanner;
-    external_pages_remover = callbacks.v2_remover;
+    assert(callbacks.scanner != nullptr);
+    assert(callbacks.remover != nullptr);
+    external_pages_scanner = callbacks.scanner;
+    external_pages_remover = callbacks.remover;
 }
 
 void PageStorage::drop()
@@ -1010,7 +1010,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
                 gc_type = GCType::Skip;
         }
 
-        // Shorcut for early exit GC routine.
+        // Shortcut for early exit GC routine.
         if (gc_type == GCType::Skip)
         {
             // Apply empty edit and cleanup.

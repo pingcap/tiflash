@@ -174,11 +174,10 @@ TEST(PageFileTest, PageFileLink)
     PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
     auto writer = pf0.createWriter(true, true);
 
-    WriteBatch batch{100};
+    WriteBatch batch;
+    const size_t buf_sz = 1024;
+    char c_buff1[buf_sz], c_buff2[buf_sz];
     {
-        const size_t buf_sz = 1024;
-        char c_buff1[buf_sz], c_buff2[buf_sz];
-
         for (size_t i = 0; i < buf_sz; ++i)
         {
             c_buff1[i] = i & 0xff;
@@ -225,11 +224,10 @@ TEST(PageFileTest, EncryptedPageFileLink)
     PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
     auto writer = pf0.createWriter(true, true);
 
-    WriteBatch batch{100};
+    WriteBatch batch;
+    const size_t buf_sz = 1024;
+    char c_buff1[buf_sz], c_buff2[buf_sz];
     {
-        const size_t buf_sz = 1024;
-        char c_buff1[buf_sz], c_buff2[buf_sz];
-
         for (size_t i = 0; i < buf_sz; ++i)
         {
             c_buff1[i] = i & 0xff;

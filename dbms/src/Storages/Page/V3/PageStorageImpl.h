@@ -50,6 +50,8 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
+    void clearExternalPagesCallbacks();
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
@@ -62,12 +64,13 @@ public:
     bool gc() { return gc(false, nullptr, nullptr); }
 #endif
 
+    friend class PageDirectoryFactory;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
     LogWithPrefixPtr log;
 
-    PageDirectory page_directory;
+    PageDirectoryPtr page_directory;
 
     BlobStore::Config blob_config;
 
@@ -75,7 +78,9 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPageCallbacks::V3ExternalPagesRemover external_pages_remover = nullptr;
+    std::mutex callbacks_mutex;
+    using ExternalPageCallbacksContainer = std::vector<ExternalPageCallbacks>;
+    ExternalPageCallbacksContainer callbacks_container;
 };
 
 } // namespace PS::V3

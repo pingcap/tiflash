@@ -232,10 +232,10 @@ try
     size_t times_remover_called = 0;
 
     ExternalPageCallbacks callbacks;
-    callbacks.v2_scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.v2_remover
+    callbacks.remover
         = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 2UL);
@@ -276,7 +276,7 @@ try
     }
 
     snapshot.reset();
-    callbacks.v2_remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
