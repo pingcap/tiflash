@@ -816,12 +816,20 @@ struct TiDBConvertToFloat
 
 /// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
-// can_skip_check_overflow: we can avoid overflow check in some situations, such as cast(tiny_int_val as decimal(10, 0)).
-//                          Because max_tiny_int(256) < to_max_val(10^9).
-// CastInternalType: The type we use in the multiplication of from_int_val and scale_mul.
-//                   The original implementation always use Int256, which is not necessary in some situations.
-//                   Such as cast(tiny_int_val as decimal(10, 2)), Int32 is enough.
-// The above two optimizations only take effects when from type is int/decimal/date/dateimte, real and string is not implemented.
+// There are two optimizations in TiDBConvertToDecimal:
+// 1. Skip overflow check if possible, such as cast(tiny_int_val as decimal(10, 0)),
+//    we can skip check overflow, because max_tiny_int(127) < to_max_val(10^9).
+// 2. Use appropriate type for multiplication of from_int_val and scale_mul(which is 10^abs(scale_diff)).
+//    The original implementation always uses Int256, which is very slow.
+// The general idea is:
+// 1. If from_type_prec + scale_diff <= to_type_prec, we can skip overflow check.
+//    Because the max value of from type is less than the max value of to type, so no overflow will happen.
+// 2. CastInternalType is the int type with minimum prec which satisfies: from_type_prec + scale_diff <= IntPrec<CastInternalType>::prec - 1.
+//    So on the one hand CastInternalType can hold both from_int_value and the result of multiplication of from_int_val and scale_mul,
+//    on the other hand the multiplication is as fast as possible.
+// NOTE: scale_diff = to_type_scale - from_type_scale.
+// NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte, real and string types are not handled.
+//       So CastInternalType is Int512 and can_skip_check_overflow is false when from_type is real or string.
 template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
@@ -1166,8 +1174,8 @@ struct TiDBConvertToDecimal
             }
             else
             {
-                // Treat datetime(fsp) as decimal(20, 6).
-                // Because the internal fraction is always aligned to 6 valid digits, so we can avoid division for fsp.
+                // Treat datetime(fsp) as decimal(20, 6). Otherwise we need to use micro_second / (10^(6-fsp)) as the real micro_second.
+                // Because the internal fraction is always aligned to 6 valid digits.
                 static constexpr ScaleType from_scale = 6;
                 const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
                 for (size_t i = 0; i < size; ++i)
@@ -1829,7 +1837,7 @@ private:
     {
         const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
             using FromFieldType = typename FromDataType::FieldType;
-            // This is required because other type(like Float32) doesn't have template specialization for IntPrec.
+            // This is required because other types(like Float32) don't have template specialization for IntPrec.
             if constexpr (std::is_integral_v<FromFieldType>)
             {
                 from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
@@ -1862,9 +1870,6 @@ private:
         Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
         if (scale_diff < 0)
         {
-            // During cast(decimal as decimal), we will use from_int_val/(10^abs(scale_diff)) as the to_int.
-            // Why plus 1: need do rounding during division, such as cast(99.9999 as decimal(5, 3)); 100.000 is greater than max_value of decimal(5, 3).
-            // Why zero: should not minus from_prec when determining CastInternalType to avoid truncating from_int_val.
             if (avoid_truncate_from_value)
                 scale_diff = 0;
             else
@@ -1880,8 +1885,6 @@ private:
             const auto fsp = datetime_type->getFraction();
             if (fsp > 0)
             {
-                // We treat datetime(fsp) as decimal(20, 6) instead of decimal(14 + fsp, fsp).
-                // Because the internal fraction is always aligned to 6 valid digits, so we can avoid division for fsp.
                 from_scaled_prec = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
             }
             else
@@ -1919,11 +1922,16 @@ private:
         });
     }
 
-    // Get the minimum prec that can holding the value of from type, which is from_prec + scale_diff.
-    // Because the internal store of Decimal is the multipiler of 10^scale_diff.
+    // The core function of the optimizations of TiDBConvertToDecimal. The basic idea has already described above.
     // avoid_truncate_from_value:
-    //      true when determine CastInternalType to avoid truncating from_int_val when static_cast it to CastInternalType.
-    //      false when determine if can skip overflow check.
+    //  1. True when determining CastInternalType to avoid truncating from_int_val when static_cast it to CastInternalType.
+    //     Because it needs to hold both from_int_value and the result of multiplication(division when scale_diff is negative) of from_int_val and scale_mul.
+    //     So if scale_diff is negative, we should reset scale_diff as zero to avoid from_int_value is truncated unexpectedly.
+    //  2. False when determining if can_skip_overflow_check. Also the scale_diff should plus 1 if it's negative,
+    //     Such as cast(99.9999 as decimal(4, 2)), after division, the internal int value of cast result is 10000 instead of 9999,
+    //     because we need to round up during cast. In this case, overflow happens.
+    //     So we plus 1 to scale_diff(check getMinPrecForHoldingDecimalInternal).
+    //     Then the rule will be from_prec + scale_diff + 1 <= to_prec when scale_diff < 0.
     template <typename FromDataType>
     static PrecType getMinPrecForHoldingFromValue(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value)
     {
@@ -1957,10 +1965,8 @@ private:
         return from_scaled_prec;
     }
 
-    // Determine CastInternalType template argument, which is used as the type in the multiplication of from_int_val and scale_mul.
-    // rule: from_scaled_prec <= (Intxxx::prec - 1)
-    //       from_scaled_prec is the scale for result of max_from_val * 10^to_scale, e.g. from_val_prec + scale_diff.
-    //       Why minus 1: the same reason why maxDecimalPrecision<Decimal32> is 9 instead of 10.
+    // Determine CastInternalType template argument for TiDBConvertToDecimal,
+    // which is used as the type in the multiplication/division of from_int_val and scale_mul.
     template <typename FromDataType, typename ToDataType, bool return_nullable>
     WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
     {
@@ -1995,7 +2001,7 @@ private:
         }
     }
 
-    // Determine can_skip_overflow_check template argument.
+    // Determine can_skip_overflow_check template argument for TiDBConvertToDecimal.
     template <typename FromDataType, typename ToDataType, bool return_nullable, typename CastInternalType>
     WrapperType createWrapperForDecimal(const ToDataType * decimal_type, bool can_skip) const
     {
