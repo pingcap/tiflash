@@ -19,12 +19,9 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
-<<<<<<< HEAD
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
-=======
 #include <Storages/Page/V3/PageDirectory.h>
->>>>>>> dd6bdc32c (simply fix)
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
