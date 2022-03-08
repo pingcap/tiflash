@@ -1852,7 +1852,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_thread_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"rpc.*\", type!~\".*max\"}) by (instance, type)",
+              "expr": "max(tiflash_thread_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"rpc.*\", type!~\".*max\"}) by (instance, type)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -1951,7 +1951,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_thread_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"rpc.*\", type=~\".*max\"}) by (instance, type)",
+              "expr": "max(tiflash_thread_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"rpc.*\", type=~\".*max\"}) by (instance, type)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -2050,7 +2050,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_thread_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\".*max\", type!~\"rpc.*\"}) by (instance, type)",
+              "expr": "max(tiflash_thread_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\".*max\", type!~\"rpc.*\"}) by (instance, type)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -2149,7 +2149,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_thread_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\".*max\", type!~\"rpc.*\"}) by (instance, type)",
+              "expr": "max(tiflash_thread_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\".*max\", type!~\"rpc.*\"}) by (instance, type)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
