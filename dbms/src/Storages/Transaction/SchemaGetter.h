@@ -59,6 +59,7 @@ enum class SchemaActionType : Int8
     RebaseAutoRandomBase = 40,
     AlterIndexVisibility = 41,
     ExchangeTablePartition = 42,
+    CreateTables = 60,
 };
 
 struct AffectedOption

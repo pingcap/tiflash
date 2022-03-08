@@ -417,6 +417,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    if (diff.type == SchemaActionType::CreateTables) {
+        for (auto && opt : diff.affected_opts) {
+            AffectedOption aff;
+            aff.schema_id = opt.schema_id;
+            aff.table_id = opt.table_id;
+            aff.old_schema_id = opt.old_schema_id;
+            aff.old_table_id = opt.old_table_id;
+            applyDiff(diff);
+        }
+        return;
+    }
+
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
         throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
