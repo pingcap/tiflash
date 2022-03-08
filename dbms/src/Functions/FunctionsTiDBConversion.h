@@ -828,8 +828,8 @@ struct TiDBConvertToFloat
 //    So on the one hand CastInternalType can hold both from_int_value and the result of multiplication of from_int_val and scale_mul,
 //    on the other hand the multiplication is as fast as possible.
 // NOTE: scale_diff = to_type_scale - from_type_scale.
-// NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte, real and string types are not handled.
-//       So CastInternalType is Int512 and can_skip_check_overflow is false when from_type is real or string.
+// NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte.
+//       The logical of cast doesn't care about CastInternalType(Int512) and can_skip_check_overflow(false) at all when from_type is real or string.
 template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
