@@ -111,6 +111,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
+        Stopwatch watch;
         auto thread_manager = newThreadManager();
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
@@ -129,7 +130,19 @@ void CreatingSetsBlockInputStream::createAll()
         thread_manager->wait();
 
         if (!exception_from_workers.empty())
-            std::rethrow_exception(exception_from_workers.front());
+        {
+            if (exception_from_workers.front() != nullptr)
+            {
+                LOG_DEBUG(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec with exception and rethrow the first, left " << exception_from_workers.size());
+                std::rethrow_exception(exception_from_workers.front());
+            }
+            else
+            {
+                LOG_ERROR(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec with exception but rethrow null ptr, left" << exception_from_workers.size());
+                throw Exception("a exception ptr is null in CreatingSets");
+            }
+        }
+        LOG_DEBUG(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec. ");
 
         created = true;
     }
@@ -137,14 +150,16 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
+    std::stringstream log_msg;
+    log_msg << std::fixed << std::setprecision(3);
+    log_msg << (subquery.set ? "Creating set. " : "")
+            << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
+            << mpp_task_id.toString();
+
+    LOG_DEBUG(log, log_msg.rdbuf());
+    Stopwatch watch;
     try
     {
-        LOG_DEBUG(log,
-                  (subquery.set ? "Creating set. " : "")
-                      << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
-                      << mpp_task_id.toString());
-        Stopwatch watch;
-
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -256,7 +271,21 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     catch (std::exception & e)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
+        log_msg << " throw exception: " << e.what() << " In " << watch.elapsedSeconds() << " sec. ";
+        LOG_ERROR(log, log_msg.rdbuf());
         exception_from_workers.push_back(std::current_exception());
+        if (subquery.join)
+            subquery.join->setFinishBuildTable(true);
+    }
+    catch (...)
+    {
+        std::unique_lock<std::mutex> lock(exception_mutex);
+        log_msg << " throw exception: unknown error"
+                << " In " << watch.elapsedSeconds() << " sec. ";
+        LOG_ERROR(log, log_msg.rdbuf());
+        exception_from_workers.push_back(std::current_exception());
+        if (subquery.join)
+            subquery.join->setFinishBuildTable(true);
     }
 }
 
