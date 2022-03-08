@@ -5,17 +5,19 @@
 namespace DB
 {
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
-    : service(service)
+    : watch_dog(new EstablishCallData(this))
+    , p_ctx(&(watch_dog->ctx)) //  Uses context from watch_dog to avoid context early released. Since watch_dog will check context, even when watched calldata is released.
+    , service(service)
     , cq(cq)
     , notify_cq(notify_cq)
-    , responder(&ctx)
+    , responder(p_ctx)
     , state(NEW_REQUEST)
 {
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    ctx.AsyncNotifyWhenDone(new EstablishCallData(this));
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    p_ctx->AsyncNotifyWhenDone(watch_dog);
+    service->RequestEstablishMPPConnection(p_ctx, &request, &responder, cq, notify_cq, this);
 }
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
@@ -44,7 +46,7 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        service->EstablishMPPConnectionSyncOrAsync(p_ctx, &request, nullptr, this);
     }
     catch (...)
     {
@@ -102,12 +104,12 @@ void EstablishCallData::cancel()
 
 void EstablishCallData::proceed()
 {
-    if (parent) // handle cancel case, which is triggered by AsyncNotifyWhenDone. parent is the canceled EstablishCallData. "this" is the monitor.
+    if (calldata_watched) // handle cancel case, which is triggered by AsyncNotifyWhenDone. calldata_watched is the EstablishCallData to be canceled. "this" is the monitor.
     {
-        if (parent->ctx.IsCancelled())
+        if (ctx.IsCancelled())
         {
-            parent->cancel();
-            delete parent;
+            calldata_watched->cancel();
+            delete calldata_watched;
         }
         delete this;
         return;

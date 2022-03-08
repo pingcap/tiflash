@@ -33,9 +33,10 @@ public:
     // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
+    // A watchdog of EstablishCallData used for handle cancel event.
     EstablishCallData(EstablishCallData * p)
         : responder(nullptr)
-        , parent(p)
+        , calldata_watched(p)
     {}
 
     bool write(const mpp::MPPDataPacket & packet) override;
@@ -57,6 +58,10 @@ public:
     // EstablishCallData will handle its lifecycle by itself.
     static EstablishCallData * spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
+    EstablishCallData * watch_dog = nullptr;
+    ::grpc::ServerContext * p_ctx; // Calldata uses context from watch_dog to avoid context early released.
+    ::grpc::ServerContext ctx;
+
 private:
     void notifyReady();
 
@@ -69,7 +74,6 @@ private:
     // The producer-consumer queue where for asynchronous server notifications.
     ::grpc::ServerCompletionQueue * cq;
     ::grpc::ServerCompletionQueue * notify_cq;
-    ::grpc::ServerContext ctx;
     ::grpc::Status err_status;
 
     // What we get from the client.
@@ -78,7 +82,7 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
-    EstablishCallData * parent = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
+    EstablishCallData * calldata_watched = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
 
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
