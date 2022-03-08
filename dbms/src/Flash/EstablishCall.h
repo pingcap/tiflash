@@ -2,6 +2,7 @@
 
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -35,8 +36,8 @@ public:
 
     // A watchdog of EstablishCallData used for handle cancel event.
     EstablishCallData(EstablishCallData * p)
-        : responder(nullptr)
-        , calldata_watched(p)
+        : calldata_watched(p)
+        , responder(nullptr)
     {}
 
     bool write(const mpp::MPPDataPacket & packet) override;
@@ -58,6 +59,8 @@ public:
     // EstablishCallData will handle its lifecycle by itself.
     static EstablishCallData * spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
+
+    EstablishCallData * calldata_watched; // used by AsyncNotifyWhenDone for handling cancel case.
     EstablishCallData * watch_dog = nullptr;
     ::grpc::ServerContext * p_ctx; // Calldata uses context from watch_dog to avoid context early released.
     ::grpc::ServerContext ctx;
@@ -82,7 +85,6 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
-    EstablishCallData * calldata_watched = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
 
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
@@ -98,7 +100,7 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    CallStatus state; // The current serving state.
+    CallStatus state = NEW_REQUEST; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
 };

@@ -2,16 +2,20 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/Utils.h>
 
+
 namespace DB
 {
+
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
-    : watch_dog(new EstablishCallData(this))
+    : calldata_watched(nullptr)
+    , watch_dog(new EstablishCallData(this))
     , p_ctx(&(watch_dog->ctx)) //  Uses context from watch_dog to avoid context early released. Since watch_dog will check context, even when watched calldata is released.
     , service(service)
     , cq(cq)
     , notify_cq(notify_cq)
     , responder(p_ctx)
     , state(NEW_REQUEST)
+
 {
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
@@ -106,10 +110,14 @@ void EstablishCallData::proceed()
 {
     if (calldata_watched) // handle cancel case, which is triggered by AsyncNotifyWhenDone. calldata_watched is the EstablishCallData to be canceled. "this" is the monitor.
     {
-        if (ctx.IsCancelled())
+        if (ctx.IsCancelled() && state != FINISH)
         {
             calldata_watched->cancel();
             delete calldata_watched;
+        }
+        if (calldata_watched == nullptr)
+        {
+            std::cerr << "calldata_watched == nullptr & != nullptr!!" << std::endl;
         }
         delete this;
         return;
@@ -124,7 +132,7 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
-        std::unique_lock lk(mu); // don't move this lock , this code protect the check of mpp_tunnel and ready.
+        std::unique_lock lk(mu);
         if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
             ready = false;
@@ -144,6 +152,8 @@ void EstablishCallData::proceed()
         assert(state == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That't the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
+        if (watch_dog)
+            watch_dog->state = FINISH;
         delete this;
         return;
     }
