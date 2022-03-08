@@ -61,7 +61,6 @@ private:
 
     // RegionPersister stores it's data individually, so the `ns_id` value doesn't matter
     NamespaceId ns_id = MAX_NAMESPACE_ID;
-
     const RegionManager & region_manager;
     std::mutex mutex;
     Poco::Logger * log;

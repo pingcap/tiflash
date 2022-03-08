@@ -302,9 +302,8 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 throw Exception(
-                    fmt::format("Reading with entries meet checksum not match [page_id={}.{}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
-                                page_id_v3.high,
-                                page_id_v3.low,
+                    fmt::format("Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] [entry={}] [file={}]",
+                                page_id_v3,
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
@@ -369,11 +368,10 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                 {
                     throw Exception(
                         fmt::format("Reading with fields meet checksum not match "
-                                    "[page_id={}.{}] [expected=0x{:X}] [actual=0x{:X}] "
+                                    "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
                                     "[field_index={}] [field_offset={}] [field_size={}] "
                                     "[entry={}] [file={}]",
-                                    page_id_v3.high,
-                                    page_id_v3.low,
+                                    page_id_v3,
                                     expect_checksum,
                                     field_checksum,
                                     field_index,

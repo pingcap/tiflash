@@ -66,7 +66,6 @@ protected:
 
 protected:
     PageStorage::Config config;
-    NamespaceId ns_id = 100;
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr file_provider;
 };
@@ -94,7 +93,7 @@ try
 
     for (size_t i = 0; i < 100; ++i)
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(i, tag, buff, buf_sz);
         storage->write(std::move(batch));
@@ -102,14 +101,14 @@ try
 
     // Read
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -124,14 +123,14 @@ try
 
     // Read again
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -143,28 +142,28 @@ try
     {
         // Check whether write is correctly.
         {
-            WriteBatch batch{ns_id};
+            WriteBatch batch;
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
             batch.putPage(2, tag, buff, buf_sz);
             storage->write(std::move(batch));
         }
         // Read to check
         {
-            DB::Page page0 = storage->read(ns_id, 0);
+            DB::Page page0 = storage->read(0);
             ASSERT_EQ(page0.data.size(), buf_sz);
             ASSERT_EQ(page0.page_id, 0UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            DB::Page page1 = storage->read(ns_id, 1);
+            DB::Page page1 = storage->read(1);
             ASSERT_EQ(page1.data.size(), buf_sz);
             ASSERT_EQ(page1.page_id, 1UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            DB::Page page2 = storage->read(ns_id, 2);
+            DB::Page page2 = storage->read(2);
             ASSERT_EQ(page2.data.size(), buf_sz);
             ASSERT_EQ(page2.page_id, 2UL);
             for (size_t i = 0; i < buf_sz; ++i)
@@ -180,21 +179,21 @@ try
 
     // Read again to check all data.
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page2 = storage->read(ns_id, 2);
+        DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), buf_sz);
         ASSERT_EQ(page2.page_id, 2UL);
         for (size_t i = 0; i < buf_sz; ++i)

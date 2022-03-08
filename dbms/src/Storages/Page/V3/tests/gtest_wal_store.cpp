@@ -19,14 +19,12 @@ constexpr static NamespaceId ns_id = 100;
 
 TEST(WALSeriTest, AllPuts)
 {
-    PageIdV3Internal page_id_1 = combine(ns_id, 1);
-    PageIdV3Internal page_id_2 = combine(ns_id, 2);
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20(/*seq=*/20);
     PageEntriesEdit edit;
-    edit.put(page_id_1, entry_p1);
-    edit.put(page_id_2, entry_p2);
+    edit.put(combine(ns_id, 1), entry_p1);
+    edit.put(combine(ns_id, 2), entry_p2);
 
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
@@ -35,7 +33,7 @@ TEST(WALSeriTest, AllPuts)
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, page_id_1);
+    EXPECT_EQ(iter->page_id, combine(ns_id, 1));
     EXPECT_EQ(iter->version, ver20);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1);
 }

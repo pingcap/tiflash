@@ -92,8 +92,6 @@ public:
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *path_pool, *db_context, db_context->getSettingsRef());
         page_id_generator = std::make_unique<PageIdGenerator>();
-        storage_pool->restore();
-        page_id_generator->restore(*storage_pool);
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();

@@ -51,7 +51,6 @@ public:
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
     void clearExternalPagesCallbacks();
-
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }

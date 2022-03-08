@@ -138,7 +138,7 @@ inline ::testing::AssertionResult getEntriesCompare(
                 const auto & actual_id_entry = expected_id_entries[idx];
                 if (actual_id_entry.first != expected_id_entry.first)
                 {
-                    auto err_msg = fmt::format("Try to get entry [id={}.{}] but get [id={}.{}] at [index={}]", expected_id_entry.first.high, expected_id_entry.first.low, actual_id_entry.first.high, actual_id_entry.first.low, idx);
+                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}.{}] at [index={}]", expected_id_entry.first, actual_id_entry.first.high, actual_id_entry.first.low, idx);
                     return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
                 }
                 if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))

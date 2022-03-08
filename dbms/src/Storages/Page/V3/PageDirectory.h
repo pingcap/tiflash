@@ -229,14 +229,13 @@ public:
         return fmt::format(
             "{{"
             "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
-            "ori_page_id: {}.{}, being_ref_count: {}, num_entries: {}"
+            "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
             "}}",
             type,
             create_ver,
             is_deleted,
             delete_ver,
-            ori_page_id.high,
-            ori_page_id.low,
+            ori_page_id,
             being_ref_count,
             entries.size());
     }

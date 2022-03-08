@@ -67,7 +67,6 @@ protected:
 
 protected:
     PageStorage::Config config;
-    NamespaceId ns_id = 100;
     std::shared_ptr<PageStorage> storage;
     std::unique_ptr<StoragePathPool> path_pool;
     const FileProviderPtr file_provider;
@@ -85,7 +84,7 @@ try
     }
 
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -93,14 +92,14 @@ try
         storage->write(std::move(batch));
     }
 
-    DB::Page page0 = storage->read(ns_id, 0);
+    DB::Page page0 = storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
     ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
-    DB::Page page1 = storage->read(ns_id, 1);
+    DB::Page page1 = storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
     ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
@@ -122,26 +121,26 @@ try
     }
 
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, tag, buff, buf_sz);
         storage->write(std::move(batch));
     }
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
         storage->write(std::move(batch));
     }
 
-    DB::Page page0 = storage->read(ns_id, 0);
+    DB::Page page0 = storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
     ASSERT_EQ(page0.page_id, 0UL);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
-    DB::Page page1 = storage->read(ns_id, 1);
+    DB::Page page1 = storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
     ASSERT_EQ(page1.page_id, 1UL);
     for (size_t i = 0; i < buf_sz; ++i)
@@ -162,7 +161,7 @@ try
     const char page0_byte = 0x3f;
     {
         // put page0
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(c_buff, page0_byte, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, 0, buff, buf_sz);
@@ -171,7 +170,7 @@ try
     // repeated put page1
     for (size_t n = 1; n <= num_repeat; ++n)
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(c_buff, n, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(pid, 0, buff, buf_sz);
@@ -179,7 +178,7 @@ try
     }
 
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -187,7 +186,7 @@ try
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
         }
 
-        DB::Page page1 = storage->read(ns_id, pid);
+        DB::Page page1 = storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -199,7 +198,7 @@ try
     storage->gc();
 
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -207,7 +206,7 @@ try
             EXPECT_EQ(*(page0.data.begin() + i), page0_byte);
         }
 
-        DB::Page page1 = storage->read(ns_id, pid);
+        DB::Page page1 = storage->read(pid);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, pid);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -222,7 +221,7 @@ TEST_F(PageStorage_test, WriteReadGcExternalPage)
 try
 {
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putExternal(0, 0);
         batch.putRefPage(1, 0);
         batch.putExternal(1024, 0);
@@ -252,7 +251,7 @@ try
     auto snapshot = storage->getSnapshot();
 
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
         batch.delPage(1); // free ref 1 -> 0
         batch.delPage(1024); // free normal page 1024
@@ -266,11 +265,11 @@ try
     }
 
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), 0UL);
         ASSERT_EQ(page0.page_id, 0UL);
 
-        DB::Page page2 = storage->read(ns_id, 2);
+        DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), 0UL);
         ASSERT_EQ(page2.page_id, 2UL);
     }
@@ -298,7 +297,7 @@ try
 
     {
         // Page1 should be written to PageFile{1, 0}
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(c_buff, 0xf, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, 0, buff, buf_sz);
@@ -308,7 +307,7 @@ try
 
     {
         // RefPage 2 -> 1, Del Page 1 should be written to PageFile{2, 0}
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(2, 1);
         batch.delPage(1);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -319,7 +318,7 @@ try
 
     {
         // Another RefPage 2 -> 1, Del Page 1 should be written to PageFile{3, 0}
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(2, 1);
         batch.delPage(1);
 
@@ -376,7 +375,7 @@ try
 
     {
         // Create a Legacy PageFile_1_0
-        WriteBatch wb{ns_id};
+        WriteBatch wb;
         memset(c_buff, 0xf, buf_sz);
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
@@ -389,7 +388,7 @@ try
 
     {
         // Create a Checkpoint PageFile_2_0
-        WriteBatch wb{ns_id};
+        WriteBatch wb;
         memset(c_buff, 0xf, buf_sz);
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
@@ -447,7 +446,7 @@ try
     storage = reopenWithConfig(tmp_config);
 
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -457,14 +456,14 @@ try
 
     // Read
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -478,14 +477,14 @@ try
 
     // Read again
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -497,28 +496,28 @@ try
     {
         // Check whether write is correctly.
         {
-            WriteBatch batch{ns_id};
+            WriteBatch batch;
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
             batch.putPage(2, tag, buff, buf_sz);
             storage->write(std::move(batch));
         }
         // Read to check
         {
-            DB::Page page0 = storage->read(ns_id, 0);
+            DB::Page page0 = storage->read(0);
             ASSERT_EQ(page0.data.size(), buf_sz);
             ASSERT_EQ(page0.page_id, 0UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            DB::Page page1 = storage->read(ns_id, 1);
+            DB::Page page1 = storage->read(1);
             ASSERT_EQ(page1.data.size(), buf_sz);
             ASSERT_EQ(page1.page_id, 1UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            DB::Page page2 = storage->read(ns_id, 2);
+            DB::Page page2 = storage->read(2);
             ASSERT_EQ(page2.data.size(), buf_sz);
             ASSERT_EQ(page2.page_id, 2UL);
             for (size_t i = 0; i < buf_sz; ++i)
@@ -533,21 +532,21 @@ try
 
     // Read again to check all data.
     {
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        DB::Page page2 = storage->read(ns_id, 2);
+        DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), buf_sz);
         ASSERT_EQ(page2.page_id, 2UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -572,7 +571,7 @@ try
     std::map<size_t, size_t> page1_fields = {{0, 20}, {1, 20}, {2, 59}, {3, 29}, {4, 896}};
 
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         PageFieldSizes p0_sizes;
         for (auto [idx, sz] : page0_fields)
         {
@@ -618,7 +617,7 @@ try
         PageStorage::PageReadFields p1_fields{1, {0, 2, 4}};
         read_fields.push_back(p1_fields);
 
-        auto pages = storage->read(ns_id, read_fields);
+        auto pages = storage->read(read_fields);
         ASSERT_EQ(pages.size(), 2UL);
 
         {
@@ -661,7 +660,7 @@ try
         PageStorage::PageReadFields p1_fields{1, {3, 4, 2}};
         read_fields.push_back(p1_fields);
 
-        auto pages = storage->read(ns_id, read_fields);
+        auto pages = storage->read(read_fields);
         ASSERT_EQ(pages.size(), 2UL);
 
         {
@@ -700,12 +699,12 @@ try
 
     {
         // Read as single page
-        DB::Page page0 = storage->read(ns_id, 0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
-        DB::Page page1 = storage->read(ns_id, 1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -723,7 +722,7 @@ try
     const size_t buf_sz = 1024;
     char buf[buf_sz];
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(buf, 0x01, buf_sz);
         batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
         batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
@@ -752,7 +751,7 @@ try
 
     // Continue to write some pages
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(buf, 0x02, buf_sz);
         batch.putPage(1,
                       0,
@@ -761,7 +760,7 @@ try
                       PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         storage->write(std::move(batch));
 
-        auto page1 = storage->read(ns_id, 1);
+        auto page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
@@ -778,7 +777,7 @@ try
         storage->traverse([&num_pages](const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
-        auto page1 = storage->read(ns_id, 1);
+        auto page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
@@ -798,7 +797,7 @@ try
     const size_t buf_sz = 1024;
     char buf[buf_sz];
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(buf, 0x01, buf_sz);
         batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
         batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
@@ -826,7 +825,7 @@ try
 
     // Continue to write some pages
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         memset(buf, 0x02, buf_sz);
         batch.putPage(1,
                       0,
@@ -835,7 +834,7 @@ try
                       PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         storage->write(std::move(batch));
 
-        auto page1 = storage->read(ns_id, 1);
+        auto page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
@@ -852,7 +851,7 @@ try
         storage->traverse([&num_pages](const Page &) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
-        auto page1 = storage->read(ns_id, 1);
+        auto page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
@@ -881,13 +880,13 @@ protected:
         const size_t buf_sz = 1024;
         char buf[buf_sz];
         {
-            WriteBatch wb{ns_id};
+            WriteBatch wb;
             memset(buf, 0x01, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             storage->write(std::move(wb));
         }
         {
-            WriteBatch wb{ns_id};
+            WriteBatch wb;
             memset(buf, 0x02, buf_sz);
             wb.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             storage->write(std::move(wb));
@@ -901,7 +900,7 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
     const UInt64 tag = 0;
     // put ref page: RefPage3 -> Page2
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(3, 2);
         storage->write(std::move(batch));
     }
@@ -910,19 +909,19 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
     // if update PageId == 3 or PageId == 2, both RefPage3 && Page2 get updated
     {
         // update RefPage3
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         char ch_to_update = 0x0f;
         memset(buf, ch_to_update, buf_sz);
         batch.putPage(3, tag, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
         storage->write(std::move(batch));
 
         // check RefPage3 and Page2 both get updated
-        const Page page3 = storage->read(ns_id, 3);
+        const Page page3 = storage->read(3);
         for (size_t i = 0; i < page3.data.size(); ++i)
         {
             EXPECT_EQ(*(page3.data.begin() + i), ch_to_update);
         }
-        const Page page2 = storage->read(ns_id, 2);
+        const Page page2 = storage->read(2);
         for (size_t i = 0; i < page2.data.size(); ++i)
         {
             EXPECT_EQ(*(page2.data.begin() + i), ch_to_update);
@@ -930,19 +929,19 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
     }
     {
         // update Page2
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         char ch_to_update = 0xef;
         memset(buf, ch_to_update, buf_sz);
         batch.putPage(2, tag, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
         storage->write(std::move(batch));
 
         // check RefPage3 and Page2 both get updated
-        const Page page3 = storage->read(ns_id, 3);
+        const Page page3 = storage->read(3);
         for (size_t i = 0; i < page3.data.size(); ++i)
         {
             EXPECT_EQ(*(page3.data.begin() + i), ch_to_update);
         }
-        const Page page2 = storage->read(ns_id, 2);
+        const Page page2 = storage->read(2);
         for (size_t i = 0; i < page2.data.size(); ++i)
         {
             EXPECT_EQ(*(page2.data.begin() + i), ch_to_update);
@@ -954,7 +953,7 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
 {
     // put ref page: RefPage3 -> Page2, RefPage4 -> Page2
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
         storage->write(std::move(batch));
@@ -962,18 +961,18 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
     { // tests for delete Page
         // delete RefPage3, RefPage4 don't get deleted
         {
-            WriteBatch batch{ns_id};
+            WriteBatch batch;
             batch.delPage(3);
             storage->write(std::move(batch));
-            EXPECT_FALSE(storage->getEntry(ns_id, 3).isValid());
-            EXPECT_TRUE(storage->getEntry(ns_id, 4).isValid());
+            EXPECT_FALSE(storage->getEntry(3).isValid());
+            EXPECT_TRUE(storage->getEntry(4).isValid());
         }
         // delete RefPage4
         {
-            WriteBatch batch{ns_id};
+            WriteBatch batch;
             batch.delPage(4);
             storage->write(std::move(batch));
-            EXPECT_FALSE(storage->getEntry(ns_id, 4).isValid());
+            EXPECT_FALSE(storage->getEntry(4).isValid());
         }
     }
 }
@@ -982,7 +981,7 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
 {
     /// put ref page to ref page, ref path collapse to normal page
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         // RefPage3 -> Page1
         batch.putRefPage(3, 1);
         // RefPage4 -> RefPage3 -> Page1
@@ -990,15 +989,15 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
         storage->write(std::move(batch));
     }
 
-    const auto p0entry = storage->getEntry(ns_id, 1);
+    const auto p0entry = storage->getEntry(1);
 
     {
         // check that RefPage3 -> Page1
-        auto entry = storage->getEntry(ns_id, 3);
+        auto entry = storage->getEntry(3);
         ASSERT_EQ(entry.fileIdLevel(), p0entry.fileIdLevel());
         ASSERT_EQ(entry.offset, p0entry.offset);
         ASSERT_EQ(entry.size, p0entry.size);
-        const Page page3 = storage->read(ns_id, 3);
+        const Page page3 = storage->read(3);
         for (size_t i = 0; i < page3.data.size(); ++i)
         {
             EXPECT_EQ(*(page3.data.begin() + i), 0x01);
@@ -1007,11 +1006,11 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
 
     {
         // check that RefPage4 -> Page1
-        auto entry = storage->getEntry(ns_id, 4);
+        auto entry = storage->getEntry(4);
         ASSERT_EQ(entry.fileIdLevel(), p0entry.fileIdLevel());
         ASSERT_EQ(entry.offset, p0entry.offset);
         ASSERT_EQ(entry.size, p0entry.size);
-        const Page page4 = storage->read(ns_id, 4);
+        const Page page4 = storage->read(4);
         for (size_t i = 0; i < page4.data.size(); ++i)
         {
             EXPECT_EQ(*(page4.data.begin() + i), 0x01);
@@ -1023,18 +1022,18 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
 {
     /// put duplicated RefPages in different WriteBatch
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.putRefPage(3, 1);
         storage->write(std::move(batch));
 
-        WriteBatch batch2{ns_id};
+        WriteBatch batch2;
         batch2.putRefPage(3, 1);
         storage->write(std::move(batch));
         // now Page1's entry has ref count == 2 but not 3
     }
-    PageEntry entry1 = storage->getEntry(ns_id, 1);
+    PageEntry entry1 = storage->getEntry(1);
     ASSERT_TRUE(entry1.isValid());
-    PageEntry entry3 = storage->getEntry(ns_id, 3);
+    PageEntry entry3 = storage->getEntry(3);
     ASSERT_TRUE(entry3.isValid());
 
     EXPECT_EQ(entry1.fileIdLevel(), entry3.fileIdLevel());
@@ -1044,20 +1043,20 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
 
     // check Page1's entry has ref count == 2 but not 1
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.delPage(1);
         storage->write(std::move(batch));
-        PageEntry entry_after_del1 = storage->getEntry(ns_id, 3);
+        PageEntry entry_after_del1 = storage->getEntry(3);
         ASSERT_TRUE(entry_after_del1.isValid());
         EXPECT_EQ(entry1.fileIdLevel(), entry_after_del1.fileIdLevel());
         EXPECT_EQ(entry1.offset, entry_after_del1.offset);
         EXPECT_EQ(entry1.size, entry_after_del1.size);
         EXPECT_EQ(entry1.checksum, entry_after_del1.checksum);
 
-        WriteBatch batch2{ns_id};
+        WriteBatch batch2;
         batch2.delPage(3);
         storage->write(std::move(batch2));
-        PageEntry entry_after_del2 = storage->getEntry(ns_id, 3);
+        PageEntry entry_after_del2 = storage->getEntry(3);
         ASSERT_FALSE(entry_after_del2.isValid());
     }
 }
@@ -1066,25 +1065,25 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
 {
     /// put duplicated RefPages due to ref-path-collapse
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         // RefPage3 -> Page1
         batch.putRefPage(3, 1);
         // RefPage4 -> RefPage3, collapse to RefPage4 -> Page1
         batch.putRefPage(4, 3);
         storage->write(std::move(batch));
 
-        WriteBatch batch2{ns_id};
+        WriteBatch batch2;
         // RefPage4 -> Page1, duplicated due to ref-path-collapse
         batch2.putRefPage(4, 1);
         storage->write(std::move(batch));
         // now Page1's entry has ref count == 3 but not 2
     }
 
-    PageEntry entry1 = storage->getEntry(ns_id, 1);
+    PageEntry entry1 = storage->getEntry(1);
     ASSERT_TRUE(entry1.isValid());
-    PageEntry entry3 = storage->getEntry(ns_id, 3);
+    PageEntry entry3 = storage->getEntry(3);
     ASSERT_TRUE(entry3.isValid());
-    PageEntry entry4 = storage->getEntry(ns_id, 4);
+    PageEntry entry4 = storage->getEntry(4);
     ASSERT_TRUE(entry4.isValid());
 
     EXPECT_EQ(entry1.fileIdLevel(), entry4.fileIdLevel());
@@ -1094,21 +1093,21 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
 
     // check Page1's entry has ref count == 3 but not 2
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         batch.delPage(1);
         batch.delPage(4);
         storage->write(std::move(batch));
-        PageEntry entry_after_del2 = storage->getEntry(ns_id, 3);
+        PageEntry entry_after_del2 = storage->getEntry(3);
         ASSERT_TRUE(entry_after_del2.isValid());
         EXPECT_EQ(entry1.fileIdLevel(), entry_after_del2.fileIdLevel());
         EXPECT_EQ(entry1.offset, entry_after_del2.offset);
         EXPECT_EQ(entry1.size, entry_after_del2.size);
         EXPECT_EQ(entry1.checksum, entry_after_del2.checksum);
 
-        WriteBatch batch2{ns_id};
+        WriteBatch batch2;
         batch2.delPage(3);
         storage->write(std::move(batch2));
-        PageEntry entry_after_del3 = storage->getEntry(ns_id, 3);
+        PageEntry entry_after_del3 = storage->getEntry(3);
         ASSERT_FALSE(entry_after_del3.isValid());
     }
 }
@@ -1117,40 +1116,40 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
 try
 {
     {
-        WriteBatch batch{ns_id};
+        WriteBatch batch;
         // RefPage3 -> non-exist Page999
         batch.putRefPage(3, 999);
         ASSERT_NO_THROW(storage->write(std::move(batch)));
     }
 
-    ASSERT_FALSE(storage->getEntry(ns_id, 3).isValid());
-    ASSERT_THROW(storage->read(ns_id, 3), DB::Exception);
+    ASSERT_FALSE(storage->getEntry(3).isValid());
+    ASSERT_THROW(storage->read(3), DB::Exception);
     // storage->read(3);
 
     // Invalid Pages is filtered after reopen PageStorage
     ASSERT_NO_THROW(reopenWithConfig(config));
-    ASSERT_FALSE(storage->getEntry(ns_id, 3).isValid());
-    ASSERT_THROW(storage->read(ns_id, 3), DB::Exception);
+    ASSERT_FALSE(storage->getEntry(3).isValid());
+    ASSERT_THROW(storage->read(3), DB::Exception);
     // storage->read(3);
 
     // Test Add RefPage to non exists page with snapshot acuqired.
     {
         auto snap = storage->getSnapshot();
         {
-            WriteBatch batch{ns_id};
+            WriteBatch batch;
             // RefPage3 -> non-exist Page999
             batch.putRefPage(8, 999);
             ASSERT_NO_THROW(storage->write(std::move(batch)));
         }
 
-        ASSERT_FALSE(storage->getEntry(ns_id, 8).isValid());
-        ASSERT_THROW(storage->read(ns_id, 8), DB::Exception);
+        ASSERT_FALSE(storage->getEntry(8).isValid());
+        ASSERT_THROW(storage->read(8), DB::Exception);
         // storage->read(8);
     }
     // Invalid Pages is filtered after reopen PageStorage
     ASSERT_NO_THROW(reopenWithConfig(config));
-    ASSERT_FALSE(storage->getEntry(ns_id, 8).isValid());
-    ASSERT_THROW(storage->read(ns_id, 8), DB::Exception);
+    ASSERT_FALSE(storage->getEntry(8).isValid());
+    ASSERT_THROW(storage->read(8), DB::Exception);
     // storage->read(8);
 }
 CATCH
@@ -1180,14 +1179,14 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
     EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
     auto snapshot = storage->getSnapshot();
     EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
-    PageEntry p1_snapshot_entry = storage->getEntry(ns_id, 1, snapshot);
+    PageEntry p1_snapshot_entry = storage->getEntry(1, snapshot);
 
     {
         // write new version of Page1
         const size_t buf_sz = 1024;
         char buf[buf_sz];
         {
-            WriteBatch wb{ns_id};
+            WriteBatch wb;
             memset(buf, ch_update, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
@@ -1197,42 +1196,42 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
 
     {
         /// read without snapshot
-        PageEntry p1_entry = storage->getEntry(ns_id, 1);
+        PageEntry p1_entry = storage->getEntry(1);
         ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
-        Page page1 = storage->read(ns_id, 1);
+        Page page1 = storage->read(1);
         ASSERT_EQ(*page1.data.begin(), ch_update);
 
         // Page3
-        PageEntry p3_entry = storage->getEntry(ns_id, 3);
+        PageEntry p3_entry = storage->getEntry(3);
         ASSERT_TRUE(p3_entry.isValid());
-        Page page3 = storage->read(ns_id, 3);
+        Page page3 = storage->read(3);
         ASSERT_EQ(*page3.data.begin(), ch_update);
     }
 
     {
         /// read with snapshot
         // getEntry with snapshot
-        PageEntry p1_entry = storage->getEntry(ns_id, 1, snapshot);
+        PageEntry p1_entry = storage->getEntry(1, snapshot);
         ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
 
         // read(PageId) with snapshot
-        Page page1 = storage->read(ns_id, 1, nullptr, snapshot);
+        Page page1 = storage->read(1, nullptr, snapshot);
         ASSERT_EQ(*page1.data.begin(), ch_before);
 
         // read(vec<PageId>) with snapshot
         PageIds ids{
             1,
         };
-        auto pages = storage->read(ns_id, ids, nullptr, snapshot);
+        auto pages = storage->read(ids, nullptr, snapshot);
         ASSERT_EQ(pages.count(1), 1UL);
         ASSERT_EQ(*pages[1].data.begin(), ch_before);
         // TODO read(vec<PageId>, callback) with snapshot
 
         // new page do appear while read with snapshot
-        PageEntry p3_entry = storage->getEntry(ns_id, 3, snapshot);
+        PageEntry p3_entry = storage->getEntry(3, snapshot);
         ASSERT_FALSE(p3_entry.isValid());
-        ASSERT_THROW({ storage->read(ns_id, 3, nullptr, snapshot); }, DB::Exception);
+        ASSERT_THROW({ storage->read(3, nullptr, snapshot); }, DB::Exception);
     }
 }
 
@@ -1240,7 +1239,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
 {
     char ch_before = 0x01;
     char ch_update = 0xFF;
-    PageEntry p1_snapshot_entry = storage->getEntry(ns_id, 1);
+    PageEntry p1_snapshot_entry = storage->getEntry(1);
     EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
     auto s1 = storage->getSnapshot();
     EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
@@ -1254,7 +1253,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
         const size_t buf_sz = 1024;
         char buf[buf_sz];
         {
-            WriteBatch wb{ns_id};
+            WriteBatch wb;
             memset(buf, ch_update, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
@@ -1267,83 +1266,83 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
         1,
     };
     // getEntry with snapshot
-    PageEntry p1_entry = storage->getEntry(ns_id, 1, s1);
+    PageEntry p1_entry = storage->getEntry(1, s1);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
-    p1_entry = storage->getEntry(ns_id, 1, s2);
+    p1_entry = storage->getEntry(1, s2);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
-    p1_entry = storage->getEntry(ns_id, 1, s3);
+    p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    Page page1 = storage->read(ns_id, 1, nullptr, s1);
+    Page page1 = storage->read(1, nullptr, s1);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(ns_id, 1, nullptr, s2);
+    page1 = storage->read(1, nullptr, s2);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(ns_id, 1, nullptr, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
-    auto pages = storage->read(ns_id, ids, nullptr, s1);
+    auto pages = storage->read(ids, nullptr, s1);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ns_id, ids, nullptr, s2);
+    pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ns_id, ids, nullptr, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
-    p1_entry = storage->getEntry(ns_id, 1);
+    p1_entry = storage->getEntry(1);
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s1.reset(); /// free snapshot 1
     EXPECT_EQ(getPSMVCCNumSnapshots(), 2);
 
     // getEntry with snapshot
-    p1_entry = storage->getEntry(ns_id, 1, s2);
+    p1_entry = storage->getEntry(1, s2);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
-    p1_entry = storage->getEntry(ns_id, 1, s3);
+    p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    page1 = storage->read(ns_id, 1, nullptr, s2);
+    page1 = storage->read(1, nullptr, s2);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(ns_id, 1, nullptr, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ns_id, ids, nullptr, s2);
+    pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ns_id, ids, nullptr, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
-    p1_entry = storage->getEntry(ns_id, 1);
+    p1_entry = storage->getEntry(1);
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s2.reset(); /// free snapshot 2
     EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
 
     // getEntry with snapshot
-    p1_entry = storage->getEntry(ns_id, 1, s3);
+    p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    page1 = storage->read(ns_id, 1, nullptr, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
-    pages = storage->read(ns_id, ids, nullptr, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
-    p1_entry = storage->getEntry(ns_id, 1);
+    p1_entry = storage->getEntry(1);
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s3.reset(); /// free snapshot 3
     EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
 
     // without snapshot
-    p1_entry = storage->getEntry(ns_id, 1);
+    p1_entry = storage->getEntry(1);
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 }
 

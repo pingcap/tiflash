@@ -88,7 +88,6 @@ public:
         records.emplace_back(record);
     }
 
-
     void putExternal(PageIdV3Internal page_id)
     {
         EditRecord record{};

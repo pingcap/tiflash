@@ -6,7 +6,6 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 
-
 namespace DB
 {
 namespace ErrorCodes

@@ -334,11 +334,11 @@ try
     auto snapshot = page_storage->getSnapshot();
 
     {
-        WriteBatch batch2;
-        batch2.putRefPage(2, 1); // ref 2 -> 1 -> 0
-        batch2.delPage(1); // free ref 1 -> 0
-        batch2.delPage(1024); // free normal page 1024
-        page_storage->write(std::move(batch2));
+        WriteBatch batch;
+        batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
+        batch.delPage(1); // free ref 1 -> 0
+        batch.delPage(1024); // free normal page 1024
+        page_storage->write(std::move(batch));
     }
 }
 CATCH
