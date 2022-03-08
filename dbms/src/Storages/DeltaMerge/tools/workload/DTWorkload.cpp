@@ -51,7 +51,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     ts_gen = std::make_unique<TimestampGenerator>();
 
     Stopwatch sw;
-    store = std::make_unique<DeltaMergeStore>(*context, true, table_info->db_name, table_info->table_name, 1, *table_info->columns, //
+    store = std::make_unique<DeltaMergeStore>(*context, true, table_info->db_name, table_info->table_name, *table_info->columns, //
                                               table_info->handle,
                                               table_info->is_common_handle,
                                               table_info->rowkey_column_indexes.size(),

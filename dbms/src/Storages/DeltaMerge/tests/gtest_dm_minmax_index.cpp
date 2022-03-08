@@ -98,7 +98,6 @@ bool checkMatch(
         false,
         "test_database",
         name,
-        1,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,

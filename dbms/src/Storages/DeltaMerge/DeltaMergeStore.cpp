@@ -174,12 +174,12 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool data_path_contains_database_name,
                                  const String & db_name_,
                                  const String & table_name_,
-                                 const TableID physical_table_id,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_)
+                                 const Settings & settings_,
+                                 const TableID physical_table_id)
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)

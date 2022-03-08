@@ -1183,12 +1183,12 @@ void StorageDeltaMerge::rename(
         data_path_contains_database_name,
         new_database_name,
         new_table_name,
-        tidb_table_info.id,
         std::move(table_column_defines),
         std::move(handle_column_define),
         is_common_handle,
         rowkey_column_size,
-        settings);
+        settings,
+        tidb_table_info.id);
 }
 
 String StorageDeltaMerge::getTableName() const
@@ -1495,12 +1495,12 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             data_path_contains_database_name,
             table_column_info->db_name,
             table_column_info->table_name,
-            tidb_table_info.id,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings());
+            DeltaMergeStore::Settings(),
+            tidb_table_info.id);
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }

@@ -42,7 +42,7 @@ DMStressProxy::DMStressProxy(const StressOptions & opts_)
     cols->emplace_back(col_balance_define);
     cols->emplace_back(col_random_define);
     auto handle_col = (*cols)[0];
-    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, 1, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
     if (opts_.verify)
     {
         ColumnDefines columns;
