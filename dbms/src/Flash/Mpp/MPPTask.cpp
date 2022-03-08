@@ -41,7 +41,6 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -260,6 +259,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
+    auto & mpp_task_statistics = dag_context->getMPPTaskStatistics();
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());
     mpp_task_statistics.logTracingJson();
 }
@@ -271,6 +271,7 @@ void MPPTask::preprocess()
     executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    auto & mpp_task_statistics = dag_context->getMPPTaskStatistics();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
     mpp_task_statistics.recordReadWaitIndex(*dag_context);
 }
@@ -293,6 +294,7 @@ void MPPTask::runImpl()
     });
     String err_msg;
     LOG_INFO(log, "task starts running");
+    auto & mpp_task_statistics = dag_context->getMPPTaskStatistics();
     try
     {
         preprocess();

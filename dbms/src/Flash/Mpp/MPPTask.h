@@ -99,8 +99,6 @@ private:
 
     const LogWithPrefixPtr log;
 
-    MPPTaskStatistics mpp_task_statistics;
-
     Exception err;
 
     friend class MPPTaskManager;

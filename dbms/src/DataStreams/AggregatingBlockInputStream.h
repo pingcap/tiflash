@@ -10,6 +10,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 /** Aggregates the stream of blocks using the specified key columns and aggregate functions.
   * Columns with aggregate functions adds to the end of the block.
   * If final = false, the aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -29,8 +31,10 @@ public:
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
-        const LogWithPrefixPtr & log_)
+        const LogWithPrefixPtr & log_,
+        DAGContext * dag_context_)
         : log(getMPPTaskLog(log_, NAME))
+        , dag_context(dag_context_)
         , params(params_)
         , aggregator(params, log)
         , file_provider{file_provider_}
@@ -47,6 +51,7 @@ protected:
     Block readImpl() override;
 
     LogWithPrefixPtr log;
+    DAGContext * dag_context;
 
     Aggregator::Params params;
     Aggregator aggregator;

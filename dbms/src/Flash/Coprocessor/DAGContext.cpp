@@ -14,10 +14,13 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
+namespace
+{
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
+} // namespace
 
 bool DAGContext::allowZeroInDate() const
 {
@@ -32,6 +35,13 @@ bool DAGContext::allowInvalidDate() const
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
+}
+
+MPPTaskStatistics & DAGContext::getMPPTaskStatistics()
+{
+    if (!isMPPTask())
+        throw TiFlashException("MPPTaskStatistics is used in mpp only", Errors::Coprocessor::Internal);
+    return mpp_task_statistics;
 }
 
 void DAGContext::initExecutorIdToJoinIdMap()

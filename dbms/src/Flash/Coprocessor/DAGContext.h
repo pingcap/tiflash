@@ -14,6 +14,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -108,6 +109,7 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , mpp_task_statistics(MPPTaskId::unknown_mpp_task_id, "unknown")
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
@@ -127,6 +129,7 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , mpp_task_statistics(mpp_task_id, meta_.address())
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
     }
@@ -142,6 +145,7 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , mpp_task_statistics(MPPTaskId::unknown_mpp_task_id, "unknown")
     {}
 
     void attachBlockIO(const BlockIO & io_);
@@ -232,6 +236,8 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
+    MPPTaskStatistics & getMPPTaskStatistics();
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -283,6 +289,8 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
+
+    MPPTaskStatistics mpp_task_statistics;
 };
 
 } // namespace DB
