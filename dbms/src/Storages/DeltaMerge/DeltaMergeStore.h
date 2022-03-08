@@ -431,8 +431,7 @@ private:
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
-    PageIdGenerator page_id_generator;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;

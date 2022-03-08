@@ -142,7 +142,8 @@ public:
         String name,
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        bool use_v3 = false);
 
     PageStorage(
         String name,

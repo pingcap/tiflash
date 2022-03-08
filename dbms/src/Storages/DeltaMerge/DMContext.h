@@ -13,7 +13,6 @@ class StoragePathPool;
 namespace DM
 {
 class StoragePool;
-class PageIdGenerator;
 using NotCompress = std::unordered_set<ColId>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
@@ -27,7 +26,6 @@ struct DMContext : private boost::noncopyable
 
     StoragePathPool & path_pool;
     StoragePool & storage_pool;
-    PageIdGenerator & page_id_generator;
     const UInt64 hash_salt;
 
     // gc safe-point, maybe update.
@@ -75,7 +73,6 @@ public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
               StoragePool & storage_pool_,
-              PageIdGenerator & page_id_generator_,
               const UInt64 hash_salt_,
               const DB::Timestamp min_version_,
               const NotCompress & not_compress_,
@@ -86,7 +83,6 @@ public:
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
-        , page_id_generator(page_id_generator_)
         , hash_salt(hash_salt_)
         , min_version(min_version_)
         , not_compress(not_compress_)

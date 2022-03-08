@@ -39,8 +39,10 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -147,6 +149,8 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
+    DM::StoragePoolPtr storage_pool;
+
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1555,6 +1559,73 @@ IORateLimiter & Context::getIORateLimiter() const
 ReadLimiterPtr Context::getReadLimiter() const
 {
     return getIORateLimiter().getReadLimiter();
+}
+
+static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
+{
+    // check whether v3 is already enabled
+    bool v3_manifests_exists = false;
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
+        {
+            v3_manifests_exists = true;
+            break;
+        }
+    }
+    if (v3_manifests_exists)
+        return true;
+
+    // check whether v3 on new node is enabled in the config, if not, no need to check anymore
+    if (!enable_v3_latest_on_new_node)
+        return false;
+
+    // check whether there are any files in kvstore path, if exists, then this is not a new node
+    bool is_new_node = true;
+    for (const auto & path : path_pool.listKVStorePaths())
+    {
+        Poco::File dir(path);
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            is_new_node = false;
+            break;
+        }
+    }
+    return is_new_node;
+}
+
+void Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
+{
+    if (isPageV3Enabled(path_pool, enable_v3_latest_on_new_node))
+    {
+        auto lock = getLock();
+        try
+        {
+            // create manifests file before initialize StoragePool
+            for (const auto & path : path_pool.listGlobalPagePaths())
+                PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
+
+            shared->storage_pool = std::make_shared<DM::StoragePool>("__global__", path_pool, *this, settings);
+            shared->storage_pool->restore();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->storage_pool = nullptr;
+    }
+}
+
+DM::StoragePoolPtr Context::getGlobalStoragePool() const
+{
+    auto lock = getLock();
+    return shared->storage_pool;
 }
 
 UInt16 Context::getTCPPort() const

@@ -62,6 +62,12 @@ PathPool::PathPool(
             kvstore_paths.emplace_back(std::move(p));
         }
     }
+    for (const auto & s : latest_data_paths)
+    {
+        // Get a normalized path without trailing '/'
+        auto p = getNormalizedPath(s + "/page");
+        global_page_paths.emplace_back(std::move(p));
+    }
 }
 
 StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_) const
@@ -85,6 +91,11 @@ Strings PathPool::listPaths() const
 PSDiskDelegatorPtr PathPool::getPSDiskDelegatorRaft()
 {
     return std::make_shared<PSDiskDelegatorRaft>(*this);
+}
+
+PSDiskDelegatorPtr PathPool::getPSDiskDelegatorGlobalMulti(const String & prefix) const
+{
+    return std::make_shared<PSDiskDelegatorGlobalMulti>(*this, prefix);
 }
 
 //==========================================================================================
@@ -720,6 +731,55 @@ void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size
             page_path_map.erase(iter);
         pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
     }
+}
+
+//==========================================================================================
+// Global page data
+//==========================================================================================
+
+size_t PSDiskDelegatorGlobalMulti::numPaths() const
+{
+    return pool.listGlobalPagePaths().size();
+}
+
+String PSDiskDelegatorGlobalMulti::defaultPath() const
+{
+    return fmt::format("{}/{}", pool.listGlobalPagePaths()[default_path_index], path_prefix);
+}
+
+Strings PSDiskDelegatorGlobalMulti::listPaths() const
+{
+    // The delta data could be stored in all direcotries.
+    std::vector<String> paths;
+    for (const auto & path : pool.listGlobalPagePaths())
+    {
+        paths.push_back(fmt::format("{}/{}", path, path_prefix));
+    }
+    return paths;
+}
+
+String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
+{
+    throw Exception("Shouldn't called", ErrorCodes::LOGICAL_ERROR);
+}
+
+size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
+    const PageFileIdAndLevel & /*id_lvl*/,
+    size_t /*size_to_add*/,
+    const String & /*pf_parent_path*/,
+    bool /*need_insert_location*/)
+{
+    throw Exception("Shouldn't called", ErrorCodes::LOGICAL_ERROR);
+}
+
+String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
+{
+    throw Exception("Shouldn't called", ErrorCodes::LOGICAL_ERROR);
+}
+
+void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/)
+{
+    throw Exception("Shouldn't called", ErrorCodes::LOGICAL_ERROR);
 }
 
 } // namespace DB

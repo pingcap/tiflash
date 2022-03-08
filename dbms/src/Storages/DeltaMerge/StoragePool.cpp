@@ -74,11 +74,49 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
     , global_context(global_ctx)
 {}
 
+StoragePool::StoragePool(const String & name, const PathPool & path_pool, const Context & global_ctx, const Settings & settings)
+    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+    log_storage(PageStorage::create(name + ".log",
+                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                    extractConfig(settings, StorageType::Log),
+                                    global_ctx.getFileProvider(),
+                                    true))
+    ,
+    // The iops in data_storage is low, only use the first disk for storing data
+    data_storage(PageStorage::create(name + ".data",
+                                     path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                     extractConfig(settings, StorageType::Data),
+                                     global_ctx.getFileProvider(),
+                                     true))
+    ,
+    // The iops in meta_storage is relatively high, use multi-disks if possible
+    meta_storage(PageStorage::create(name + ".meta",
+                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                     extractConfig(settings, StorageType::Meta),
+                                     global_ctx.getFileProvider(),
+                                     true))
+    , global_context(global_ctx)
+{}
+
+StoragePool::StoragePool(PageStoragePtr log_storage_, PageStoragePtr data_storage_, PageStoragePtr meta_storage_, const Context & global_ctx)
+    : log_storage(std::move(log_storage_))
+    , data_storage(std::move(data_storage_))
+    , meta_storage(std::move(meta_storage_))
+    , global_context(global_ctx)
+    , initialized(true)
+{}
+
 void StoragePool::restore()
 {
-    log_storage->restore();
-    data_storage->restore();
-    meta_storage->restore();
+    if (!initialized)
+    {
+        log_storage->restore();
+        data_storage->restore();
+        meta_storage->restore();
+    }
+    max_log_page_id = log_storage->getMaxId();
+    max_data_page_id = data_storage->getMaxId();
+    max_meta_page_id = meta_storage->getMaxId();
 }
 
 void StoragePool::drop()
@@ -118,14 +156,7 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     return done_anything;
 }
 
-void PageIdGenerator::restore(const StoragePool & storage_pool)
-{
-    max_log_page_id = storage_pool.log_storage->getMaxId();
-    max_data_page_id = storage_pool.data_storage->getMaxId();
-    max_meta_page_id = storage_pool.meta_storage->getMaxId();
-}
-
-PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may

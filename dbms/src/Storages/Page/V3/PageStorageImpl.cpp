@@ -250,5 +250,21 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     external_pages_remover = callbacks.v3_remover;
 }
 
+const String PageStorageImpl::manifests_file_name = "manifests";
+
+bool PageStorageImpl::isManifestsFileExists(const String & path)
+{
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    return file.exists();
+}
+
+void PageStorageImpl::createManifestsFileIfNeed(const String & path)
+{
+    Poco::File dir(path);
+    dir.createDirectories();
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    file.createFile();
+}
+
 } // namespace PS::V3
 } // namespace DB

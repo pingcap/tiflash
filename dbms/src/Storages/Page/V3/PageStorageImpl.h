@@ -50,6 +50,10 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
+    static bool isManifestsFileExists(const String & path);
+
+    static void createManifestsFileIfNeed(const String & path);
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
@@ -74,6 +78,8 @@ private:
     BlobStore blob_store;
 
     std::atomic<bool> gc_is_running = false;
+
+    const static String manifests_file_name;
 
     ExternalPageCallbacks::V3ExternalPagesRemover external_pages_remover = nullptr;
 };

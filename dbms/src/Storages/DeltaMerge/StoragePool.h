@@ -14,6 +14,8 @@ class StableDiskDelegator;
 
 namespace DM
 {
+class StoragePool;
+using StoragePoolPtr = std::shared_ptr<StoragePool>;
 static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
 class StoragePool : private boost::noncopyable
@@ -26,6 +28,10 @@ public:
 
     StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
 
+    StoragePool(const String & name, const PathPool & path_pool, const Context & global_ctx, const Settings & settings);
+
+    StoragePool(PageStoragePtr log_storage_, PageStoragePtr data_storage_, PageStoragePtr meta_storage_, const Context & global_ctx);
+
     void restore();
 
     PageStoragePtr log() { return log_storage; }
@@ -33,9 +39,17 @@ public:
     PageStoragePtr meta() { return meta_storage; }
 
     // Caller must cancel gc tasks before drop
+    // FIXME: the drop logic may not be appropriate for global StoragePool
     void drop();
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
+
+    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
+
+    PageId maxMetaPageId() { return max_meta_page_id; }
+
+    PageId newLogPageId() { return ++max_log_page_id; }
+    PageId newMetaPageId() { return ++max_meta_page_id; }
 
 private:
     PageStoragePtr log_storage;
@@ -48,24 +62,8 @@ private:
 
     const Context & global_context;
 
-    friend class PageIdGenerator;
-};
+    bool initialized = false;
 
-class PageIdGenerator : private boost::noncopyable
-{
-public:
-    PageIdGenerator() = default;
-
-    void restore(const StoragePool & storage_pool);
-
-    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
-
-    PageId maxMetaPageId() { return max_meta_page_id; }
-
-    PageId newLogPageId() { return ++max_log_page_id; }
-    PageId newMetaPageId() { return ++max_meta_page_id; }
-
-private:
     std::atomic<PageId> max_log_page_id = 0;
     std::atomic<PageId> max_data_page_id = 0;
     std::atomic<PageId> max_meta_page_id = 0;

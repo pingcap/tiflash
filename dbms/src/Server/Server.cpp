@@ -978,6 +978,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
+    // must initialize before the following operation:
+    //   1. load data from disk(because this process may depend on the initialization of global StoragePool)
+    //   2. initialize kvstore service(because we use whether there are any files in kvstore directory to check whether this is the first startup of this node)
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), storage_config.enable_v3_latest_on_new_node);
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.

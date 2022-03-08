@@ -56,7 +56,7 @@ private:
 #endif
 
     Context & global_context;
-    std::shared_ptr<PS::V2::PageStorage> page_storage;
+    std::shared_ptr<PageStorage> page_storage;
     std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
 
     const RegionManager & region_manager;
