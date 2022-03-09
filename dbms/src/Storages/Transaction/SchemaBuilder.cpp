@@ -306,7 +306,7 @@ inline SchemaChanges detectSchemaChanges(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_info, TableInfoPtr table_info, ManageableStoragePtr storage)
 {
-    LOG_FMT_INFO(log, "Altering table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    LOG_FMT_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 
     /// Detect schema changes.
     auto orig_table_info = storage->getTableInfo();
@@ -332,7 +332,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
                 ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
         }
 
-    LOG_FMT_DEBUG(log, "{} : {} ", __PRETTY_FUNCTION__, ss.str());
+    LOG_FMT_DEBUG(log, "{} : {}", __PRETTY_FUNCTION__, ss.str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
@@ -354,7 +354,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
             context);
     }
 
-    LOG_FMT_INFO(log, "Altered table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    LOG_FMT_INFO(log, "Altered table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -363,15 +363,14 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, Table
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), Errors::DDL::StaleSchema);
+        throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
     }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
-        throw TiFlashException(
-            "miss table in TiFlash : " + name_mapper.debugCanonicalName(*db_info, *table_info),
-            Errors::DDL::MissingTable);
+        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
+                               Errors::DDL::MissingTable);
     }
 
     applyAlterLogicalTable(db_info, table_info, storage);
@@ -508,7 +507,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         }
         else
         { // >= SchemaActionType::MaxRecognizedType
-            LOG_FMT_ERROR(log, "Unsupported change type: {} ", int(diff.type));
+            LOG_FMT_ERROR(log, "Unsupported change type: {}", int(diff.type));
         }
 
         break;
@@ -613,7 +612,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*db_info), updated_table_info, name_mapper, context);
 
-    LOG_FMT_INFO(log, "Applied partition changes {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    LOG_FMT_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -734,10 +733,10 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException(
-            fmt::format("miss table in TiFlash : {} ", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
+            fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
             Errors::DDL::MissingTable);
 
-    LOG_FMT_INFO(log, "Exchange partition for table {} ", name_mapper.debugCanonicalName(*pt_db_info, *table_info));
+    LOG_FMT_INFO(log, "Exchange partition for table {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info));
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
     {
@@ -755,7 +754,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// step 2 change non partition table to a partition of the partition table
     storage = tmt_context.getStorages().get(npt_table_id);
     if (storage == nullptr)
-        throw TiFlashException(fmt::format("miss table in TiFlash : {} ", name_mapper.debugCanonicalName(*npt_db_info, *table_info)),
+        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*npt_db_info, *table_info)),
                                Errors::DDL::MissingTable);
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = pt_table_info;
@@ -960,7 +959,7 @@ String createTableStmt(
     const SchemaNameMapper & name_mapper,
     Poco::Logger * log)
 {
-    LOG_FMT_DEBUG(log, "Analyzing table info : {} ", table_info.serialize());
+    LOG_FMT_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
     auto [columns, pks] = parseColumnsFromTableInfo(table_info, log);
 
     String stmt;
@@ -1005,7 +1004,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_info, TableInfoPtr table_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
-    LOG_FMT_INFO(log, "Creating table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    LOG_FMT_INFO(log, "Creating table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 
     /// Update schema version.
     table_info->schema_version = target_version;
@@ -1023,7 +1022,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
                 return;
             }
 
-            LOG_FMT_DEBUG(log, "Recovering table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+            LOG_FMT_DEBUG(log, "Recovering table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             AlterCommands commands;
             {
                 AlterCommand command;
@@ -1032,7 +1031,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
             }
             auto alter_lock = storage->lockForAlter(getThreadName());
             storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
-            LOG_FMT_INFO(log, "Created table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+            LOG_FMT_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             return;
         }
     }
@@ -1060,7 +1059,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();
-    LOG_FMT_INFO(log, "Created table {} ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    LOG_FMT_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -1184,13 +1183,13 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
     table_info.replica_info = latest_table_info->replica_info;
 
     AlterCommands commands;
-    LOG_FMT_INFO(log, "Updating replica info for {} ", name_mapper.debugCanonicalName(*db_info, table_info));
+    LOG_FMT_INFO(log, "Updating replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
     // Note that update replica info will update table info in table create statement by modifying
     // original table info with new replica info instead of using latest_table_info directly, so that
     // other changes (ALTER commands) won't be saved.
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
-    LOG_FMT_INFO(log, "Updated replica info for {} ", name_mapper.debugCanonicalName(*db_info, table_info));
+    LOG_FMT_INFO(log, "Updated replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
 }
 
 template <typename Getter, typename NameMapper>
