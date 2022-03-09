@@ -131,7 +131,7 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first, {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
+            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first of total {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
         LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
