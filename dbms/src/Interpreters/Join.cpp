@@ -1772,8 +1772,8 @@ void Join::joinBlock(Block & block) const
         std::unique_lock lk(build_table_mutex);
 
         build_table_cv.wait(lk, [&]() { return build_table_state != 0; });
-        if (build_table_state == -1) /// return once failed to build the hash table
-            return;
+        if (build_table_state == -1) /// throw this exception once failed to build the hash table
+            throw Exception("Build failed before join probe!");
     }
 
     std::shared_lock lock(rwlock);
