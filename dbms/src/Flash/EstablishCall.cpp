@@ -2,27 +2,66 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/Utils.h>
 
-
 namespace DB
 {
-
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
-    : calldata_watched(nullptr)
-    , watch_dog(new EstablishCallData(this))
-    , p_ctx(&(watch_dog->ctx)) //  Uses context from watch_dog to avoid context early released. Since watch_dog will check context, even when watched calldata is released.
+    : ctx(std::make_shared<::grpc::ServerContext>())
+    , watch_dog(new EstablishCallData(this, ctx))
     , service(service)
     , cq(cq)
     , notify_cq(notify_cq)
-    , responder(p_ctx)
+    , responder(ctx.get())
     , state(NEW_REQUEST)
-
 {
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    p_ctx->AsyncNotifyWhenDone(watch_dog);
-    service->RequestEstablishMPPConnection(p_ctx, &request, &responder, cq, notify_cq, this);
+    ctx->AsyncNotifyWhenDone(watch_dog);
+    service->RequestEstablishMPPConnection(ctx.get(), &request, &responder, cq, notify_cq, this);
 }
+
+void EstablishSharedEnv::cancelLoop()
+{
+    while (!end_syn)
+    {
+        {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            long now_ts = ts.tv_sec;
+            while (true)
+            {
+                std::unique_lock<std::mutex> lock(mu);
+                if (!wait_deadline_queue.empty())
+                {
+                    std::pair<long, EstablishCallData *> top_item = wait_deadline_queue.top();
+                    if (now_ts >= top_item.first)
+                    { // deadline is met
+                        wait_deadline_queue.pop();
+                        lock.unlock();
+                        top_item.second->cancel();
+                    }
+                    else
+                        break;
+                }
+                else
+                    break;
+            }
+        }
+        usleep(1000000); // sleep 1s
+    }
+}
+
+void EstablishSharedEnv::submitCancelTask(EstablishCallData * calldata)
+{
+    const int wait_interval = 60; // 60s
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    long deadline_ts = ts.tv_sec + wait_interval; // timestamp of deadline, unit: second
+    std::unique_lock<std::mutex> lock(mu);
+    wait_deadline_queue.push(std::make_pair(deadline_ts, calldata));
+}
+
+std::unique_ptr<EstablishSharedEnv> EstablishSharedEnv::global_instance;
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
 {
@@ -50,7 +89,7 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnectionSyncOrAsync(p_ctx, &request, nullptr, this);
+        service->EstablishMPPConnectionSyncOrAsync(ctx.get(), &request, nullptr, this);
     }
     catch (...)
     {
@@ -58,9 +97,8 @@ void EstablishCallData::initRpc()
     }
     if (eptr)
     {
-        state = FINISH;
         grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
-        responder.Finish(status, this);
+        writeDone(status);
     }
 }
 
@@ -83,7 +121,8 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
-    if (canceled)
+    std::unique_lock state_lock(state_mu);
+    if (canceled || state == FINISH)
         return;
     state = FINISH;
     if (stopwatch)
@@ -101,27 +140,33 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::cancel()
 {
-    canceled = true;
+    std::unique_lock state_lock(state_mu);
     if (mpp_tunnel)
-        mpp_tunnel->consumerFinish("grpc canceled.", true); //trigger mpp tunnel finish work
+    {
+        canceled = true;
+        mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
+        delete this;
+    }
 }
+
 
 void EstablishCallData::proceed()
 {
     if (calldata_watched) // handle cancel case, which is triggered by AsyncNotifyWhenDone. calldata_watched is the EstablishCallData to be canceled. "this" is the monitor.
     {
-        if (ctx.IsCancelled() && state != FINISH)
+        // watchdog role
+        if (ctx->IsCancelled())
         {
-            calldata_watched->cancel();
-            delete calldata_watched;
+            // if state == FINISH for watchdog, it means watched calldata had been finished and released.
+            // So just cancel case of "state != FINISH"
+            if (state != FINISH)
+                EstablishSharedEnv::global_instance->submitCancelTask(calldata_watched);
         }
-        if (calldata_watched == nullptr)
-        {
-            std::cerr << "calldata_watched == nullptr & != nullptr!!" << std::endl;
-        }
+        // delete watchdog itself
         delete this;
         return;
     }
+    // calldata role
     if (state == NEW_REQUEST)
     {
         state = PROCESSING;
@@ -132,7 +177,7 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
-        std::unique_lock lk(mu);
+        std::unique_lock lk(mu); // don't move this lock , this code protect the check of mpp_tunnel and ready.
         if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
             ready = false;
@@ -144,16 +189,14 @@ void EstablishCallData::proceed()
     }
     else if (state == ERR_HANDLE)
     {
-        state = FINISH;
         writeDone(err_status);
     }
     else
     {
         assert(state == FINISH);
+        watch_dog->state = FINISH; // update state of watchdog, so that it can known if watched calldata had beed released.
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That't the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
-        if (watch_dog)
-            watch_dog->state = FINISH;
         delete this;
         return;
     }
@@ -163,5 +206,13 @@ void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_
 {
     stopwatch = std::make_shared<Stopwatch>();
     this->mpp_tunnel = mpp_tunnel_;
+    {
+        std::unique_lock state_lock(state_mu);
+        if (canceled)
+        {
+            EstablishSharedEnv::global_instance->submitCancelTask(this);
+        }
+    }
 }
+
 } // namespace DB

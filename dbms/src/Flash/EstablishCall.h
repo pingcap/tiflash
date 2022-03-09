@@ -7,6 +7,8 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
 
+#include <queue>
+
 namespace DB
 {
 class MPPTunnel;
@@ -25,6 +27,7 @@ private:
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 };
 
+
 class EstablishCallData : public PacketWriter
 {
 public:
@@ -35,9 +38,10 @@ public:
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
     // A watchdog of EstablishCallData used for handle cancel event.
-    EstablishCallData(EstablishCallData * p)
-        : calldata_watched(p)
+    EstablishCallData(EstablishCallData * p, const std::shared_ptr<::grpc::ServerContext> & ctx_)
+        : ctx(ctx_)
         , responder(nullptr)
+        , calldata_watched(p)
     {}
 
     bool write(const mpp::MPPDataPacket & packet) override;
@@ -60,17 +64,17 @@ public:
     static EstablishCallData * spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
 
-    EstablishCallData * calldata_watched; // used by AsyncNotifyWhenDone for handling cancel case.
+    std::shared_ptr<::grpc::ServerContext> ctx;
     EstablishCallData * watch_dog = nullptr;
-    ::grpc::ServerContext * p_ctx; // Calldata uses context from watch_dog to avoid context early released.
-    ::grpc::ServerContext ctx;
 
 private:
     void notifyReady();
 
     void initRpc();
 
-    std::mutex mu;
+    std::mutex mu; // protect "ready"
+    std::mutex state_mu; // protect "canceled", "state"
+
     // server instance
     AsyncFlashService * service;
 
@@ -85,6 +89,7 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
+    EstablishCallData * calldata_watched = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
 
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
@@ -100,8 +105,35 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    CallStatus state = NEW_REQUEST; // The current serving state.
+    std::atomic<CallStatus> state{NEW_REQUEST}; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
+};
+
+class EstablishSharedEnv
+{
+public:
+    EstablishSharedEnv()
+    {
+        background_worker = std::unique_ptr<std::thread>(new std::thread(&EstablishSharedEnv::cancelLoop, this));
+    }
+    void cancelLoop();
+    void submitCancelTask(EstablishCallData * calldata);
+
+    std::unique_ptr<std::thread> background_worker;
+    ~EstablishSharedEnv()
+    {
+        end_syn = true;
+        background_worker->join();
+    }
+
+    std::priority_queue<std::pair<long, EstablishCallData *>, std::vector<std::pair<long, EstablishCallData *>>, auto (*)(const std::pair<long, EstablishCallData *> &, const std::pair<long, EstablishCallData *> &)->bool> wait_deadline_queue{
+        [](const std::pair<long, EstablishCallData *> & a, const std::pair<long, EstablishCallData *> & b) -> bool {
+            return a.first > b.first;
+        }}; // min deadline first priority queue of EstablishCallData cancel
+    std::atomic<bool> end_syn{false};
+    std::mutex mu;
+
+    static std::unique_ptr<EstablishSharedEnv> global_instance;
 };
 } // namespace DB
