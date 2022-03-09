@@ -81,12 +81,15 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
-void executeTask(const std::unique_ptr<IExecutableTask> & task)
+namespace
+{
+void executeTask(TaskPtr & task)
 {
     UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_thdpool, type_max_active_threads_of_thdpool);
     task->execute();
     task.reset();
 }
+} // namespace
 
 void DynamicThreadPool::fixedWork(size_t index)
 {
