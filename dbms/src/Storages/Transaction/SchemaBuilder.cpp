@@ -394,7 +394,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(DBInfoPtr db_info
             auto part_storage = tmt_context.getStorages().get(part_def.id);
             if (part_storage == nullptr)
             {
-                throw TiFlashException(fmt::format("miss table in TiFlash : {},  partition: {}.", name_mapper.debugCanonicalName(*db_info, *table_info), std::to_string(part_def.id)),
+                throw TiFlashException(fmt::format("miss table in TiFlash : {},  partition: {}.", name_mapper.debugCanonicalName(*db_info, *table_info), part_def.id),
                                        Errors::DDL::MissingTable);
             }
             applyAlterPhysicalTable(db_info, part_table_info, part_storage);
@@ -502,7 +502,15 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     default:
     {
-        LOG_FMT_ERROR(log, "Unsupported change type: {} ", int(diff.type));
+        if (diff.type < SchemaActionType::MaxRecognizedType)
+        {
+            LOG_FMT_INFO(log, "Ignore change type: {}", int(diff.type));
+        }
+        else
+        { // >= SchemaActionType::MaxRecognizedType
+            LOG_FMT_ERROR(log, "Unsupported change type: {} ", int(diff.type));
+        }
+
         break;
     }
     }
@@ -536,7 +544,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table in TiFlash {}", std::to_string(table_id)), Errors::DDL::MissingTable);
+        throw TiFlashException(fmt::format("miss table in TiFlash {}", table_id), Errors::DDL::MissingTable);
     }
 
     applyPartitionDiff(db_info, table_info, storage);
@@ -669,7 +677,11 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     const auto old_mapped_tbl_name = storage->getTableName();
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
-    LOG_FMT_INFO(log, "Renaming table {}.{} (display name: {}) to {}.", old_mapped_db_name, old_mapped_tbl_name, old_display_table_name, name_mapper.debugCanonicalName(*new_db_info, new_table_info));
+    LOG_FMT_INFO(log, "Renaming table {}.{} (display name: {}) to {}.",
+                 old_mapped_db_name, //
+                 old_mapped_tbl_name, //
+                 old_display_table_name, //
+                 name_mapper.debugCanonicalName(*new_db_info, new_table_info));
 
     // Note that rename will update table info in table create statement by modifying original table info
     // with "tidb_display.table" instead of using new_table_info directly, so that other changes
@@ -683,7 +695,11 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     InterpreterRenameQuery(rename, context, getThreadName()).execute();
 
-    LOG_FMT_INFO(log, "Renamed table {}.{} (display name: {}) to {}", old_mapped_db_name, old_mapped_tbl_name, old_display_table_name, name_mapper.debugCanonicalName(*new_db_info, new_table_info));
+    LOG_FMT_INFO(log, "Renamed table {}.{} (display name: {}) to {}",
+                 old_mapped_db_name, //
+                 old_mapped_tbl_name, //
+                 old_display_table_name, //
+                 name_mapper.debugCanonicalName(*new_db_info, new_table_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -769,7 +785,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException(
-            fmt::format("miss table in TiFlash :", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
+            fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
             Errors::DDL::MissingTable);
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = DB::InvalidTableID;
@@ -884,7 +900,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & schema_name)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_db).Increment();
-    LOG_FMT_INFO(log, "Tombstoning database ", schema_name);
+    LOG_FMT_INFO(log, "Tombstoning database {}", schema_name);
     auto db = context.tryGetDatabase(schema_name);
     if (db == nullptr)
     {
@@ -1089,7 +1105,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         return;
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
-    LOG_FMT_INFO(log, "Tombstoning table {}.{} ", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_FMT_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
     AlterCommands commands;
     {
         AlterCommand command;
