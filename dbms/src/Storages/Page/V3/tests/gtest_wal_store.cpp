@@ -100,17 +100,17 @@ TEST(WALSeriTest, Upserts)
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1_2);
     iter++;
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3_2);
     iter++;
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
