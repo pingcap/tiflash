@@ -131,16 +131,8 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            if (exception_from_workers.front() != nullptr)
-            {
-                LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first, {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
-                std::rethrow_exception(exception_from_workers.front());
-            }
-            else /// should not happen, safety check.
-            {
-                LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception but rethrow null ptr, left {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
-                throw Exception("An exception ptr is null in CreatingSets");
-            }
+            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first, {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
+            std::rethrow_exception(exception_from_workers.front());
         }
         LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
 
