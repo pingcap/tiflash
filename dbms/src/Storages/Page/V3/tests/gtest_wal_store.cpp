@@ -212,6 +212,56 @@ protected:
     PSDiskDelegatorPtr delegator;
 };
 
+TEST_F(WALStoreTest, FindCheckpointFile)
+{
+    Poco::Logger * log = &Poco::Logger::get("WALStoreTest");
+    auto path = getTemporaryPath();
+
+    {
+        // no checkpoint
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_1_0", log),
+            LogFilename::parseFrom(path, "log_2_0", log),
+            LogFilename::parseFrom(path, "log_3_0", log),
+            LogFilename::parseFrom(path, "log_4_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_FALSE(cp.has_value());
+        EXPECT_EQ(files_to_read.size(), 4);
+    }
+
+    {
+        // checkpoint and some other logfiles
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_12_1", log),
+            LogFilename::parseFrom(path, "log_13_0", log),
+            LogFilename::parseFrom(path, "log_14_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_TRUE(cp.has_value());
+        EXPECT_EQ(cp->log_num, 12);
+        EXPECT_EQ(cp->level_num, 1);
+        EXPECT_EQ(files_to_read.size(), 2);
+    }
+
+    {
+        // some files before checkpoint left on disk
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_10_0", log),
+            LogFilename::parseFrom(path, "log_11_0", log),
+            LogFilename::parseFrom(path, "log_12_0", log),
+            LogFilename::parseFrom(path, "log_12_1", log),
+            LogFilename::parseFrom(path, "log_13_0", log),
+            LogFilename::parseFrom(path, "log_14_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_TRUE(cp.has_value());
+        EXPECT_EQ(cp->log_num, 12);
+        EXPECT_EQ(cp->level_num, 1);
+        EXPECT_EQ(files_to_read.size(), 2);
+    }
+}
+
 TEST_F(WALStoreTest, Empty)
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
