@@ -63,8 +63,12 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
 
     if (type == EditRecordType::VAR_ENTRY)
     {
-        auto last_iter = entries.rbegin();
-        if (last_iter->second.isDelete())
+        auto last_iter = MapUtils::findLess(entries, PageVersionType(ver.sequence + 1, 0));
+        if (last_iter == entries.end())
+        {
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        }
+        else if (last_iter->second.isDelete())
         {
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         }
@@ -302,10 +306,8 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        // If we applied write batches like this: [ver=1]{putExternal 10}, [ver=2]{ref 11->10, del 10}
-        // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
-        // when resolving 11 to 10, we need to set `check_prev` to true
-        bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq < delete_ver.sequence)));
+        // We may add reference to an external id even if it is logically deleted.
+        bool ok = check_prev ? true : (!is_deleted || (is_deleted && seq < delete_ver.sequence));
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
@@ -354,8 +356,9 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        if (create_ver <= ver && (!is_deleted || (is_deleted && ver < delete_ver)))
+        if (create_ver <= ver)
         {
+            // We may add reference to an external id even if it is logically deleted.
             return ++being_ref_count;
         }
     }
