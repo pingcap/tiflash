@@ -114,10 +114,22 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 
 WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
 {
-    const auto current_writting_log_num = [this]() {
+    const auto [ok, current_writting_log_num] = [this]() -> std::tuple<bool, Format::LogNumberType> {
         std::lock_guard lock(log_file_mutex);
-        return log_file->logNumber();
+        if (!log_file)
+        {
+            return {false, 0};
+        }
+        return {true, log_file->logNumber()};
     }();
+    // Return empty set if `log_file` is not ready
+    if (!ok)
+    {
+        return WALStore::FilesSnapshot{
+            .current_writting_log_num = 0,
+            .persisted_log_files = {},
+        };
+    }
 
     // Only those files are totally persisted
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
