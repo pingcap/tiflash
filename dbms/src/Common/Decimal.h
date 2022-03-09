@@ -377,6 +377,8 @@ class DecimalMaxValue final : public ext::Singleton<DecimalMaxValue>
 public:
     static Int256 get(PrecType idx)
     {
+        // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
+        assert(idx <= decimal_max_prec);
         return instance().getInternal(idx);
     }
 

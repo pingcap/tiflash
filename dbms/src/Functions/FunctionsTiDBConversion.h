@@ -829,7 +829,7 @@ struct TiDBConvertToFloat
 //    on the other hand the multiplication is as fast as possible.
 // NOTE: scale_diff = to_type_scale - from_type_scale.
 // NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte.
-//       The logical of cast doesn't care about CastInternalType(Int512) and can_skip_check_overflow(false) at all when from_type is real or string.
+//       The logic of cast doesn't care about CastInternalType(Int512) and can_skip_check_overflow(false) at all when from_type is real or string.
 template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
@@ -1174,8 +1174,7 @@ struct TiDBConvertToDecimal
             }
             else
             {
-                // Treat datetime(fsp) as decimal(20, 6). Otherwise we need to use micro_second / (10^(6-fsp)) as the real micro_second.
-                // Because the internal fraction is always aligned to 6 valid digits.
+                // Check getMinPrecForHoldingDatetime() to see why from_scale is 6.
                 static constexpr ScaleType from_scale = 6;
                 const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
                 for (size_t i = 0; i < size; ++i)
@@ -1816,7 +1815,7 @@ public:
     template <typename FromDataType>
     static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
     {
-        const bool avoid_truncate_from_value = false;
+        constexpr bool avoid_truncate_from_value = false;
         const PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, to_decimal_scale, avoid_truncate_from_value);
         return from_scaled_prec <= to_decimal_prec;
     }
@@ -1885,10 +1884,16 @@ private:
             const auto fsp = datetime_type->getFraction();
             if (fsp > 0)
             {
+                // Treat datetime(fsp) as decimal(20, 6).
+                // Max value of datetime time is '9999-12-31 23:59:59.999999',
+                // which will be treated as 99991231235959.999999 when doing cast,
+                // so here we use 20 as its precision and 6 as its scale.
                 from_scaled_prec = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
             }
             else
             {
+                // Max value of datetime time is '9999-12-31 23:59:59', which will be treated as 99991231235959.
+                // So treat it as a int value whose precision is 14.
                 assert(fsp == 0);
                 from_scaled_prec = 14 + to_decimal_scale;
             }
@@ -1944,6 +1949,8 @@ private:
         else if (checkDataType<DataTypeMyDate>(from_type.get()))
         {
             // cast(date as decimal)
+            // The max value of date type is '9999-12-31', which will be treated as 99991231 when cast it as decimal,
+            // so we use 8 as its precision.
             from_scaled_prec = 8 + to_decimal_scale;
         }
         else if (getMinPrecForHoldingDatetime(from_type, to_decimal_scale, avoid_truncate_from_value, from_scaled_prec))
@@ -1979,6 +1986,10 @@ private:
             from_scaled_prec = std::max(from_scaled_prec, decimal_type->getPrec());
         }
 
+        // Here we minus 1 to IntPrec::prec to avoid potential overflow.
+        // IntPrec denotes the minimum precision of decimals to hold a specific integer type.
+        // However, not all decimals with such precision could be held by this integer type.
+        // This could happen when calculating the max_value and the multiplication of from_int_val and scale_mul.
         if (from_scaled_prec <= IntPrec<Int32>::prec - 1)
         {
             return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int32>(decimal_type, can_skip);
