@@ -70,7 +70,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
-    , have_finish_build(true)
+    , build_table_state(1)
     , log(getLogWithPrefix(log_, "Join"))
     , limits(limits)
 {
@@ -96,10 +96,10 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         throw Exception("Not supported: non right join with right conditions");
 }
 
-void Join::setFinishBuildTable(bool finish_)
+void Join::setBuildTableState(int state_)
 {
     std::lock_guard<std::mutex> lk(build_table_mutex);
-    have_finish_build = finish_;
+    build_table_state = state_;
     build_table_cv.notify_all();
 }
 
@@ -1622,7 +1622,9 @@ void Join::joinBlock(Block & block) const
     {
         std::unique_lock lk(build_table_mutex);
 
-        build_table_cv.wait(lk, [&]() { return have_finish_build; });
+        build_table_cv.wait(lk, [&]() { return build_table_state != 0; });
+        if (build_table_state == -1) /// return once failed to build the hash table
+            return;
     }
 
     std::shared_lock lock(rwlock);
