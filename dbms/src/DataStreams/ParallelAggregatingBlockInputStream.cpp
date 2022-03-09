@@ -31,7 +31,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler)
+    , processor(inputs, additional_input_at_end, max_threads, handler, log)
 {
     children = inputs;
     if (additional_input_at_end)
