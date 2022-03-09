@@ -613,16 +613,12 @@ CATCH
 class VersionedEntriesTest : public ::testing::Test
 {
 public:
-    void SetUp() override
-    {
-    }
-
     using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>>;
     std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), &deref_counter, removed_entries, entries.acquireLock());
+        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, removed_entries, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
