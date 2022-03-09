@@ -17,7 +17,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_in_creating_set_input_stream[];
-}
+extern const char exception_mpp_hash_build[];
+} // namespace FailPoints
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -212,8 +213,12 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             }
         }
 
+
         if (subquery.join)
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
             subquery.join->setBuildTableState(1);
+        }
 
         if (table_out)
             table_out->writeSuffix();
