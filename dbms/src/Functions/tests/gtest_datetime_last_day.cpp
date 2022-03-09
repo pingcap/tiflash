@@ -73,25 +73,25 @@ try
     for (size_t i = 0; i < sizeof(input) / sizeof(UInt64); ++i)
     {
         ASSERT_COLUMN_EQ(
-                createConstColumn<Nullable<MyDate>>(3, output[i]),
-                executeFunction(func_name,
-                    {createConstColumn<MyDate>(3, input[i])}));
+            createConstColumn<Nullable<MyDate>>(3, output[i]),
+            executeFunction(func_name,
+                            {createConstColumn<MyDate>(3, input[i])}));
     }
 
     // special const test, month is zero.
     ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<MyDate>>(3, {}),
-            executeFunction(func_name,
-                {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
+        createConstColumn<Nullable<MyDate>>(3, {}),
+        executeFunction(func_name,
+                        {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
 
     // no_zero_date sql mode test, day is zero.
     UInt64 ori_sql_mode = dag_context->getSQLMode();
     dag_context->addSQLMode(TiDBSQLMode::NO_ZERO_DATE);
 
     ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<MyDate>>(3, {}),
-            executeFunction(func_name,
-                {createConstColumn<MyDate>(3, MyDateTime{2000, 10, 0, 10, 10, 10, 0}.toPackedUInt())}));
+        createConstColumn<Nullable<MyDate>>(3, {}),
+        executeFunction(func_name,
+                        {createConstColumn<MyDate>(3, MyDateTime{2000, 10, 0, 10, 10, 10, 0}.toPackedUInt())}));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<MyDate>>({{}}),
