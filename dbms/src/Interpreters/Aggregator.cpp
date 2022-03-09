@@ -61,7 +61,7 @@ AggregatedDataVariants::~AggregatedDataVariants()
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 }
