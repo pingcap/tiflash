@@ -8,7 +8,7 @@ mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
-d
+
 # Data.
 
 ## exception before mpp register non root mpp task
