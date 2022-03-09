@@ -54,7 +54,7 @@ MakeRegionQueryInfos(
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
     RegionException::RegionReadStatus status_res = RegionException::RegionReadStatus::OK;
-    for (auto & [id, r] : dag_region_infos)
+    for (const auto & [id, r] : dag_region_infos)
     {
         if (r.key_ranges.empty())
         {
@@ -155,7 +155,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    for (auto & region_info : dag_context.getRegionsForRemoteRead())
+    for (const auto & region_info : dag_context.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
 
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
@@ -267,7 +267,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
-                    if (rand() % 100 > 50)
+                    if (random() % 100 > 50)
                         region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
@@ -364,12 +364,12 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     /// Get current schema version in schema syncer for a chance to shortcut.
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
-        auto storage_ = tmt.getStorages().get(table_id);
-        if (!storage_)
+        auto managed_storage = tmt.getStorages().get(table_id);
+        if (!managed_storage)
         {
             throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
-        return {storage_, storage_->lockStructureForShare(context.getCurrentQueryId())};
+        return {managed_storage, managed_storage->lockStructureForShare(context.getCurrentQueryId())};
     }
 
     auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion();
@@ -379,8 +379,8 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = tmt.getStorages().get(table_id);
-        if (!storage_)
+        auto managed_storage = tmt.getStorages().get(table_id);
+        if (!managed_storage)
         {
             if (schema_synced)
                 throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
@@ -388,14 +388,14 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
                 return {nullptr, TableStructureLockHolder{}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
         }
 
-        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
+        if (managed_storage->engineType() != ::TiDB::StorageEngine::TMT && managed_storage->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw TiFlashException("Specifying schema_version for non-managed storage: " + storage_->getName()
-                                       + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
+            throw TiFlashException("Specifying schema_version for non-managed storage: " + managed_storage->getName()
+                                       + ", table: " + managed_storage->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
                                    Errors::Coprocessor::Internal);
         }
 
-        auto lock = storage_->lockStructureForShare(context.getCurrentQueryId());
+        auto lock = managed_storage->lockStructureForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -403,7 +403,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         // 2. Global: the version that TiFlash global schema is at.
         // And one from TiDB/TiSpark:
         // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = storage_->getTableInfo().schema_version;
+        auto storage_schema_version = managed_storage->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
             throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
@@ -412,13 +412,13 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
-            return {storage_, lock, storage_schema_version, true};
+            return {managed_storage, lock, storage_schema_version, true};
         // From now on the schema was not synced.
         // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
         // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
         // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
         if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return {storage_, lock, storage_schema_version, true};
+            return {managed_storage, lock, storage_schema_version, true};
         // From now on we have global < query.
         // Return false for outer to sync and retry.
         return {nullptr, TableStructureLockHolder{}, storage_schema_version, false};
@@ -480,13 +480,13 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
                                Errors::BroadcastJoin::TooManyColumns);
     }
 
-    Names required_columns_;
-    NamesAndTypes source_columns_;
+    Names table_scan_required_columns;
+    NamesAndTypes table_scan_source_columns;
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.columns_size());
-    String handle_column_name_ = MutableSupport::tidb_pk_column_name;
+    String table_scan_handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-        handle_column_name_ = pk_handle_col->get().name;
+        table_scan_handle_column_name = pk_handle_col->get().name;
 
     for (Int32 i = 0; i < table_scan.columns_size(); i++)
     {
@@ -496,7 +496,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
         // Column ID -1 return the handle column, -3 return the extra physical table id column
         String name;
         if (cid == TiDBPkColumnID)
-            name = handle_column_name_;
+            name = table_scan_handle_column_name;
         else if (cid == ExtraTblColumnID)
             name = MutableSupport::extra_phys_tblid_column_name;
         else
@@ -504,14 +504,14 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
         if (cid == ExtraTblColumnID)
         {
             NameAndTypePair extra_tbl_column_pair = {name, MutableSupport::extra_phys_tblid_column_type};
-            source_columns_.emplace_back(std::move(extra_tbl_column_pair));
+            table_scan_source_columns.emplace_back(std::move(extra_tbl_column_pair));
         }
         else
         {
             auto pair = storage->getColumns().getPhysical(name);
-            source_columns_.emplace_back(std::move(pair));
+            table_scan_source_columns.emplace_back(std::move(pair));
         }
-        required_columns_.emplace_back(std::move(name));
+        table_scan_required_columns.emplace_back(std::move(name));
         if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
         else if (cid != -1 && ci.tp() == TiDB::TypeTime)
@@ -520,7 +520,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
             need_cast_column.push_back(ExtraCastAfterTSMode::None);
     }
 
-    return {required_columns_, source_columns_, need_cast_column, handle_column_name_};
+    return {table_scan_required_columns, table_scan_source_columns, need_cast_column, table_scan_handle_column_name};
 }
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()
@@ -555,7 +555,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         executor->set_tp(tipb::ExecType::TypeSelection);
         executor->set_executor_id(query_block.selection->executor_id());
         auto * selection = executor->mutable_selection();
-        for (auto & condition : query_block.selection->selection().conditions())
+        for (const auto & condition : query_block.selection->selection().conditions())
             *selection->add_conditions() = condition;
         executor = selection->mutable_child();
     }
@@ -582,7 +582,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
             }
             else
             {
-                auto & col_info = table_info.getColumnInfo(col_id);
+                const auto & col_info = table_info.getColumnInfo(col_id);
                 schema.emplace_back(std::make_pair(col_info.name, col_info));
             }
             dag_req.add_output_offsets(i);

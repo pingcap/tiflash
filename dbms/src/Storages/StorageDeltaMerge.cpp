@@ -806,7 +806,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
-    auto start_index = rand() % (total_rows - delete_rows + 1);
+    auto start_index = random() % (total_rows - delete_rows + 1);
 
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
@@ -939,7 +939,7 @@ static void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context);
 
@@ -1427,7 +1427,7 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
-void StorageDeltaMerge::shutdown()
+void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
@@ -1436,6 +1436,11 @@ void StorageDeltaMerge::shutdown()
     {
         _store->shutdown();
     }
+}
+
+void StorageDeltaMerge::shutdown()
+{
+    shutdownImpl();
 }
 
 void StorageDeltaMerge::removeFromTMTContext()
@@ -1448,7 +1453,7 @@ void StorageDeltaMerge::removeFromTMTContext()
 
 StorageDeltaMerge::~StorageDeltaMerge()
 {
-    shutdown();
+    shutdownImpl();
 }
 
 DataTypePtr StorageDeltaMerge::getPKTypeImpl() const

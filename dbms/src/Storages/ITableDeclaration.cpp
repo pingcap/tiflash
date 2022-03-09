@@ -294,7 +294,8 @@ void ITableDeclaration::check(const Block & block, bool need_all) const
 
 ITableDeclaration::ITableDeclaration(ColumnsDescription columns_)
 {
-    setColumns(std::move(columns_));
+    if (columns_.ordinary.empty())
+        throw Exception("Empty list of columns passed", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
+    columns = std::move(columns_);
 }
-
 } // namespace DB
