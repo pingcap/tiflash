@@ -23,7 +23,7 @@ enum : ColumnID
 {
     // Prevent conflict with TiDB.
     TiDBPkColumnID = -1,
-    ExtraTblIDColumnID = -3,
+    ExtraTableIDColumnID = -3,
     VersionColumnID = -1024,
     DelMarkColumnID = -1025,
     InvalidColumnID = -10000,

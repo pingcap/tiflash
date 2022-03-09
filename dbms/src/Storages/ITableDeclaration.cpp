@@ -68,7 +68,7 @@ Block ITableDeclaration::getSampleBlockForColumns(const Names & column_names) co
 
     for (const auto & name : column_names)
     {
-        auto col = name == MutableSupport::extra_tblid_column_name ? NameAndTypePair(name, MutableSupport::extra_tblid_column_type) : getColumn(name);
+        auto col = name == MutableSupport::extra_table_id_column_name ? NameAndTypePair(name, MutableSupport::extra_table_id_column_type) : getColumn(name);
         res.insert({col.type->createColumn(), col.type, name});
     }
 

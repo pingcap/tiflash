@@ -55,7 +55,7 @@ public:
     {
         if (extra_table_id_index != InvalidColumnID)
         {
-            ColumnDefine extra_table_id_col_define = getExtraTblIDColumnDefine();
+            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
@@ -114,7 +114,7 @@ protected:
             {
                 if (extra_table_id_index != InvalidColumnID)
                 {
-                    ColumnDefine extra_table_id_col_define = getExtraTblIDColumnDefine();
+                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
                     ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
                     size_t row_number = res.rows();
                     auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
@@ -147,6 +147,7 @@ private:
     const size_t expected_block_size;
     const bool is_raw;
     const bool do_range_filter_for_raw;
+    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
 
     bool done = false;
