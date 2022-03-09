@@ -307,14 +307,14 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
             throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
         ColumnsDescription columns
             = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
-        String engine_type("dt");
-        if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-            engine_type = "tmt";
-        auto tso = context.getTMTContext().getPDClient()->getTS();
-
         tables.emplace_back(table_name, columns, "");
     }
-    TableID table_id = MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
+    auto tso = context.getTMTContext().getPDClient()->getTS();
+    String engine_type("dt");
+    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
+        engine_type = "tmt";
+    MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
+    output("");
 }
 
 } // namespace DB
