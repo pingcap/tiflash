@@ -15,16 +15,14 @@
 
 namespace DB::PS::V3::tests
 {
-constexpr static NamespaceId ns_id = 100;
-
 TEST(WALSeriTest, AllPuts)
 {
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver20(/*seq=*/20);
     PageEntriesEdit edit;
-    edit.put(combine(ns_id, 1), entry_p1);
-    edit.put(combine(ns_id, 2), entry_p2);
+    edit.put(1, entry_p1);
+    edit.put(2, entry_p2);
 
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
@@ -33,7 +31,7 @@ TEST(WALSeriTest, AllPuts)
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 1));
+    EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1);
 }
@@ -45,12 +43,12 @@ try
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersionType ver21(/*seq=*/21);
     PageEntriesEdit edit;
-    edit.put(combine(ns_id, 3), entry_p3);
-    edit.ref(combine(ns_id, 4), combine(ns_id, 3));
-    edit.put(combine(ns_id, 5), entry_p5);
-    edit.del(combine(ns_id, 2));
-    edit.del(combine(ns_id, 1));
-    edit.del(combine(ns_id, 987));
+    edit.put(3, entry_p3);
+    edit.ref(4, 3);
+    edit.put(5, entry_p5);
+    edit.del(2);
+    edit.del(1);
+    edit.del(987);
 
     for (auto & rec : edit.getMutRecords())
         rec.version = ver21;
@@ -59,30 +57,30 @@ try
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 3));
+    EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::REF);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 4));
+    EXPECT_EQ(iter->page_id, 4);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_EQ(iter->entry.file_id, INVALID_BLOBFILE_ID);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 5));
+    EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 2));
+    EXPECT_EQ(iter->page_id, 2);
     EXPECT_EQ(iter->version, ver21);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 1));
+    EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver21);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, combine(ns_id, 987));
+    EXPECT_EQ(iter->page_id, 987);
     EXPECT_EQ(iter->version, ver21);
 }
 CATCH
@@ -95,25 +93,25 @@ TEST(WALSeriTest, Upserts)
     PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
-    edit.upsertPage(combine(ns_id, 1), ver20_1, entry_p1_2);
-    edit.upsertPage(combine(ns_id, 3), ver21_1, entry_p3_2);
-    edit.upsertPage(combine(ns_id, 5), ver21_1, entry_p5_2);
+    edit.upsertPage(1, ver20_1, entry_p1_2);
+    edit.upsertPage(3, ver21_1, entry_p3_2);
+    edit.upsertPage(5, ver21_1, entry_p5_2);
 
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, combine(ns_id, 1));
+    EXPECT_EQ(iter->page_id, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1_2);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, combine(ns_id, 3));
+    EXPECT_EQ(iter->page_id, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3_2);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, combine(ns_id, 5));
+    EXPECT_EQ(iter->page_id, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
@@ -264,8 +262,8 @@ try
     PageVersionType ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
-        edit.put(combine(ns_id, 1), entry_p1);
-        edit.put(combine(ns_id, 2), entry_p2);
+        edit.put(1, entry_p1);
+        edit.put(2, entry_p2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver20);
     }
@@ -294,10 +292,10 @@ try
     PageVersionType ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
-        edit.put(combine(ns_id, 3), entry_p3);
-        edit.ref(combine(ns_id, 4), combine(ns_id, 3));
-        edit.put(combine(ns_id, 5), entry_p5);
-        edit.del(combine(ns_id, 2));
+        edit.put(3, entry_p3);
+        edit.ref(4, 3);
+        edit.put(5, entry_p5);
+        edit.del(2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver21);
     }
@@ -329,9 +327,9 @@ try
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
-        edit.upsertPage(combine(ns_id, 1), ver20_1, entry_p1_2);
-        edit.upsertPage(combine(ns_id, 3), ver21_1, entry_p3_2);
-        edit.upsertPage(combine(ns_id, 5), ver21_1, entry_p5_2);
+        edit.upsertPage(1, ver20_1, entry_p1_2);
+        edit.upsertPage(3, ver21_1, entry_p3_2);
+        edit.upsertPage(5, ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit);
     }
@@ -373,8 +371,8 @@ try
     PageVersionType ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
-        edit.put(combine(ns_id, 1), entry_p1);
-        edit.put(combine(ns_id, 2), entry_p2);
+        edit.put(1, entry_p1);
+        edit.put(2, entry_p2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver20);
     }
@@ -385,10 +383,10 @@ try
     PageVersionType ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
-        edit.put(combine(ns_id, 3), entry_p3);
-        edit.ref(combine(ns_id, 4), combine(ns_id, 3));
-        edit.put(combine(ns_id, 5), entry_p5);
-        edit.del(combine(ns_id, 2));
+        edit.put(3, entry_p3);
+        edit.ref(4, 3);
+        edit.put(5, entry_p5);
+        edit.del(2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit, ver21);
     }
@@ -401,9 +399,9 @@ try
     PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
-        edit.upsertPage(combine(ns_id, 1), ver20_1, entry_p1_2);
-        edit.upsertPage(combine(ns_id, 3), ver21_1, entry_p3_2);
-        edit.upsertPage(combine(ns_id, 5), ver21_1, entry_p5_2);
+        edit.upsertPage(1, ver20_1, entry_p1_2);
+        edit.upsertPage(3, ver21_1, entry_p3_2);
+        edit.upsertPage(5, ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(edit);
     }
@@ -475,7 +473,7 @@ try
         {
             page_id += 1;
             entry.size = page_id;
-            edit.put(combine(ns_id, page_id), entry);
+            edit.put(page_id, entry);
         }
         wal->apply(edit, ver);
 

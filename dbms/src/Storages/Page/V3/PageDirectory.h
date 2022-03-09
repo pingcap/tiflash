@@ -295,6 +295,25 @@ public:
     {
         return getNormalPageId(page_id, toConcreteSnapshot(snap));
     }
+#ifndef NDEBUG
+    // Just for tests, refactor them out later
+    PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+    {
+        return get(combine(TEST_NAMESPACE_ID, page_id), snap);
+    }
+    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(combine(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+    }
+    PageIdV3Internal getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+    {
+        return getNormalPageId(combine(TEST_NAMESPACE_ID, page_id), snap);
+    }
+    PageIdV3Internal getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return getNormalPageId(combine(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+    }
+#endif
 
     PageId getMaxId(NamespaceId ns_id) const;
 

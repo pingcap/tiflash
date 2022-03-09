@@ -75,7 +75,7 @@ inline ::testing::AssertionResult getEntryCompare(
         String err_msg;
         if (pid != expected_id_entry.first)
         {
-            err_msg = fmt::format("Try to get entry [id={}] but get [id={}.{}]", page_id_expr, pid.high, pid.low);
+            err_msg = fmt::format("Try to get entry [id={}] but get [id={}]", page_id_expr, pid);
             return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
         }
         if (isSameEntry(entry, expected_entry))
@@ -115,9 +115,9 @@ inline ::testing::AssertionResult getEntryCompare(
 }
 
 #define ASSERT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
+    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, combine(TEST_NAMESPACE_ID, pid), snap)
 #define EXPECT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
+    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, combine(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesCompare(
     const char * expected_entries_expr,
@@ -138,7 +138,7 @@ inline ::testing::AssertionResult getEntriesCompare(
                 const auto & actual_id_entry = expected_id_entries[idx];
                 if (actual_id_entry.first != expected_id_entry.first)
                 {
-                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}.{}] at [index={}]", expected_id_entry.first, actual_id_entry.first.high, actual_id_entry.first.low, idx);
+                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}] at [index={}]", expected_id_entry.first, actual_id_entry.first, idx);
                     return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
                 }
                 if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))
@@ -231,7 +231,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     return ::testing::AssertionFailure(::testing::Message(error.c_str()));
 }
 #define EXPECT_ENTRY_NOT_EXIST(dir, pid, snap) \
-    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, pid, snap)
+    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, combine(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
