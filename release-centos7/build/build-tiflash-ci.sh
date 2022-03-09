@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set -x
+
+ARCH=$(uname -p)
+
 command -v ccache >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install ccache"
@@ -18,7 +22,18 @@ else
 fi
 clang-format --version
 
-set -ueox pipefail
+command -v cmake-3.22 >/dev/null 2>&1
+if [[ $? != 0 ]]; then
+  curl -o /root/cmake-3.22.tar.gz http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/cmake-3.22.3-linux-${ARCH}.tar.gz
+  cd /root
+  tar zxf cmake-3.22.tar.gz
+  rm -rf /usr/bin/cmake-3.22
+  ln -s /root/cmake-3.22.3-linux-${ARCH}/bin/cmake /usr/bin/cmake-3.22
+  rm cmake-3.22.tar.gz
+fi
+cmake-3.22 --version
+
+set -ueo pipefail
 
 SCRIPTPATH="$(
   cd "$(dirname "$0")"
@@ -34,6 +49,7 @@ BUILD_BRANCH=${BUILD_BRANCH:-master}
 ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
+  cd ${SRCPATH}
   python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from $(git merge-base origin/${BUILD_BRANCH} HEAD) --dump_diff_files_to "/tmp/tiflash-diff-files.json"
   export ENABLE_FORMAT_CHECK=false
 fi
@@ -125,11 +141,12 @@ chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 BUILD_DIR="$SRCPATH/release-centos7/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake "$SRCPATH" \
+cmake-3.22 -S "$SRCPATH" \
   -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
   -DENABLE_TESTS=${ENABLE_TESTS} \
   -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
   -DUSE_CCACHE=${USE_CCACHE} \
+  -DUSE_INTERNAL_ZLIB_LIBRARY=OFF \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
 make -j ${NPROC} tiflash

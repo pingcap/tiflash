@@ -1,5 +1,20 @@
 #!/bin/bash
 
+set -x
+
+ARCH=$(uname -p)
+
+command -v cmake-3.22 >/dev/null 2>&1
+if [[ $? != 0 ]]; then
+  curl -o /root/cmake-3.22.tar.gz http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/cmake-3.22.3-linux-${ARCH}.tar.gz
+  cd /root
+  tar zxf cmake-3.22.tar.gz
+  rm -rf /usr/bin/cmake-3.22
+  ln -s /root/cmake-3.22.3-linux-${ARCH}/bin/cmake /usr/bin/cmake-3.22
+  rm cmake-3.22.tar.gz
+fi
+cmake-3.22 --version
+
 mkdir -p /build
 
 command -v ccache >/dev/null 2>&1
@@ -103,13 +118,14 @@ done
 BUILD_DIR="/build/release-centos7/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake "${SRCPATH}" \
+cmake-3.22 -S "${SRCPATH}" \
   -DENABLE_EMBEDDED_COMPILER=FALSE \
   -DENABLE_TESTS=ON \
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
   -DUSE_CCACHE=${USE_CCACHE} \
   -DTEST_COVERAGE=ON \
   -DTEST_COVERAGE_XML=ON \
+  -DUSE_INTERNAL_ZLIB_LIBRARY=OFF \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
 make -j ${NPROC} gtests_dbms gtests_libcommon gtests_libdaemon
