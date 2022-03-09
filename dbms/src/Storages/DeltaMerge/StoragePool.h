@@ -125,11 +125,13 @@ public:
     PageId newMetaPageId() { return ++max_meta_page_id; }
 
 private:
-    NamespaceId ns_id;
+    // whether the three storage instance is owned by this StoragePool
+    const bool owned_storage = false;
+    const NamespaceId ns_id;
 
-    PageStoragePtr log_storage;
-    PageStoragePtr data_storage;
-    PageStoragePtr meta_storage;
+    const PageStoragePtr log_storage;
+    const PageStoragePtr data_storage;
+    const PageStoragePtr meta_storage;
 
     PageReader log_storage_reader;
     PageReader data_storage_reader;
@@ -140,9 +142,6 @@ private:
     std::mutex mutex;
 
     Context & global_context;
-
-    // whether the three storage instance is owned by this StoragePool
-    bool owned_storage = false;
 
     std::atomic<PageId> max_log_page_id = 0;
     std::atomic<PageId> max_data_page_id = 0;

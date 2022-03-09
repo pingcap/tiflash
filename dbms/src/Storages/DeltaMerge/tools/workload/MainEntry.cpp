@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/tools/workload/Handle.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
@@ -64,7 +66,7 @@ struct BasicStatistics
     uint64_t read_count = 0;
     double read_sec = 0.0;
 
-    BasicStatistics(const DTWorkload::Statistics & stat)
+    explicit BasicStatistics(const DTWorkload::Statistics & stat)
     {
         init_sec = stat.init_store_sec;
         for (const auto & t : stat.write_stats)
@@ -76,7 +78,7 @@ struct BasicStatistics
         read_sec = stat.total_read_usec.load(std::memory_order_relaxed) / 1000000.0;
     }
 
-    BasicStatistics() {}
+    BasicStatistics() = default;
 };
 
 void print(Poco::Logger * log, uint64_t i, const BasicStatistics & stat, WorkloadOptions & opts)
@@ -121,9 +123,8 @@ std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 
 void run(WorkloadOptions & opts)
 {
-    init(opts);
     auto * log = &Poco::Logger::get("DTWorkload_main");
-    LOG_INFO(log, opts.toString());
+    LOG_FMT_INFO(log, "{}", opts.toString());
     auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
     std::vector<BasicStatistics> basic_stats;
     try
@@ -143,17 +144,9 @@ void run(WorkloadOptions & opts)
         }
         removeData(log, data_dirs);
     }
-    catch (const DB::Exception & e)
-    {
-        LOG_ERROR(log, e.message());
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, e.what());
-    }
     catch (...)
     {
-        LOG_ERROR(log, "Unknow Exception");
+        DB::tryLogCurrentException("exception thrown");
     }
 
     outputResult(log, basic_stats, opts);
@@ -262,7 +255,11 @@ int DTWorkload::mainEntry(int argc, char ** argv)
         return -1;
     }
 
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
+    // need to init logger before creating global context,
+    // or the logging in global context won't be output to
+    // the log file
+    init(opts);
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.enable_ps_v3);
 
     if (opts.testing_type == "daily_perf")
     {
