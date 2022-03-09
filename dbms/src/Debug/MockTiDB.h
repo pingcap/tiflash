@@ -59,9 +59,9 @@ public:
         const String & handle_pk_name,
         const String & engine_type);
 
-    TableID newTables(
+    int newTables(
         const String & database_name,
-        std::vector<std::tuple<const String &, const ColumnsDescription &, const String &>> tables,
+        const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
         Timestamp tso,
         const String & engine_type);
 

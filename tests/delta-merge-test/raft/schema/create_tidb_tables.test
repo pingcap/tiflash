@@ -24,3 +24,6 @@
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ t3   │ DeltaMerge │
 └──────────┴──────┴────────────┘
+=> drop table if exists default.t1
+=> drop table if exists default.t2
+=> drop table if exists default.t3

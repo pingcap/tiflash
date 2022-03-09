@@ -257,9 +257,9 @@ TableID MockTiDB::newTable(
     return addTable(database_name, std::move(*table_info));
 }
 
-TableID MockTiDB::newTables(
+int MockTiDB::newTables(
     const String & database_name,
-    std::vector<std::tuple<const String &, const ColumnsDescription &, const String &>> tables,
+    const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
     Timestamp tso,
     const String & engine_type)
 {
@@ -281,8 +281,9 @@ TableID MockTiDB::newTables(
         auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
         table_info->id = table_id_allocator++;
         table_info->update_timestamp = tso;
-        return addTable(database_name, std::move(*table_info));
+        addTable(database_name, std::move(*table_info));
     }
+    return 0;
 }
 
 TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)

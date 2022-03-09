@@ -292,7 +292,7 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     auto db = context.getDatabase(database_name);
 
-    std::vector<std::tuple<const String &, const ColumnsDescription &, const String &>> tables;
+    std::vector<std::tuple<String, ColumnsDescription, String>> tables;
 
     for (ASTs::size_type i = 1; i < args.size(); i++)
     {
