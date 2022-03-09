@@ -446,11 +446,16 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
             {
                 String arg_name = getActions(expr.children(i), step.actions);
                 types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                if (0 == i && !types[0]->isNullable())
+                {
+                    arg_name = appendCast(makeNullable(types[0]), step.actions, arg_name);
+                    types[0] = makeNullable(types[0]);
+                }
                 if (removeNullable(types[i])->isString())
                     arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
                 else
                     arg_collators.push_back({});
-                if (i == 2 && isWindowLagOrLeadFunctionExpr(expr) && types[i] != types[0])
+                if (i == 2 && isWindowLagOrLeadFunctionExpr(expr) && types[i] != types[0] && !checkDataType<DataTypeNothing>(types[i].get()))
                 {
                     arg_name = appendCast(types[0], step.actions, arg_name);
                     types[i] = types[0];
@@ -1141,6 +1146,11 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
+
+        std::string s;
+        google::protobuf::util::MessageToJsonString(expr.field_type(), &s);
+        std::cout << "expr.field_type : " << s << std::endl;
+        std::cout << "expected_type_name : " << expected_type->getName() << "----- actual_type_name : " << actual_type->getName() << std::endl;
         if (expected_type->getName() != actual_type->getName())
             return appendCast(expected_type, actions, expr_name);
     }

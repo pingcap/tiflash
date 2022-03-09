@@ -30,6 +30,12 @@ protected:
     }
 
     template <typename T>
+    static ColumnWithTypeAndName toConst(const T s)
+    {
+        return createConstColumn<T>(1, s);
+    }
+
+    template <typename T>
     ColumnWithTypeAndName toNullableDecimalVec(String name, const std::vector<std::optional<String>> & v, int prec, int scala)
     {
         return createColumn<Nullable<T>>(std::make_tuple(prec, scala), v, name);
@@ -38,7 +44,7 @@ protected:
     ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
     {
         std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
-        for (auto & value_str : v)
+        for (const auto & value_str : v)
         {
             Field value = parseMyDateTime(value_str, fsp);
             vec.push_back(value.template safeGet<UInt64>());
@@ -50,7 +56,7 @@ protected:
     ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
     {
         std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
-        for (auto & value_str : v)
+        for (const auto & value_str : v)
         {
             if (!value_str.empty())
             {
@@ -108,7 +114,7 @@ protected:
         mock_interpreter->executeExpression(pipeline, window_description.before_window_select);
 
         NamesWithAliases final_project;
-        for (auto column : (*mock_interpreter->analyzer).source_columns)
+        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
         {
             final_project.push_back({column.name, ""});
         }
@@ -120,15 +126,15 @@ protected:
         mock_interpreter->executeProject(pipeline, final_project);
     }
 
-    void ASSERT_CHECK_BLOCK(const Block & lhs, const Block & rhs)
+    void checkBlock(const Block & lhs, const Block & rhs)
     {
         size_t columns = rhs.columns();
-        //        std::cout << lhs.columns() << "---" << columns << std::endl;
-        //
-        //        for (size_t i = 0; i < columns; ++i)
-        //        {
-        //            std::cout << rhs.getByPosition(i).name << std::endl;
-        //        }
+        std::cout << lhs.columns() << "---" << columns << std::endl;
+
+        for (size_t i = 0; i < columns; ++i)
+        {
+            std::cout << rhs.getByPosition(i).name << std::endl;
+        }
 
         ASSERT_TRUE(lhs.columns() == columns);
 
@@ -139,16 +145,6 @@ protected:
             std::cout << actual.type->getName() << "---" << expected.type->getName() << std::endl;
             ASSERT_TRUE(actual.type->getName() == expected.type->getName());
             ASSERT_COLUMN_EQ(expected.column, actual.column);
-        }
-    }
-
-    void ASSERT_CHECK_BLOCKS(Blocks expect_blocks, Blocks actual_blocks)
-    {
-        ASSERT_EQ(expect_blocks.size(), actual_blocks.size());
-        for (size_t i = 0; i < actual_blocks.size(); ++i)
-        {
-            ASSERT_EQ(expect_blocks[i].rows(), actual_blocks[i].rows());
-            ASSERT_CHECK_BLOCK(expect_blocks[i], actual_blocks[i]);
         }
     }
 
@@ -209,7 +205,7 @@ protected:
 
         Block actual_block = mergeBlocks(actual_blocks);
         ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.getSettingsRef().max_block_size + 1);
-        ASSERT_CHECK_BLOCK(except_block, actual_block);
+        checkBlock(except_block, actual_block);
     }
 };
 
@@ -301,9 +297,9 @@ try
         sort_json);
 
     // 2 partiton key and 2 order key
-    // sql :  select *, row_number() over w1 from test6 window w1 as (partition by partition_int1, partition_int2 order by order_int1,order_int2)
-    window_json = "{\"funcDesc\":[{\"tp\":\"RowNumber\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":21,\"decimal\":-1,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"partitionBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"orderBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"frame\":{\"type\":\"Rows\",\"start\":{\"type\":\"CurrentRow\",\"unbounded\":false,\"offset\":\"0\"},\"end\":{\"type\":\"CurrentRow\",\"unbounded\":false,\"offset\":\"0\"}},\"child\":{\"tp\":\"TypeSort\",\"executorId\":\"Sort_12\",\"sort\":{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGAkLXGqNT+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}}}";
-    sort_json = "{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGAkLXGqNT+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}";
+    // sql : select *, row_number() over w1 from test6 window w1 as (partition by partition_int1, partition_int2 order by order_int1,order_int2)
+    window_json = "{\"funcDesc\":[{\"tp\":\"RowNumber\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":21,\"decimal\":-1,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"partitionBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"orderBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"frame\":{\"type\":\"Rows\",\"start\":{\"type\":\"CurrentRow\",\"unbounded\":false,\"offset\":\"0\"},\"end\":{\"type\":\"CurrentRow\",\"unbounded\":false,\"offset\":\"0\"}},\"child\":{\"tp\":\"TypeSort\",\"executorId\":\"Sort_13\",\"sort\":{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGA0JTR0+z+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_12\"}}}}";
+    sort_json = "{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGA0JTR0+z+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":8,\"flag\":128,\"flen\":20,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_12\"}}";
     testOneWindowFunction(
         {NameAndTypePair("partition1", std::make_shared<DataTypeInt64>()), NameAndTypePair("partition2", std::make_shared<DataTypeInt64>()), NameAndTypePair("order1", std::make_shared<DataTypeInt64>()), NameAndTypePair("order2", std::make_shared<DataTypeInt64>())},
         {toVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}), toVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}), toVec<Int64>("order1", {2, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1}), toVec<Int64>("order2", {2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1})},
@@ -589,6 +585,36 @@ try
          toNullableDecimalVec<Decimal64>("avg_int", {"1.0000", "2.0000", "2.0000", "2.5000", "3.2000", "3.5000", "1.0000", "2.0000", "2.0000", "2.5000", "3.2000", "3.5000"}, 15, 4),
          toNullableVec<Int32>("max_int", {1, 3, 3, 4, 6, 6, 1, 3, 3, 4, 6, 6}),
          toNullableVec<Int32>("min_int", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})},
+        window_json,
+        sort_json);
+}
+CATCH
+
+TEST_F(WindowFunction, testLagAndLead)
+try
+{
+    setMaxBlockSize(2);
+
+    std::string window_json;
+    std::string sort_json;
+
+    // sql : select *, lead(value_int) over w1, lag(value_int) over w1 from test8 window w1 as (partition by partition_int order by order_int);
+    window_json = "{\"funcDesc\":[{\"tp\":\"Lead\",\"children\":[{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Lag\",\"children\":[{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"partitionBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"orderBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"child\":{\"tp\":\"TypeSort\",\"executorId\":\"Sort_12\",\"sort\":{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGA4KKj2u3+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}}}";
+    sort_json = "{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIGA4KKj2u3+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":4097,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}";
+    testOneWindowFunction(
+        {NameAndTypePair("partition", std::make_shared<DataTypeInt64>()), NameAndTypePair("order", std::make_shared<DataTypeInt64>()), NameAndTypePair("value_int", std::make_shared<DataTypeInt64>())},
+        {toVec<Int64>("partition", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}), toVec<Int64>("order", {1, 3, 2, 4, 6, 5, 1, 3, 2, 4, 6, 5}), toVec<Int64>("value_int", {1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6})},
+        {toVec<Int64>("partition", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}), toVec<Int64>("order", {1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}), toVec<Int64>("value_int", {1, 3, 2, 4, 6, 5, 1, 3, 2, 4, 6, 5}), toNullableVec<Int32>("lead", {4, 6, 5, {}, {}, {}, 4, 6, 5, {}, {}, {}}), toNullableVec<Int32>("lag", {{}, {}, {}, 1, 3, 2, {}, {}, {}, 1, 3, 2})},
+        window_json,
+        sort_json);
+
+    // sql : select *, lead(value_int) over w1, lag(value_int) over w1 from test8 window w1 as (partition by partition_int order by order_int);
+    window_json = "{\"funcDesc\":[{\"tp\":\"Lead\",\"children\":[{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Int64\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":129,\"flen\":1,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Null\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":6,\"flag\":128,\"flen\":0,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Lag\",\"children\":[{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAI=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Int64\",\"val\":\"gAAAAAAAAAM=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":8,\"flag\":129,\"flen\":1,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},{\"tp\":\"Null\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":6,\"flag\":128,\"flen\":0,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false}],\"partitionBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"orderBy\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"child\":{\"tp\":\"TypeSort\",\"executorId\":\"Sort_12\",\"sort\":{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIKAkLPxpe3+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}}}";
+    sort_json = "{\"byItems\":[{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAA=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false},{\"expr\":{\"tp\":\"ColumnRef\",\"val\":\"gAAAAAAAAAE=\",\"sig\":\"Unspecified\",\"fieldType\":{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},\"hasDistinct\":false},\"desc\":false}],\"isPartialSort\":true,\"child\":{\"tp\":\"TypeExchangeReceiver\",\"exchangeReceiver\":{\"encodedTaskMeta\":[\"CIKAkLPxpe3+BRABIg4xMjcuMC4wLjE6MzkzMA==\"],\"fieldTypes\":[{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"},{\"tp\":3,\"flag\":0,\"flen\":11,\"decimal\":0,\"collate\":63,\"charset\":\"binary\"}]},\"executorId\":\"ExchangeReceiver_11\"}}";
+    testOneWindowFunction(
+        {NameAndTypePair("partition", std::make_shared<DataTypeInt64>()), NameAndTypePair("order", std::make_shared<DataTypeInt64>()), NameAndTypePair("value_int", std::make_shared<DataTypeInt64>())},
+        {toVec<Int64>("partition", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}), toVec<Int64>("order", {1, 3, 2, 4, 6, 5, 1, 3, 2, 4, 6, 5}), toVec<Int64>("value_int", {1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6})},
+        {toVec<Int64>("partition", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}), toVec<Int64>("order", {1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}), toVec<Int64>("value_int", {1, 3, 2, 4, 6, 5, 1, 3, 2, 4, 6, 5}), toNullableVec<Int32>("lead", {4, 6, 5, {}, {}, {}, 4, 6, 5, {}, {}, {}}), toNullableVec<Int32>("lag", {{}, {}, {}, 1, 3, 2, {}, {}, {}, 1, 3, 2})},
         window_json,
         sort_json);
 }
