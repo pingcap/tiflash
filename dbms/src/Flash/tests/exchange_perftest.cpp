@@ -469,7 +469,7 @@ struct ReceiverHelper
     {
         if (join_ptr)
         {
-            join_ptr->setFinishBuildTable(true);
+            join_ptr->setBuildTableState(1);
             std::cout << fmt::format("Hash table size: {} bytes", join_ptr->getTotalByteCount()) << std::endl;
         }
     }

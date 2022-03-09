@@ -108,7 +108,7 @@ void CreatingSetsBlockInputStream::createAll()
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setFinishBuildTable(false);
+                    elem.second.join->setBuildTableState(0);
             }
         }
         Stopwatch watch;
@@ -133,16 +133,16 @@ void CreatingSetsBlockInputStream::createAll()
         {
             if (exception_from_workers.front() != nullptr)
             {
-                LOG_DEBUG(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec with exception and rethrow the first, left " << exception_from_workers.size());
+                LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first, {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
                 std::rethrow_exception(exception_from_workers.front());
             }
-            else
+            else /// should not happen, safety check.
             {
-                LOG_ERROR(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec with exception but rethrow null ptr, left" << exception_from_workers.size());
-                throw Exception("a exception ptr is null in CreatingSets");
+                LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception but rethrow null ptr, left {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
+                throw Exception("An exception ptr is null in CreatingSets");
             }
         }
-        LOG_DEBUG(log, "Creat all tasks of " << mpp_task_id.toString() << " take " << watch.elapsedSeconds() << " sec. ");
+        LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
 
         created = true;
     }
@@ -155,15 +155,13 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     log_msg << (subquery.set ? "Creating set. " : "")
             << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
             << mpp_task_id.toString();
-
-    LOG_DEBUG(log, log_msg.rdbuf());
     Stopwatch watch;
     try
     {
+        LOG_FMT_DEBUG(log, "{}", log_msg.rdbuf()->str());
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
-
 
         bool done_with_set = !subquery.set;
         bool done_with_join = !subquery.join;
@@ -179,7 +177,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_FMT_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -222,9 +220,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             }
         }
 
-
         if (subquery.join)
-            subquery.join->setFinishBuildTable(true);
+            subquery.join->setBuildTableState(1);
 
         if (table_out)
             table_out->writeSuffix();
@@ -258,34 +255,28 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
 
-            if (log != nullptr)
-                LOG_DEBUG(log, msg.rdbuf());
-            else
-                LOG_DEBUG(log, msg.rdbuf());
+            LOG_FMT_DEBUG(log, "{}", msg.rdbuf()->str());
         }
         else
         {
-            LOG_DEBUG(log, "Subquery has empty result for task " << mpp_task_id.toString() << ".");
+            LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
         }
     }
     catch (std::exception & e)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
-        log_msg << " throw exception: " << e.what() << " In " << watch.elapsedSeconds() << " sec. ";
-        LOG_ERROR(log, log_msg.rdbuf());
+        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg.rdbuf()->str(), e.what(), watch.elapsedSeconds());
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
-            subquery.join->setFinishBuildTable(true);
+            subquery.join->setBuildTableState(-1);
     }
     catch (...)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
-        log_msg << " throw exception: unknown error"
-                << " In " << watch.elapsedSeconds() << " sec. ";
-        LOG_ERROR(log, log_msg.rdbuf());
+        LOG_FMT_ERROR(log, "{} throw exception: unknown error In {} sec. ", log_msg.rdbuf()->str(), watch.elapsedSeconds());
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
-            subquery.join->setFinishBuildTable(true);
+            subquery.join->setBuildTableState(-1);
     }
 }
 
