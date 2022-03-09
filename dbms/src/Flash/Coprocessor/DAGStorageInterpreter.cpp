@@ -497,13 +497,13 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
         String name;
         if (cid == TiDBPkColumnID)
             name = table_scan_handle_column_name;
-        else if (cid == ExtraTblColumnID)
-            name = MutableSupport::extra_phys_tblid_column_name;
+        else if (cid == ExtraTblIDColumnID)
+            name = MutableSupport::extra_tblid_column_name;
         else
             name = storage->getTableInfo().getColumnName(cid);
-        if (cid == ExtraTblColumnID)
+        if (cid == ExtraTblIDColumnID)
         {
-            NameAndTypePair extra_tbl_column_pair = {name, MutableSupport::extra_phys_tblid_column_type};
+            NameAndTypePair extra_tbl_column_pair = {name, MutableSupport::extra_tblid_column_type};
             table_scan_source_columns.emplace_back(std::move(extra_tbl_column_pair));
         }
         else

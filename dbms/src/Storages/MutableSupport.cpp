@@ -10,13 +10,13 @@ const String MutableSupport::delta_tree_storage_name = "DeltaMerge";
 const String MutableSupport::tidb_pk_column_name = "_tidb_rowid";
 const String MutableSupport::version_column_name = "_INTERNAL_VERSION";
 const String MutableSupport::delmark_column_name = "_INTERNAL_DELMARK";
-const String MutableSupport::extra_phys_tblid_column_name = "_tidb_tid";
+const String MutableSupport::extra_tblid_column_name = "_tidb_tid";
 
 const DataTypePtr MutableSupport::tidb_pk_column_int_type = DataTypeFactory::instance().get("Int64");
 const DataTypePtr MutableSupport::tidb_pk_column_string_type = DataTypeFactory::instance().get("String");
 const DataTypePtr MutableSupport::version_column_type = DataTypeFactory::instance().get("UInt64");
 const DataTypePtr MutableSupport::delmark_column_type = DataTypeFactory::instance().get("UInt8");
-const DataTypePtr MutableSupport::extra_phys_tblid_column_type = DataTypeFactory::instance().get("Int64");
+const DataTypePtr MutableSupport::extra_tblid_column_type = DataTypeFactory::instance().get("Int64");
 ;
 
 } // namespace DB

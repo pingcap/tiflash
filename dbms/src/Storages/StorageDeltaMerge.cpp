@@ -573,7 +573,7 @@ BlockInputStreams StorageDeltaMerge::read(
             col_define = getVersionColumnDefine();
         else if (column_names[i] == TAG_COLUMN_NAME)
             col_define = getTagColumnDefine();
-        else if (column_names[i] == EXTRA_PHYS_TBLID_COLUMN_NAME)
+        else if (column_names[i] == EXTRA_TBLID_COLUMN_NAME)
         {
             extra_table_id_index = i;
             continue;

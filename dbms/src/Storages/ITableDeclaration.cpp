@@ -1,13 +1,12 @@
 #include <Common/Exception.h>
 #include <Storages/ITableDeclaration.h>
+#include <Storages/MutableSupport.h>
 
 #include <boost/range/join.hpp>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
 #include <sstream>
 #include <unordered_set>
-
-#include "MutableSupport.h"
 
 
 namespace DB
@@ -26,9 +25,7 @@ extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
 
 void ITableDeclaration::setColumns(ColumnsDescription columns_)
 {
-    if (columns_.ordinary.empty())
-        throw Exception("Empty list of columns passed", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
-    columns = std::move(columns_);
+    setColumnsImpl(columns_);
 }
 
 
@@ -71,16 +68,8 @@ Block ITableDeclaration::getSampleBlockForColumns(const Names & column_names) co
 
     for (const auto & name : column_names)
     {
-        if (name == MutableSupport::extra_phys_tblid_column_name)
-        {
-            NameAndTypePair extra_tbl_column_pair = {name, MutableSupport::extra_phys_tblid_column_type};
-            res.insert({extra_tbl_column_pair.type->createColumn(), extra_tbl_column_pair.type, name});
-        }
-        else
-        {
-            auto col = getColumn(name);
-            res.insert({col.type->createColumn(), col.type, name});
-        }
+        auto col = name == MutableSupport::extra_tblid_column_name ? NameAndTypePair(name, MutableSupport::extra_tblid_column_type) : getColumn(name);
+        res.insert({col.type->createColumn(), col.type, name});
     }
 
     return res;
@@ -293,6 +282,11 @@ void ITableDeclaration::check(const Block & block, bool need_all) const
 
 
 ITableDeclaration::ITableDeclaration(ColumnsDescription columns_)
+{
+    setColumnsImpl(columns_);
+}
+
+void ITableDeclaration::setColumnsImpl(ColumnsDescription columns_)
 {
     if (columns_.ordinary.empty())
         throw Exception("Empty list of columns passed", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);

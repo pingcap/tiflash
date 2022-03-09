@@ -645,7 +645,7 @@ try
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
-    Names read_columns = {"col1", EXTRA_PHYS_TBLID_COLUMN_NAME, "col2"};
+    Names read_columns = {"col1", EXTRA_TBLID_COLUMN_NAME, "col2"};
     BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
@@ -654,7 +654,7 @@ try
     size_t num_rows_read = 0;
     while (Block block = in->read())
     {
-        ASSERT_EQ(block.getByPosition(1).name, EXTRA_PHYS_TBLID_COLUMN_NAME);
+        ASSERT_EQ(block.getByPosition(1).name, EXTRA_TBLID_COLUMN_NAME);
         num_rows_read += block.rows();
         for (auto & iter : block)
         {
@@ -669,7 +669,7 @@ try
                 {
                     ASSERT_EQ(c->getDataAt(i), "a");
                 }
-                else if (iter.name == EXTRA_PHYS_TBLID_COLUMN_NAME)
+                else if (iter.name == EXTRA_TBLID_COLUMN_NAME)
                 {
                     ASSERT_EQ(c->getInt(i), 1);
                 }
