@@ -932,9 +932,11 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
+    // In order to distinguish different exchange receivers.
+    auto executor_id_prefix_log = getMPPTaskLog(taskLogger(), query_block.source_name);
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, taskLogger());
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, executor_id_prefix_log);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, taskLogger());
         pipeline.streams.push_back(stream);
