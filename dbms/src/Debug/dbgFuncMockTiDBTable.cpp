@@ -285,4 +285,36 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     output("all regions have been cleaned");
 }
 
+void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 2)
+        throw Exception("Args not matched, should be: db_name, table_name, [table_name], ..., [table_name]", ErrorCodes::BAD_ARGUMENTS);
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    auto db = context.getDatabase(database_name);
+
+    std::vector<std::tuple<const String &, const ColumnsDescription &, const String &>> tables;
+
+    for (ASTs::size_type i = 1; i < args.size(); i++)
+    {
+        String schema_str = "i Int64";
+        String table_name = fmt::format("t{}", i);
+        ASTPtr columns_ast;
+        ParserColumnDeclarationList schema_parser;
+        Tokens tokens(schema_str.data(), schema_str.data() + schema_str.length());
+        TokenIterator pos(tokens);
+        Expected expected;
+        if (!schema_parser.parse(pos, columns_ast, expected))
+            throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
+        ColumnsDescription columns
+            = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+        String engine_type("dt");
+        if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
+            engine_type = "tmt";
+        auto tso = context.getTMTContext().getPDClient()->getTS();
+
+        tables.emplace_back(table_name, columns, "");
+    }
+    TableID table_id = MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
+}
+
 } // namespace DB

@@ -59,6 +59,12 @@ public:
         const String & handle_pk_name,
         const String & engine_type);
 
+    TableID newTables(
+        const String & database_name,
+        std::vector<std::tuple<const String &, const ColumnsDescription &, const String &>> tables,
+        Timestamp tso,
+        const String & engine_type);
+
     TableID addTable(const String & database_name, TiDB::TableInfo && table_info);
 
     static TiDB::TableInfoPtr parseColumns(

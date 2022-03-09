@@ -3,14 +3,18 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ParserCreateQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <fmt/core.h>
+
+#include <ext/singleton.h>
 
 namespace DB
 {

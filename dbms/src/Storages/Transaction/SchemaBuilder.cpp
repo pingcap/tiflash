@@ -417,8 +417,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
-    if (diff.type == SchemaActionType::CreateTables) {
-        for (auto && opt : diff.affected_opts) {
+    if (diff.type == SchemaActionType::CreateTables)
+    {
+        for (auto && opt : diff.affected_opts)
+        {
             SchemaDiff new_diff;
             new_diff.type = SchemaActionType::CreateTable;
             new_diff.version = diff.version;
