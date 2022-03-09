@@ -3249,6 +3249,21 @@ struct TiDBLastDayTransformerImpl
     static_assert(std::is_same_v<ToFieldType, DataTypeMyDate::FieldType>);
     static constexpr auto name = "tidbLastDay";
 
+    static void execute(const Context & context,
+                        const DataTypePtr & from_type,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, from_type, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
     static ToFieldType execute(const Context & context, const DataTypePtr & from_type, const MyTimeBase & val, bool & is_null)
     {
         if (isInvalidDateForLastDay(context, from_type, val, name))
@@ -3278,37 +3293,6 @@ struct TiDBLastDayTransformerImpl
     }
 };
 
-template <typename ToFieldType, template <typename> class Transformer>
-struct MyDateOrMyDateTimeTransformer
-{
-    static void execute(const Context & context,
-                        const DataTypePtr & from_type,
-                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
-                        typename ColumnVector<ToFieldType>::Container & vec_to)
-    {
-        for (size_t i = 0; i < vec_from.size(); ++i)
-        {
-            MyTimeBase val(vec_from[i]);
-            vec_to[i] = Transformer<ToFieldType>::execute(context, from_type, val);
-        }
-    }
-
-    static void execute(const Context & context,
-                        const DataTypePtr & from_type,
-                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
-                        typename ColumnVector<ToFieldType>::Container & vec_to,
-                        typename ColumnVector<UInt8>::Container & vec_null_map)
-    {
-        for (size_t i = 0; i < vec_from.size(); ++i)
-        {
-            bool is_null = false;
-            MyTimeBase val(vec_from[i]);
-            vec_to[i] = Transformer<ToFieldType>::execute(context, from_type, val, is_null);
-            vec_null_map[i] = is_null;
-        }
-    }
-};
-
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
 template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
@@ -3330,30 +3314,21 @@ public:
         return name;
     }
 
-    bool isVariadic() const override { return false; }
     size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        if (arguments.size() == 1)
-        {
-            if (!arguments[0].type->isMyDateOrMyDateTime())
-                throw Exception(
-                    fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time", arguments[0].type->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
-        else
+        if (!arguments[0].type->isMyDateOrMyDateTime())
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         DataTypePtr return_type = std::make_shared<ToDataType>();
         if constexpr (return_nullable)
             return_type = makeNullable(return_type);
         return return_type;
     }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
@@ -3375,12 +3350,12 @@ public:
             {
                 ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(size, 0);
                 ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-                MyDateOrMyDateTimeTransformer<ToFieldType, Transformer>::execute(context, from_type, vec_from, vec_to, vec_null_map);
+                Transformer<ToFieldType>::execute(context, from_type, vec_from, vec_to, vec_null_map);
                 block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
             }
             else
             {
-                MyDateOrMyDateTimeTransformer<ToFieldType, Transformer>::execute(context, from_type, vec_from, vec_to);
+                Transformer<ToFieldType>::execute(context, from_type, vec_from, vec_to);
                 block.getByPosition(result).column = std::move(col_to);
             }
         }
