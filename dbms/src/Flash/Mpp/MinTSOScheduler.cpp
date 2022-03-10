@@ -169,7 +169,7 @@ void MinTSOScheduler::updateMinTSO(UInt64 tso, bool valid, String msg)
             min_tso = *waiting_set.begin();
         }
     }
-    if (min_tso != old_min_tso)
-        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}.", old_min_tso, min_tso, msg, used_threads); // has waiting tasks?
+    if (min_tso != old_min_tso) /// if min_tso == MAX_UINT64 and the query tso is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
+        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, active set size = {}, waiting set size = {}.", old_min_tso, min_tso, msg, used_threads, active_set.size(), waiting_set.size());
 }
 } // namespace DB
