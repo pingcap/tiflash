@@ -10,8 +10,22 @@ namespace
 // may throw
 void waitTasks(std::vector<std::future<void>> & futures)
 {
+    std::exception_ptr first_exception;
     for (auto & future : futures)
-        future.get();
+    {
+        // ensure all futures finished
+        try
+        {
+            future.get();
+        }
+        catch (...)
+        {
+            if (!first_exception)
+                first_exception = std::current_exception();
+        }
+    }
+    if (first_exception)
+        std::rethrow_exception(first_exception);
 }
 
 class DynamicThreadManager : public ThreadManager
