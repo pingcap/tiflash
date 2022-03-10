@@ -19,10 +19,9 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-class CollapsingPageDirectory;
 using PageIdAndVersionedEntries = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
 
-class BlobStore : public Allocator<false>
+class BlobStore : private Allocator<false>
 {
 public:
     struct Config
@@ -116,9 +115,7 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(Poco::Logger * log_, BlobStore::Config config);
-
-        void restore(const CollapsingPageDirectory & entries);
+        BlobStats(LogWithPrefixPtr log_, BlobStore::Config config);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
@@ -159,7 +156,14 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
-        Poco::Logger * log;
+        void restoreByEntry(const PageEntryV3 & entry);
+        void restore();
+        friend class PageDirectoryFactory;
+
+#ifndef DBMS_PUBLIC_GTEST
+    private:
+#endif
+        LogWithPrefixPtr log;
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
@@ -169,8 +173,6 @@ public:
     };
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
-
-    void restore(const CollapsingPageDirectory & entries);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -227,6 +229,7 @@ private:
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
+    friend class PageDirectoryFactory;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -235,7 +238,7 @@ private:
     String path{};
     Config config;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 
     BlobStats blob_stats;
 

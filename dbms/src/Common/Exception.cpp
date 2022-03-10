@@ -61,7 +61,7 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
 {
     try
     {
-        LOG_ERROR(logger, start_of_message << (start_of_message.empty() ? "" : ": ") << getCurrentExceptionMessage(true));
+        LOG_FMT_ERROR(logger, "{}{}{}", start_of_message, (start_of_message.empty() ? "" : ": "), getCurrentExceptionMessage(true));
     }
     catch (...)
     {

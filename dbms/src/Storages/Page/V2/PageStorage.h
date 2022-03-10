@@ -243,8 +243,8 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPageCallbacks::V2ExternalPagesScanner external_pages_scanner = nullptr;
-    ExternalPageCallbacks::V2ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
 
