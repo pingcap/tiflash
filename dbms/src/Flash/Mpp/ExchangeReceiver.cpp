@@ -84,6 +84,8 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
         packets.resize(BATCH_PACKET_COUNT);
         for (auto & packet : packets)
             packet = std::make_shared<MPPDataPacket>();
+
+        start();
     }
 
     void notifyReactor()
@@ -322,18 +324,20 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<AsyncRequestHandler<RPCContext>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-    {
         handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
-        handlers.back().start();
-    }
-
-    static constexpr auto timeout = std::chrono::milliseconds(10);
 
     while (alive_async_connections > 0)
     {
+        // to avoid waiting_for_retry_requests starvation.
+        static constexpr Int32 check_waiting_requests_freq = 100;
+        static constexpr auto timeout = std::chrono::milliseconds(10);
         size_t source_index = 0;
-        if (ready_requests.tryPop(source_index, timeout))
+
+        for (Int32 i = 0; i < check_waiting_requests_freq; ++i)
         {
+            if (unlikely(!ready_requests.tryPop(source_index, timeout)))
+                break;
+
             auto & handler = handlers[source_index];
             handler.handle();
             if (handler.finished())
@@ -346,7 +350,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
                 waiting_for_retry_requests.push_back(source_index);
             }
         }
-        else if (!waiting_for_retry_requests.empty())
+        if (unlikely(!waiting_for_retry_requests.empty()))
         {
             std::vector<size_t> tmp;
             for (auto i : waiting_for_retry_requests)

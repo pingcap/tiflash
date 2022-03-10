@@ -106,5 +106,5 @@ storage_engine = "dt"
 [profiles]
 [profiles.default]
 enable_local_tunnel = 0
-enable_async_grpc = 1
+enable_async_grpc_client = 1
 # max_memory_usage = 0

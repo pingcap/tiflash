@@ -182,7 +182,7 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                         context.getTMTContext().getKVCluster(),
                         context.getTMTContext().getMPPTaskManager(),
                         context.getSettingsRef().enable_local_tunnel,
-                        context.getSettingsRef().enable_async_grpc),
+                        context.getSettingsRef().enable_async_grpc_client),
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
                     log);

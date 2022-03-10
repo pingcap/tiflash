@@ -1239,7 +1239,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
 
-    if (settings.enable_async_grpc)
+    if (settings.enable_async_grpc_client)
     {
         auto size = settings.grpc_completion_queue_pool_size;
         if (size == 0)
