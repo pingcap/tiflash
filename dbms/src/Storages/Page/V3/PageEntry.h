@@ -43,7 +43,7 @@ using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 
-inline PageIdV3Internal combine(NamespaceId n_id, PageId p_id)
+inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
 {
     // low bits first
     return PageIdV3Internal(p_id, n_id);

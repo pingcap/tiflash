@@ -813,7 +813,7 @@ TEST_F(BlobStoreTest, GC)
     PageIdAndVersionedEntries versioned_pageid_entries;
     for (const auto & record : edit.getRecords())
     {
-        versioned_pageid_entries.emplace_back(combine(TEST_NAMESPACE_ID, page_id), 1, record.entry);
+        versioned_pageid_entries.emplace_back(buildV3Id(TEST_NAMESPACE_ID, page_id), 1, record.entry);
     }
     std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
     gc_context[1] = versioned_pageid_entries;
@@ -918,7 +918,7 @@ try
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = static_cast<char>(combine(TEST_NAMESPACE_ID, page_id + j));
+            c_buff[j + i * buff_size] = static_cast<char>(buildV3Id(TEST_NAMESPACE_ID, page_id + j));
         }
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
@@ -928,7 +928,7 @@ try
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        read_infos.emplace_back(BlobStore::FieldReadInfo(combine(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
+        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
 
         page_id++;
         wb.clear();

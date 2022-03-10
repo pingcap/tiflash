@@ -71,8 +71,8 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
     {
-        PageIdV3Internals ids{combine(TEST_NAMESPACE_ID, 1), combine(TEST_NAMESPACE_ID, 2)};
-        PageIDAndEntriesV3 expected_entries{{combine(TEST_NAMESPACE_ID, 1), entry1}, {combine(TEST_NAMESPACE_ID, 2), entry2}};
+        PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, 1), buildV3Id(TEST_NAMESPACE_ID, 2)};
+        PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, 1), entry1}, {buildV3Id(TEST_NAMESPACE_ID, 2), entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
@@ -118,8 +118,8 @@ try
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, page_id, snap2);
     {
-        PageIdV3Internals ids{combine(TEST_NAMESPACE_ID, page_id)};
-        PageIDAndEntriesV3 expected_entries{{combine(TEST_NAMESPACE_ID, page_id), entry2}};
+        PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, page_id)};
+        PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, page_id), entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
@@ -137,8 +137,8 @@ try
     }
     auto snap3 = dir->createSnapshot();
 
-    PageIdV3Internals ids{combine(TEST_NAMESPACE_ID, page_id)};
-    PageIDAndEntriesV3 expected_entries{{combine(TEST_NAMESPACE_ID, page_id), entry3}};
+    PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, page_id)};
+    PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, page_id), entry3}};
     EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap3);
 }
 CATCH
@@ -181,8 +181,8 @@ try
     EXPECT_ENTRY_EQ(entry3, dir, 3, snap2);
     EXPECT_ENTRY_EQ(entry4, dir, 4, snap2);
     {
-        PageIdV3Internals ids{combine(TEST_NAMESPACE_ID, 1), combine(TEST_NAMESPACE_ID, 3), combine(TEST_NAMESPACE_ID, 4)};
-        PageIDAndEntriesV3 expected_entries{{combine(TEST_NAMESPACE_ID, 1), entry1}, {combine(TEST_NAMESPACE_ID, 3), entry3}, {combine(TEST_NAMESPACE_ID, 4), entry4}};
+        PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, 1), buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 4)};
+        PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, 1), entry1}, {buildV3Id(TEST_NAMESPACE_ID, 3), entry3}, {buildV3Id(TEST_NAMESPACE_ID, 4), entry4}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 }
@@ -592,14 +592,14 @@ public:
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, combine(TEST_NAMESPACE_ID, page_id), &deref_counter, removed_entries, entries.acquireLock());
+        bool all_removed = entries.cleanOutdatedEntries(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), &deref_counter, removed_entries, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
     std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersionType ver, Int64 decrease_num)
     {
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.derefAndClean(seq, combine(TEST_NAMESPACE_ID, page_id), ver, decrease_num, removed_entries);
+        bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, removed_entries);
         return {all_removed, removed_entries};
     }
 
@@ -984,7 +984,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 0);
         ASSERT_EQ(total_size, 0);
@@ -993,7 +993,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 1;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 4);
@@ -1004,7 +1004,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 2;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 2);
@@ -1015,7 +1015,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
         const BlobFileId blob_id = 3;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 2);
@@ -1026,7 +1026,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 2);
         ASSERT_EQ(blob_entries[1].size(), 4);
@@ -1039,7 +1039,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     // {2, 3}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 2);
         ASSERT_EQ(blob_entries[2].size(), 2);
@@ -1052,7 +1052,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2, 3}
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 3);
         ASSERT_EQ(blob_entries[1].size(), 4);
@@ -1067,7 +1067,7 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     // {1, 2, 3, 100}; blob_id 100 is not exist in actual
     {
         std::map<BlobFileId, PageIdAndVersionedEntries> blob_entries;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, combine(TEST_NAMESPACE_ID, page_id), blob_entries);
+        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries);
 
         ASSERT_EQ(blob_entries.size(), 3); // 100 not exist
         ASSERT_EQ(blob_entries.find(100), blob_entries.end());
