@@ -152,7 +152,12 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
         if (!run_in_compatible_mode)
         {
-            mergeConfigFromSettings(global_context.getSettingsRef(), config);
+            const auto & global_setting = global_context.getSettingsRef();
+            if (global_setting.region_persister_gc_force_hardlink_rate <= 1.0)
+            {
+                config.gc_force_hardlink_rate = global_setting.region_persister_gc_force_hardlink_rate;
+            }
+            mergeConfigFromSettings(global_setting, config);
             config.num_write_slots = 4; // extend write slots to 4 at least
 
             LOG_INFO(log, "RegionPersister running in normal mode");
