@@ -493,6 +493,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applySetTiFlashReplica(db_info, diff.table_id);
         break;
     }
+    case SchemaActionType::RenameTables:
+    {
+        LOG_FMT_WARNING(log, "change type RenameTables is not supported")
+    }
     default:
     {
         LOG_INFO(log, "ignore change type: " << int(diff.type));
