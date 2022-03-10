@@ -88,7 +88,6 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::cancel()
 {
-    canceled = true;
     if (mpp_tunnel) {
         mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
     }

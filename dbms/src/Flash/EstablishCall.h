@@ -77,8 +77,6 @@ private:
     // It's protected by mu.
     bool ready = false;
 
-    std::atomic<bool> canceled{false};
-
     // Let's implement a state machine with the following states.
     enum CallStatus
     {
