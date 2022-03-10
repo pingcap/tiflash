@@ -267,21 +267,7 @@ int MockTiDB::newTables(
 
     for (const auto & [table_name, columns, handle_pk_name] : tables)
     {
-        String qualified_name = database_name + "." + table_name;
-        if (tables_by_name.find(qualified_name) != tables_by_name.end())
-        {
-            throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
-        }
-
-        if (databases.find(database_name) == databases.end())
-        {
-            throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
-        }
-
-        auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
-        table_info->id = table_id_allocator++;
-        table_info->update_timestamp = tso;
-        addTable(database_name, std::move(*table_info));
+        newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
     }
     return 0;
 }
