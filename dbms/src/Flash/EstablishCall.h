@@ -72,8 +72,7 @@ private:
 
     void initRpc();
 
-    std::mutex mu; // protect "ready"
-    std::mutex state_mu; // protect "canceled", "state"
+    std::mutex mu; //prevent race between MppTunnel, current Calldataa and its watchdog
 
     // server instance
     AsyncFlashService * service;

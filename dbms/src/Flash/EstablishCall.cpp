@@ -68,13 +68,14 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
     return new EstablishCallData(service, cq, notify_cq);
 }
 
+//called by MPPTunnel
 void EstablishCallData::tryFlushOne()
 {
+    std::unique_lock lock(mu);
     if (canceled)
         return;
     // check whether there is a valid msg to write
     {
-        std::unique_lock lk(mu);
         if (ready && mpp_tunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
@@ -121,7 +122,6 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
-    std::unique_lock state_lock(state_mu);
     if (canceled || state == FINISH)
         return;
     state = FINISH;
@@ -134,13 +134,13 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
 
 void EstablishCallData::notifyReady()
 {
-    std::unique_lock lk(mu);
     ready = true;
 }
 
+//called by background cancel worker.
 void EstablishCallData::cancel()
 {
-    std::unique_lock state_lock(state_mu);
+    std::unique_lock lock(mu);
     if (mpp_tunnel)
     {
         canceled = true;
@@ -149,7 +149,7 @@ void EstablishCallData::cancel()
     }
 }
 
-
+//called by hanldeRpcs
 void EstablishCallData::proceed()
 {
     if (calldata_watched) // handle cancel case, which is triggered by AsyncNotifyWhenDone. calldata_watched is the EstablishCallData to be canceled. "this" is the monitor.
@@ -157,6 +157,8 @@ void EstablishCallData::proceed()
         // watchdog role
         if (ctx->IsCancelled())
         {
+            std::unique_lock lock(calldata_watched->mu);
+            calldata_watched->canceled = true;
             // if state == FINISH for watchdog, it means watched calldata had been finished and released.
             // So just cancel case of "state != FINISH"
             if (state != FINISH)
@@ -167,6 +169,9 @@ void EstablishCallData::proceed()
         return;
     }
     // calldata role
+    std::unique_lock lock(mu);
+    if (canceled)
+        return;
     if (state == NEW_REQUEST)
     {
         state = PROCESSING;
@@ -177,11 +182,9 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
-        std::unique_lock lk(mu); // don't move this lock , this code protect the check of mpp_tunnel and ready.
         if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
             ready = false;
-            lk.unlock();
             mpp_tunnel->sendJob(true);
         }
         else
@@ -207,7 +210,6 @@ void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_
     stopwatch = std::make_shared<Stopwatch>();
     this->mpp_tunnel = mpp_tunnel_;
     {
-        std::unique_lock state_lock(state_mu);
         if (canceled)
         {
             EstablishSharedEnv::global_instance->submitCancelTask(this);
