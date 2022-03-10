@@ -16,7 +16,7 @@ source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 INSTALL_DIR="${SRCPATH}/${INSTALL_DIR_SUFFIX}" # use original path
 
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
-CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
+CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-RELWITHDEBINFO}
 BUILD_BRANCH=${BUILD_BRANCH:-master}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
