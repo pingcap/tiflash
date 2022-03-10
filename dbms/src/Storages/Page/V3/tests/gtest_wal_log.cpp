@@ -780,7 +780,7 @@ TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
 INSTANTIATE_TEST_CASE_P(
     Recycle_AllowRetryRead,
     LogFileRWTest,
-    ::testing::buildV3Id(
+    ::testing::Combine(
         ::testing::Bool(),
         ::testing::Bool()),
     [](const ::testing::TestParamInfo<LogFileRWTest::ParamType> & info) -> String {
