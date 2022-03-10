@@ -1,3 +1,4 @@
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -5,6 +6,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -56,29 +58,10 @@ const std::unordered_map<String, String> DateSub::unit_to_func_name_map
         {"SECOND", "subtractSeconds"}};
 } // namespace
 
-String DAGExpressionAnalyzerHelper::genFuncString(
-    const String & func_name,
-    const Names & argument_names,
-    const TiDB::TiDBCollators & collators)
-{
-    assert(!collators.empty());
-    FmtBuffer buf;
-    buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
-    for (const auto & collator : collators)
-    {
-        if (collator == nullptr)
-            buf.append("_0");
-        else
-            buf.fmtAppend("_{}", collator->getCollatorId());
-    }
-    buf.append(" ");
-    return buf.toString();
-}
-
 String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // multiIf is special because
     // 1. the type of odd argument(except the last one) must be UInt8
@@ -102,7 +85,7 @@ String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
 String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // rewrite IFNULL function with multiIf
     // ifNull(arg1, arg2) -> multiIf(isNull(arg1), arg2, arg1)
@@ -129,7 +112,7 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
 String DAGExpressionAnalyzerHelper::buildInFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -200,7 +183,7 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
 String DAGExpressionAnalyzerHelper::buildLogicalFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -216,7 +199,7 @@ String DAGExpressionAnalyzerHelper::buildLogicalFunction(
 String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = "substringUTF8";
     Names argument_names;
@@ -242,7 +225,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
     const Names & argument_names,
     bool in_union,
     const tipb::FieldType & field_type,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     static const String tidb_cast_name = "tidb_cast";
 
@@ -264,7 +247,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
 String DAGExpressionAnalyzerHelper::buildCastFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
         throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
@@ -285,7 +268,7 @@ template <typename Impl>
 String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 3)
     {
@@ -329,7 +312,7 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
 String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -362,7 +345,7 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
 String DAGExpressionAnalyzerHelper::buildRoundFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
-    ExpressionActionsPtr & actions)
+    const ExpressionActionsPtr & actions)
 {
     // ROUND(x) -> ROUND(x, 0)
     if (expr.children_size() != 1)
@@ -378,6 +361,30 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
     argument_names.push_back(std::move(const_zero_arg_name));
 
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
+}
+
+String DAGExpressionAnalyzerHelper::buildRegexpFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    TiDB::TiDBCollatorPtr collator = getCollatorFromExpr(expr);
+    if (expr.sig() == tipb::ScalarFuncSig::RegexpReplaceSig || expr.sig() == tipb::ScalarFuncSig::RegexpSig)
+    {
+        /// according to https://github.com/pingcap/tidb/blob/v5.0.0/expression/builtin_like.go#L126,
+        /// For binary collation, it will use RegexpXXXSig, otherwise it will use RegexpXXXUTF8Sig
+        /// Need to set the collator explicitly because `getCollatorFromExpr` will return nullptr
+        /// if new collation is not enabled.
+        collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
 
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
@@ -401,6 +408,8 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
      {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
+     {"regexp", DAGExpressionAnalyzerHelper::buildRegexpFunction},
+     {"replaceRegexpAll", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
 
 } // namespace DB

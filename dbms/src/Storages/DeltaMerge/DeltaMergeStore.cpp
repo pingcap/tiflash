@@ -217,10 +217,11 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     try
     {
         storage_pool.restore(); // restore from disk
-        if (!storage_pool.maxMetaPageId())
+        page_id_generator.restore(storage_pool);
+        if (!page_id_generator.maxMetaPageId())
         {
             // Create the first segment.
-            auto segment_id = storage_pool.newMetaPageId();
+            auto segment_id = page_id_generator.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
             auto first_segment
@@ -265,7 +266,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     ExternalPageCallbacks callbacks;
     // V2 callbacks for cleaning DTFiles
-    callbacks.v2_scanner = [this]() {
+    callbacks.scanner = [this]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
         auto delegate = path_pool.getStableDiskDelegator();
         DMFile::ListOptions options;
@@ -280,7 +281,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
         return path_and_ids_vec;
     };
-    callbacks.v2_remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+    callbacks.remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
         auto delegate = path_pool.getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
@@ -301,8 +302,6 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    // TODO: callbacks for cleaning DTFiles
-    callbacks.v3_remover = nullptr;
     storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
@@ -391,6 +390,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                storage_pool,
+                               page_id_generator,
                                hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
@@ -591,7 +591,7 @@ std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
 
     auto delegator = path_pool.getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
-    auto new_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto new_id = page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     return {parent_path, new_id};
 }
 
@@ -708,7 +708,7 @@ void DeltaMergeStore::ingestFiles(
                 /// Generate DMFile instance with a new ref_id pointed to the file_id.
                 auto file_id = file->fileId();
                 const auto & file_parent_path = file->parentPath();
-                auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+                auto ref_id = page_id_generator.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
@@ -2158,6 +2158,9 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     DeltaMergeStoreStat stat;
 
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return stat;
+
     stat.segment_count = segments.size();
 
     Int64 total_placed_rows = 0;
@@ -2239,9 +2242,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.data()->getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        stat.storage_stable_num_pages = concrete_snap->version()->numPages();
-        stat.storage_stable_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_stable_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_stable_num_pages = version->numPages();
+            stat.storage_stable_num_normal_pages = version->numNormalPages();
+            stat.storage_stable_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_delta_num_snapshots, //
@@ -2250,9 +2260,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.log()->getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        stat.storage_delta_num_pages = concrete_snap->version()->numPages();
-        stat.storage_delta_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_delta_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_delta_num_pages = version->numPages();
+            stat.storage_delta_num_normal_pages = version->numNormalPages();
+            stat.storage_delta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_meta_num_snapshots, //
@@ -2261,9 +2278,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.meta()->getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        stat.storage_meta_num_pages = concrete_snap->version()->numPages();
-        stat.storage_meta_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_meta_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_meta_num_pages = version->numPages();
+            stat.storage_meta_num_normal_pages = version->numNormalPages();
+            stat.storage_meta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
+        }
     }
 
     stat.background_tasks_length = background_tasks.length();

@@ -53,6 +53,7 @@ public:
         const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// May change the source columns.
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
@@ -61,6 +62,8 @@ public:
     void initChain(
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
+
+    ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
     void appendJoin(
         ExpressionActionsChain & chain,
@@ -80,7 +83,7 @@ public:
 
     String getActions(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         bool output_as_uint8_type = false);
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
@@ -115,11 +118,11 @@ public:
 
 private:
     NamesAndTypes buildOrderColumns(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
     void appendCastAfterAgg(
-        ExpressionActionsChain & chain,
+        const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -127,11 +130,11 @@ private:
         SortDescription & sort_desc,
         NamesAndTypes & names_and_types,
         TiDB::TiDBCollators & collators,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
@@ -139,11 +142,34 @@ private:
 
     void buildCommonAggFunc(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
+
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    void fillAggArgumentDetail(
+        const ExpressionActionsPtr & actions,
+        const tipb::Expr & arg,
+        Names & arg_names,
+        DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
@@ -153,12 +179,12 @@ private:
 
     String appendCast(
         const DataTypePtr & target_type,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name);
 
     String appendCastIfNeeded(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name);
 
     /**
@@ -172,17 +198,17 @@ private:
      */
     String alignReturnType(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
 
     bool buildExtraCastsAfterTS(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
         bool left,
@@ -191,31 +217,31 @@ private:
     String applyFunction(
         const String & func_name,
         const Names & arg_names,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const TiDB::TiDBCollatorPtr & collator);
 
     String appendTimeZoneCast(
         const String & tz_col,
         const String & ts_col,
         const String & func_name,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     String appendDurationCast(
         const String & fsp_expr,
         const String & dur_expr,
         const String & func_name,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     String convertToUInt8(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & column_name);
 
     String buildFunction(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     String buildFilterColumn(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
 
     // all columns from table scan

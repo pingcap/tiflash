@@ -36,6 +36,10 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,
     const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators);
 
 extern const Int8 VAR_SIZE;
 
