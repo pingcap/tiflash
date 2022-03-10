@@ -263,8 +263,6 @@ int MockTiDB::newTables(
     Timestamp tso,
     const String & engine_type)
 {
-    std::lock_guard lock(tables_mutex);
-
     for (const auto & [table_name, columns, handle_pk_name] : tables)
     {
         newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
