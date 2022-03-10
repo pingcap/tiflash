@@ -123,8 +123,6 @@ private:
 
     bool finished; // if the tunnel has finished its connection.
 
-    bool err_set = false; // if consumer_state has been set.
-
     bool is_local; // if the tunnel is used for local environment
 
     bool is_async; // if the tunnel is used for async server.

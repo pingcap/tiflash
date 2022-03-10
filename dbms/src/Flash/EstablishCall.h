@@ -2,12 +2,9 @@
 
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
-#include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
-
-#include <queue>
 
 namespace DB
 {
@@ -27,7 +24,6 @@ private:
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 };
 
-
 class EstablishCallData : public PacketWriter
 {
 public:
@@ -36,13 +32,6 @@ public:
     // used for asynchronous communication with the gRPC runtime.
     // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
     EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
-
-    // A watchdog of EstablishCallData used for handle cancel event.
-    EstablishCallData(EstablishCallData * p, const std::shared_ptr<::grpc::ServerContext> & ctx_)
-        : ctx(ctx_)
-        , responder(nullptr)
-        , calldata_watched(p)
-    {}
 
     bool write(const mpp::MPPDataPacket & packet) override;
 
@@ -54,8 +43,6 @@ public:
 
     void proceed();
 
-    void cancel();
-
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
@@ -63,24 +50,19 @@ public:
     // EstablishCallData will handle its lifecycle by itself.
     static EstablishCallData * spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
 
-
-    std::shared_ptr<::grpc::ServerContext> ctx;
-    EstablishCallData * watch_dog = nullptr;
-
 private:
     void notifyReady();
 
     void initRpc();
 
-    std::mutex mu; //prevent race between MppTunnel, current Calldataa and its watchdog
-    std::mutex ready_mu; // protect ready
-
+    std::mutex mu;
     // server instance
     AsyncFlashService * service;
 
     // The producer-consumer queue where for asynchronous server notifications.
     ::grpc::ServerCompletionQueue * cq;
     ::grpc::ServerCompletionQueue * notify_cq;
+    ::grpc::ServerContext ctx;
     ::grpc::Status err_status;
 
     // What we get from the client.
@@ -89,13 +71,9 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
-    EstablishCallData * calldata_watched = nullptr; // used by AsyncNotifyWhenDone for handling cancel case.
-
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
     bool ready = false;
-
-    std::atomic<bool> canceled{false};
 
     // Let's implement a state machine with the following states.
     enum CallStatus
@@ -105,35 +83,8 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    std::atomic<CallStatus> state{NEW_REQUEST}; // The current serving state.
+    CallStatus state; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
-};
-
-class EstablishSharedEnv
-{
-public:
-    EstablishSharedEnv()
-    {
-        background_worker = std::unique_ptr<std::thread>(new std::thread(&EstablishSharedEnv::cancelLoop, this));
-    }
-    void cancelLoop();
-    void submitCancelTask(EstablishCallData * calldata);
-
-    std::unique_ptr<std::thread> background_worker;
-    ~EstablishSharedEnv()
-    {
-        end_syn = true;
-        background_worker->join();
-    }
-
-    std::priority_queue<std::pair<long, EstablishCallData *>, std::vector<std::pair<long, EstablishCallData *>>, auto (*)(const std::pair<long, EstablishCallData *> &, const std::pair<long, EstablishCallData *> &)->bool> wait_deadline_queue{
-        [](const std::pair<long, EstablishCallData *> & a, const std::pair<long, EstablishCallData *> & b) -> bool {
-            return a.first > b.first;
-        }}; // min deadline first priority queue of EstablishCallData cancel
-    std::atomic<bool> end_syn{false};
-    std::mutex mu;
-
-    static std::unique_ptr<EstablishSharedEnv> global_instance;
 };
 } // namespace DB

@@ -577,7 +577,6 @@ public:
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
         {
-            EstablishSharedEnv::global_instance = std::make_unique<EstablishSharedEnv>();
             int preallocated_request_count_per_poller = server.context().getSettingsRef().preallocated_request_count_per_poller;
             int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
             for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
