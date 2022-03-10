@@ -73,6 +73,7 @@ private:
     void initRpc();
 
     std::mutex mu; //prevent race between MppTunnel, current Calldataa and its watchdog
+    std::mutex ready_mu; // protect ready
 
     // server instance
     AsyncFlashService * service;
@@ -94,7 +95,7 @@ private:
     // It's protected by mu.
     bool ready = false;
 
-    bool canceled = false;
+    std::atomic<bool> canceled{false};
 
     // Let's implement a state machine with the following states.
     enum CallStatus

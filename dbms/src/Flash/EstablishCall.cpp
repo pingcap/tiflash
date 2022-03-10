@@ -71,11 +71,11 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
 //called by MPPTunnel
 void EstablishCallData::tryFlushOne()
 {
-    std::unique_lock lock(mu);
     if (canceled)
         return;
     // check whether there is a valid msg to write
     {
+        std::unique_lock r_lk(ready_mu);
         if (ready && mpp_tunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
@@ -134,6 +134,7 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
 
 void EstablishCallData::notifyReady()
 {
+    std::unique_lock rlk(ready_mu);
     ready = true;
 }
 
@@ -182,9 +183,11 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
+        std::unique_lock rlk(ready_mu);
         if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
             ready = false;
+            rlk.unlock();
             mpp_tunnel->sendJob(true);
         }
         else
