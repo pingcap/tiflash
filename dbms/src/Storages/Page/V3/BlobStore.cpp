@@ -71,18 +71,18 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             {
             case WriteBatch::WriteType::DEL:
             {
-                edit.del(combine(ns_id, write.page_id));
+                edit.del(buildV3Id(ns_id, write.page_id));
                 break;
             }
             case WriteBatch::WriteType::REF:
             {
-                edit.ref(combine(ns_id, write.page_id), combine(ns_id, write.ori_page_id));
+                edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
                 break;
             }
             case WriteBatch::WriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
-                edit.putExternal(combine(ns_id, write.page_id));
+                edit.putExternal(buildV3Id(ns_id, write.page_id));
                 break;
             }
             case WriteBatch::WriteType::PUT:
@@ -142,21 +142,21 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-            edit.put(combine(ns_id, write.page_id), entry);
+            edit.put(buildV3Id(ns_id, write.page_id), entry);
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
-            edit.del(combine(ns_id, write.page_id));
+            edit.del(buildV3Id(ns_id, write.page_id));
             break;
         }
         case WriteBatch::WriteType::REF:
         {
-            edit.ref(combine(ns_id, write.page_id), combine(ns_id, write.ori_page_id));
+            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
             break;
         }
         case WriteBatch::WriteType::PUT_EXTERNAL:
-            edit.putExternal(combine(ns_id, write.page_id));
+            edit.putExternal(buildV3Id(ns_id, write.page_id));
             break;
         case WriteBatch::WriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));

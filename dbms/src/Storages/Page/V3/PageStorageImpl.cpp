@@ -55,7 +55,7 @@ PageId PageStorageImpl::getNormalPageId(NamespaceId ns_id, PageId page_id, Snaps
         snapshot = this->getSnapshot();
     }
 
-    return page_directory->getNormalPageId(combine(ns_id, page_id), snapshot).low;
+    return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot).low;
 }
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
@@ -87,7 +87,7 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
 
     try
     {
-        const auto & [id, entry] = page_directory->get(combine(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
@@ -114,7 +114,7 @@ DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimi
         snapshot = this->getSnapshot();
     }
 
-    auto page_entry = page_directory->get(combine(ns_id, page_id), snapshot);
+    auto page_entry = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
     return blob_store.read(page_entry, read_limiter);
 }
 
@@ -127,7 +127,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & pag
 
     PageIdV3Internals page_id_v3s;
     for (auto p_id : page_ids)
-        page_id_v3s.emplace_back(combine(ns_id, p_id));
+        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
     auto page_entries = page_directory->get(page_id_v3s, snapshot);
     return blob_store.read(page_entries, read_limiter);
 }
@@ -141,7 +141,7 @@ void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_i
 
     PageIdV3Internals page_id_v3s;
     for (auto p_id : page_ids)
-        page_id_v3s.emplace_back(combine(ns_id, p_id));
+        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
     auto page_entries = page_directory->get(page_id_v3s, snapshot);
     blob_store.read(page_entries, handler, read_limiter);
 }
@@ -156,9 +156,9 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadField
     BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = page_directory->get(combine(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
-        auto info = BlobStore::FieldReadInfo(combine(ns_id, page_id), entry, field_indices);
+        auto info = BlobStore::FieldReadInfo(buildV3Id(ns_id, page_id), entry, field_indices);
         read_infos.emplace_back(info);
     }
 

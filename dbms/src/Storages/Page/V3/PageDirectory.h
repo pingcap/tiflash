@@ -299,19 +299,19 @@ public:
     // Just for tests, refactor them out later
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
     {
-        return get(combine(TEST_NAMESPACE_ID, page_id), snap);
+        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
     }
     PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(combine(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
     }
     PageIdV3Internal getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
     {
-        return getNormalPageId(combine(TEST_NAMESPACE_ID, page_id), snap);
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
     }
     PageIdV3Internal getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return getNormalPageId(combine(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
     }
 #endif
 

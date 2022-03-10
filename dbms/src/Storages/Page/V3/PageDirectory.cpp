@@ -286,7 +286,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             {
                 if (iter == entries.begin())
                 {
-                    return {RESOLVE_FAIL, combine(0, 0), PageVersionType(0)};
+                    return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
                 }
                 --iter;
                 // fallover the check the prev item
@@ -296,7 +296,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             {
                 if (entry != nullptr)
                     *entry = iter->second.entry;
-                return {RESOLVE_TO_NORMAL, combine(0, 0), PageVersionType(0)};
+                return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
             } // fallover to FAIL
         }
     }
@@ -308,7 +308,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
         bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq < delete_ver.sequence)));
         if (create_ver.sequence <= seq && ok)
         {
-            return {RESOLVE_TO_NORMAL, combine(0, 0), PageVersionType(0)};
+            return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
         }
     }
     else if (type == EditRecordType::VAR_REF)
@@ -318,7 +318,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
     }
-    return {RESOLVE_FAIL, combine(0, 0), PageVersionType(0)};
+    return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
 }
 
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
@@ -813,7 +813,7 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
 PageId PageDirectory::getMaxId(NamespaceId ns_id) const
 {
     std::shared_lock read_lock(table_rw_mutex);
-    PageIdV3Internal upper_bound = combine(ns_id, UINT64_MAX);
+    PageIdV3Internal upper_bound = buildV3Id(ns_id, UINT64_MAX);
 
     auto iter = mvcc_table_directory.upper_bound(upper_bound);
     if (iter == mvcc_table_directory.begin())
@@ -858,7 +858,7 @@ void PageDirectory::applyRefEditRecord(
         {
             auto resolve_ver_iter = mvcc_table_directory.find(id_to_resolve);
             if (resolve_ver_iter == mvcc_table_directory.end())
-                return {false, combine(0, 0), PageVersionType(0)};
+                return {false, buildV3Id(0, 0), PageVersionType(0)};
 
             const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
             // If we already hold the lock from `id_to_resolve`, then we should not request it again.

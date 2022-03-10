@@ -115,9 +115,9 @@ inline ::testing::AssertionResult getEntryCompare(
 }
 
 #define ASSERT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, combine(TEST_NAMESPACE_ID, pid), snap)
+    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 #define EXPECT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, combine(TEST_NAMESPACE_ID, pid), snap)
+    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesCompare(
     const char * expected_entries_expr,
@@ -231,7 +231,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     return ::testing::AssertionFailure(::testing::Message(error.c_str()));
 }
 #define EXPECT_ENTRY_NOT_EXIST(dir, pid, snap) \
-    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, combine(TEST_NAMESPACE_ID, pid), snap)
+    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
