@@ -168,6 +168,8 @@ private:
     };
     ConsumerState consumer_state;
 
+    bool err_set = false;
+
     ConnectionProfileInfo connection_profile_info;
 
     const LogWithPrefixPtr log;

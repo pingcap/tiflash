@@ -294,7 +294,10 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_loc
     auto rest_work = [this, &err_msg] {
         finished = true;
         // must call setError in the critical area to keep consistent with `finished` from outside.
-        consumer_state.setError(err_msg);
+        if (!err_set)
+        {
+            consumer_state.setError(err_msg);
+        }
         cv_for_connected_or_finished.notify_all();
     };
     if (need_lock)
