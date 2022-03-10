@@ -297,6 +297,7 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_loc
         if (!err_set)
         {
             consumer_state.setError(err_msg);
+            err_set = true;
         }
         cv_for_connected_or_finished.notify_all();
     };
