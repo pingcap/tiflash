@@ -86,6 +86,15 @@ void EstablishCallData::notifyReady()
     ready = true;
 }
 
+void EstablishCallData::cancel()
+{
+    canceled = true;
+    if (mpp_tunnel) {
+        mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
+    }
+    delete this;
+}
+
 void EstablishCallData::proceed()
 {
     if (state == NEW_REQUEST)

@@ -43,6 +43,8 @@ public:
 
     void proceed();
 
+    void cancel();
+
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
@@ -74,6 +76,8 @@ private:
     // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
     // It's protected by mu.
     bool ready = false;
+
+    std::atomic<bool> canceled{false};
 
     // Let's implement a state machine with the following states.
     enum CallStatus

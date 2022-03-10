@@ -515,6 +515,8 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq)
         // We need not log all not ok events, since the volumn is large which will pollute the content of log.
         if (ok) 
             static_cast<EstablishCallData *>(tag)->proceed();
+        else
+            static_cast<EstablishCallData *>(tag)->cancel();
     }
 }
 
