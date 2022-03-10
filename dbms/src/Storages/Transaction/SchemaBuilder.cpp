@@ -428,7 +428,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             new_diff.table_id = opt.table_id;
             new_diff.old_schema_id = opt.old_schema_id;
             new_diff.old_table_id = opt.old_table_id;
-            LOG_FMT_WARNING(log, "find CreateTables of version {} schema {} table {}", new_diff.version, opt.schema_id, opt.table_id);
             applyDiff(new_diff);
         }
         return;
