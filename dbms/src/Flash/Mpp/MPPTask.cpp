@@ -296,14 +296,14 @@ void MPPTask::runImpl()
     String err_msg;
     try
     {
-        LOG_INFO(log, "task starts preprocessing");
+        LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
         needed_threads = estimateCountOfNewThreads();
         LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
 
         scheduleOrWait();
 
-        LOG_INFO(log, "task starts running");
+        LOG_FMT_INFO(log, "task starts running");
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -439,7 +439,7 @@ void MPPTask::scheduleOrWait()
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
-        std::unique_lock<std::mutex> lock(schedule_mu);
+        std::unique_lock lock(schedule_mu);
         schedule_cv.wait(lock, [&] { return scheduled; });
         LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
     }
@@ -448,7 +448,7 @@ void MPPTask::scheduleOrWait()
 void MPPTask::scheduleThisTask()
 {
     LOG_FMT_INFO(log, "task gets schedule");
-    std::unique_lock<std::mutex> lock(schedule_mu);
+    std::unique_lock lock(schedule_mu);
     scheduled = true;
     schedule_cv.notify_one();
 }
@@ -461,6 +461,15 @@ int MPPTask::estimateCountOfNewThreads()
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
     return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
+}
+
+int MPPTask::getNeededThreads()
+{
+    if (needed_threads == 0)
+    {
+        throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
+    }
+    return needed_threads;
 }
 
 } // namespace DB

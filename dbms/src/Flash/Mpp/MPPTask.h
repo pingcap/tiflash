@@ -46,25 +46,15 @@ public:
 
     void prepare(const mpp::DispatchTaskRequest & task_request);
 
-    void preprocess();
-
-    void scheduleOrWait();
-    void scheduleThisTask();
-
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
     int estimateCountOfNewThreads();
 
-    int getNeededThreads()
-    {
-        if (needed_threads == 0)
-        {
-            throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
-        }
-        return needed_threads;
-    }
+    int getNeededThreads();
+
+    void scheduleThisTask();
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -87,6 +77,10 @@ private:
     void finishWrite();
 
     bool switchStatus(TaskStatus from, TaskStatus to);
+
+    void preprocess();
+
+    void scheduleOrWait();
 
     tipb::DAGRequest dag_req;
 

@@ -47,7 +47,8 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
 public:
-    MPPTaskManager(MPPTaskSchedulerPtr);
+    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
+
     ~MPPTaskManager() = default;
 
     std::vector<UInt64> getCurrentQueries();
