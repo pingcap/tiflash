@@ -125,7 +125,6 @@ cmake-3.22 -S "${SRCPATH}" \
   -DUSE_CCACHE=${USE_CCACHE} \
   -DTEST_COVERAGE=ON \
   -DTEST_COVERAGE_XML=ON \
-  -DUSE_INTERNAL_ZLIB_LIBRARY=OFF \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
 make -j ${NPROC} gtests_dbms gtests_libcommon gtests_libdaemon

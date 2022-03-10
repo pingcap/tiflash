@@ -52,7 +52,6 @@ cmake-3.22 -S "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
       -Wno-dev \
-      -DUSE_INTERNAL_ZLIB_LIBRARY=OFF \
       -DUSE_CCACHE=OFF
 
 make -j ${NPROC} tiflash
