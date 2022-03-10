@@ -495,7 +495,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     case SchemaActionType::RenameTables:
     {
-        LOG_FMT_WARNING(log, "change type RenameTables is not supported")
+        LOG_FMT_WARNING(log, "change type RenameTables is not supported");
     }
     default:
     {
