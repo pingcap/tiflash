@@ -183,7 +183,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)
-    , storage_pool(db_name_ + "." + table_name_, table_id_, path_pool, global_context, db_context.getSettingsRef())
+    // for mock test, table_id_ should be DB::InvalidTableID
+    , storage_pool(db_name_ + "." + table_name_, table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_, path_pool, global_context, db_context.getSettingsRef())
     , db_name(db_name_)
     , table_name(table_name_)
     , is_common_handle(is_common_handle_)
