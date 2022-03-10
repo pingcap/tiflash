@@ -9,7 +9,7 @@ endif()
 
 option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ${ENABLE_JEMALLOC_DEFAULT})
 # TODO: Make ENABLE_JEMALLOC_PROF default value to ${ENABLE_JEMALLOC_DEFAULT} after https://github.com/pingcap/tics/issues/3236 get fixed.
-option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" OFF)
+option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" ${ENABLE_JEMALLOC_DEFAULT})
 option (USE_INTERNAL_JEMALLOC_LIBRARY "Set to FALSE to use system jemalloc library instead of bundled" ${NOT_UNBUNDLED})
 
 if (ENABLE_JEMALLOC)
