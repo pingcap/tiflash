@@ -259,21 +259,13 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
         }
     }
-    catch (std::exception & e)
-    {
-        std::unique_lock<std::mutex> lock(exception_mutex);
-        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg.rdbuf()->str(), e.what(), watch.elapsedSeconds());
-        exception_from_workers.push_back(std::current_exception());
-        if (subquery.join)
-            subquery.join->setBuildTableState(-1);
-    }
     catch (...)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
-        LOG_FMT_ERROR(log, "{} throw exception: unknown error In {} sec. ", log_msg.rdbuf()->str(), watch.elapsedSeconds());
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
             subquery.join->setBuildTableState(-1);
+        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg.rdbuf()->str(), getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
     }
 }
 
