@@ -151,15 +151,15 @@ try
 CATCH
 
 struct X
-    {
+{
     std::mutex * mu;
     std::condition_variable * cv;
     bool * destructed;
 
     X(std::mutex * mu_, std::condition_variable * cv_, bool * destructed_)
-    : mu(mu_)
-    , cv(cv_)
-    , destructed(destructed_)
+        : mu(mu_)
+        , cv(cv_)
+        , destructed(destructed_)
     {}
 
     ~X()
@@ -168,7 +168,7 @@ struct X
         *destructed = true;
         cv->notify_all();
     }
-    };
+};
 
 TEST_F(DynamicThreadPoolTest, testTaskDestruct)
 try
