@@ -98,16 +98,15 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
+        std::unique_lock lk(mu);
         if (mpp_tunnel->isSendQueueNextPopNonBlocking())
         {
-            {
-                std::unique_lock lk(mu);
-                ready = false;
-            }
+            ready = false;
+            lk.unlock();
             mpp_tunnel->sendJob(true);
         }
         else
-            notifyReady();
+            ready = true;
     }
     else if (state == ERR_HANDLE)
     {
