@@ -174,6 +174,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool data_path_contains_database_name,
                                  const String & db_name_,
                                  const String & table_name_,
+                                 TableID table_id_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
@@ -183,7 +184,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)
-    , storage_pool(db_name_ + "." + table_name_, path_pool, global_context, db_context.getSettingsRef())
+    // for mock test, table_id_ should be DB::InvalidTableID
+    , storage_pool(db_name_ + "." + table_name_, table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_, path_pool, global_context, db_context.getSettingsRef())
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id)
@@ -304,6 +306,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
+    callbacks.ns_id = storage_pool.getNamespaceId();
     storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });

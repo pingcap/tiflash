@@ -127,7 +127,7 @@ std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageF
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files)
 {
     PageStorage::MetaMergingQueue merging_queue;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         PageFile::MetaMergingReaderPtr reader;
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
@@ -244,10 +244,11 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(
     const PageStorage::ConcreteSnapshotPtr & snapshot,
     const WriteBatch::SequenceID wb_sequence)
 {
-    WriteBatch wb;
+    // namespace in v2 is useless
+    WriteBatch wb{MAX_NAMESPACE_ID};
     // First Ingest exists pages with normal_id
     auto normal_ids = snapshot->version()->validNormalPageIds();
-    for (auto & page_id : normal_ids)
+    for (const auto & page_id : normal_ids)
     {
         auto entry = snapshot->version()->findNormalPageEntry(page_id);
         if (unlikely(!entry))
@@ -266,7 +267,7 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
     auto ref_ids = snapshot->version()->validPageIds();
-    for (auto & page_id : ref_ids)
+    for (const auto & page_id : ref_ids)
     {
         auto ori_id = snapshot->version()->isRefId(page_id).second;
         wb.putRefPage(page_id, ori_id);

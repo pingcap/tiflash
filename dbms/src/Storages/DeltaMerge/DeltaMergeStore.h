@@ -276,6 +276,7 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    TableID table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
