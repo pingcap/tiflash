@@ -9,7 +9,8 @@ namespace DB
 {
 /// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_tso query to preempt threads under the hard limit of threads.
 /// The min_tso query avoids the deadlock resulted from threads competition among nodes.
-/// schedule tasks under the lock protection of the task manager
+/// schedule tasks under the lock protection of the task manager.
+/// NOTE: if this scheduler hangs resulting from some bugs, kill the min_tso query, and the cancelled query surely transfers the min_tso.
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
@@ -30,7 +31,7 @@ public:
 
 private:
     bool scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set, MPPTaskPtr task, bool isWaiting);
-    void updateMinTSO(UInt64 tso, bool valid, String msg);
+    bool updateMinTSO(UInt64 tso, bool valid, String msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
     std::set<UInt64> waiting_set;
     std::set<UInt64> active_set;
