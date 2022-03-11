@@ -7,7 +7,6 @@
 
 namespace DB::PS::V3
 {
-
 PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
     auto [wal, reader] = WALStore::create(file_provider, delegator);
@@ -62,7 +61,7 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
                 if (holder)
                 {
                     *holder = r.page_id;
-                    dir->external_ids.emplace_back(std::weak_ptr<PageId>(holder));
+                    dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
                 }
                 break;
             }
@@ -77,7 +76,7 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
                 if (holder)
                 {
                     *holder = r.page_id;
-                    dir->external_ids.emplace_back(std::weak_ptr<PageId>(holder));
+                    dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
                 }
                 break;
             }

@@ -806,8 +806,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
-    auto start_index = random() % (total_rows - delete_rows + 1);
-
+    auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
         ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
@@ -1183,6 +1182,7 @@ void StorageDeltaMerge::rename(
         data_path_contains_database_name,
         new_database_name,
         new_table_name,
+        tidb_table_info.id,
         std::move(table_column_defines),
         std::move(handle_column_define),
         is_common_handle,
@@ -1225,7 +1225,7 @@ void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context)
 {
@@ -1500,6 +1500,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             data_path_contains_database_name,
             table_column_info->db_name,
             table_column_info->table_name,
+            tidb_table_info.id,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
             is_common_handle,
