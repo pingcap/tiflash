@@ -146,7 +146,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             used_version++;
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
-        LOG_DEBUG(log, "end load schema diffs.");
+        LOG_FMT_DEBUG(log, "end load schema diffs with total {} entries.", diffs.size());
         try
         {
             for (const auto & diff : diffs)

@@ -317,4 +317,20 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     output("");
 }
 
+void MockTiDBTable::dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() % 3 != 0)
+        throw Exception("Args not matched, should be: database-name, table-name, new-table-name, ..., [database-name, table-name, new-table-name]", ErrorCodes::BAD_ARGUMENTS);
+    std::vector<std::tuple<std::string, std::string, std::string>> table_map;
+    for (ASTs::size_type i = 0; i < args.size() / 3; i++)
+    {
+        const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 0]).name;
+        const String & table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 1]).name;
+        const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 2]).name;
+        table_map.emplace_back(database_name, table_name, new_table_name);
+    }
+    MockTiDB::instance().renameTables(table_map);
+    output(fmt::format("renamed tables"));
+}
+
 } // namespace DB
