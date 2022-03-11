@@ -8,6 +8,7 @@ Children getChildren(const tipb::Executor & executor)
     switch (executor.tp())
     {
     case tipb::ExecType::TypeTableScan:
+    case tipb::ExecType::TypePartitionTableScan:
         return {};
     case tipb::ExecType::TypeJoin:
         return {&executor.join().children(0), &executor.join().children(1)};

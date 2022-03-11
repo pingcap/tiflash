@@ -42,7 +42,7 @@ std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler:
     const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges)
 {
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
-    for (auto & range : ranges)
+    for (const auto & range : ranges)
     {
         DecodedTiKVKeyPtr start = std::make_shared<DecodedTiKVKey>(std::string(range.start()));
         DecodedTiKVKeyPtr end = std::make_shared<DecodedTiKVKey>(std::string(range.end()));
@@ -73,16 +73,23 @@ grpc::Status CoprocessorHandler::execute()
                     "DAG request with rpn expression is not supported in TiFlash",
                     Errors::Coprocessor::Unimplemented);
             tipb::SelectResponse dag_response;
-            RegionInfoMap regions;
+            TablesRegionsInfo tables_regions_info(true);
+            auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
             const std::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
-            regions.emplace(cop_context.kv_context.region_id(),
-                            RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges()), &bypass_lock_ts));
+            table_regions_info.local_regions.emplace(
+                cop_context.kv_context.region_id(),
+                RegionInfo(
+                    cop_context.kv_context.region_id(),
+                    cop_context.kv_context.region_epoch().version(),
+                    cop_context.kv_context.region_epoch().conf_ver(),
+                    GenCopKeyRange(cop_request->ranges()),
+                    &bypass_lock_ts));
 
             DAGContext dag_context(dag_request);
-            dag_context.regions_for_local_read = std::move(regions);
+            dag_context.tables_regions_info = std::move(tables_regions_info);
             dag_context.log = std::make_shared<LogWithPrefix>(log, "");
             dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);

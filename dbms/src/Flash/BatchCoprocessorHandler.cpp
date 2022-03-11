@@ -43,33 +43,18 @@ grpc::Status BatchCoprocessorHandler::execute()
                 { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
-            RegionInfoMap regions;
-            RegionInfoList retry_regions;
-            for (auto & r : cop_request->regions())
-            {
-                auto res = regions.emplace(r.region_id(),
-                                           RegionInfo(
-                                               r.region_id(),
-                                               r.region_epoch().version(),
-                                               r.region_epoch().conf_ver(),
-                                               GenCopKeyRange(r.ranges()),
-                                               nullptr));
-                if (!res.second)
-                {
-                    retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
-                }
-            }
+            TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
             LOG_FMT_DEBUG(
                 log,
-                "{}: Handling {} regions in DAG request: {}",
+                "{}: Handling {} regions from {} physical tables in DAG request: {}",
                 __PRETTY_FUNCTION__,
-                regions.size(),
+                tables_regions_info.regionCount(),
+                tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
             DAGContext dag_context(dag_request);
             dag_context.is_batch_cop = true;
-            dag_context.regions_for_local_read = std::move(regions);
-            dag_context.regions_for_remote_read = std::move(retry_regions);
+            dag_context.tables_regions_info = std::move(tables_regions_info);
             dag_context.log = std::make_shared<LogWithPrefix>(log, "");
             dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);
