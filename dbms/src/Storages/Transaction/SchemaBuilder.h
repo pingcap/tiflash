@@ -36,8 +36,8 @@ struct SchemaBuilder
 private:
     void applyDropSchema(DatabaseID schema_id);
 
-    /// Parameter schema_name should be mapped.
-    void applyDropSchema(const String & schema_name);
+    /// Parameter db_name should be mapped.
+    void applyDropSchema(const String & db_name);
 
     bool applyCreateSchema(DatabaseID schema_id);
 
