@@ -139,7 +139,7 @@ bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set,
     {
         if (tso <= min_tso) /// the min_tso query should fully run
         {
-            auto msg = fmt::format("threads are unavailable for the min_tso query {} {}, need {}, but used {} of the thread hard limit {}, active set size = {}, waiting set size = {}.", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, used_threads, thread_hard_limit, active_set.size(), waiting_set.size());
+            auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso query {}) {}, need {}, but used {} of the thread hard limit {}, active set size = {}, waiting set size = {}.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, used_threads, thread_hard_limit, active_set.size(), waiting_set.size());
             LOG_FMT_ERROR(log, "{}", msg);
             throw Exception(msg);
         }
