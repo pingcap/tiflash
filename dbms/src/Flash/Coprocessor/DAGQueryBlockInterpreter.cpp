@@ -956,8 +956,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
-    dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
+    auto & last_step = dag_analyzer.initAndGetLastStep(chain);
     std::vector<NameAndTypePair> output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;

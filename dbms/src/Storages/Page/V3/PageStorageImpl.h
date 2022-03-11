@@ -62,12 +62,13 @@ public:
     bool gc() { return gc(false, nullptr, nullptr); }
 #endif
 
+    friend class PageDirectoryFactory;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
     LogWithPrefixPtr log;
 
-    PageDirectory page_directory;
+    PageDirectoryPtr page_directory;
 
     BlobStore::Config blob_config;
 
@@ -75,7 +76,8 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPageCallbacks::V3ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 } // namespace PS::V3
