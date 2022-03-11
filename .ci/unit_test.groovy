@@ -34,6 +34,8 @@ def runBuilderClosure(label, image, Closure body) {
     volumes: [
             nfsVolume(mountPath: '/home/jenkins/agent/dependency', serverAddress: '172.16.5.22',
                     serverPath: '/mnt/ci.pingcap.net-nfs/tiflash/dependency', readOnly: true),
+            nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+                    serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: true),
     ],
     hostNetwork: false
     ) {
@@ -117,7 +119,7 @@ node(GO_TEST_SLAVE) {
         def repo_path = "/home/jenkins/agent/workspace/tiflash-build-common/tics"
         def build_path = "/home/jenkins/agent/workspace/tiflash-build-common/build"
         def binary_path = "/tiflash"
-        def prallelism = sh(returnStdout: true, script: 'nproc || grep -c ^processor /proc/cpuinfo').trim().toInteger()
+        def prallelism = 8
         stage('Checkout') {
             dir(repo_path) {
                 def cache_path = "/home/jenkins/agent/ci-cached-code-daily/src-tics.tar.gz"
@@ -146,7 +148,7 @@ node(GO_TEST_SLAVE) {
                     ],
                     extensions                       : [
                             [$class             : 'SubmoduleOption',
-                            disableSubmodules  : true,
+                            disableSubmodules  : toolchain == 'llvm',
                             parentCredentials  : true,
                             recursiveSubmodules: true,
                             trackingSubmodules : false,
@@ -167,11 +169,20 @@ node(GO_TEST_SLAVE) {
             tar -xvaf tiflash.tar.gz
             ln -sf \$(realpath tiflash) /tiflash
             """
+            dir(repo_path) {
+                sh """
+                cp '${cwd}/source-patch.tar.xz' ./source-patch.tar.xz
+                tar -xaf ./build-data.tar.xz
+                """
+            }
             dir(build_path) {
                 sh """
                 cp '${cwd}/build-data.tar.xz' ./build-data.tar.xz
                 tar -xaf ./build-data.tar.xz
                 """
+                if (toolchain == 'legacy') {
+                    sh "touch -a -m \$(find . -name '*.gcno')"
+                }
             }
         }
         stage('Run Tests') {
@@ -271,24 +282,33 @@ node(GO_TEST_SLAVE) {
                     -e "${repo_path}/contrib/*" \\
                     -e "${repo_path}/dbms/src/Debug/*" \\
                     -e "${repo_path}/dbms/src/Client/*" \\
-                    --object-directory=${build_path} -o /tmp/tiflash_gcovr_coverage.xml -j \${NPROC:-\$(nproc || grep -c ^processor /proc/cpuinfo)} -s >${cwd}/diff-coverage
+                    --object-directory=${build_path} -o ${cwd}/tiflash_gcovr_coverage.xml -j ${prallelism} -s >${cwd}/diff-coverage
                 """
             }
         }
 
         stage("Report Coverage") {
-            archiveArtifacts artifacts: "coverage-report.tar.gz"
             ut_coverage_result = readFile(file: "diff-coverage").trim()
-            sh """
-            set +x
-            /home/jenkins/agent/dependency/comment-pr \\
-                --token=\$TOKEN \\
-                --owner=pingcap \\
-                --repo=tics \\
-                --number=${ghprbPullId} \\
-                --comment='${ut_coverage_result}'
-            set -x
-            """
+            withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
+                sh """
+                set +x
+                /home/jenkins/agent/dependency/comment-pr \\
+                    --token="\$TOKEN" \\
+                    --owner=pingcap \\
+                    --repo=tics \\
+                    --number=${ghprbPullId} \\
+                    --comment='${ut_coverage_result}'
+                    set -x
+                """
+            }
+            if (toolchain == 'llvm') {
+                archiveArtifacts artifacts: "coverage-report.tar.gz"
+            } else {
+                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
+                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
+                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
+                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
+            }
         }
     }
 }
