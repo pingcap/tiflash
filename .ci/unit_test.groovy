@@ -199,7 +199,7 @@ node(GO_TEST_SLAVE) {
                 cp '${cwd}/build-data.tar.xz' ./build-data.tar.xz
                 tar -xaf ./build-data.tar.xz
                 """
-                if (toolchain == 'legacy') {
+                if (toolchain == 'legacy' && coverage()) {
                     sh "touch -a -m \$(find . -name '*.gcno')"
                 }
             }
