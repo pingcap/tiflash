@@ -563,18 +563,24 @@ BlockInputStreams StorageDeltaMerge::read(
     // failed to parsed.
     ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    for (const auto & n : column_names)
+    size_t extra_table_id_index = InvalidColumnID;
+    for (size_t i = 0; i < column_names.size(); i++)
     {
         ColumnDefine col_define;
-        if (n == EXTRA_HANDLE_COLUMN_NAME)
+        if (column_names[i] == EXTRA_HANDLE_COLUMN_NAME)
             col_define = store->getHandle();
-        else if (n == VERSION_COLUMN_NAME)
+        else if (column_names[i] == VERSION_COLUMN_NAME)
             col_define = getVersionColumnDefine();
-        else if (n == TAG_COLUMN_NAME)
+        else if (column_names[i] == TAG_COLUMN_NAME)
             col_define = getTagColumnDefine();
+        else if (column_names[i] == EXTRA_TABLE_ID_COLUMN_NAME)
+        {
+            extra_table_id_index = i;
+            continue;
+        }
         else
         {
-            auto & column = header->getByName(n);
+            auto & column = header->getByName(column_names[i]);
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
@@ -592,7 +598,8 @@ BlockInputStreams StorageDeltaMerge::read(
             context.getSettingsRef(),
             columns_to_read,
             num_streams,
-            parseSegmentSet(select_query.segment_expression_list));
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
     }
 
     // Read with MVCC filtering
@@ -714,7 +721,8 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         max_block_size,
-        parseSegmentSet(select_query.segment_expression_list));
+        parseSegmentSet(select_query.segment_expression_list),
+        extra_table_id_index);
 
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
@@ -798,7 +806,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
-    auto start_index = rand() % (total_rows - delete_rows + 1);
+    auto start_index = random() % (total_rows - delete_rows + 1);
 
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
@@ -931,7 +939,7 @@ static void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context);
 
@@ -1179,7 +1187,8 @@ void StorageDeltaMerge::rename(
         std::move(handle_column_define),
         is_common_handle,
         rowkey_column_size,
-        settings);
+        settings,
+        tidb_table_info.id);
 }
 
 String StorageDeltaMerge::getTableName() const
@@ -1418,7 +1427,7 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
-void StorageDeltaMerge::shutdown()
+void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
@@ -1427,6 +1436,11 @@ void StorageDeltaMerge::shutdown()
     {
         _store->shutdown();
     }
+}
+
+void StorageDeltaMerge::shutdown()
+{
+    shutdownImpl();
 }
 
 void StorageDeltaMerge::removeFromTMTContext()
@@ -1439,7 +1453,7 @@ void StorageDeltaMerge::removeFromTMTContext()
 
 StorageDeltaMerge::~StorageDeltaMerge()
 {
-    shutdown();
+    shutdownImpl();
 }
 
 DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
@@ -1490,7 +1504,8 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings());
+            DeltaMergeStore::Settings(),
+            tidb_table_info.id);
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
