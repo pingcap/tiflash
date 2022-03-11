@@ -1,53 +1,29 @@
-catchError {
-    def util = load('util.groovy')
+def parameters = [
+        string(name: "ARCH", value: "amd64"),
+        string(name: "OS", value: "linux"),
+        string(name: "CMAKE_BUILD_TYPE", value: "Debug"),
+        string(name: "TARGET_BRANCH", value: ghprbTargetBranch),
+        string(name: "TARGET_PULL_REQUEST", value: ghprbPullId),
+        string(name: "TARGET_COMMIT_HASH", value: ghprbActualCommit),
+        [$class: 'BooleanParameterValue', name: 'BUILD_TIFLASH', value: true],
+        [$class: 'BooleanParameterValue', name: 'BUILD_PAGE_TOOLS', value: false],
+        [$class: 'BooleanParameterValue', name: 'BUILD_TESTS', value: false],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_CCACHE', value: true],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_PROXY_CACHE', value: true],
+        [$class: 'BooleanParameterValue', name: 'UPDATE_CCACHE', value: false],
+        [$class: 'BooleanParameterValue', name: 'UPDATE_PROXY_CACHE', value: false],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_STATIC_ANALYSIS', value: true],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_FORMAT_CHECK', value: true],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_COVERAGE', value: false],
+        [$class: 'BooleanParameterValue', name: 'PUSH_MESSAGE', value: false],
+        [$class: 'BooleanParameterValue', name: 'DEBUG_WITHOUT_DEBUG_INFO', value: true],
+        [$class: 'BooleanParameterValue', name: 'ARCHIVE_ARTIFACTS', value: true],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_FAILPOINTS', value: true],
+    ]
 
-    def tiflashTag = ({
-        def m = ghprbCommentBody =~ /tiflash\s*=\s*([^\s\\]+)(\s|\\|$)/
-        if (m) {
-            return "${m.group(1)}"
-        }
-        return params.tiflashTag ?: ghprbTargetBranch ?: 'master'
-    }).call()
-
-    def CURWS = pwd()
-
-    def NPROC = 5
-
-    util.runCheckoutAndBuilderClosure("build-tics-v1", CURWS) {
-        dir("${CURWS}/tics") {
-            stage("Build & Upload") {
-                timeout(time: 70, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} ENABLE_FORMAT_CHECK=true ${CURWS}/tics/release-centos7/build/build-tiflash-ci.sh"
-                        sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} ${CURWS}/tics/release-centos7/build/upload-ci-build.sh"
-                    }
-                }
-            }
-            stage("Static Analysis") {
-                timeout(time: 360, unit: 'MINUTES') {
-                    container("builder") {
-                        echo "NPROC=${NPROC} /build/tics/release-centos7/build/static-analysis.sh"
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-stage('Summary') {
-    def duration = ((System.currentTimeMillis() - currentBuild.startTimeInMillis) / 1000 / 60).setScale(2, BigDecimal.ROUND_HALF_UP)
-    def msg = "[#${ghprbPullId}: ${ghprbPullTitle}]" + "\n" +
-            "${ghprbPullLink}" + "\n" +
-            "${ghprbPullDescription}" + "\n" +
-            "Build Result: `${currentBuild.currentResult}`" + "\n" +
-            "Elapsed Time: `${duration} mins` " + "\n" +
-            "${env.RUN_DISPLAY_URL}"
-
-    echo "${msg}"
-
-    if (currentBuild.currentResult != "SUCCESS") {
-        echo "Send slack here ..."
-        slackSend channel: '#jenkins-ci', color: 'danger', teamDomain: 'pingcap', tokenCredentialId: 'slack-pingcap-token', message: "${msg}"
-    }
+stage('Build') {
+    build job: "tiflash-build-common",
+        wait: true,
+        propagate: true,
+        parameters: parameters
 }

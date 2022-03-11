@@ -1,3 +1,22 @@
+def coverage() {
+    if (ghprbTargetBranch.contains("release-5.2") 
+     || ghprbTargetBranch.contains("release-5.1")
+     || ghprbTargetBranch.contains("release-5.0") 
+     || ghprbTargetBranch.contains("release-4.0") 
+     || ghprbTargetBranch.contains("release-3.0")) {
+        return false
+    }
+    return true
+}
+def page_tools() {
+    if (ghprbTargetBranch.contains("release-5.1") 
+     || ghprbTargetBranch.contains("release-5.0") 
+     || ghprbTargetBranch.contains("release-4.0") 
+     || ghprbTargetBranch.contains("release-3.0")) {
+        return false
+    }
+    return true
+}
 def IDENTIFIER = "tiflash-ut-${ghprbTargetBranch}-${ghprbPullId}"
 def parameters = [
         string(name: "ARCH", value: "amd64"),
@@ -7,7 +26,7 @@ def parameters = [
         string(name: "TARGET_PULL_REQUEST", value: ghprbPullId),
         string(name: "TARGET_COMMIT_HASH", value: ghprbActualCommit),
         [$class: 'BooleanParameterValue', name: 'BUILD_TIFLASH', value: false],
-        [$class: 'BooleanParameterValue', name: 'BUILD_PAGE_TOOLS', value: true],
+        [$class: 'BooleanParameterValue', name: 'BUILD_PAGE_TOOLS', value: page_tools()],
         [$class: 'BooleanParameterValue', name: 'BUILD_TESTS', value: true],
         [$class: 'BooleanParameterValue', name: 'ENABLE_CCACHE', value: true],
         [$class: 'BooleanParameterValue', name: 'ENABLE_PROXY_CACHE', value: true],
@@ -15,7 +34,7 @@ def parameters = [
         [$class: 'BooleanParameterValue', name: 'UPDATE_PROXY_CACHE', value: false],
         [$class: 'BooleanParameterValue', name: 'ENABLE_STATIC_ANALYSIS', value: false],
         [$class: 'BooleanParameterValue', name: 'ENABLE_FORMAT_CHECK', value: false],
-        [$class: 'BooleanParameterValue', name: 'ENABLE_COVERAGE', value: true],
+        [$class: 'BooleanParameterValue', name: 'ENABLE_COVERAGE', value: coverage()],
         [$class: 'BooleanParameterValue', name: 'PUSH_MESSAGE', value: false],
         [$class: 'BooleanParameterValue', name: 'DEBUG_WITHOUT_DEBUG_INFO', value: true],
         [$class: 'BooleanParameterValue', name: 'ARCHIVE_ARTIFACTS', value: true],
@@ -172,7 +191,7 @@ node(GO_TEST_SLAVE) {
             dir(repo_path) {
                 sh """
                 cp '${cwd}/source-patch.tar.xz' ./source-patch.tar.xz
-                tar -xaf ./build-data.tar.xz
+                tar -xaf ./source-patch.tar.xz
                 """
             }
             dir(build_path) {
@@ -195,7 +214,10 @@ node(GO_TEST_SLAVE) {
         }
 
         stage('Prepare Coverage Report') {
-            if(toolchain == 'llvm') {
+            if (!coverage()) {
+                echo "skipped"
+            }
+            else if(toolchain == 'llvm') {
                 dir(repo_path){
                     if (sh(returnStatus: true, script: "which lcov") != 0) {
                         echo "try to install lcov"
@@ -288,26 +310,30 @@ node(GO_TEST_SLAVE) {
         }
 
         stage("Report Coverage") {
-            ut_coverage_result = readFile(file: "diff-coverage").trim()
-            withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
-                sh """
-                set +x
-                /home/jenkins/agent/dependency/comment-pr \\
-                    --token="\$TOKEN" \\
-                    --owner=pingcap \\
-                    --repo=tics \\
-                    --number=${ghprbPullId} \\
-                    --comment='${ut_coverage_result}'
+            if (coverage()) {
+                ut_coverage_result = readFile(file: "diff-coverage").trim()
+                withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
+                    sh """
+                    set +x
+                    /home/jenkins/agent/dependency/comment-pr \\
+                        --token="\$TOKEN" \\
+                        --owner=pingcap \\
+                        --repo=tics \\
+                        --number=${ghprbPullId} \\
+                        --comment='${ut_coverage_result}'
                     set -x
-                """
-            }
-            if (toolchain == 'llvm') {
-                archiveArtifacts artifacts: "coverage-report.tar.gz"
+                    """
+                }
+                if (toolchain == 'llvm') {
+                    archiveArtifacts artifacts: "coverage-report.tar.gz"
+                } else {
+                    cobertura autoUpdateHealth: false, autoUpdateStability: false, 
+                        coberturaReportFile: "tiflash_gcovr_coverage.xml", 
+                        lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
+                        maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
+                }
             } else {
-                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
-                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
-                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
-                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
+                echo "skipped"
             }
         }
     }
