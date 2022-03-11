@@ -56,6 +56,12 @@ RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGCon
                 ci.setNotNullFlag();
                 schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
             }
+            else if (col_id == ExtraTableIDColumnID)
+            {
+                ColumnInfo ci;
+                ci.tp = TiDB::TypeLongLong;
+                schema.emplace_back(std::make_pair(MutableSupport::extra_table_id_column_name, std::move(ci)));
+            }
             else
             {
                 const auto & col_info = table_info.getColumnInfo(col_id);
