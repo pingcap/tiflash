@@ -60,10 +60,18 @@ private:
     using Writes = std::vector<Write>;
 
 public:
-    WriteBatch() = default;
+#ifdef DBMS_PUBLIC_GTEST
+    WriteBatch()
+        : namespace_id(TEST_NAMESPACE_ID)
+    {}
+#endif
+    explicit WriteBatch(NamespaceId namespace_id_)
+        : namespace_id(namespace_id_)
+    {}
     WriteBatch(WriteBatch && rhs)
         : writes(std::move(rhs.writes))
         , sequence(rhs.sequence)
+        , namespace_id(rhs.namespace_id)
     {}
 
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
@@ -171,6 +179,8 @@ public:
     // `setSequence` should only called by internal method of PageStorage.
     void setSequence(SequenceID seq) { sequence = seq; }
 
+    NamespaceId getNamespaceId() const { return namespace_id; }
+
     String toString() const
     {
         String str;
@@ -193,6 +203,7 @@ public:
 private:
     Writes writes;
     SequenceID sequence = 0;
+    NamespaceId namespace_id;
     size_t total_data_size = 0;
 };
 } // namespace DB

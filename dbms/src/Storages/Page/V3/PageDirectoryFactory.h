@@ -24,7 +24,7 @@ class PageDirectoryFactory
 {
 public:
     PageVersionType max_applied_ver;
-    PageId max_applied_page_id;
+    PageIdV3Internal max_applied_page_id;
 
     PageDirectoryFactory & setBlobStore(BlobStore & blob_store)
     {

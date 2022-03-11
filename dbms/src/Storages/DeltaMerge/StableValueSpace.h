@@ -138,7 +138,7 @@ public:
                                                     size_t expected_block_size,
                                                     bool enable_clean_read);
 
-        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range);
+        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
     private:
         Poco::Logger * log;

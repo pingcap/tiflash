@@ -356,9 +356,9 @@ TEST_F(PageStorageTest, IngestFile)
 
     auto snapshot = page_storage->getSnapshot();
 
-    EXPECT_ANY_THROW(page_storage->getNormalPageId(100, snapshot));
-    EXPECT_EQ(100, page_storage->getNormalPageId(101, snapshot));
-    EXPECT_EQ(100, page_storage->getNormalPageId(102, snapshot));
+    EXPECT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 100, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 101, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 102, snapshot));
 
     size_t times_remover_called = 0;
     ExternalPageCallbacks callbacks;
@@ -370,6 +370,7 @@ TEST_F(PageStorageTest, IngestFile)
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
     };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
@@ -788,6 +789,7 @@ try
         EXPECT_GT(living_page_ids.count(0), 0);
         EXPECT_GT(living_page_ids.count(1024), 0);
     };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("fist gc");
@@ -815,14 +817,14 @@ try
     }
 
     {
-        auto ori_id_0 = page_storage->getNormalPageId(0, nullptr);
+        auto ori_id_0 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 0, nullptr);
         ASSERT_EQ(ori_id_0, 0);
-        auto ori_id_2 = page_storage->getNormalPageId(2, nullptr);
+        auto ori_id_2 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 2, nullptr);
         ASSERT_EQ(ori_id_2, 0);
-        ASSERT_EQ(1024, page_storage->getNormalPageId(1024, snapshot));
-        ASSERT_EQ(0, page_storage->getNormalPageId(1, snapshot));
-        ASSERT_ANY_THROW(page_storage->getNormalPageId(1024, nullptr));
-        ASSERT_ANY_THROW(page_storage->getNormalPageId(1, nullptr));
+        ASSERT_EQ(1024, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, snapshot));
+        ASSERT_EQ(0, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, snapshot));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, nullptr));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, nullptr));
     }
 
     /// After `snapshot` released, 1024 should be removed from `living`
@@ -832,6 +834,7 @@ try
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(0), 0);
     };
+    page_storage->clearExternalPagesCallbacks();
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("gc with snapshot released");

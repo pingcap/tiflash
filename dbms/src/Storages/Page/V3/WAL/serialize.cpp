@@ -155,7 +155,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 {
     assert(record_type == EditRecordType::DEL || record_type == EditRecordType::VAR_DELETE);
 
-    PageId page_id;
+    PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
     PageVersionType version;
     deserializeVersionFrom(buf, version);
