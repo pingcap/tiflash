@@ -265,6 +265,14 @@ int MockTiDB::newTables(
 {
     for (const auto & [table_name, columns, handle_pk_name] : tables)
     {
+        AffectedOption opt;
+        opt.schema_id = table->database_id;
+        opt.table_id = table->id();
+        opt.old_schema_id = table->database_id;
+        opt.old_table_id = new_table->database_id;
+        diff.affected_opts.push_back(std::move(opt));
+        version_diff[version] = diff;
+
         newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
     }
     return 0;
