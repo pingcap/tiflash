@@ -359,8 +359,8 @@ void MPPTask::runImpl()
     }
     else
     {
-        writeErrToAllTunnels(err_msg);
         context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
