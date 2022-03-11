@@ -505,6 +505,7 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
 
 void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map)
 {
+    std::lock_guard lock(tables_mutex);
     version++;
     SchemaDiff diff;
     for (const auto & [database_name, table_name, new_table_name] : table_name_map)
@@ -523,9 +524,9 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
 
         AffectedOption opt;
         opt.schema_id = table->database_id;
-        opt.table_id = table->id();
+        opt.table_id = new_table->id();
         opt.old_schema_id = table->database_id;
-        opt.old_table_id = new_table->database_id;
+        opt.old_table_id = table->id();
         diff.affected_opts.push_back(std::move(opt));
         version_diff[version] = diff;
     }
