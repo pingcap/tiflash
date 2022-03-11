@@ -127,7 +127,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context->getTMTContext();
-    assert(task_request.regions_size() == 0 || task_request.table_regions_size() == 0);
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
     /// The ones defined in tipb::TableScan will never be used and can be removed later.
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(task_request.regions(), task_request.table_regions(), tmt_context);

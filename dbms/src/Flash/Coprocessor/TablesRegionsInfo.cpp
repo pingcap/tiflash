@@ -77,7 +77,7 @@ TablesRegionsInfo TablesRegionsInfo::create(
     const google::protobuf::RepeatedPtrField<coprocessor::TableRegions> & table_regions,
     const TMTContext & tmt_context)
 {
-    assert(regions.empty() != table_regions.empty());
+    assert(regions.empty() || table_regions.empty());
     TablesRegionsInfo tables_regions_info(!regions.empty());
     std::unordered_set<RegionID> local_region_id_set;
     if (!regions.empty())
