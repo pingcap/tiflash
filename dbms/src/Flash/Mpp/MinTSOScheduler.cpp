@@ -37,7 +37,7 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manag
     {
         return true;
     }
-    auto & id = task->getId();
+    const auto & id = task->getId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
     if (nullptr == query_task_set || query_task_set->to_be_cancelled)
     {
@@ -87,7 +87,6 @@ void MinTSOScheduler::deleteThenSchedule(UInt64 tso, MPPTaskManager & task_manag
 
     /// as deleted query release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);
-    return;
 }
 
 void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
