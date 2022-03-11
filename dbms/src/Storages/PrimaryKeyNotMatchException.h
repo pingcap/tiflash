@@ -11,7 +11,7 @@ namespace DB
 {
 class Context;
 
-struct PrimaryKeyNotMatchException : std::exception
+struct PrimaryKeyNotMatchException : public std::exception
 {
     // The primary key name in definition
     const String pri_key;
