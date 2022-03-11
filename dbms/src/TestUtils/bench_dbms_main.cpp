@@ -1,5 +1,5 @@
-#include <benchmark/benchmark.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <benchmark/benchmark.h>
 
 // main function for bench_xxx.cpp.
 int main(int argc, char * argv[])
