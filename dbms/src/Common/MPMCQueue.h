@@ -55,6 +55,7 @@ public:
 
     ~MPMCQueue()
     {
+        std::unique_lock lock(mu);
         for (; read_pos < write_pos; ++read_pos)
             destruct(getObj(read_pos));
     }
