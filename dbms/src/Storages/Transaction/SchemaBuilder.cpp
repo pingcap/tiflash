@@ -433,7 +433,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
-    if (diff.type == SchemaActionType::RenameTables) {
+    if (diff.type == SchemaActionType::RenameTables)
+    {
         for (auto && opt : diff.affected_opts)
         {
             auto db_info = getter.getDatabase(opt.schema_id);
