@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Settings.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
@@ -9,6 +10,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -47,9 +50,12 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_WARNING(&Poco::Logger::get("RegionPersister"),
-                    "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
-                                              << region_size);
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("RegionPersister"),
+            "Persisting big region: {} with data info: {}, serialized size {}",
+            region.toString(),
+            region.dataInfo(),
+            region_size);
     }
 }
 
@@ -157,7 +163,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         {
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
 
-            LOG_INFO(log, "RegionPersister running in v3 mode");
+            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
             page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
                 delegator,
@@ -170,8 +176,8 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
 
-            LOG_INFO(log, "RegionPersister running in normal mode");
-            page_storage = std::make_unique<PS::V2::PageStorage>( //
+            LOG_FMT_INFO(log, "RegionPersister running in v2 mode");
+            page_storage = std::make_unique<PS::V2::PageStorage>(
                 "RegionPersister",
                 delegator,
                 config,
@@ -180,9 +186,9 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         else
         {
-            LOG_INFO(log, "RegionPersister running in compatible mode");
+            LOG_FMT_INFO(log, "RegionPersister running in v1 mode");
             auto c = getV1PSConfig(config);
-            stable_page_storage = std::make_unique<PS::V1::PageStorage>( //
+            stable_page_storage = std::make_unique<PS::V1::PageStorage>(
                 "RegionPersister",
                 delegator->defaultPath(),
                 c,
@@ -221,7 +227,7 @@ bool RegionPersister::gc()
 {
     if (page_storage)
     {
-        PS::V2::PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
+        PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
         page_storage->reloadSettings(config);
         return page_storage->gc(false, nullptr, nullptr);
     }

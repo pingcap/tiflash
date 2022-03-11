@@ -24,11 +24,8 @@ namespace V1
 {
 class PageStorage;
 }
-namespace V2
-{
-class PageStorage;
-}
 } // namespace PS
+class PageStorage;
 
 class RegionPersister final : private boost::noncopyable
 {
@@ -56,7 +53,7 @@ private:
 #endif
 
     Context & global_context;
-    std::shared_ptr<PageStorage> page_storage;
+    PageStoragePtr page_storage;
     std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
 
     // RegionPersister stores it's data individually, so the `ns_id` value doesn't matter
