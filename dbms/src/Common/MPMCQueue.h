@@ -53,6 +53,12 @@ public:
     {
     }
 
+    ~MPMCQueue()
+    {
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
+    }
+
     /// Block util:
     /// 1. Pop succeeds with a valid T: return true.
     /// 2. The queue is cancelled or finished: return false.
