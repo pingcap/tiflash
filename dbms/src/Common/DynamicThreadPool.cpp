@@ -77,6 +77,16 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+<<<<<<< HEAD
+=======
+void DynamicThreadPool::executeTask(TaskPtr & task)
+{
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_thdpool, type_max_active_threads_of_thdpool);
+    task->execute();
+    task.reset();
+}
+
+>>>>>>> 86e21ef59b (*: Fix bug that DynamicThreadPool may not destruct tasks in time. (#4210))
 void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
@@ -110,8 +120,12 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
+<<<<<<< HEAD
         node.task->execute();
         node.task.reset();
+=======
+        executeTask(node.task);
+>>>>>>> 86e21ef59b (*: Fix bug that DynamicThreadPool may not destruct tasks in time. (#4210))
     }
     alive_dynamic_threads.fetch_sub(1);
 }
