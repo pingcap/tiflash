@@ -21,7 +21,7 @@ class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
 class MinTSOScheduler;
-using MPPTaskSchedulerPtr = std::shared_ptr<MinTSOScheduler>;
+using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
 
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;

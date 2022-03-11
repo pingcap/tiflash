@@ -64,7 +64,7 @@ void MinTSOScheduler::deleteCancelledQuery(UInt64 tso, MPPTaskManager & task_man
     }
 
     /// NOTE: if the cancelled query hang, it will block the min_tso, possibly resulting in deadlock. so here force scheduling waiting tasks of the updated min_tso query.
-    if (updateMinTSO(tso, false, "when cancelling it."))
+    if (updateMinTSO(tso, true, "when cancelling it."))
     {
         scheduleWaitingQueries(task_manager);
     }
@@ -88,7 +88,7 @@ void MinTSOScheduler::deleteThenSchedule(UInt64 tso, MPPTaskManager & task_manag
     /// delete from working set and return threads for finished or cancelled queries
     active_set.erase(tso);
     waiting_set.erase(tso);
-    updateMinTSO(tso, false, "as deleting it.");
+    updateMinTSO(tso, true, "as deleting it.");
 
     /// as deleted query release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);
@@ -104,7 +104,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         if (nullptr == query_task_set) /// silently solve this rare case
         {
             LOG_FMT_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id);
-            updateMinTSO(current_query_id, false, "as it is not in the task manager.");
+            updateMinTSO(current_query_id, true, "as it is not in the task manager.");
             active_set.erase(current_query_id);
             waiting_set.erase(current_query_id);
             continue;
@@ -130,7 +130,7 @@ bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set,
     auto needed_threads = task->getNeededThreads();
     if ((tso <= min_tso && used_threads + needed_threads <= thread_hard_limit) || ((active_set.size() < active_set_soft_limit || tso <= *active_set.rbegin()) && (used_threads + needed_threads <= thread_soft_limit)))
     {
-        updateMinTSO(tso, true, isWaiting ? "from the waiting set" : "when directly schedule it");
+        updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
         active_set.insert(tso);
         ++query_task_set->scheduled_task;
         query_task_set->used_threads += needed_threads;
@@ -159,19 +159,22 @@ bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set,
 }
 
 /// if return true, then need to schedule the waiting tasks of the min_tso.
-bool MinTSOScheduler::updateMinTSO(UInt64 tso, bool valid, String msg)
+bool MinTSOScheduler::updateMinTSO(UInt64 tso, bool retired, String msg)
 {
     auto old_min_tso = min_tso;
     bool force_scheduling = false;
-    if (valid)
+    if (retired)
+    {
+        if (tso == min_tso) /// elect a new min_tso from all queries.
+        {
+            min_tso = active_set.empty() ? MAX_UINT64 : *active_set.begin();
+            min_tso = (!waiting_set.empty() && *waiting_set.begin() < min_tso) ? *waiting_set.begin() : min_tso;
+            force_scheduling = waiting_set.find(min_tso) != waiting_set.end(); /// whether this min_tso has waiting tasks?
+        }
+    }
+    else
     {
         min_tso = tso < min_tso ? tso : min_tso;
-    }
-    else if (tso == min_tso)
-    {
-        min_tso = active_set.empty() ? MAX_UINT64 : *active_set.begin();
-        min_tso = (!waiting_set.empty() && *waiting_set.begin() < min_tso) ? *waiting_set.begin() : min_tso;
-        force_scheduling = waiting_set.find(min_tso) != waiting_set.end(); /// whether this min_tso has waiting tasks?
     }
     if (min_tso != old_min_tso) /// if min_tso == MAX_UINT64 and the query tso is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
         LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, active set size = {}, waiting set size = {}.", old_min_tso, min_tso, msg, used_threads, active_set.size(), waiting_set.size());

@@ -447,10 +447,13 @@ void MPPTask::scheduleOrWait()
 
 void MPPTask::scheduleThisTask()
 {
-    LOG_FMT_INFO(log, "task gets schedule");
     std::unique_lock lock(schedule_mu);
-    scheduled = true;
-    schedule_cv.notify_one();
+    if (!scheduled)
+    {
+        LOG_FMT_INFO(log, "task gets schedule");
+        scheduled = true;
+        schedule_cv.notify_one();
+    }
 }
 
 int MPPTask::estimateCountOfNewThreads()

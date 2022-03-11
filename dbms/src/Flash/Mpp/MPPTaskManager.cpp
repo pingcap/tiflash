@@ -9,7 +9,7 @@
 namespace DB
 {
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
-    : scheduler(scheduler_)
+    : scheduler(std::move(scheduler_))
     , log(&Poco::Logger::get("TaskManager"))
 {}
 

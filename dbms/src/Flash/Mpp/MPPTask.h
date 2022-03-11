@@ -50,8 +50,6 @@ public:
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
-    int estimateCountOfNewThreads();
-
     int getNeededThreads();
 
     void scheduleThisTask();
@@ -81,6 +79,8 @@ private:
     void preprocess();
 
     void scheduleOrWait();
+
+    int estimateCountOfNewThreads();
 
     tipb::DAGRequest dag_req;
 
