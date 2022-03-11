@@ -325,7 +325,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     RegionException::UnavailableRegions region_ids;
                     for (const auto & info : regions_info)
                     {
-                        if (rand() % 100 > 50) // NOLINT
+                        if (random() % 100 > 50)
                             region_ids.insert(info.region_id);
                     }
                     throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
@@ -610,10 +610,24 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         ColumnID cid = ci.column_id();
 
         // Column ID -1 return the handle column
-        String name = cid == -1 ? handle_column_name : storage_for_logical_table->getTableInfo().getColumnName(cid);
-        auto pair = storage_for_logical_table->getColumns().getPhysical(name);
+        String name;
+        if (cid == TiDBPkColumnID)
+            name = handle_column_name;
+        else if (cid == ExtraTableIDColumnID)
+            name = MutableSupport::extra_table_id_column_name;
+        else
+            name = storage_for_logical_table->getTableInfo().getColumnName(cid);
+        if (cid == ExtraTableIDColumnID)
+        {
+            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
+            source_columns_tmp.emplace_back(std::move(extra_table_id_column_pair));
+        }
+        else
+        {
+            auto pair = storage_for_logical_table->getColumns().getPhysical(name);
+            source_columns_tmp.emplace_back(std::move(pair));
+        }
         required_columns_tmp.emplace_back(std::move(name));
-        source_columns_tmp.emplace_back(std::move(pair));
         if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
             need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
         else if (cid != -1 && ci.tp() == TiDB::TypeTime)
