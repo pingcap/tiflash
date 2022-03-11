@@ -20,6 +20,12 @@ using ScaleType = UInt32;
 constexpr PrecType decimal_max_prec = 65;
 constexpr ScaleType decimal_max_scale = 30;
 
+// IntPrec indicates the max precision of different integer types.
+// For now, the binary arithmetic functions use it to calculate result precision.
+// And cast function use it to do some optimizations, such as skipping overflow check.
+// But in TiDB the signed types will plus 1, for example IntPrec<int8_t>::prec is 4.
+// This is a little confusing because we will add 1 when return result to client.
+// Here we make sure TiFlash code is clean and will fix TiDB later.
 template <typename T>
 struct IntPrec
 {
@@ -27,7 +33,7 @@ struct IntPrec
 template <>
 struct IntPrec<int8_t>
 {
-    static constexpr PrecType prec = 4;
+    static constexpr PrecType prec = 3;
 };
 template <>
 struct IntPrec<uint8_t>
@@ -37,7 +43,7 @@ struct IntPrec<uint8_t>
 template <>
 struct IntPrec<int16_t>
 {
-    static constexpr PrecType prec = 6;
+    static constexpr PrecType prec = 5;
 };
 template <>
 struct IntPrec<uint16_t>
@@ -47,7 +53,7 @@ struct IntPrec<uint16_t>
 template <>
 struct IntPrec<int32_t>
 {
-    static constexpr PrecType prec = 11;
+    static constexpr PrecType prec = 10;
 };
 template <>
 struct IntPrec<uint32_t>
@@ -57,12 +63,24 @@ struct IntPrec<uint32_t>
 template <>
 struct IntPrec<int64_t>
 {
-    static constexpr PrecType prec = 20;
+    static constexpr PrecType prec = 19;
 };
 template <>
 struct IntPrec<uint64_t>
 {
     static constexpr PrecType prec = 20;
+};
+
+template <>
+struct IntPrec<Int128>
+{
+    static constexpr PrecType prec = 39;
+};
+
+template <>
+struct IntPrec<Int256>
+{
+    static constexpr PrecType prec = 78;
 };
 
 //  1) If the declared type of both operands of a dyadic arithmetic operator is exact numeric, then the declared
@@ -359,6 +377,8 @@ class DecimalMaxValue final : public ext::Singleton<DecimalMaxValue>
 public:
     static Int256 get(PrecType idx)
     {
+        // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
+        assert(idx <= decimal_max_prec);
         return instance().getInternal(idx);
     }
 
@@ -384,10 +404,16 @@ private:
 
 // In some case, getScaleMultiplier and its callee may not be auto inline by the compiler.
 // This may hurt performance. __attribute__((flatten)) tells compliler to inline the callee of this function.
-template <typename T>
+template <typename T, std::enable_if_t<IsDecimal<T>> * = nullptr>
 __attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
     return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
+}
+
+template <typename T, std::enable_if_t<is_integer_v<T>> * = nullptr>
+__attribute__((flatten)) inline T getScaleMultiplier(ScaleType scale)
+{
+    return static_cast<T>(DecimalMaxValue::get(scale) + 1);
 }
 
 template <typename T>
