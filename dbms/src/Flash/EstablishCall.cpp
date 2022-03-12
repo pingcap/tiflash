@@ -95,7 +95,8 @@ void EstablishCallData::cancel()
     }
     if (mpp_tunnel)
         mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
-    responder.Finish(::grpc::Status::CANCELLED, this);
+    grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
+    responder.Finish(status, this);
 }
 
 void EstablishCallData::proceed()
