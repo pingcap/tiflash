@@ -26,7 +26,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     if (page_storage)
     {
-        DB::WriteBatch wb_v2;
+        DB::WriteBatch wb_v2{ns_id};
         wb_v2.delPage(region_id);
         page_storage->write(std::move(wb_v2), global_context.getWriteLimiter());
     }
@@ -82,7 +82,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     if (page_storage)
     {
-        auto entry = page_storage->getEntry(region_id, nullptr);
+        auto entry = page_storage->getEntry(ns_id, region_id, nullptr);
         if (entry.isValid() && entry.tag > applied_index)
             return;
     }
@@ -102,7 +102,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     auto read_buf = buffer.tryGetReadBuffer();
     if (page_storage)
     {
-        DB::WriteBatch wb;
+        DB::WriteBatch wb{ns_id};
         wb.putPage(region_id, applied_index, read_buf, region_size);
         page_storage->write(std::move(wb), global_context.getWriteLimiter());
     }
