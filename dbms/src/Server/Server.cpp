@@ -493,9 +493,9 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
 
 void handleRpcs(grpc::ServerCompletionQueue * curcq)
 {
-    GET_METRIC(tiflash_thread_count, type_rpc_async_worker).Increment();
+    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
     SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_rpc_async_worker).Decrement();
+        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
     });
     void * tag = nullptr; // uniquely identifies a request.
     bool ok = false;
@@ -511,6 +511,10 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq)
             LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
             break;
         }
+        GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
+        });
         // If ok is false, it means server is shutdown.
         // We need not log all not ok events, since the volumn is large which will pollute the content of log.
         if (ok) 
