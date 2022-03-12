@@ -1,4 +1,3 @@
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
 
@@ -52,32 +51,6 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
 
         return DateLUT::instance();
     }
-}
-
-bool isInvalidDateForLastDay(const Context & context, const DataTypePtr & from_type, const MyTimeBase & val, const String & func_name)
-{
-    DAGContext * dag_context = context.getDAGContext();
-    if (val.month == 0 || (val.day == 0 && dag_context->hasSQLMode(TiDBSQLMode::NO_ZERO_DATE)))
-    {
-        String msg;
-        if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
-        {
-            msg = fmt::format("Invalid time value: '{}'", MyDateTime(val.toPackedUInt()).toString(datetime_type->getFraction()));
-        }
-        else if (checkDataType<DataTypeMyDate>(from_type.get()))
-        {
-            msg = fmt::format("Invalid time value: '{}'", MyDate(val.toPackedUInt()).toString());
-        }
-        else
-        {
-            throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", from_type->getName(), func_name),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
-        dag_context->handleInvalidTime(msg, Errors::Types::WrongValue);
-        return true;
-    }
-    return false;
 }
 
 void registerFunctionsDateTime(FunctionFactory & factory)

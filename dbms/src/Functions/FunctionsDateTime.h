@@ -15,6 +15,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
@@ -3241,8 +3242,6 @@ private:
     const Context & context;
 };
 
-inline bool isInvalidDateForLastDay(const Context & context, const DataTypePtr & from_type, const MyTimeBase & val, const String & func_name);
-
 template <typename ToFieldType>
 struct TiDBLastDayTransformerImpl
 {
@@ -3250,7 +3249,6 @@ struct TiDBLastDayTransformerImpl
     static constexpr auto name = "tidbLastDay";
 
     static void execute(const Context & context,
-                        const DataTypePtr & from_type,
                         const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
@@ -3259,15 +3257,19 @@ struct TiDBLastDayTransformerImpl
         {
             bool is_null = false;
             MyTimeBase val(vec_from[i]);
-            vec_to[i] = execute(context, from_type, val, is_null);
+            vec_to[i] = execute(context, val, is_null);
             vec_null_map[i] = is_null;
         }
     }
 
-    static ToFieldType execute(const Context & context, const DataTypePtr & from_type, const MyTimeBase & val, bool & is_null)
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
     {
-        if (isInvalidDateForLastDay(context, from_type, val, name))
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
         {
+            context.getDAGContext()->handleInvalidTime(
+                    fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                    Errors::Types::WrongValue);
             is_null = true;
             return 0;
         }
@@ -3350,12 +3352,12 @@ public:
             {
                 ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(size, 0);
                 ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-                Transformer<ToFieldType>::execute(context, from_type, vec_from, vec_to, vec_null_map);
+                Transformer<ToFieldType>::execute(context, vec_from, vec_to, vec_null_map);
                 block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
             }
             else
             {
-                Transformer<ToFieldType>::execute(context, from_type, vec_from, vec_to);
+                Transformer<ToFieldType>::execute(context, vec_from, vec_to);
                 block.getByPosition(result).column = std::move(col_to);
             }
         }

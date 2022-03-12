@@ -84,28 +84,7 @@ try
             executeFunction(func_name,
                 {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
 
-    // no_zero_date sql mode test, day is zero.
-    UInt64 ori_sql_mode = dag_context->getSQLMode();
-    dag_context->addSQLMode(TiDBSQLMode::NO_ZERO_DATE);
-
-    ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<MyDate>>(3, {}),
-            executeFunction(func_name,
-                {createConstColumn<MyDate>(3, MyDateTime{2000, 10, 0, 10, 10, 10, 0}.toPackedUInt())}));
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<MyDate>>({{}}),
-        executeFunction(func_name, {createColumn<MyDate>({MyDate{2001, 2, 0}.toPackedUInt()})}));
-
-    dag_context->delSQLMode(TiDBSQLMode::NO_ZERO_DATE);
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<MyDate>>({MyDate{2001, 2, 28}.toPackedUInt()}),
-        executeFunction(func_name, {createColumn<MyDate>({MyDate{2001, 2, 0}.toPackedUInt()})}));
-
-    dag_context->setSQLMode(ori_sql_mode);
     dag_context->setFlags(ori_flags);
-    dag_context->clearWarnings();
 }
 CATCH
 
