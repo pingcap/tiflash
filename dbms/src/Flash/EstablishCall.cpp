@@ -88,7 +88,7 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::cancel()
 {
-    if (state == FINISH)
+    if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
     {
         delete this;
         return;
