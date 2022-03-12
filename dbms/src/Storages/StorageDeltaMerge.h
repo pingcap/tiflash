@@ -168,6 +168,7 @@ private:
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
+    void shutdownImpl();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

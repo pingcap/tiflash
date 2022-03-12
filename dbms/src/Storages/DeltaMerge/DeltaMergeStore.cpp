@@ -174,17 +174,21 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool data_path_contains_database_name,
                                  const String & db_name_,
                                  const String & table_name_,
+                                 TableID table_id_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_)
+                                 const Settings & settings_,
+                                 const TableID physical_table_id)
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)
-    , storage_pool(db_name_ + "." + table_name_, path_pool, global_context, db_context.getSettingsRef())
+    // for mock test, table_id_ should be DB::InvalidTableID
+    , storage_pool(db_name_ + "." + table_name_, table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_, path_pool, global_context, db_context.getSettingsRef())
     , db_name(db_name_)
     , table_name(table_name_)
+    , physical_table_id(physical_table_id)
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
@@ -266,7 +270,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     ExternalPageCallbacks callbacks;
     // V2 callbacks for cleaning DTFiles
-    callbacks.v2_scanner = [this]() {
+    callbacks.scanner = [this]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
         auto delegate = path_pool.getStableDiskDelegator();
         DMFile::ListOptions options;
@@ -281,7 +285,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
         return path_and_ids_vec;
     };
-    callbacks.v2_remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+    callbacks.remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
         auto delegate = path_pool.getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
@@ -302,8 +306,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    // TODO: callbacks for cleaning DTFiles
-    callbacks.v3_remover = nullptr;
+    callbacks.ns_id = storage_pool.getNamespaceId();
     storage_pool.data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
@@ -956,7 +959,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
                                            size_t num_streams,
-                                           const SegmentIdSet & read_segments)
+                                           const SegmentIdSet & read_segments,
+                                           size_t extra_table_id_index)
 {
     SegmentReadTasks tasks;
 
@@ -997,6 +1001,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             DEFAULT_BLOCK_SIZE,
             true,
             db_settings.dt_raw_filter_range,
+            extra_table_id_index,
+            physical_table_id,
             nullptr);
         res.push_back(stream);
     }
@@ -1011,7 +1017,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         size_t expected_block_size,
-                                        const SegmentIdSet & read_segments)
+                                        const SegmentIdSet & read_segments,
+                                        size_t extra_table_id_index)
 {
     auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
 
@@ -1040,6 +1047,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             expected_block_size,
             false,
             db_settings.dt_raw_filter_range,
+            extra_table_id_index,
+            physical_table_id,
             nullptr);
         res.push_back(stream);
     }
@@ -2160,6 +2169,9 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     DeltaMergeStoreStat stat;
 
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return stat;
+
     stat.segment_count = segments.size();
 
     Int64 total_placed_rows = 0;
@@ -2241,9 +2253,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.data()->getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        stat.storage_stable_num_pages = concrete_snap->version()->numPages();
-        stat.storage_stable_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_stable_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_stable_num_pages = version->numPages();
+            stat.storage_stable_num_normal_pages = version->numNormalPages();
+            stat.storage_stable_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_delta_num_snapshots, //
@@ -2252,9 +2271,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.log()->getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        stat.storage_delta_num_pages = concrete_snap->version()->numPages();
-        stat.storage_delta_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_delta_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_delta_num_pages = version->numPages();
+            stat.storage_delta_num_normal_pages = version->numNormalPages();
+            stat.storage_delta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
+        }
     }
     {
         std::tie(stat.storage_meta_num_snapshots, //
@@ -2263,9 +2289,16 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             = storage_pool.meta()->getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        stat.storage_meta_num_pages = concrete_snap->version()->numPages();
-        stat.storage_meta_num_normal_pages = concrete_snap->version()->numNormalPages();
-        stat.storage_meta_max_page_id = concrete_snap->version()->maxId();
+        if (const auto * const version = concrete_snap->version(); version != nullptr)
+        {
+            stat.storage_meta_num_pages = version->numPages();
+            stat.storage_meta_num_normal_pages = version->numNormalPages();
+            stat.storage_meta_max_page_id = version->maxId();
+        }
+        else
+        {
+            LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
+        }
     }
 
     stat.background_tasks_length = background_tasks.length();

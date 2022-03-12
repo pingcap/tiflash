@@ -417,6 +417,22 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    if (diff.type == SchemaActionType::CreateTables)
+    {
+        for (auto && opt : diff.affected_opts)
+        {
+            SchemaDiff new_diff;
+            new_diff.type = SchemaActionType::CreateTable;
+            new_diff.version = diff.version;
+            new_diff.schema_id = opt.schema_id;
+            new_diff.table_id = opt.table_id;
+            new_diff.old_schema_id = opt.old_schema_id;
+            new_diff.old_table_id = opt.old_table_id;
+            applyDiff(new_diff);
+        }
+        return;
+    }
+
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
         throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
@@ -475,6 +491,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::SetTiFlashReplica:
     {
         applySetTiFlashReplica(db_info, diff.table_id);
+        break;
+    }
+    case SchemaActionType::RenameTables:
+    {
+        LOG_FMT_WARNING(log, "change type RenameTables is not supported");
         break;
     }
     default:
@@ -564,14 +585,14 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
-    for (auto orig_def : orig_defs)
+    for (const auto & orig_def : orig_defs)
     {
         if (new_part_id_set.count(orig_def.id) == 0)
         {
             applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
         }
     }
-    for (auto new_def : new_defs)
+    for (const auto & new_def : new_defs)
     {
         if (orig_part_id_set.count(new_def.id) == 0)
         {
@@ -979,7 +1000,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     /// Check if this is a RECOVER table.
     {
         auto & tmt_context = context.getTMTContext();
-        if (auto storage = tmt_context.getStorages().get(table_info->id).get(); storage)
+        if (auto * storage = tmt_context.getStorages().get(table_info->id).get(); storage)
         {
             if (!storage->isTombstone())
             {
@@ -1093,7 +1114,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(table_id).get();
+    auto * storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
         LOG_DEBUG(log, "table " << table_id << " does not exist.");
