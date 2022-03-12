@@ -517,7 +517,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq)
         });
         // If ok is false, it means server is shutdown.
         // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-        if (ok) 
+        if (ok)
             static_cast<EstablishCallData *>(tag)->proceed();
         else
             static_cast<EstablishCallData *>(tag)->cancel();
