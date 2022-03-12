@@ -1,0 +1,195 @@
+// ------------------------------------------------------------------
+// NOTICE file corresponding to the section 4d of The Apache License,
+// Version 2.0, in this case for
+// ------------------------------------------------------------------
+
+abseil-cpp
+Revision: 215105818dfde3174fe799600bb0f3cae233d0bf
+Address: https://github.com/abseil/abseil-cpp
+License: https://github.com/abseil/abseil-cpp/blob/master/LICENSE
+--------------------------------------
+benchmark
+Revision: f91b6b42b1b9854772a90ae9501464a161707d1e
+Address: https://github.com/google/benchmark
+License: https://github.com/google/benchmark/blob/main/LICENSE
+--------------------------------------
+boost
+Revision: f7aa8cd1fea2dcd85b54542d19200c8f8957a0aa
+Address: https://github.com/boostorg/boost
+License: https://github.com/boostorg/boost/blob/master/LICENSE_1_0.txt
+--------------------------------------
+boringssl
+Revision: f6ef1c560ae5af51e2df5d8d2175bed207b28b8f
+Address: https://github.com/google/boringssl
+License: https://github.com/google/boringssl/blob/master/LICENSE
+--------------------------------------
+cctz
+Revision: 79e037678a5fce43eb7a3584508a67366dc2111d
+Address: https://github.com/google/cctz
+License: https://github.com/google/cctz/blob/master/LICENSE.txt
+--------------------------------------
+client-c
+Revision: 0c834b9fe189841e078046b7b66d4960acc339fc
+Address: https://github.com/tikv/client-c
+License: https://github.com/tikv/client-c/blob/master/LICENSE
+--------------------------------------
+cpptoml
+Revision: fededad7169e538ca47e11a9ee9251bc361a9a65
+Address: https://github.com/skystrife/cpptoml
+License: https://github.com/skystrife/cpptoml/blob/master/LICENSE
+--------------------------------------
+cpu_features
+Revision: e38dc6d2a8a855dc4bcea421c23eaf68ddd671e6
+Address: https://github.com/google/cpu_features
+License: https://github.com/google/cpu_features/blob/main/LICENSE
+--------------------------------------
+curl
+Revision: 801bd5138ce31aa0d906fa4e2eabfc599d74e793
+Address: https://github.com/curl/curl
+License: https://github.com/curl/curl/blob/master/COPYING
+--------------------------------------
+double-conversion
+Revision: cf2f0f3d547dc73b4612028a155b80536902ba02
+Address: https://github.com/google/double-conversion
+License: https://github.com/google/double-conversion/blob/master/LICENSE
+--------------------------------------
+fmtlib
+Revision: d141cdbeb0fb422a3fb7173b285fd38e0d1772dc
+Address: https://github.com/fmtlib/fmt
+License: https://github.com/fmtlib/fmt/blob/master/LICENSE.rst
+--------------------------------------
+google-test
+Revision: d175c8bf823e709d570772b038757fadf63bc632
+Address: https://github.com/google/googletest
+License: https://github.com/google/googletest/blob/main/LICENSE
+--------------------------------------
+grpc
+Revision: de893acb6aef88484a427e64b96727e4926fdcfd
+Address: https://github.com/grpc/grpc
+License: https://github.com/grpc/grpc/blob/master/LICENSE
+--------------------------------------
+jemalloc
+Revision: ea6b3e973b477b8061e0076bb257dbd7f3faa756
+Address: https://github.com/jemalloc/jemalloc
+License: https://github.com/jemalloc/jemalloc/blob/dev/COPYING
+--------------------------------------
+junction
+Revision: 5ad3be7ce1d3f16b9f7ed6065bbfeacd2d629a08
+Address: https://github.com/preshing/junction
+License: https://github.com/preshing/junction/blob/master/LICENSE
+--------------------------------------
+kvproto
+Revision: 714e05ea3b18f9f89e88ae88db693bd5e0b383a2
+Address: https://github.com/pingcap/kvproto
+License: https://github.com/pingcap/kvproto/blob/master/LICENSE
+--------------------------------------
+btrie
+Revision: ddb0dcd2fd4f093d9622f68ee48b61655348a512
+Address: https://github.com/ClickHouse/ClickHouse/tree/v1.1.54381-stable/contrib/libbtrie
+License: https://github.com/ClickHouse/ClickHouse/blob/v1.1.54381-stable/contrib/libbtrie/LICENSE
+--------------------------------------
+cityhash
+Revision: caf83a650e88f5c1ac3da33dfc9409c5314f4554
+Address: https://github.com/ClickHouse/ClickHouse/tree/v1.1.54381-stable/contrib/libcityhash
+License: https://github.com/ClickHouse/ClickHouse/blob/v1.1.54381-stable/contrib/libcityhash/COPYING
+--------------------------------------
+cpuid
+Revision: ac178bde1fa3c27adb97d8dfcae2992074c88caa
+Address: https://github.com/anrieff/libcpuid
+License: https://github.com/anrieff/libcpuid/blob/master/COPYING
+--------------------------------------
+divide（lbdivide）
+Revision: fdbafd427f329b3c1ccafcdc13a354e88c596787
+Address: https://github.com/ridiculousfish/libdivide
+License: https://github.com/ridiculousfish/libdivide/blob/master/LICENSE.txt
+--------------------------------------
+farmhash
+Revision: afdb2e459d030afd1f3b6116545397509326385e
+Address: https://github.com/google/farmhash
+License: https://github.com/google/farmhash/blob/master/COPYING
+--------------------------------------
+pcg-random
+Revision: 93f1e274fb29b6a7cb20676252085a19d8d5a62d
+Address: https://github.com/ClickHouse/ClickHouse/tree/v1.1.54381-stable/contrib/libpcg-random
+License: https://github.com/ClickHouse/ClickHouse/blob/v1.1.54381-stable/contrib/libpcg-random/LICENSE-APACHE.txt
+--------------------------------------
+metrohash
+Revision: d6833a0d5569a9dbd4d1cdf67d95015712f13cb6
+Address: https://github.com/ClickHouse/ClickHouse/tree/v1.1.54381-stable/contrib/libmetrohash
+License: https://github.com/ClickHouse/ClickHouse/blob/v1.1.54381-stable/contrib/libmetrohash/LICENSE
+--------------------------------------
+sparsehash
+Revision: 21d37dbaa45742c0bd23cc1e5a70b52cbc27f809
+Address: https://github.com/ClickHouse/ClickHouse/tree/b13313eecca9455f4fdc923f597fe863df409742/contrib/libsparsehash
+License: https://github.com/ClickHouse/ClickHouse/blob/b13313eecca9455f4fdc923f597fe863df409742/contrib/libsparsehash/COPYING
+--------------------------------------
+tcmalloc
+Revision: dde32f8bbc95312379f9f5a651799815bb6327c5
+Address: https://github.com/ClickHouse/ClickHouse/tree/b13313eecca9455f4fdc923f597fe863df409742/contrib/libtcmalloc
+License: https://github.com/ClickHouse/ClickHouse/blob/b13313eecca9455f4fdc923f597fe863df409742/contrib/libtcmalloc/COPYING
+--------------------------------------
+libunwind
+Revision: 19a2c01b1e8ac20871ea09d20f596d425ba53aed
+Address: https://github.com/libunwind/libunwind
+License: https://github.com/libunwind/libunwind/blob/master/LICENSE
+--------------------------------------
+lz4
+Revision: d44371841a2f1728a3f36839fd4b7e872d0927d3
+Address: https://github.com/lz4/lz4
+License: https://github.com/lz4/lz4/blob/dev/LICENSE
+--------------------------------------
+mimalloc
+Revision: dc6bce256d4f3ce87761f9337977dff3d8b1776c
+Address: https://github.com/microsoft/mimalloc
+License: https://github.com/microsoft/mimalloc/blob/master/LICENSE
+--------------------------------------
+poco
+Revision: e411ea34492bf26e76b4e4a03ff5813a0c779240
+Address: https://github.com/ClickHouse-Extras/poco
+License: https://github.com/ClickHouse-Extras/poco/blob/clickhouse/LICENSE
+--------------------------------------
+prometheus-cpp
+Revision: ca1f3463e74d957d1cccddd4a1a29e3e5d34bd83
+Address: https://github.com/jupp0r/prometheus-cpp
+License: https://github.com/jupp0r/prometheus-cpp/blob/master/LICENSE
+--------------------------------------
+protobuf
+Revision: 09745575a923640154bcf307fba8aedff47f240a
+Address: https://github.com/protocolbuffers/protobuf
+License: https://github.com/protocolbuffers/protobuf/blob/master/LICENSE
+--------------------------------------
+re2
+Revision: 7cf8b88e8f70f97fd4926b56aa87e7f53b2717e0
+Address: https://github.com/google/re2
+License: https://github.com/google/re2/blob/main/LICENSE
+--------------------------------------
+tiflash-proxy
+Revision: 1e3f15fdb93a7ae41958d81c168d9e25ef3d4570
+Address: https://github.com/pingcap/tidb-engine-ext
+License: https://github.com/pingcap/tidb-engine-ext/blob/raftstore-proxy/LICENSE
+--------------------------------------
+tipb
+Revision: 0e3817b1f556337705053dac55606d04030bf1a0
+Address: https://github.com/pingcap/tipb
+License: https://github.com/pingcap/tipb/blob/master/LICENSE
+--------------------------------------
+xxhash
+Revision: 94e5f23e736f2bb67ebdf90727353e65344f9fc0
+Address: https://github.com/Cyan4973/xxHash
+License: https://github.com/Cyan4973/xxHash/blob/dev/LICENSE
+--------------------------------------
+zlib-ng
+Revision: b56a2fd0b126cfe5f13e68ab9090cd4f6a773286
+Address: https://github.com/zlib-ng/zlib-ng
+License: https://github.com/zlib-ng/zlib-ng/blob/develop/LICENSE.md
+--------------------------------------
+zstd
+Revision: 791626dfb92acf4a3d3ba0342636b0dd82848e01
+Address: https://github.com/facebook/zstd
+License: https://github.com/facebook/zstd/blob/dev/LICENSE
+--------------------------------------
+ClickHouse
+Revision: 30fcaeb2a3fff1bf894aae9c776bed7fd83f783f
+Address: https://github.com/ClickHouse/ClickHouse
+License: https://github.com/ClickHouse/ClickHouse/blob/master/LICENSE
+
