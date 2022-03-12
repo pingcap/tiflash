@@ -73,16 +73,16 @@ try
     for (size_t i = 0; i < sizeof(input) / sizeof(UInt64); ++i)
     {
         ASSERT_COLUMN_EQ(
-                createConstColumn<Nullable<MyDate>>(3, output[i]),
-                executeFunction(func_name,
-                    {createConstColumn<MyDate>(3, input[i])}));
+            createConstColumn<Nullable<MyDate>>(3, output[i]),
+            executeFunction(func_name,
+                            {createConstColumn<MyDate>(3, input[i])}));
     }
 
     // special const test, month is zero.
     ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<MyDate>>(3, {}),
-            executeFunction(func_name,
-                {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
+        createConstColumn<Nullable<MyDate>>(3, {}),
+        executeFunction(func_name,
+                        {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
 
     dag_context->setFlags(ori_flags);
 }
