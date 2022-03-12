@@ -187,6 +187,8 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         std::unique_lock lk(mu);
         if (connected)
             throw Exception("has connected");
+        if (finished)
+            throw Exception("has finished");
 
         LOG_TRACE(log, "ready to connect");
         if (is_local)
