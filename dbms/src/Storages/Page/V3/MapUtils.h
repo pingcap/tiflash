@@ -27,4 +27,15 @@ findLess(const C & c, const typename C::key_type & key)
     return --iter;
 }
 
+template <typename C>
+typename C::iterator
+findMutLess(C & c, const typename C::key_type & key)
+{
+    auto iter = c.lower_bound(key); // first element >= `key`
+    if (iter == c.begin())
+        return c.end(); // Nothing < `key`
+    // its prev must be less than `key`
+    return --iter;
+}
+
 } // namespace DB::MapUtils

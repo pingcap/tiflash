@@ -36,6 +36,8 @@ public:
         size_t expected_block_size_,
         bool is_raw_,
         bool do_range_filter_for_raw_,
+        const int extra_table_id_index,
+        const TableID physical_table_id,
         const LogWithPrefixPtr & log_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
@@ -47,8 +49,16 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
+        , extra_table_id_index(extra_table_id_index)
+        , physical_table_id(physical_table_id)
         , log(getMPPTaskLog(log_, NAME))
     {
+        if (extra_table_id_index != InvalidColumnID)
+        {
+            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
+            header.insert(extra_table_id_index, col);
+        }
     }
 
     String getName() const override { return NAME; }
@@ -102,6 +112,15 @@ protected:
 
             if (res)
             {
+                if (extra_table_id_index != InvalidColumnID)
+                {
+                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
+                    size_t row_number = res.rows();
+                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
+                    col.column = std::move(col_data);
+                    res.insert(extra_table_id_index, std::move(col));
+                }
                 if (!res.rows())
                     continue;
                 else
@@ -128,12 +147,15 @@ private:
     const size_t expected_block_size;
     const bool is_raw;
     const bool do_range_filter_for_raw;
+    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
+    const int extra_table_id_index;
 
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
 
     SegmentPtr cur_segment;
+    TableID physical_table_id;
 
     LogWithPrefixPtr log;
 };

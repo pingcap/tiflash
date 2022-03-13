@@ -5,13 +5,11 @@
 
 namespace DB
 {
-
 class Context;
 
 // TiDB table test tool
 struct MockTiDBTable
 {
-
     // Inject mocked TiDB table.
     // Usage:
 
@@ -84,9 +82,19 @@ struct MockTiDBTable
     //   ./storages-client.sh "DBGInvoke clean_up_region()"
     static void dbgFuncCleanUpRegions(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+    // Trigger a create tables ddl job.
+    // Usage:
+    //   ./storage-client.sh "DBGInvoke create_tidb_tables(db_name, table_name, [table_name], ..., [table_name])"
+    static void dbgFuncCreateTiDBTables(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 private:
     static void dbgFuncDropTiDBTableImpl(
-        Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);
+        Context & context,
+        String database_name,
+        String table_name,
+        bool drop_regions,
+        bool is_drop_db,
+        DBGInvoker::Printer output);
 };
 
 } // namespace DB

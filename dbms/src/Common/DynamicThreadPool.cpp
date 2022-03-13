@@ -81,10 +81,11 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
-void executeTask(const std::unique_ptr<IExecutableTask> & task)
+void DynamicThreadPool::executeTask(TaskPtr & task)
 {
     UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_thdpool, type_max_active_threads_of_thdpool);
     task->execute();
+    task.reset();
 }
 
 void DynamicThreadPool::fixedWork(size_t index)
@@ -124,7 +125,6 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
         if (!node.task) // may be timeout or cancelled
             break;
         executeTask(node.task);
-        node.task.reset();
     }
     alive_dynamic_threads.fetch_sub(1);
 }

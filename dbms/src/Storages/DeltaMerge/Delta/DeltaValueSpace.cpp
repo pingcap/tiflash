@@ -180,6 +180,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
+            return false;
         }
 
         /// Update delta tree
@@ -226,7 +227,7 @@ bool DeltaValueSpace::compact(DMContext & context)
 
     // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    PageReader reader(context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
+    PageReader reader(context.storage_pool.getNamespaceId(), context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
     compaction_task->prepare(context, wbs, reader);
 
     {

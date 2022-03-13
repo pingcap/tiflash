@@ -13,6 +13,10 @@ void registerFunctionsComparison(FunctionFactory & factory)
     factory.registerFunction<FunctionLessOrEquals>();
     factory.registerFunction<FunctionGreaterOrEquals>();
     factory.registerFunction<FunctionStrcmp>();
+    factory.registerFunction<FunctionIsTrue>();
+    factory.registerFunction<FunctionIsTrueWithNull>();
+    factory.registerFunction<FunctionIsFalse>();
+    factory.registerFunction<FunctionIsFalseWithNull>();
 }
 
 template <>
