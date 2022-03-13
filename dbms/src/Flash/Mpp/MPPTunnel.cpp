@@ -213,7 +213,6 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-    assert(!(is_local && is_async));
     {
         std::unique_lock lk(mu);
         if (connected)
