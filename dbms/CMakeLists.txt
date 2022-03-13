@@ -176,7 +176,8 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::pull
     cpptoml
 )
-target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include ${kvproto_SOURCE_DIR} ${tipb_SOURCE_DIR})
+target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
+target_include_directories (clickhouse_common_io BEFORE PUBLIC ${kvproto_SOURCE_DIR} ${tipb_SOURCE_DIR} ${Protobuf_INCLUDE_DIR})
 
 target_link_libraries (dbms
     clickhouse_parsers
