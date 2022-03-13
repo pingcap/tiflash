@@ -510,7 +510,7 @@ struct MPMCQueueTest::ValueHelper<std::shared_ptr<int>>
 };
 
 #define ADD_TEST_FOR(type_name, type, test_name, ...) \
-    TEST_F(TestMPMCQueue, type_name##_##test_name)    \
+    TEST_F(MPMCQueueTest, type_name##_##test_name)    \
     try                                               \
     {                                                 \
         test##test_name<type>(__VA_ARGS__);           \
@@ -589,7 +589,6 @@ try
     ASSERT_EQ(queue.size(), 1);
 }
 CATCH
-
 
 TEST_F(MPMCQueueTest, isNextOpNonBlocking)
 try

@@ -43,6 +43,7 @@ struct ExternalPageCallbacks
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
     ExternalPagesScanner scanner = nullptr;
     ExternalPagesRemover remover = nullptr;
+    NamespaceId ns_id = MAX_NAMESPACE_ID;
 };
 
 /**
@@ -156,7 +157,7 @@ public:
 
     virtual void drop() = 0;
 
-    virtual PageId getMaxId() = 0;
+    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot() = 0;
 
@@ -168,21 +169,21 @@ public:
 
     virtual void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) = 0;
 
-    virtual PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) = 0;
+    virtual PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
-    virtual Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    virtual Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
-    virtual PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    virtual PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
-    virtual void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    virtual void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
-    virtual PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    virtual PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) = 0;
 
-    virtual PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) = 0;
+    virtual PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
     // We may skip the GC to reduce useless reading by default.
     virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
@@ -204,60 +205,70 @@ class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
+    explicit PageReader(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
+        : ns_id(ns_id_)
+        , storage(storage_)
         , snap()
         , read_limiter(read_limiter_)
+
     {}
     /// Snapshot read.
-    PageReader(PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
+    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+        : ns_id(ns_id_)
+        , storage(storage_)
         , snap(snap_)
         , read_limiter(read_limiter_)
     {}
-    PageReader(PageStoragePtr storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
+    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
+        : ns_id(ns_id_)
+        , storage(storage_)
         , snap(std::move(snap_))
         , read_limiter(read_limiter_)
     {}
 
     DB::Page read(PageId page_id) const
     {
-        return storage->read(page_id, read_limiter, snap);
+        return storage->read(ns_id, page_id, read_limiter, snap);
     }
 
     PageMap read(const std::vector<PageId> & page_ids) const
     {
-        return storage->read(page_ids, read_limiter, snap);
+        return storage->read(ns_id, page_ids, read_limiter, snap);
     }
 
     void read(const std::vector<PageId> & page_ids, PageHandler & handler) const
     {
-        storage->read(page_ids, handler, read_limiter, snap);
+        storage->read(ns_id, page_ids, handler, read_limiter, snap);
     }
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
-        return storage->read(page_fields, read_limiter, snap);
+        return storage->read(ns_id, page_fields, read_limiter, snap);
+    }
+
+    PageId getMaxId() const
+    {
+        return storage->getMaxId(ns_id);
     }
 
     PageId getNormalPageId(PageId page_id) const
     {
-        return storage->getNormalPageId(page_id, snap);
+        return storage->getNormalPageId(ns_id, page_id, snap);
     }
 
     UInt64 getPageChecksum(PageId page_id) const
     {
-        return storage->getEntry(page_id, snap).checksum;
+        return storage->getEntry(ns_id, page_id, snap).checksum;
     }
 
     PageEntry getPageEntry(PageId page_id) const
     {
-        return storage->getEntry(page_id, snap);
+        return storage->getEntry(ns_id, page_id, snap);
     }
 
 private:
+    NamespaceId ns_id;
     PageStoragePtr storage;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;
