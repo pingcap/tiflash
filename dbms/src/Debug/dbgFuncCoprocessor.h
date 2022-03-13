@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
@@ -22,19 +23,6 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 // Usage:
 //   ./storages-client.sh "DBGInvoke mock_dag(query, region_id[, start_ts])"
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
-
-struct DAGProperties
-{
-    String encode_type;
-    Int64 tz_offset = 0;
-    String tz_name;
-    Int32 collator = 0;
-    bool is_mpp_query = false;
-    bool use_broadcast_join = false;
-    Int32 mpp_partition_num = 1;
-    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    Int32 mpp_timeout = 10;
-};
 
 DAGProperties getDAGProperties(const String & prop_string);
 
