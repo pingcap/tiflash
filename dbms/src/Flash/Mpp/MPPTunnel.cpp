@@ -34,6 +34,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , thread_manager(newThreadManager())
     , log(getMPPTaskLog(log_, tunnel_id))
 {
+    assert(!(is_local && is_async));
 }
 
 template <typename Writer>
