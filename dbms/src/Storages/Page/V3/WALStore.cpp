@@ -176,7 +176,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
     }
 
-#define ARCHIVE_COMPACTED_LOGS // keep for debug
+// #define ARCHIVE_COMPACTED_LOGS // keep for debug
 
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)
