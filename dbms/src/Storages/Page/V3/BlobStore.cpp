@@ -45,6 +45,10 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {
+    if (config.block_alignment_bytes % 4096 != 0)
+    {
+        LOG_FMT_WARNING(log, "[block_alignment_bytes={}] is not an integer multiple of 4096, which may slow down writes.", config.block_alignment_bytes);
+    }
 }
 
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -98,9 +102,20 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         free(buffer, all_page_data_size);
     });
     char * buffer_pos = buffer;
-    auto [blob_id, offset_in_file] = getPosFromStats(all_page_data_size);
+
+    // Calculate alignment space
+    size_t replenish_size = 0;
+    if (config.block_alignment_bytes != 0 && all_page_data_size % config.block_alignment_bytes != 0)
+    {
+        replenish_size = config.block_alignment_bytes - all_page_data_size % config.block_alignment_bytes;
+    }
+
+    size_t actually_alloced_size = all_page_data_size + replenish_size;
+
+    auto [blob_id, offset_in_file] = getPosFromStats(actually_alloced_size);
 
     size_t offset_in_allocated = 0;
+
 
     for (auto & write : wb.getWrites())
     {
@@ -118,6 +133,12 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             entry.tag = write.tag;
             entry.offset = offset_in_file + offset_in_allocated;
             offset_in_allocated += write.size;
+
+            // The last put write
+            if (offset_in_allocated == all_page_data_size)
+            {
+                entry.align_size = replenish_size;
+            }
 
             digest.update(buffer_pos, write.size);
             entry.checksum = digest.checksum();
@@ -164,13 +185,14 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (buffer_pos != buffer + all_page_data_size)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_alloced_size);
         throw Exception(
             fmt::format(
                 "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}]",
+                "[expect_offset={}] [actual_offset={}] [actually_alloced_size={}]",
                 all_page_data_size,
-                (buffer_pos - buffer)),
+                (buffer_pos - buffer),
+                actually_alloced_size),
             ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -181,8 +203,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     }
     catch (DB::Exception & e)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_alloced_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_alloced_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_alloced_size);
         throw e;
     }
 
@@ -201,7 +223,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
             //                             entry.file_id,
             //                             entry.offset));
         }
-        removePosFromStats(entry.file_id, entry.offset, entry.size);
+        removePosFromStats(entry.file_id, entry.offset, entry.size + entry.align_size);
     }
 }
 
@@ -736,7 +758,7 @@ BlobStore::BlobStats::BlobStats(LogWithPrefixPtr log_, BlobStore::Config config_
 void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
-    stat->restoreSpaceMap(entry.offset, entry.size);
+    stat->restoreSpaceMap(entry.offset, entry.size + entry.align_size);
 }
 
 void BlobStore::BlobStats::restore()
