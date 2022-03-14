@@ -164,7 +164,9 @@ namespace DB
         F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
         F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
         F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
-        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}))
+        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                             \
+        F(type_active_rpc_async_worker, {"type", "active_rpc_async_worker"}),                                                             \
+        F(type_total_rpc_async_worker, {"type", "total_rpc_async_worker"}))
 // clang-format on
 
 struct ExpBuckets

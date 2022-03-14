@@ -232,7 +232,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, log);
+        bool is_async = !is_local && context->getSettingsRef().enable_async_server;
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log);
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -361,6 +362,7 @@ void MPPTask::runImpl()
     }
     else
     {
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
