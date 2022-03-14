@@ -11,6 +11,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
+#include <Poco/Path.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -114,10 +115,22 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 
 WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
 {
-    const auto current_writting_log_num = [this]() {
+    const auto [ok, current_writting_log_num] = [this]() -> std::tuple<bool, Format::LogNumberType> {
         std::lock_guard lock(log_file_mutex);
-        return log_file->logNumber();
+        if (!log_file)
+        {
+            return {false, 0};
+        }
+        return {true, log_file->logNumber()};
     }();
+    // Return empty set if `log_file` is not ready
+    if (!ok)
+    {
+        return WALStore::FilesSnapshot{
+            .current_writting_log_num = 0,
+            .persisted_log_files = {},
+        };
+    }
 
     // Only those files are totally persisted
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
@@ -163,12 +176,24 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
     }
 
+    // #define ARCHIVE_COMPACTED_LOGS // keep for debug
+
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)
     {
         if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
         {
+#ifndef ARCHIVE_COMPACTED_LOGS
             f.remove();
+#else
+            const Poco::Path archive_path(delegator->defaultPath(), "archive");
+            Poco::File archive_dir(archive_path);
+            if (!archive_dir.exists())
+                archive_dir.createDirectory();
+            auto dest = archive_path.toString() + "/" + filename.filename(LogFileStage::Normal);
+            f.moveTo(dest);
+            LOG_FMT_INFO(logger, "archive {} to {}", filename.fullname(LogFileStage::Normal), dest);
+#endif
         }
     }
     // TODO: Log more information. duration, num entries, size of compact log file...
