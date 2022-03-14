@@ -16,7 +16,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_in_creating_set_input_stream[];
-}
+extern const char exception_mpp_hash_build[];
+} // namespace FailPoints
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -107,9 +108,14 @@ void CreatingSetsBlockInputStream::createAll()
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setFinishBuildTable(false);
+                    elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
             }
         }
+<<<<<<< HEAD
+=======
+        Stopwatch watch;
+        auto thread_manager = newThreadManager();
+>>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -129,7 +135,11 @@ void CreatingSetsBlockInputStream::createAll()
         }
 
         if (!exception_from_workers.empty())
+        {
+            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first of total {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
+        }
+        LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
 
         created = true;
     }
@@ -137,18 +147,27 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
+    auto log_msg = fmt::format("{} for task {}",
+                               subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
+                                   : subquery.table                            ? "Filling temporary table. "
+                                                                               : "null subquery",
+                               mpp_task_id.toString());
+    Stopwatch watch;
     try
     {
+<<<<<<< HEAD
         LOG_DEBUG(log,
                   (subquery.set ? "Creating set. " : "")
                       << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                       << std::to_string(mpp_task_id));
         Stopwatch watch;
 
+=======
+        LOG_FMT_DEBUG(log, "{}", log_msg);
+>>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
-
 
         bool done_with_set = !subquery.set;
         bool done_with_join = !subquery.join;
@@ -164,7 +183,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_FMT_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -209,7 +228,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
 
         if (subquery.join)
-            subquery.join->setFinishBuildTable(true);
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
+            subquery.join->setBuildTableState(Join::BuildTableState::SUCCEED);
+        }
 
         if (table_out)
             table_out->writeSuffix();
@@ -243,20 +265,24 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
 
-            if (log != nullptr)
-                LOG_DEBUG(log, msg.rdbuf());
-            else
-                LOG_DEBUG(log, msg.rdbuf());
+            LOG_FMT_DEBUG(log, "{}", msg.rdbuf()->str());
         }
         else
         {
+<<<<<<< HEAD
             LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
+=======
+            LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
+>>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
         }
     }
-    catch (std::exception & e)
+    catch (...)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
+        if (subquery.join)
+            subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
+        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg, getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
     }
 }
 
