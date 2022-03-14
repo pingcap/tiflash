@@ -3,6 +3,7 @@
 #include <Common/Arena.h>
 #include <Common/FieldVisitors.h>
 #include <DataStreams/WindowBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ExpressionActions.h>
@@ -395,17 +396,32 @@ void WindowBlockInputStream::advancePartitionEnd()
         size_t i = 0;
         for (; i < partition_by_columns; i++)
         {
-            const auto * reference_column
-                = inputAt(prev_frame_start)[partition_by_indices[i]].get();
+            const auto reference_column
+                = inputAt(prev_frame_start)[partition_by_indices[i]];
             const auto * compared_column
                 = inputAt(partition_end)[partition_by_indices[i]].get();
-            if (compared_column->compareAt(partition_end.row,
-                                           prev_frame_start.row,
-                                           *reference_column,
-                                           1 /* nan_direction_hint */)
-                != 0)
+            if (window_description.partition_by[i].collator)
             {
-                break;
+                if (compared_column->compareAtWithCollation(partition_end.row,
+                                                            prev_frame_start.row,
+                                                            *reference_column,
+                                                            1 /* nan_direction_hint */,
+                                                            *window_description.partition_by[i].collator)
+                    != 0)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                if (compared_column->compareAt(partition_end.row,
+                                               prev_frame_start.row,
+                                               *reference_column,
+                                               1 /* nan_direction_hint */)
+                    != 0)
+                {
+                    break;
+                }
             }
         }
 

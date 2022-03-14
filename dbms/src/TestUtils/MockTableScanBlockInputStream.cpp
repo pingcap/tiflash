@@ -21,8 +21,8 @@ MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndN
 ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem)
 {
     auto column = elem.type->createColumn();
-    int row_count = 0;
-    for (int i = output_index; i < rows & row_count < max_block_size; ++i)
+    size_t row_count = 0;
+    for (size_t i = output_index; i < rows & row_count < max_block_size; ++i)
     {
         column->insert((*elem.column)[i]);
         row_count++;
@@ -35,7 +35,6 @@ Block MockTableScanBlockInputStream::readImpl()
 {
     if (output_index >= rows)
         return {};
-    size_t rows_count = 0;
     ColumnsWithTypeAndName output_columns;
     for (const auto & elem : columns)
     {
