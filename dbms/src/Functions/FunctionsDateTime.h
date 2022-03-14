@@ -3277,22 +3277,6 @@ struct TiDBLastDayTransformerImpl
         return MyDate(val.year, val.month, last_day).toPackedUInt();
     }
 
-    static UInt8 getLastDay(UInt16 year, UInt8 month)
-    {
-        static constexpr UInt8 dayByMonths[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-        UInt8 last_day = 0;
-        if (month > 0 && month <= 12)
-            last_day = dayByMonths[month - 1];
-        if (month == 2 && isLeapYear(year))
-            last_day = 29;
-        return last_day;
-    }
-
-    static bool isLeapYear(UInt16 year)
-    {
-        return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
-    }
 };
 
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.

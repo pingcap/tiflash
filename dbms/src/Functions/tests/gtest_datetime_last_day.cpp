@@ -76,7 +76,18 @@ try
             createConstColumn<Nullable<MyDate>>(3, output[i]),
             executeFunction(func_name,
                             {createConstColumn<MyDate>(3, input[i])}));
+
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Nullable<MyDate>>(3, output[i]),
+            executeFunction(func_name,
+                            {createConstColumn<Nullable<MyDate>>(3, input[i])}));
     }
+
+    // const nullable test
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<MyDate>>(3, {}),
+        executeFunction(func_name,
+                        {createConstColumn<Nullable<MyDate>>(3, {})}));
 
     // special const test, month is zero.
     ASSERT_COLUMN_EQ(
