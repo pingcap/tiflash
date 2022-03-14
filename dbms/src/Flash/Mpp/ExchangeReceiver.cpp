@@ -86,7 +86,7 @@ public:
             if (!ok || read_packet_index == BATCH_PACKET_COUNT || packets[read_packet_index - 1]->has_error())
                 notifyReactor();
             else
-                reader->read(packets[read_packet_index], this);
+                reader->read(packets[read_packet_index], thisAsUnaryCallback());
             break;
         case AsyncRequestStage::WAIT_FINISH:
             notifyReactor();
@@ -107,7 +107,7 @@ public:
             {
                 stage = AsyncRequestStage::WAIT_BATCH_READ;
                 read_packet_index = 0;
-                reader->read(packets[0], this);
+                reader->read(packets[0], thisAsUnaryCallback());
             }
             else
             {
@@ -127,12 +127,12 @@ public:
             else if (read_packet_index < BATCH_PACKET_COUNT)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
-                reader->finish(finish_status, this);
+                reader->finish(finish_status, thisAsUnaryCallback());
             }
             else
             {
                 read_packet_index = 0;
-                reader->read(packets[0], this);
+                reader->read(packets[0], thisAsUnaryCallback());
             }
             break;
         case AsyncRequestStage::WAIT_FINISH:
@@ -211,7 +211,7 @@ private:
     void start()
     {
         stage = AsyncRequestStage::WAIT_MAKE_READER;
-        rpc_context->makeAsyncReader(*request, reader, this);
+        rpc_context->makeAsyncReader(*request, reader, thisAsUnaryCallback());
     }
 
     void waitForRetryOrDone(String done_msg)
@@ -241,6 +241,12 @@ private:
             packet = std::make_shared<MPPDataPacket>();
         }
         return true;
+    }
+
+    // in case of potential multiple inheritances.
+    UnaryCallback<bool> * thisAsUnaryCallback()
+    {
+        return static_cast<UnaryCallback<bool> *>(this);
     }
 
     std::shared_ptr<RPCContext> rpc_context;
