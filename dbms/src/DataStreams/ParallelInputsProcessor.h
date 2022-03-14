@@ -1,12 +1,12 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
