@@ -326,7 +326,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         }
     }
 
-    double rand_number = static_cast<double>(rand()) / RAND_MAX;
+    double rand_number = static_cast<double>(rand()) / RAND_MAX; // NOLINT(cert-msc50-cpp)
     double ratio_sum = 0.0;
     for (size_t i = 0; i < ratio.size(); i++)
     {
