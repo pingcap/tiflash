@@ -85,12 +85,13 @@ void MPPTaskStatistics::logTracingJson()
 {
     LOG_FMT_INFO(
         logger,
-        R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
+        R"({{"tracing_update_time":{},"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
         R"(,"local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{})"
         R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+        toNanoseconds(Clock::now()),
         id.start_ts,
         id.task_id,
         is_root,
