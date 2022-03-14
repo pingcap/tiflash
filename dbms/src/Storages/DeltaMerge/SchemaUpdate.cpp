@@ -24,6 +24,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
 {
     std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
     castDefaultValue = [&](const Field & value, const DataTypePtr & type) -> Field {
+        if (value.isNull()) return value;
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:
@@ -117,14 +118,6 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             static_assert(std::is_same_v<DataTypeMyDateTime::FieldType, UInt64>);
             UInt64 res = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), value);
             return toField(res);
-        }
-        case TypeIndex::Nullable:
-        {
-            if (value.isNull())
-                return value;
-            auto nullable = std::dynamic_pointer_cast<const DataTypeNullable>(type);
-            DataTypePtr nested_type = nullable->getNestedType();
-            return castDefaultValue(value, nested_type); // Recursive call on nested type
         }
         default:
             throw Exception("Unsupported to setColumnDefineDefaultValue with data type: " + type->getName()

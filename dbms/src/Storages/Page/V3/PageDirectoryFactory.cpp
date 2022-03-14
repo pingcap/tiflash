@@ -23,6 +23,7 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(file_provider, delegator);
+    (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadEdit(dir, edit);
     if (blob_stats)

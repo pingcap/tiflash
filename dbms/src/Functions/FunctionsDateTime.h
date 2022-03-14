@@ -1548,17 +1548,17 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0])->isString())
+        if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("First argument for function {} (unit) must be String", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
+        if (!arguments[1]->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
             throw Exception(
                 fmt::format("Second argument for function {} must be MyDate or MyDateTime", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[2])->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
+        if (!arguments[2]->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
             throw Exception(
                 fmt::format("Third argument for function {} must be MyDate or MyDateTime", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1935,12 +1935,12 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0])->isMyDateOrMyDateTime())
+        if (!arguments[0]->isMyDateOrMyDateTime())
             throw Exception(
                 fmt::format("First argument for function {} must be MyDate or MyDateTime", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime())
+        if (!arguments[1]->isMyDateOrMyDateTime())
             throw Exception(
                 fmt::format("Second argument for function {} must be MyDate or MyDateTime", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

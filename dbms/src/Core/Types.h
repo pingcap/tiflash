@@ -133,7 +133,6 @@ enum class TypeIndex
     Tuple,
     Set,
     Interval,
-    Nullable,
     Function,
     AggregateFunction,
     LowCardinality,

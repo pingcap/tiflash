@@ -223,6 +223,7 @@ TEST_F(WALStoreTest, Empty)
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
+        (void)edit;
         if (!ok)
         {
             reader->throwIfError();

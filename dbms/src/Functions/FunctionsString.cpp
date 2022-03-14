@@ -1360,7 +1360,7 @@ public:
         {
             if (!arguments[arg_idx]->onlyNull())
             {
-                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                const auto * arg = arguments[arg_idx].get();
                 if (!arg->isString())
                     throw Exception(
                         fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
@@ -3374,17 +3374,17 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
 
     {
-        if (!removeNullable(arguments[0])->isString())
+        if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isInteger())
+        if (!arguments[1]->isInteger())
             throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[2])->isString())
+        if (!arguments[2]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3442,7 +3442,7 @@ private:
 
     void tidbExecutePad(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
-        TypeIndex type_index = removeNullable(block.getByPosition(arguments[1]).type)->getTypeId();
+        TypeIndex type_index = block.getByPosition(arguments[1]).type->getTypeId();
         switch (type_index)
         {
         case TypeIndex::UInt8:
@@ -3501,17 +3501,17 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0])->isString())
+        if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isInteger())
+        if (!arguments[1]->isInteger())
             throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[2])->isString())
+        if (!arguments[2]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -4814,22 +4814,19 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto first_argument = removeNullable(arguments[0]);
-        if (!first_argument->isNumber() && !first_argument->isDecimal())
+        if (!arguments[0]->isNumber() && !arguments[0]->isDecimal())
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        auto second_argument = removeNullable(arguments[1]);
-        if (!second_argument->isInteger())
+        if (!arguments[1]->isInteger())
             throw Exception(
-                fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        auto third_argument = removeNullable(arguments[2]);
-        if (!third_argument->isString())
+        if (!arguments[2]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         auto return_type = std::make_shared<DataTypeString>();

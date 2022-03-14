@@ -1449,9 +1449,9 @@ public:
     {
         if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Function " + getName() + " only accept 1 or 2 arguments");
-        if (!removeNullable(arguments[0].type)->isDecimal() && !arguments[0].type->onlyNull())
+        if (!arguments[0].type->isDecimal() && !arguments[0].type->onlyNull())
             throw Exception("First argument for function " + getName() + " must be decimal type", ErrorCodes::ILLEGAL_COLUMN);
-        if (arguments.size() == 2 && (!removeNullable(arguments[1].type)->isString() && !arguments[1].type->onlyNull()))
+        if (arguments.size() == 2 && (!arguments[1].type->isString() && !arguments[1].type->onlyNull()))
             throw Exception("Second argument of function " + getName() + " must be string/null constant", ErrorCodes::ILLEGAL_COLUMN);
 
         for (const auto & arg : arguments)
@@ -1763,10 +1763,10 @@ public:
             throw Exception(fmt::format("Function {} only accept 2 arguments", getName()), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         // TODO: Maybe FixedString?
-        if (!removeNullable(arguments[0].type)->isString())
+        if (!arguments[0].type->isString())
             throw Exception(fmt::format("First argument for function {} must be String, but get {}", getName(), arguments[0].type->getName()),
                             ErrorCodes::ILLEGAL_COLUMN);
-        if (!removeNullable(arguments[1].type)->isString())
+        if (!arguments[1].type->isString())
             throw Exception(fmt::format("Second argument for function {} must be String, but get {}", getName(), arguments[1].type->getName()),
                             ErrorCodes::ILLEGAL_COLUMN);
 

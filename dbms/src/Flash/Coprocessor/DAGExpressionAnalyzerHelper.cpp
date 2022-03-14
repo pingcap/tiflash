@@ -288,7 +288,7 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
             fmt::format("{} function does not support unit {} yet.", Impl::name, unit),
             Errors::Coprocessor::Unimplemented);
     String func_name = Impl::unit_to_func_name_map.find(unit)->second;
-    const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
+    const auto & delta_column_type = actions->getSampleBlock().getByName(delta_column).type;
     if (!delta_column_type->isNumber())
     {
         // convert to numeric first

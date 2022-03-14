@@ -617,7 +617,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
         for (size_t i = 0; i < join_key_size; i++)
         {
-            if (removeNullable(join_key_types[i])->isString())
+            if (join_key_types[i]->isString())
             {
                 if (join.probe_types(i).collate() != join.build_types(i).collate())
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
@@ -1126,7 +1126,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
-        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
+        if (has_collator_info && getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isString())
         {
             collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
         }

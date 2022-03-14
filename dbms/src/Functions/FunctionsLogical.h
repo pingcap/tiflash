@@ -373,7 +373,7 @@ public:
             if (!(arguments[i]->isNumber()
                   || (special_impl_for_nulls
                       && (arguments[i]->onlyNull()
-                          || removeNullable(arguments[i])->isNumber()))))
+                          || arguments[i]->isNumber()))))
                 throw Exception(
                     "Illegal type (" + arguments[i]->getName() + ") of "
                         + toString(i + 1) + " argument of function " + getName(),
