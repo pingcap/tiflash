@@ -410,7 +410,6 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
         {
-            scheduleThisTask();
             closeAllTunnels(reason);
             unregisterTask();
             LOG_WARNING(log, "Finish cancel task from uninitialized");
@@ -439,8 +438,10 @@ void MPPTask::scheduleOrWait()
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
-        std::unique_lock lock(schedule_mu);
-        schedule_cv.wait(lock, [&] { return scheduled; });
+        {
+            std::unique_lock lock(schedule_mu);
+            schedule_cv.wait(lock, [&] { return scheduled; });
+        }
         LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
     }
 }

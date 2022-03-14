@@ -18,21 +18,25 @@ public:
     ~MinTSOScheduler() = default;
     /// try to schedule this task if it is the min_tso query or there are enough threads, otherwise put it into the waiting set.
     /// NOTE: call tryToSchedule under the lock protection of MPPTaskManager
-    bool tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manager);
+    bool tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager);
 
     /// delete this to-be cancelled query from scheduler and update min_tso if needed, so that there aren't cancelled queries in the scheduler.
     /// NOTE: call deleteCancelledQuery under the lock protection of MPPTaskManager
-    void deleteCancelledQuery(UInt64 tso, MPPTaskManager & task_manager);
+    void deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager);
 
     /// delete the query in the active set and waiting set and release threads, then schedule waiting tasks.
     /// NOTE: call deleteThenSchedule under the lock protection of MPPTaskManager,
     /// so this func is called exactly once for a query.
-    void deleteThenSchedule(UInt64 tso, MPPTaskManager & task_manager);
+    void deleteThenSchedule(const UInt64 tso, MPPTaskManager & task_manager);
 
 private:
-    bool scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set, MPPTaskPtr task, bool isWaiting);
-    bool updateMinTSO(UInt64 tso, bool valid, String msg);
+    bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting);
+    bool updateMinTSO(const UInt64 tso, const bool retired, const String msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
+    bool isDisabled()
+    {
+        return thread_hard_limit == 0 && thread_soft_limit == 0;
+    }
     std::set<UInt64> waiting_set;
     std::set<UInt64> active_set;
     UInt64 min_tso;

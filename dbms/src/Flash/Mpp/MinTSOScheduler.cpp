@@ -4,6 +4,7 @@
 namespace DB
 {
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
+constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
 MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
     : min_tso(MAX_UINT64)
@@ -14,16 +15,17 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
 {
     auto cores = getNumberOfPhysicalCPUCores();
     active_set_soft_limit = (cores + 2) / 2; /// at least 1
-    if (thread_hard_limit == 0 && thread_soft_limit == 0)
+    if (isDisabled())
     {
         LOG_FMT_INFO(log, "MinTSOScheduler is disabled!");
     }
-    else if (thread_hard_limit <= thread_soft_limit)
+    else if (thread_hard_limit <= thread_soft_limit || thread_hard_limit > OS_THREAD_SOFT_LIMIT)
     {
-        LOG_FMT_INFO(log, "thread_hard_limit {} should be larger than thread_soft_limit {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", thread_hard_limit, thread_soft_limit, cores * 1000, cores * 200, active_set_soft_limit);
         /// generally max_threads == cores, so we support a query runs about 200 tasks simultaneously on a node.
-        thread_hard_limit = cores * 400;
-        thread_soft_limit = cores * 200;
+        /// besides, the general soft limit of OS threads is no more than 100000.
+        thread_hard_limit = std::min(10000U, cores * 400U);
+        thread_soft_limit = std::min(5000U, cores * 200U);
+        LOG_FMT_INFO(log, "hard limit {} should > soft limit {} and under OS' soft limit of {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
     }
     else
     {
@@ -31,10 +33,10 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
     }
 }
 
-bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manager)
+bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager)
 {
     /// check whether this schedule is disabled or not
-    if (thread_hard_limit == 0 && thread_soft_limit == 0)
+    if (isDisabled())
     {
         return true;
     }
@@ -49,7 +51,7 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskPtr task, MPPTaskManager & task_manag
 }
 
 /// the cancelled query maybe hang, so trigger scheduling as needed.
-void MinTSOScheduler::deleteCancelledQuery(UInt64 tso, MPPTaskManager & task_manager)
+void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager)
 {
     active_set.erase(tso);
     waiting_set.erase(tso);
@@ -70,9 +72,9 @@ void MinTSOScheduler::deleteCancelledQuery(UInt64 tso, MPPTaskManager & task_man
     }
 }
 
-void MinTSOScheduler::deleteThenSchedule(UInt64 tso, MPPTaskManager & task_manager)
+void MinTSOScheduler::deleteThenSchedule(const UInt64 tso, MPPTaskManager & task_manager)
 {
-    if (thread_hard_limit == 0 && thread_soft_limit == 0)
+    if (isDisabled())
     {
         return;
     }
@@ -125,10 +127,12 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 }
 
 /// [directly schedule, from waiting set] * [is min_tso query, not] * [can schedule, can't] totally 8 cases.
-bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set, MPPTaskPtr task, bool isWaiting)
+bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting)
 {
     auto needed_threads = task->getNeededThreads();
-    if ((tso <= min_tso && used_threads + needed_threads <= thread_hard_limit) || ((active_set.size() < active_set_soft_limit || tso <= *active_set.rbegin()) && (used_threads + needed_threads <= thread_soft_limit)))
+    auto check_for_new_min_tso = tso <= min_tso && used_threads + needed_threads <= thread_hard_limit;
+    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || tso <= *active_set.rbegin()) && (used_threads + needed_threads <= thread_soft_limit);
+    if (check_for_new_min_tso || check_for_not_min_tso)
     {
         updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
         active_set.insert(tso);
@@ -142,9 +146,9 @@ bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set,
     }
     else
     {
-        if (tso <= min_tso) /// the min_tso query should fully run
+        if (tso <= min_tso) /// the min_tso query should fully run, otherwise throw errors here.
         {
-            auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso query {}) {}, need {}, but used {} of the thread hard limit {}, active set size = {}, waiting set size = {}.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, used_threads, thread_hard_limit, active_set.size(), waiting_set.size());
+            auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso {}) {}, need {}, but used {} of the thread hard limit {}, {} active and {} waiting queries.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, used_threads, thread_hard_limit, active_set.size(), waiting_set.size());
             LOG_FMT_ERROR(log, "{}", msg);
             throw Exception(msg);
         }
@@ -159,7 +163,7 @@ bool MinTSOScheduler::scheduleImp(UInt64 tso, MPPQueryTaskSetPtr query_task_set,
 }
 
 /// if return true, then need to schedule the waiting tasks of the min_tso.
-bool MinTSOScheduler::updateMinTSO(UInt64 tso, bool retired, String msg)
+bool MinTSOScheduler::updateMinTSO(const UInt64 tso, const bool retired, const String msg)
 {
     auto old_min_tso = min_tso;
     bool force_scheduling = false;
@@ -168,16 +172,16 @@ bool MinTSOScheduler::updateMinTSO(UInt64 tso, bool retired, String msg)
         if (tso == min_tso) /// elect a new min_tso from all queries.
         {
             min_tso = active_set.empty() ? MAX_UINT64 : *active_set.begin();
-            min_tso = (!waiting_set.empty() && *waiting_set.begin() < min_tso) ? *waiting_set.begin() : min_tso;
-            force_scheduling = waiting_set.find(min_tso) != waiting_set.end(); /// whether this min_tso has waiting tasks?
+            min_tso = waiting_set.empty() ? min_tso : std::min(*waiting_set.begin(), min_tso);
+            force_scheduling = waiting_set.find(min_tso) != waiting_set.end(); /// if this min_tso has waiting tasks, these tasks should force being scheduled.
         }
     }
     else
     {
-        min_tso = tso < min_tso ? tso : min_tso;
+        min_tso = std::min(tso, min_tso);
     }
     if (min_tso != old_min_tso) /// if min_tso == MAX_UINT64 and the query tso is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
-        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, active set size = {}, waiting set size = {}.", old_min_tso, min_tso, msg, used_threads, active_set.size(), waiting_set.size());
+        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_tso, min_tso, msg, used_threads, active_set.size(), waiting_set.size());
     return force_scheduling;
 }
 } // namespace DB

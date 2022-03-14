@@ -61,7 +61,7 @@ public:
 
     void unregisterTask(MPPTask * task);
 
-    bool tryToScheduleTask(MPPTaskPtr task);
+    bool tryToScheduleTask(const MPPTaskPtr & task);
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 

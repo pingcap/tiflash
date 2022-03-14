@@ -188,11 +188,11 @@ String MPPTaskManager::toString()
 
 MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
 {
-    const auto & it = mpp_query_map.find(query_id);
+    auto it = mpp_query_map.find(query_id);
     return it == mpp_query_map.end() ? nullptr : it->second;
 }
 
-bool MPPTaskManager::tryToScheduleTask(MPPTaskPtr task)
+bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
 {
     std::lock_guard lock(mu);
     return scheduler->tryToSchedule(task, *this);
