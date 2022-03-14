@@ -31,7 +31,7 @@ TEST(WALSeriTest, AllPuts)
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, 1);
+    EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver20);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1);
 }
@@ -57,30 +57,30 @@ try
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, 3);
+    EXPECT_EQ(iter->page_id.low, 3);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::REF);
-    EXPECT_EQ(iter->page_id, 4);
+    EXPECT_EQ(iter->page_id.low, 4);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_EQ(iter->entry.file_id, INVALID_BLOBFILE_ID);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT);
-    EXPECT_EQ(iter->page_id, 5);
+    EXPECT_EQ(iter->page_id.low, 5);
     EXPECT_EQ(iter->version, ver21);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, 2);
+    EXPECT_EQ(iter->page_id.low, 2);
     EXPECT_EQ(iter->version, ver21);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, 1);
+    EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver21);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::DEL);
-    EXPECT_EQ(iter->page_id, 987);
+    EXPECT_EQ(iter->page_id.low, 987);
     EXPECT_EQ(iter->version, ver21);
 }
 CATCH
@@ -101,17 +101,17 @@ TEST(WALSeriTest, Upserts)
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, 1);
+    EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1_2);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, 3);
+    EXPECT_EQ(iter->page_id.low, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3_2);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
-    EXPECT_EQ(iter->page_id, 5);
+    EXPECT_EQ(iter->page_id.low, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
