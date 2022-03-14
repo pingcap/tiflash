@@ -43,7 +43,7 @@ grpc::Status BatchCoprocessorHandler::execute()
                 { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
-            TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
+            auto tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
             LOG_FMT_DEBUG(
                 log,
                 "{}: Handling {} regions from {} physical tables in DAG request: {}",

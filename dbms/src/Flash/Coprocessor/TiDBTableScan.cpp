@@ -13,8 +13,12 @@ TiDBTableScan::TiDBTableScan(const tipb::Executor * table_scan_, const DAGContex
             logical_table_id = table_scan->partition_table_scan().table_id();
         else
             throw TiFlashException("Partition table scan without table id.", Errors::Coprocessor::BadRequest);
+        std::set<Int64> all_physical_table_ids;
         for (const auto & partition_table_id : table_scan->partition_table_scan().partition_ids())
         {
+            if (all_physical_table_ids.count(partition_table_id) > 0)
+                throw TiFlashException("Partition table scan contains duplicated physical table ids.", Errors::Coprocessor::BadRequest);
+            all_physical_table_ids.insert(partition_table_id);
             if (dag_context.containsRegionsInfoForTable(partition_table_id))
                 physical_table_ids.push_back(partition_table_id);
         }

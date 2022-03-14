@@ -273,6 +273,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         }
         for (auto & p : ret)
         {
+            // todo mvcc_query_info->concurrent is not used anymore, should remove it later
             p.second.mvcc_query_info->concurrent = p.second.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
         }
     }
