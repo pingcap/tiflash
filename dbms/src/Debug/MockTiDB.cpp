@@ -528,7 +528,6 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
         opt.old_schema_id = table->database_id;
         opt.old_table_id = table->id();
         diff.affected_opts.push_back(std::move(opt));
-        version_diff[version] = diff;
     }
 
     if (diff.affected_opts.empty())
@@ -540,6 +539,7 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
     diff.table_id = diff.affected_opts[0].table_id;
     diff.old_table_id = diff.affected_opts[0].old_table_id;
     diff.version = version;
+    version_diff[version] = diff;
 }
 
 void MockTiDB::truncateTable(const String & database_name, const String & table_name)
