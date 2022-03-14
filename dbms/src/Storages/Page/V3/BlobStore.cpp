@@ -752,14 +752,6 @@ void BlobStore::BlobStats::restore()
     }
     // restore `roll_id`
     roll_id = max_restored_file_id + 1;
-    // restore `old_ids`
-    for (BlobFileId old_id = 1; old_id < roll_id; ++old_id)
-    {
-        if (existing_file_ids.count(old_id) == 0)
-        {
-            old_ids.emplace_back(old_id);
-        }
-    }
 }
 
 std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
@@ -813,7 +805,6 @@ BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
-    old_ids.emplace_back(stat->id);
     stats_map.remove(stat);
 }
 
@@ -841,24 +832,6 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_gu
     eraseStat(std::move(stat), lock);
 }
 
-BlobFileId BlobStore::BlobStats::chooseNewStat()
-{
-    /**
-     * If we do have any `old blob id` which may removed by GC.
-     * Then we should get a `old blob id` rather than create a new blob id.
-     * If `old_ids` is empty , we will use the `roll_id` as the new 
-     * id return. After roll_id generate a `BlobStat`, it will been `++`.
-     */
-    if (old_ids.empty())
-    {
-        return roll_id;
-    }
-
-    auto rv = old_ids.front();
-    old_ids.pop_front();
-    return rv;
-}
-
 std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
@@ -867,7 +840,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     // No stats exist
     if (stats_map.empty())
     {
-        return std::make_pair(nullptr, chooseNewStat());
+        return std::make_pair(nullptr, roll_id);
     }
 
     for (const auto & stat : stats_map)
@@ -884,7 +857,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 
     if (!stat_ptr)
     {
-        return std::make_pair(nullptr, chooseNewStat());
+        return std::make_pair(nullptr, roll_id);
     }
 
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
