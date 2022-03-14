@@ -5,14 +5,22 @@
 
 namespace DB
 {
-
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct RegionQueryInfo
 {
+    RegionQueryInfo(RegionID region_id_, UInt64 version_, UInt64 conf_version_, Int64 physical_table_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_ = {}, const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & required_handle_ranges_ = {})
+        : region_id(region_id_)
+        , version(version_)
+        , conf_version(conf_version_)
+        , physical_table_id(physical_table_id_)
+        , range_in_table(range_in_table_)
+        , required_handle_ranges(required_handle_ranges_)
+    {}
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
+    Int64 physical_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
