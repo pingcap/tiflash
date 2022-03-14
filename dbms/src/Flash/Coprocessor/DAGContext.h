@@ -13,6 +13,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -199,8 +200,9 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
-    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
+    const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
+
+    bool containsRegionsInfoForTable(Int64 table_id) const;
 
     const BlockIO & getBlockIO() const
     {
@@ -267,8 +269,7 @@ public:
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
     MPPTunnelSetPtr tunnel_set;
-    RegionInfoMap regions_for_local_read;
-    RegionInfoList regions_for_remote_read;
+    TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
