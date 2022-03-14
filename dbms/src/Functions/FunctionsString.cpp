@@ -4037,7 +4037,7 @@ private:
 
     void tidbExecutePadUTF8(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
-        TypeIndex type_index = removeNullable(block.getByPosition(arguments[1]).type)->getTypeId();
+        TypeIndex type_index = block.getByPosition(arguments[1]).type->getTypeId();
         switch (type_index)
         {
         case TypeIndex::UInt8:

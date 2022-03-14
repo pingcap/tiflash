@@ -326,7 +326,7 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
         DataTypePtr orig_type = sample_block.getByName(name).type;
 
         // Bump argument type
-        if (!removeNullable(orig_type)->equals(*uint64_type))
+        if (!orig_type->equals(*uint64_type))
         {
             if (orig_type->isNullable())
             {

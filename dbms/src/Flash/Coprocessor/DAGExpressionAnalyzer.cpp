@@ -41,7 +41,7 @@ namespace
 {
 bool isUInt8Type(const DataTypePtr & type)
 {
-    return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
+    return type->getTypeId() == TypeIndex::UInt8;
 }
 
 tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
