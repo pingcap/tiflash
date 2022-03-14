@@ -539,6 +539,8 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
 
+    LOG_INFO(log, config.toString());
+
     for (const auto & stat : stats_list)
     {
         if (stat->isReadOnly())
