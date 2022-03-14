@@ -209,4 +209,14 @@ int DAGContext::getNewThreadCountOfExchangeReceiver() const
     return new_thread_count_of_exchange_receiver;
 }
 
+bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+{
+    return tables_regions_info.containsRegionsInfoForTable(table_id);
+}
+
+const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+{
+    return tables_regions_info.getTableRegionInfoByTableID(table_id);
+}
+
 } // namespace DB

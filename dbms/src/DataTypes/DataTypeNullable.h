@@ -12,12 +12,11 @@ class DataTypeNullable final : public IDataType
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeNullable(const DataTypePtr & nested_data_type_);
+    explicit DataTypeNullable(const DataTypePtr & nested_data_type_);
     std::string getName() const override { return "Nullable(" + nested_data_type->getName() + ")"; }
     const char * getFamilyName() const override { return "Nullable"; }
 
-    TypeIndex getTypeId() const override { return TypeIndex::Nullable; }
-
+    TypeIndex getTypeId() const override { return nested_data_type->getTypeId(); }
     void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
 
     void serializeBinaryBulkWithMultipleStreams(
@@ -70,7 +69,7 @@ public:
       * Now we support only first.
       * In CSV, non-NULL string value, starting with \N characters, must be placed in quotes, to avoid ambiguity.
       */
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
+    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
 
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
@@ -92,11 +91,27 @@ public:
     bool canBeComparedWithCollation() const override { return nested_data_type->canBeComparedWithCollation(); }
     bool canBeUsedAsVersion() const override { return false; }
     bool isSummable() const override { return nested_data_type->isSummable(); }
+    bool canBeUsedInBitOperations() const override { return nested_data_type->canBeUsedInBitOperations(); };
     bool canBeUsedInBooleanContext() const override { return nested_data_type->canBeUsedInBooleanContext(); }
+    bool isNumber() const override { return nested_data_type->isNumber(); }
+    bool isInteger() const override { return nested_data_type->isInteger(); }
+    bool isUnsignedInteger() const override { return nested_data_type->isUnsignedInteger(); }
+    bool isFloatingPoint() const override { return nested_data_type->isFloatingPoint(); }
+    bool isDateOrDateTime() const override { return nested_data_type->isDateOrDateTime(); } // used in delta merge
+    bool isMyDateOrMyDateTime() const override { return nested_data_type->isMyDateOrMyDateTime(); }
+    bool isMyTime() const override { return nested_data_type->isMyTime(); }
+    bool isDecimal() const override { return nested_data_type->isDecimal(); }
+    bool isValueRepresentedByNumber() const override { return nested_data_type->isValueRepresentedByNumber(); }
+    bool isValueRepresentedByInteger() const override { return nested_data_type->isValueRepresentedByInteger(); }
+    bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return nested_data_type->isValueUnambiguouslyRepresentedInContiguousMemoryRegion(); }
+    bool isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() const override { return nested_data_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion(); }
+    bool isString() const override { return nested_data_type->isString(); }
     bool haveMaximumSizeOfValue() const override { return nested_data_type->haveMaximumSizeOfValue(); }
     size_t getMaximumSizeOfValueInMemory() const override { return 1 + nested_data_type->getMaximumSizeOfValueInMemory(); }
     bool isNullable() const override { return true; }
     size_t getSizeOfValueInMemory() const override;
+    bool isCategorial() const override { return nested_data_type->isCategorial(); }
+    bool isEnum() const override { return nested_data_type->isEnum(); }
     bool onlyNull() const override;
 
     const DataTypePtr & getNestedType() const { return nested_data_type; }

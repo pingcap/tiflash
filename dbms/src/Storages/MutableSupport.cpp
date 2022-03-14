@@ -16,7 +16,8 @@ const DataTypePtr MutableSupport::tidb_pk_column_int_type = DataTypeFactory::ins
 const DataTypePtr MutableSupport::tidb_pk_column_string_type = DataTypeFactory::instance().get("String");
 const DataTypePtr MutableSupport::version_column_type = DataTypeFactory::instance().get("UInt64");
 const DataTypePtr MutableSupport::delmark_column_type = DataTypeFactory::instance().get("UInt8");
-const DataTypePtr MutableSupport::extra_table_id_column_type = DataTypeFactory::instance().get("Int64");
+/// it should not be nullable, but TiDB does not set not null flag for extra_table_id_column_type, so has to align with TiDB
+const DataTypePtr MutableSupport::extra_table_id_column_type = DataTypeFactory::instance().get("Nullable(Int64)");
 ;
 
 } // namespace DB

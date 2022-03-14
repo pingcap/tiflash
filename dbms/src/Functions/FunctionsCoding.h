@@ -214,10 +214,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        DataTypePtr data_type = removeNullable(arguments[0]);
-        if (!data_type->isString())
+        if (!arguments[0]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", data_type->getName(), getName()),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeString>());
@@ -617,10 +616,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        DataTypePtr data_type = removeNullable(arguments[0]);
-        if (!data_type->isString())
+        if (!arguments[0]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", data_type->getName(), getName()),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeString>());
@@ -971,10 +969,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        DataTypePtr data_type = removeNullable(arguments[0]);
-        if (!data_type->isString())
+        if (!arguments[0]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", data_type->getName(), getName()),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeUInt32>());

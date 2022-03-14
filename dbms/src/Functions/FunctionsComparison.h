@@ -1340,9 +1340,8 @@ public:
             return;
         }
 
-        auto src_type = removeNullable(src.type);
         ColumnPtr res_col;
-        switch (src_type->getTypeId())
+        switch (src.type->getTypeId())
         {
         case TypeIndex::UInt8:
             res_col = executeVec<ColumnVector<UInt8>>(src.column);

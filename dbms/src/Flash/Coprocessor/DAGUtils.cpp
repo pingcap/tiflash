@@ -560,7 +560,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Timestamp2Args, "cast"},
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
-    //{tipb::ScalarFuncSig::LastDay, "cast"},
+    {tipb::ScalarFuncSig::LastDay, "tidbLastDay"},
     {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
     {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
     // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
@@ -1153,7 +1153,7 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
         TiDB::TiDBCollatorPtr collator = nullptr;
-        if (removeNullable(order_columns[i].type)->isString())
+        if (order_columns[i].type->isString())
             collator = getCollatorFromExpr(by_items[i].expr());
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);

@@ -41,7 +41,7 @@ namespace
 {
 bool isUInt8Type(const DataTypePtr & type)
 {
-    return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
+    return type->getTypeId() == TypeIndex::UInt8;
 }
 
 tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
@@ -142,7 +142,7 @@ void DAGExpressionAnalyzer::fillAggArgumentDetail(
 {
     arg_names.push_back(getActions(arg, actions));
     arg_types.push_back(actions->getSampleBlock().getByName(arg_names.back()).type);
-    arg_collators.push_back(removeNullable(arg_types.back())->isString() ? getCollatorFromExpr(arg) : nullptr);
+    arg_collators.push_back(arg_types.back()->isString() ? getCollatorFromExpr(arg) : nullptr);
 }
 
 void DAGExpressionAnalyzer::buildGroupConcat(
@@ -306,7 +306,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
         {
             auto type = actions->getSampleBlock().getByName(name).type;
             TiDB::TiDBCollatorPtr collator = nullptr;
-            if (removeNullable(type)->isString())
+            if (type->isString())
                 collator = getCollatorFromExpr(expr);
             if (!duplicated_key)
                 collators.push_back(collator);
@@ -467,14 +467,14 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
     {
         return column_name;
     }
-    const auto & org_type = removeNullable(actions->getSampleBlock().getByName(column_name).type);
-    if (org_type->isNumber() || org_type->isDecimal())
+    const auto & type = actions->getSampleBlock().getByName(column_name).type;
+    if (type->isNumber() || type->isDecimal())
     {
         tipb::Expr const_expr = constructInt64LiteralTiExpr(0);
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    if (org_type->isStringOrFixedString())
+    if (type->isStringOrFixedString())
     {
         /// use tidb_cast to make it compatible with TiDB
         tipb::FieldType field_type;
@@ -494,13 +494,13 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {num_col_name, const_expr_name}, actions, nullptr);
     }
-    if (org_type->isDateOrDateTime())
+    if (type->isDateOrDateTime())
     {
         tipb::Expr const_expr = constructDateTimeLiteralTiExpr(0);
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
+    throw TiFlashException(fmt::format("Filter on {} is not supported.", type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
 NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
@@ -1070,7 +1070,7 @@ String DAGExpressionAnalyzer::buildTupleFunctionForGroupConcat(
         argument_names.push_back(name);
         auto type = actions->getSampleBlock().getByName(name).type;
         names_and_types.emplace_back(name, type);
-        if (removeNullable(type)->isString())
+        if (type->isString())
             collators.push_back(getCollatorFromExpr(expr.children(i)));
         else
             collators.push_back(nullptr);
@@ -1084,7 +1084,7 @@ String DAGExpressionAnalyzer::buildTupleFunctionForGroupConcat(
         auto type = actions->getSampleBlock().getByName(name).type;
         order_columns.emplace_back(name, type);
         names_and_types.emplace_back(name, type);
-        if (removeNullable(type)->isString())
+        if (type->isString())
             collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
         else
             collators.push_back(nullptr);
