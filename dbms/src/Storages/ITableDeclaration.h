@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Description of the table.
   * Is not thread safe. See IStorage::lockStructure ().
   */
@@ -62,6 +61,7 @@ private:
     {
         return empty_names;
     }
+    void setColumnsImpl(ColumnsDescription columns_);
 };
 
-}
+} // namespace DB

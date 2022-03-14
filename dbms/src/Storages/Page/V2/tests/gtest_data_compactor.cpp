@@ -50,7 +50,6 @@ try
     PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
-
 #ifdef GENERATE_TEST_DATA
     // Codes to generate a directory of test data
     storage.restore();
