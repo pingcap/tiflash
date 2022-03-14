@@ -93,6 +93,7 @@ void EstablishCallData::cancel()
         delete this;
         return;
     }
+    state = FINISH;
     if (mpp_tunnel)
         mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
