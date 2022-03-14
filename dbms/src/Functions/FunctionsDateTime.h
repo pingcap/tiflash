@@ -3276,7 +3276,6 @@ struct TiDBLastDayTransformerImpl
         UInt8 last_day = getLastDay(val.year, val.month);
         return MyDate(val.year, val.month, last_day).toPackedUInt();
     }
-
 };
 
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
