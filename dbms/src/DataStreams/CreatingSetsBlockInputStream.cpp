@@ -143,9 +143,10 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    auto log_msg = fmt::format("{} for task {}", (subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
-                                                      : subquery.table                            ? "Filling temporary table. "
-                                                                                                  : ""),
+    auto log_msg = fmt::format("{} for task {}",
+                               subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
+                                   : subquery.table                            ? "Filling temporary table. "
+                                                                               : "null subquery",
                                mpp_task_id.toString());
     Stopwatch watch;
     try
