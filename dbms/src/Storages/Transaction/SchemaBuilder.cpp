@@ -676,11 +676,13 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     const auto old_mapped_tbl_name = storage->getTableName();
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
-    LOG_FMT_INFO(log, "Renaming table {}.{} (display name: {}) to {}.",
-                 old_mapped_db_name, //
-                 old_mapped_tbl_name, //
-                 old_display_table_name, //
-                 name_mapper.debugCanonicalName(*new_db_info, new_table_info));
+    LOG_FMT_INFO(
+        log,
+        "Renaming table {}.{} (display name: {}) to {}.",
+        old_mapped_db_name,
+        old_mapped_tbl_name,
+        old_display_table_name,
+        name_mapper.debugCanonicalName(*new_db_info, new_table_info));
 
     // Note that rename will update table info in table create statement by modifying original table info
     // with "tidb_display.table" instead of using new_table_info directly, so that other changes
@@ -694,11 +696,13 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     InterpreterRenameQuery(rename, context, getThreadName()).execute();
 
-    LOG_FMT_INFO(log, "Renamed table {}.{} (display name: {}) to {}",
-                 old_mapped_db_name, //
-                 old_mapped_tbl_name, //
-                 old_display_table_name, //
-                 name_mapper.debugCanonicalName(*new_db_info, new_table_info));
+    LOG_FMT_INFO(
+        log,
+        "Renamed table {}.{} (display name: {}) to {}",
+        old_mapped_db_name,
+        old_mapped_tbl_name,
+        old_display_table_name,
+        name_mapper.debugCanonicalName(*new_db_info, new_table_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -896,14 +900,14 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & schema_name)
+void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_db).Increment();
-    LOG_FMT_INFO(log, "Tombstoning database {}", schema_name);
-    auto db = context.tryGetDatabase(schema_name);
+    LOG_FMT_INFO(log, "Tombstoning database {}", db_name);
+    auto db = context.tryGetDatabase(db_name);
     if (db == nullptr)
     {
-        LOG_FMT_INFO(log, "Database {} does not exists", schema_name);
+        LOG_FMT_INFO(log, "Database {} does not exists", db_name);
         return;
     }
 
@@ -920,7 +924,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & schema_na
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone);
 
-    LOG_FMT_INFO(log, "Tombstoned database {}", schema_name);
+    LOG_FMT_INFO(log, "Tombstoned database {}", db_name);
 }
 
 std::tuple<NamesAndTypes, Strings>
