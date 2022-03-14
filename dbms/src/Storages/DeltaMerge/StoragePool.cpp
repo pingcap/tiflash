@@ -53,6 +53,27 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
+template <class T>
+static bool doStoragePoolGC(const Context & global_context, const Settings & settings, const T & storage_pool)
+{
+    bool done_anything = false;
+    auto write_limiter = global_context.getWriteLimiter();
+    auto read_limiter = global_context.getReadLimiter();
+    auto config = extractConfig(settings, StorageType::Meta);
+    storage_pool.meta()->reloadSettings(config);
+    done_anything |= storage_pool.meta()->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Data);
+    storage_pool.data()->reloadSettings(config);
+    done_anything |= storage_pool.data()->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Log);
+    storage_pool.log()->reloadSettings(config);
+    done_anything |= storage_pool.log()->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    return done_anything;
+}
+
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create("__global__.log",
@@ -111,22 +132,7 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
         last_try_gc_time = now;
     }
 
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage->reloadSettings(config);
-    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    data_storage->reloadSettings(config);
-    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    log_storage->reloadSettings(config);
-    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    return done_anything;
+    return doStoragePoolGC(global_context, settings, *this);
 }
 
 
@@ -212,22 +218,7 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
         last_try_gc_time = now;
     }
 
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage->reloadSettings(config);
-    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    data_storage->reloadSettings(config);
-    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    log_storage->reloadSettings(config);
-    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    return done_anything;
+    return doStoragePoolGC(global_context, settings, *this);
 }
 
 PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
