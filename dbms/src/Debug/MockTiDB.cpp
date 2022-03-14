@@ -294,7 +294,6 @@ int MockTiDB::newTables(
         opt.old_schema_id = table->database_id;
         opt.old_table_id = table->id();
         diff.affected_opts.push_back(std::move(opt));
-        version_diff[version] = diff;
     }
 
     if (diff.affected_opts.empty())
@@ -302,6 +301,7 @@ int MockTiDB::newTables(
 
     diff.schema_id = diff.affected_opts[0].schema_id;
     diff.version = version;
+    version_diff[version] = diff;
     return 0;
 }
 
