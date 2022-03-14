@@ -87,13 +87,14 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
 
     try
     {
-        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
         PageEntry entry_ret;
         entry_ret.file_id = entry.file_id;
         entry_ret.offset = entry.offset;
+        entry_ret.tag = entry.tag;
         entry_ret.size = entry.size;
         entry_ret.field_offsets = entry.field_offsets;
         entry_ret.checksum = entry.checksum;

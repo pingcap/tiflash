@@ -278,10 +278,14 @@ public:
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_id, toConcreteSnapshot(snap));
+    }
+    PageIDAndEntryV3 getOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
