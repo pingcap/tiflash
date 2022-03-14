@@ -15,6 +15,7 @@ protected:
     void SetUp() override
     {
         DB::tests::FunctionTest::SetUp();
+        DB::registerAggregateFunctions();
     }
 
     template <typename T>

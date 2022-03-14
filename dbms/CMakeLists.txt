@@ -185,6 +185,7 @@ target_link_libraries (clickhouse_common_io
     cpptoml
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
+target_include_directories (clickhouse_common_io BEFORE PUBLIC ${kvproto_SOURCE_DIR} ${tipb_SOURCE_DIR} ${Protobuf_INCLUDE_DIR} ${gRPC_INCLUDE_DIRS})
 
 target_link_libraries (dbms
     clickhouse_parsers
@@ -263,6 +264,11 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro(grep_bench_sources BASE_DIR DST_VAR)
+        # Cold match files that are not in tests/ directories
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
@@ -279,6 +285,23 @@ if (ENABLE_TESTS)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
+
+    grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
+    add_executable(bench_dbms EXCLUDE_FROM_ALL
+        ${dbms_bench_sources}
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        )
+    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+
+    target_link_libraries(bench_dbms gtest dbms test_utils benchmark clickhouse_functions)
+    if (ENABLE_TIFLASH_DTWORKLOAD)
+        target_link_libraries(bench_dbms dt-workload-lib)
+    endif ()
+
+    add_check(bench_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")

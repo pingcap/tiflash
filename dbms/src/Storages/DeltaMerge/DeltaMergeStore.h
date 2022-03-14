@@ -276,11 +276,13 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    TableID table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS);
+                    const Settings & settings_ = EMPTY_SETTINGS,
+                    const TableID physical_table_id = 0);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -325,7 +327,8 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
-                              const SegmentIdSet & read_segments = {});
+                              const SegmentIdSet & read_segments = {},
+                              size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows with MVCC filtering
     /// `sorted_ranges` should be already sorted and merged
@@ -337,7 +340,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet & read_segments = {});
+                           const SegmentIdSet & read_segments = {},
+                           size_t extra_table_id_index = InvalidColumnID);
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)
@@ -432,9 +436,11 @@ private:
     StoragePathPool path_pool;
     Settings settings;
     StoragePool storage_pool;
+    PageIdGenerator page_id_generator;
 
     String db_name;
     String table_name;
+    TableID physical_table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;

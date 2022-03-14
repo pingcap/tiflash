@@ -25,7 +25,7 @@ std::string extractTimeZoneNameFromFunctionArguments(const ColumnsWithTypeAndNam
     }
     else
     {
-        if (!arguments.size())
+        if (arguments.empty())
             return {};
 
         /// If time zone is attached to an argument of type DateTime.
@@ -42,7 +42,7 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
         return DateLUT::instance(extractTimeZoneNameFromColumn(*block.getByPosition(arguments[time_zone_arg_num]).column));
     else
     {
-        if (!arguments.size())
+        if (arguments.empty())
             return DateLUT::instance();
 
         /// If time zone is attached to an argument of type DateTime.
@@ -93,6 +93,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToYYYYMM>();
     factory.registerFunction<FunctionToYYYYMMDD>();
     factory.registerFunction<FunctionToYYYYMMDDhhmmss>();
+    factory.registerFunction<FunctionToDayName>();
+    factory.registerFunction<FunctionToMonthName>();
 
     factory.registerFunction<FunctionAddSeconds>();
     factory.registerFunction<FunctionAddMinutes>();
@@ -119,6 +121,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBDateDiff>();
 
     factory.registerFunction<FunctionToTimeZone>();
+    factory.registerFunction<FunctionToLastDay>();
 }
 
 } // namespace DB

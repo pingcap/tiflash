@@ -143,6 +143,11 @@ public:
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        cnt += processor.getMaxThreads();
+    }
+
 protected:
     void finalize()
     {

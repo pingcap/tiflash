@@ -98,6 +98,7 @@ public:
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
     Int64 waitRegionReadyTimeout() const;
+    uint64_t readIndexWorkerTick() const;
 
 private:
     Context & context;
@@ -124,6 +125,7 @@ private:
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
     std::atomic_uint64_t wait_index_timeout_ms;
+    std::atomic_uint64_t read_index_worker_tick_ms;
     std::atomic_int64_t wait_region_ready_timeout_sec;
 };
 

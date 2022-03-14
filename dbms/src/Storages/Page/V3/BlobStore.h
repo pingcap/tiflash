@@ -19,10 +19,9 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-class CollapsingPageDirectory;
-using PageIdAndVersionedEntries = std::vector<std::pair<PageId, VersionedEntries>>;
+using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersionType, PageEntryV3>>;
 
-class BlobStore : public Allocator<false>
+class BlobStore : private Allocator<false>
 {
 public:
     struct Config
@@ -116,9 +115,7 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(Poco::Logger * log_, BlobStore::Config config);
-
-        void restore(const CollapsingPageDirectory & entries);
+        BlobStats(LogWithPrefixPtr log_, BlobStore::Config config);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
@@ -146,8 +143,6 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
 
-        BlobFileId chooseNewStat();
-
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
@@ -159,18 +154,22 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
-        Poco::Logger * log;
+        void restoreByEntry(const PageEntryV3 & entry);
+        void restore();
+        friend class PageDirectoryFactory;
+
+#ifndef DBMS_PUBLIC_GTEST
+    private:
+#endif
+        LogWithPrefixPtr log;
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
-        std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         mutable std::mutex lock_stats;
     };
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
-
-    void restore(const CollapsingPageDirectory & entries);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -191,11 +190,11 @@ public:
 
     struct FieldReadInfo
     {
-        PageId page_id;
+        PageIdV3Internal page_id;
         PageEntryV3 entry;
         std::vector<size_t> fields;
 
-        FieldReadInfo(PageId id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+        FieldReadInfo(PageIdV3Internal id_, PageEntryV3 entry_, std::vector<size_t> fields_)
             : page_id(id_)
             , entry(entry_)
             , fields(std::move(fields_))
@@ -227,6 +226,7 @@ private:
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
+    friend class PageDirectoryFactory;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -235,7 +235,7 @@ private:
     String path{};
     Config config;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 
     BlobStats blob_stats;
 

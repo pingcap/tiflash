@@ -2,7 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
@@ -21,7 +21,6 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
@@ -117,7 +116,7 @@ AnalysisResult analyzeExpressions(
     AnalysisResult res;
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
-    if (query_block.selection && query_block.source->tp() != tipb::ExecType::TypeTableScan)
+    if (query_block.selection && !query_block.isTableScanSource())
     {
         std::vector<const tipb::Expr *> where_conditions;
         for (const auto & c : query_block.selection->selection().conditions())
@@ -288,20 +287,20 @@ ExpressionActionsPtr generateProjectExpressionActions(
     return project;
 }
 
-void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (!ts.has_table_id())
+    bool has_region_to_read = false;
+    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
-        // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
+        const auto & table_regions_info = dagContext().getTableRegionsInfoByTableID(physical_table_id);
+        if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
+        {
+            has_region_to_read = true;
+            break;
+        }
     }
-    if (dagContext().getRegionsForLocalRead().empty() && dagContext().getRegionsForRemoteRead().empty())
-    {
-        throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
-    }
-    if (ts.next_read_engine() != tipb::EngineType::Local)
-        throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
-
+    if (!has_region_to_read)
+        throw TiFlashException(fmt::format("Dag Request does not have region to read for table: {}", table_scan.getLogicalTableID()), Errors::Coprocessor::BadRequest);
     // construct pushed down filter conditions.
     std::vector<const tipb::Expr *> conditions;
     if (query_block.selection)
@@ -310,19 +309,13 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
             conditions.push_back(&condition);
     }
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
 
-    // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
-    // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
-    // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
-    std::tie(std::ignore, table_drop_lock) = std::move(storage_interpreter.table_structure_lock).release();
 
-    auto region_retry = std::move(storage_interpreter.region_retry);
-    auto dag_req = std::move(storage_interpreter.dag_request);
-    auto schema = std::move(storage_interpreter.dag_schema);
+    auto remote_requests = std::move(storage_interpreter.remote_requests);
     auto null_stream_if_empty = std::move(storage_interpreter.null_stream_if_empty);
 
     // It is impossible to have no joined stream.
@@ -331,23 +324,8 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
     size_t remote_read_streams_start_index = pipeline.streams.size();
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
-    if (!region_retry.empty())
-    {
-#ifndef NDEBUG
-        if (unlikely(!dag_req.has_value() || !schema.has_value()))
-            throw TiFlashException(
-                "Try to read from remote but can not build DAG request. Should not happen!",
-                Errors::Coprocessor::Internal);
-#endif
-        std::vector<pingcap::coprocessor::KeyRange> ranges;
-        for (auto & info : region_retry)
-        {
-            for (const auto & range : info.get().key_ranges)
-                ranges.emplace_back(*range.first, *range.second);
-        }
-        sort(ranges.begin(), ranges.end());
-        executeRemoteQueryImpl(pipeline, ranges, *dag_req, *schema);
-    }
+    if (!remote_requests.empty())
+        executeRemoteQueryImpl(pipeline, remote_requests);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
@@ -360,7 +338,15 @@ void DAGQueryBlockInterpreter::handleTableScan(const tipb::TableScan & ts, DAGPi
         remote_read_streams_start_index = 1;
     }
 
-    pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
+    /// Theoretically we could move addTableLock to DAGStorageInterpreter, but we don't wants to the table to be dropped
+    /// during the lifetime of this query, and sometimes if there is no local region, we will use the RemoteBlockInputStream
+    /// or even the null_stream to hold the lock, so I would like too keep the addTableLock in DAGQueryBlockInterpreter
+    pipeline.transform([&](auto & stream) {
+        // todo do not need to hold all locks in each stream, if the stream is reading from table a
+        //  it only needs to hold the lock of table a
+        for (auto & lock : storage_interpreter.drop_locks)
+            stream->addTableLock(lock);
+    });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
@@ -1013,23 +999,51 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
     pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
+bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
+{
+    if (left.size() != right.size())
+        return false;
+    for (size_t i = 0; i < left.size(); i++)
+    {
+        const auto & left_ci = left[i];
+        const auto & right_ci = right[i];
+        if (left_ci.second.tp != right_ci.second.tp)
+            return false;
+        if (left_ci.second.flag != right_ci.second.flag)
+            return false;
+    }
+    return true;
+}
+
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     DAGPipeline & pipeline,
-    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-    ::tipb::DAGRequest & dag_req,
-    const DAGSchema & schema)
+    std::vector<RemoteRequest> & remote_requests)
 {
-    pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-    dag_req.SerializeToString(&(req->data));
-    req->tp = pingcap::coprocessor::ReqType::DAG;
-    req->start_ts = context.getSettingsRef().read_tso;
-    req->schema_version = context.getSettingsRef().schema_version;
-    bool has_enforce_encode_type = dag_req.has_force_encode_type() && dag_req.force_encode_type();
-
+    assert(!remote_requests.empty());
+    DAGSchema & schema = remote_requests[0].schema;
+#ifndef NDEBUG
+    for (size_t i = 1; i < remote_requests.size(); i++)
+    {
+        if (!schemaMatch(schema, remote_requests[i].schema))
+            throw Exception("Schema mismatch between different partitions for partition table");
+    }
+#endif
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+    std::vector<pingcap::coprocessor::copTask> all_tasks;
+    for (const auto & remote_request : remote_requests)
+    {
+        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_request.dag_request.SerializeToString(&(req->data));
+        req->tp = pingcap::coprocessor::ReqType::DAG;
+        req->start_ts = context.getSettingsRef().read_tso;
+        req->schema_version = context.getSettingsRef().schema_version;
+
+        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+    }
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
@@ -1081,8 +1095,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
-    dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
+    auto & last_step = dag_analyzer.initAndGetLastStep(chain);
     std::vector<NameAndTypePair> output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
@@ -1132,10 +1145,17 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         handleProjection(pipeline, query_block.source->projection());
         recordProfileStreams(pipeline, query_block.source_name);
     }
+    else if (query_block.isTableScanSource())
+    {
+        TiDBTableScan table_scan(query_block.source, dagContext());
+        handleTableScan(table_scan, pipeline);
+        dagContext().table_scan_executor_id = query_block.source_name;
+    }
     else
     {
-        handleTableScan(query_block.source->tbl_scan(), pipeline);
-        dagContext().table_scan_executor_id = query_block.source_name;
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Unsupported source node: " + query_block.source_name,
+            Errors::Coprocessor::BadRequest);
     }
 
     auto res = analyzeExpressions(
@@ -1158,7 +1178,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
-    dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
+    dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
 
     if (!res.window_op_list.empty())
     {
@@ -1302,7 +1322,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext());
-        stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), taskLogger());
+        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), taskLogger());
     });
 }
 

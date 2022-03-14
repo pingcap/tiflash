@@ -53,6 +53,13 @@ public:
     {
     }
 
+    ~MPMCQueue()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
+    }
+
     /// Block util:
     /// 1. Pop succeeds with a valid T: return true.
     /// 2. The queue is cancelled or finished: return false.
@@ -121,14 +128,30 @@ public:
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
-    void finish()
+    /// Return true if the previous status is NORMAL.
+    bool finish()
     {
         std::unique_lock lock(mu);
         if (isNormal())
         {
             status = Status::FINISHED;
             notifyAll();
+            return true;
         }
+        else
+            return false;
+    }
+
+    bool isNextPopNonBlocking() const
+    {
+        std::unique_lock lock(mu);
+        return read_pos < write_pos || !isNormal();
+    }
+
+    bool isNextPushNonBlocking() const
+    {
+        std::unique_lock lock(mu);
+        return write_pos - read_pos < capacity || !isNormal();
     }
 
     MPMCQueueStatus getStatus() const

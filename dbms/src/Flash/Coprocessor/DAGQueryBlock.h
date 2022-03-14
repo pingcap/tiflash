@@ -62,6 +62,7 @@ public:
     std::vector<Int32> output_offsets;
 
     bool isRootQueryBlock() const { return id == 1; };
+    bool isTableScanSource() const { return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan; }
 };
 
 } // namespace DB

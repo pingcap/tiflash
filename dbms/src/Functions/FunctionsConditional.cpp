@@ -180,15 +180,11 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
         throw Exception{"Invalid number of arguments for function " + getName(),
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
-    /// Conditions must be UInt8, Nullable(UInt8) or Null. If one of conditions is Nullable, the result is also Nullable.
-    bool have_nullable_condition = false;
-
     for_conditions([&](const DataTypePtr & arg) {
         const IDataType * nested_type;
+        /// Conditions must be UInt8, Nullable(UInt8) or Null.
         if (arg->isNullable())
         {
-            have_nullable_condition = true;
-
             if (arg->onlyNull())
                 return;
 
@@ -214,11 +210,7 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
         types_of_branches.emplace_back(arg);
     });
 
-    DataTypePtr common_type_of_branches = getLeastSupertype(types_of_branches);
-
-    return have_nullable_condition
-        ? makeNullable(common_type_of_branches)
-        : common_type_of_branches;
+    return getLeastSupertype(types_of_branches);
 }
 
 
@@ -239,7 +231,7 @@ String FunctionCaseWithExpression::getName() const
 
 DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
@@ -271,7 +263,7 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
 
 void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 

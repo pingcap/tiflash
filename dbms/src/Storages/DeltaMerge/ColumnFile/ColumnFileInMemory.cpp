@@ -44,7 +44,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
 ColumnFileReaderPtr
 ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnInMemoryFileReader>(*this, col_defs);
+    return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
 bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
@@ -62,8 +62,8 @@ bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t 
 
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
-        auto & col = data.getByPosition(i).column;
-        auto & cache_col = *cache->block.getByPosition(i).column;
+        const auto & col = data.getByPosition(i).column;
+        const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
     }
@@ -85,19 +85,19 @@ Block ColumnFileInMemory::readDataForFlush() const
 }
 
 
-ColumnPtr ColumnInMemoryFileReader::getPKColumn()
+ColumnPtr ColumnFileInMemoryReader::getPKColumn()
 {
     memory_file.fillColumns(*col_defs, 1, cols_data_cache);
     return cols_data_cache[0];
 }
 
-ColumnPtr ColumnInMemoryFileReader::getVersionColumn()
+ColumnPtr ColumnFileInMemoryReader::getVersionColumn()
 {
     memory_file.fillColumns(*col_defs, 2, cols_data_cache);
     return cols_data_cache[1];
 }
 
-size_t ColumnInMemoryFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileInMemoryReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     memory_file.fillColumns(*col_defs, output_cols.size(), cols_data_cache);
 
@@ -105,7 +105,7 @@ size_t ColumnInMemoryFileReader::readRows(MutableColumns & output_cols, size_t r
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
 }
 
-Block ColumnInMemoryFileReader::readNextBlock()
+Block ColumnFileInMemoryReader::readNextBlock()
 {
     if (read_done)
         return {};
@@ -118,10 +118,10 @@ Block ColumnInMemoryFileReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
-ColumnFileReaderPtr ColumnInMemoryFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.
-    return std::make_shared<ColumnInMemoryFileReader>(memory_file, new_col_defs, cols_data_cache);
+    return std::make_shared<ColumnFileInMemoryReader>(memory_file, new_col_defs, cols_data_cache);
 }
 
 } // namespace DM

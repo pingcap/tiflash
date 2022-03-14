@@ -1,4 +1,5 @@
 #include <Common/DynamicThreadPool.h>
+#include <Common/TiFlashMetrics.h>
 
 namespace DB
 {
@@ -80,8 +81,16 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+void DynamicThreadPool::executeTask(TaskPtr & task)
+{
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_thdpool, type_max_active_threads_of_thdpool);
+    task->execute();
+    task.reset();
+}
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
     Queue * queue = fixed_queues[index].get();
     while (true)
     {
@@ -89,7 +98,7 @@ void DynamicThreadPool::fixedWork(size_t index)
         queue->pop(task);
         if (!task)
             break;
-        task->execute();
+        executeTask(task);
 
         idle_fixed_queues.push(queue);
     }
@@ -97,7 +106,8 @@ void DynamicThreadPool::fixedWork(size_t index)
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    initial_task->execute();
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
+    executeTask(initial_task);
 
     DynamicNode node;
     while (true)
@@ -114,8 +124,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
-        node.task->execute();
-        node.task.reset();
+        executeTask(node.task);
     }
     alive_dynamic_threads.fetch_sub(1);
 }

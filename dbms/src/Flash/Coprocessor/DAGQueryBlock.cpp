@@ -22,7 +22,8 @@ class Context;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
+        || root->tp() == tipb::ExecType::TypePartitionTableScan;
 }
 
 const static String SOURCE_NAME("source");
@@ -165,6 +166,10 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypePartitionTableScan)
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
     }
 }
 

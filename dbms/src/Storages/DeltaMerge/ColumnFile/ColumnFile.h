@@ -75,10 +75,6 @@ public:
 public:
     /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
     UInt64 getId() const { return id; }
-    /// This column file is already saved to disk or not. Only saved packs can be recovered after reboot.
-    /// "saved" can only be true, after the content data and the metadata are all written to disk.
-    bool isSaved() const { return saved; }
-    void setSaved() { saved = true; }
 
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; };
@@ -110,12 +106,6 @@ public:
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
-
-    /// Put the data's page id into the corresponding WriteBatch.
-    /// The actual remove will be done later.
-    virtual void removeData(WriteBatches &) const {};
-
-    virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 
     virtual String toString() const = 0;
 };
@@ -152,6 +142,7 @@ size_t copyColumnsData(
 
 
 /// Debugging string
-String columnFilesToString(const ColumnFiles & column_files);
+template <typename T>
+String columnFilesToString(const T & column_files);
 } // namespace DM
 } // namespace DB

@@ -1185,10 +1185,4 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
 
     return ::grpc::Status::OK;
 }
-
-void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
-{
-    reinterpret_cast<diagnosticspb::ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
-}
-
 } // namespace DB

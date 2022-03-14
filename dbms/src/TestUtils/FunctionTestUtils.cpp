@@ -84,7 +84,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
+ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
 {
     auto & factory = FunctionFactory::instance();
 
@@ -102,7 +102,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return block.getByPosition(columns.size());
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
 {
     auto & factory = FunctionFactory::instance();
     Block block(columns);
@@ -118,6 +118,25 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return block.getByPosition(columns.size());
 }
 
+DataTypePtr getReturnTypeForFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator)
+{
+    auto & factory = FunctionFactory::instance();
+
+    Block block(columns);
+    ColumnNumbers cns;
+    for (size_t i = 0; i < columns.size(); ++i)
+        cns.push_back(i);
+
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(columns, collator);
+    return func->getReturnType();
+}
 ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name)
 {
     DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());

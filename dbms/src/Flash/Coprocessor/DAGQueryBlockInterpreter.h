@@ -3,6 +3,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
@@ -45,7 +46,7 @@ public:
 private:
 #endif
     void executeImpl(DAGPipeline & pipeline);
-    void handleTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void executeCastAfterTableScan(const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
@@ -91,9 +92,7 @@ private:
 
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
-        const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-        ::tipb::DAGRequest & dag_req,
-        const DAGSchema & schema);
+        std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
     const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
@@ -107,8 +106,6 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 

@@ -1,6 +1,7 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/ReadIndexStressTest.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
 #include <Debug/dbgFuncMisc.h>
@@ -48,6 +49,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("rename_column_in_tidb_table", MockTiDBTable::dbgFuncRenameColumnInTiDBTable);
     regSchemalessFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
     regSchemalessFunc("truncate_tidb_table", MockTiDBTable::dbgFuncTruncateTiDBTable);
+    regSchemalessFunc("create_tidb_tables", MockTiDBTable::dbgFuncCreateTiDBTables);
 
     regSchemalessFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 
@@ -104,6 +106,8 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
     regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
+
+    regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

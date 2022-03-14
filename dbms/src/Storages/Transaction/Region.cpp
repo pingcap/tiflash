@@ -317,7 +317,6 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
         break;
     default:
         throw Exception(fmt::format("unsupported admin command type {}", raft_cmdpb::AdminCmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
-        break;
     }
 
     switch (type)
@@ -474,12 +473,6 @@ ImutRegionRangePtr Region::getRange() const
     return meta.getRange();
 }
 
-ReadIndexResult::ReadIndexResult(RegionException::RegionReadStatus status_, UInt64 read_index_, kvrpcpb::LockInfo * lock_info_)
-    : status(status_)
-    , read_index(read_index_)
-    , lock_info(lock_info_)
-{}
-
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
 {
     auto meta_snap = region.dumpRegionMetaSnapshot();
@@ -495,8 +488,9 @@ kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 st
         {
             request.set_start_ts(start_ts);
             auto * key_range = request.add_ranges();
-            key_range->set_start_key(*meta_snap.range->rawKeys().first);
-            key_range->set_end_key(*meta_snap.range->rawKeys().second);
+            // use original tikv key
+            key_range->set_start_key(meta_snap.range->comparableKeys().first.key);
+            key_range->set_end_key(meta_snap.range->comparableKeys().second.key);
         }
     }
     return request;
@@ -507,7 +501,7 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running)
 {
     if (proxy_helper != nullptr)
     {
@@ -518,8 +512,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTCon
                           "{} need to wait learner index {}",
                           toString(),
                           index);
-            auto timeout_ms = tmt.waitIndexTimeout();
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+            auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
             {
@@ -538,11 +531,10 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTCon
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
+                LOG_FMT_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
                 return {wait_idx_res, elapsed_secs};
             }
             }
-            throw Exception("Unknown result of wait index:" + DB::toString(static_cast<int>(wait_idx_res)));
         }
     }
     return {WaitIndexResult::Finished, 0};
@@ -667,10 +659,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             }
             break;
         }
-        default:
-            throw Exception(
-                std::string(__PRETTY_FUNCTION__) + ": unsupported command type " + std::to_string(static_cast<uint8_t>(type)),
-                ErrorCodes::LOGICAL_ERROR);
         }
     };
 

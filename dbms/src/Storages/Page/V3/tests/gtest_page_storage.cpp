@@ -178,28 +178,25 @@ TEST_F(PageStorageTest, MultipleWriteRead)
     size_t page_id_max = 100;
     for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
     {
-        DB::MemHolder holder;
+        std::mt19937 size_gen;
+        size_gen.seed(time(nullptr));
+        std::uniform_int_distribution<> dist(0, 3000);
 
-        auto buff = [page_id] {
-            std::mt19937 size_gen;
-            size_gen.seed(time(nullptr));
-            std::uniform_int_distribution<> dist(0, 3000);
+        const size_t buff_sz = 2 * DB::MB + dist(size_gen);
+        char * buff = static_cast<char *>(malloc(buff_sz));
+        if (buff == nullptr)
+        {
+            throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
+        }
 
-            const size_t buff_sz = 2 * DB::MB + dist(size_gen);
-            char * buff = static_cast<char *>(malloc(buff_sz));
-            if (buff == nullptr)
-            {
-                throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
-            }
+        const char buff_ch = page_id % 0xFF;
+        memset(buff, buff_ch, buff_sz);
+        DB::MemHolder holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
 
-            const char buff_ch = page_id % 0xFF;
-            memset(buff, buff_ch, buff_sz);
-            DB::createMemHolder(buff, [&](char * p) { free(p); });
-            return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
-        }();
+        auto read_buff = std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
 
         DB::WriteBatch wb;
-        wb.putPage(page_id, 0, buff, buff->buffer().size());
+        wb.putPage(page_id, 0, read_buff, read_buff->buffer().size());
         page_storage->write(std::move(wb));
     }
 
@@ -345,6 +342,39 @@ try
     }
 }
 CATCH
+
+TEST_F(PageStorageTest, IngestFile)
+{
+    WriteBatch wb;
+    {
+        wb.putExternal(100, 0);
+        wb.putRefPage(101, 100);
+        wb.putRefPage(102, 100);
+        wb.delPage(100);
+        page_storage->write(std::move(wb));
+    }
+
+    auto snapshot = page_storage->getSnapshot();
+
+    EXPECT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 100, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 101, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 102, snapshot));
+
+    size_t times_remover_called = 0;
+    ExternalPageCallbacks callbacks;
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+        return {};
+    };
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+        times_remover_called += 1;
+        EXPECT_EQ(living_page_ids.size(), 1);
+        EXPECT_GT(living_page_ids.count(100), 0);
+    };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 1);
+}
 
 // TBD : enable after wal apply and restore
 TEST_F(PageStorageTest, DISABLED_IgnoreIncompleteWriteBatch1)
@@ -730,6 +760,128 @@ try
     ASSERT_FALSE(page_storage->getEntry(8).isValid());
     ASSERT_THROW(page_storage->read(8), DB::Exception);
     // page_storage->read(8);
+}
+CATCH
+
+TEST_F(PageStorageTest, WriteReadGcExternalPage)
+try
+{
+    WriteBatch batch;
+    {
+        // External 0, 1024
+        // Ref 1->0
+        batch.putExternal(0, 0);
+        batch.putRefPage(1, 0);
+        batch.putExternal(1024, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    size_t times_remover_called = 0;
+
+    ExternalPageCallbacks callbacks;
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+        return {};
+    };
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+        times_remover_called += 1;
+        // 0, 1024 are still alive
+        EXPECT_EQ(living_page_ids.size(), 2);
+        EXPECT_GT(living_page_ids.count(0), 0);
+        EXPECT_GT(living_page_ids.count(1024), 0);
+    };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    {
+        SCOPED_TRACE("fist gc");
+        page_storage->gc();
+        EXPECT_EQ(times_remover_called, 1);
+    }
+
+    auto snapshot = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1); // ref 2 -> 1 ==> 2 -> 0
+        batch.delPage(1); // free ref 1 -> 0
+        batch.delPage(1024); // free ext page 1024
+        // External: 0, 1024(deleted)
+        // Ref: 2->0, 1->0(deleted)
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        // With `snapshot` is being held, nothing is need to be deleted
+        SCOPED_TRACE("gc with snapshot");
+        page_storage->gc();
+        EXPECT_EQ(times_remover_called, 2);
+    }
+
+    {
+        auto ori_id_0 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 0, nullptr);
+        ASSERT_EQ(ori_id_0, 0);
+        auto ori_id_2 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 2, nullptr);
+        ASSERT_EQ(ori_id_2, 0);
+        ASSERT_EQ(1024, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, snapshot));
+        ASSERT_EQ(0, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, snapshot));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, nullptr));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, nullptr));
+    }
+
+    /// After `snapshot` released, 1024 should be removed from `living`
+    snapshot.reset();
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+        times_remover_called += 1;
+        EXPECT_EQ(living_page_ids.size(), 1);
+        EXPECT_GT(living_page_ids.count(0), 0);
+    };
+    page_storage->clearExternalPagesCallbacks();
+    page_storage->registerExternalPagesCallbacks(callbacks);
+    {
+        SCOPED_TRACE("gc with snapshot released");
+        page_storage->gc();
+        EXPECT_EQ(times_remover_called, 3);
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, GcReuseSpaceThenRestore)
+try
+{
+    DB::UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        SCOPED_TRACE("fist gc");
+        page_storage->gc();
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage.reset();
+    page_storage = reopenWithConfig(config);
 }
 CATCH
 

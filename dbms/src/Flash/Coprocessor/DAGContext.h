@@ -13,6 +13,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -199,14 +200,16 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
-    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
+    const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
+
+    bool containsRegionsInfoForTable(Int64 table_id) const;
 
     const BlockIO & getBlockIO() const
     {
         return io;
     }
 
+    int getNewThreadCountOfExchangeReceiver() const;
     UInt64 getFlags() const
     {
         return flags;
@@ -228,6 +231,27 @@ public:
         return (flags & f);
     }
 
+    UInt64 getSQLMode() const
+    {
+        return sql_mode;
+    }
+    void setSQLMode(UInt64 f)
+    {
+        sql_mode = f;
+    }
+    void addSQLMode(UInt64 f)
+    {
+        sql_mode |= f;
+    }
+    void delSQLMode(UInt64 f)
+    {
+        sql_mode &= (~f);
+    }
+    bool hasSQLMode(UInt64 f) const
+    {
+        return sql_mode & f;
+    }
+
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
@@ -245,8 +269,7 @@ public:
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
     MPPTunnelSetPtr tunnel_set;
-    RegionInfoMap regions_for_local_read;
-    RegionInfoList regions_for_remote_read;
+    TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
@@ -278,6 +301,7 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    int new_thread_count_of_exchange_receiver = 0;
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
