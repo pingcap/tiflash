@@ -150,7 +150,6 @@ struct ContextShared
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
     DM::GlobalStoragePoolPtr global_storage_pool;
-
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1563,7 +1562,7 @@ ReadLimiterPtr Context::getReadLimiter() const
 
 static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
 {
-    // check whether v3 is already enabled
+    // Check whether v3 is already enabled
     bool v3_manifests_exists = false;
     for (const auto & path : path_pool.listGlobalPagePaths())
     {
@@ -1576,11 +1575,12 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on
     if (v3_manifests_exists)
         return true;
 
-    // check whether v3 on new node is enabled in the config, if not, no need to check anymore
+    // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
     if (!enable_v3_latest_on_new_node)
         return false;
 
-    // check whether there are any files in kvstore path, if exists, then this is not a new node
+    // Check whether there are any files in kvstore path, if exists, then this is not a new node.
+    // If it's a new node, then we enable v3. Otherwise, we use v2.
     bool is_new_node = true;
     for (const auto & path : path_pool.listKVStorePaths())
     {

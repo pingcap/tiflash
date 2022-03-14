@@ -58,19 +58,22 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
     log_storage(PageStorage::create("__global__.log",
                                     path_pool.getPSDiskDelegatorGlobalMulti("log"),
                                     extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider()))
+                                    global_ctx.getFileProvider(),
+                                    true))
     ,
     // The iops in data_storage is low, only use the first disk for storing data
     data_storage(PageStorage::create("__global__.data",
                                      path_pool.getPSDiskDelegatorGlobalMulti("data"),
                                      extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider()))
+                                     global_ctx.getFileProvider(),
+                                     true))
     ,
     // The iops in meta_storage is relatively high, use multi-disks if possible
     meta_storage(PageStorage::create("__global__.meta",
                                      path_pool.getPSDiskDelegatorGlobalMulti("meta"),
                                      extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider()))
+                                     global_ctx.getFileProvider(),
+                                     true))
     , global_context(global_ctx)
 {}
 

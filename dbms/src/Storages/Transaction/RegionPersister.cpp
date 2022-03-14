@@ -150,7 +150,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     {
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
-        // If the global StoragePool is initialized, then use v3 format
+        // If the GlobalStoragePool is initialized, then use v3 format
         bool use_v3_format = global_context.getGlobalStoragePool() != nullptr;
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
         auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
