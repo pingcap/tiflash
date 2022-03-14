@@ -8,7 +8,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & expression_,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, NAME))
+    : log(getMPPTaskLog(log_, name))
 {
     children.push_back(input);
 
@@ -26,7 +26,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     }
     if (!has_join_probe_action)
     {
-        throw Exception("join probe expression should have join action", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("join probe expression should have join probe action", ErrorCodes::LOGICAL_ERROR);
     }
     expression = expression_;
 }

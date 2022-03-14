@@ -7,13 +7,18 @@ namespace DB
 class ExpressionActions;
 
 /** Executes a certain expression over the block.
-  * Expression should have join action.
+  * Basically the same as ExpressionBlockInputStream,
+  * but requires that there must be a join probe action in the Expression.
+  *
+  * The join probe action is different from the general expression
+  * and needs to be executed after join hash map building.
+  * We should separate it from the ExpressionBlockInputStream.
   */
 class HashJoinProbeBlockInputStream : public IProfilingBlockInputStream
 {
 private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
-    static constexpr auto NAME = "HashJoinProbe";
+    static constexpr auto name = "HashJoinProbe";
 
 public:
     HashJoinProbeBlockInputStream(
@@ -21,7 +26,7 @@ public:
         const ExpressionActionsPtr & expression_,
         const LogWithPrefixPtr & log_);
 
-    String getName() const override { return NAME; }
+    String getName() const override { return name; }
     Block getTotals() override;
     Block getHeader() const override;
 
