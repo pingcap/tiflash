@@ -53,8 +53,10 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
-StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
+    : ns_id(ns_id_)
+    ,
+    // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create(name + ".log",
                                     path_pool.getPSDiskDelegatorMulti("log"),
                                     extractConfig(settings, StorageType::Log),
@@ -71,6 +73,9 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                                      path_pool.getPSDiskDelegatorMulti("meta"),
                                      extractConfig(settings, StorageType::Meta),
                                      global_ctx.getFileProvider()))
+    , log_storage_reader(ns_id, log_storage, nullptr)
+    , data_storage_reader(ns_id, data_storage, nullptr)
+    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
 {}
 
@@ -95,13 +100,20 @@ StoragePool::StoragePool(const String & name, const PathPool & path_pool, const 
                                      extractConfig(settings, StorageType::Meta),
                                      global_ctx.getFileProvider(),
                                      true))
+    , log_storage_reader(ns_id, log_storage, nullptr)
+    , data_storage_reader(ns_id, data_storage, nullptr)
+    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
 {}
 
-StoragePool::StoragePool(PageStoragePtr log_storage_, PageStoragePtr data_storage_, PageStoragePtr meta_storage_, const Context & global_ctx)
-    : log_storage(std::move(log_storage_))
+StoragePool::StoragePool(NamespaceId ns_id_, PageStoragePtr log_storage_, PageStoragePtr data_storage_, PageStoragePtr meta_storage_, const Context & global_ctx)
+    : ns_id(ns_id_)
+    , log_storage(std::move(log_storage_))
     , data_storage(std::move(data_storage_))
     , meta_storage(std::move(meta_storage_))
+    , log_storage_reader(ns_id, log_storage, nullptr)
+    , data_storage_reader(ns_id, data_storage, nullptr)
+    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
     , initialized(true)
 {}

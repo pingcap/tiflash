@@ -60,12 +60,12 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), page_id_generator->newMetaPageId(), 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -76,7 +76,6 @@ protected:
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *storage_path_pool,
                                                   *storage_pool,
-                                                  *page_id_generator,
                                                   0,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,

@@ -65,7 +65,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>("test.t1", table_id, *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -106,6 +106,7 @@ protected:
     // the delta we are going to test
     DeltaValueSpacePtr delta;
 
+    static constexpr TableID table_id = 100;
     static constexpr PageId delta_id = 1;
     static constexpr size_t num_rows_write_per_batch = 100;
 };
@@ -360,8 +361,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageStorage::SnapshotPtr log_storage_snap = dmContext().storage_pool.log()->getSnapshot();
-        PageReader reader(dmContext().storage_pool.log(), std::move(log_storage_snap), dmContext().getReadLimiter());
+        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         ASSERT_EQ(compaction_task->getCompactionSourceLevel(), 0);
         // There should be two compaction sub_tasks.
@@ -409,8 +409,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageStorage::SnapshotPtr log_storage_snap = dmContext().storage_pool.log()->getSnapshot();
-                PageReader reader(dmContext().storage_pool.log(), std::move(log_storage_snap), dmContext().getReadLimiter());
+                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;

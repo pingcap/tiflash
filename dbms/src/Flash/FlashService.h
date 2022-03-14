@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -13,13 +14,16 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 #include <kvproto/tikvpb.grpc.pb.h>
+
 #pragma GCC diagnostic pop
 
 namespace DB
 {
 class IServer;
+class CallExecPool;
+class EstablishCallData;
 
-class FlashService final : public tikvpb::Tikv::Service
+class FlashService : public tikvpb::Tikv::Service
     , public std::enable_shared_from_this<FlashService>
     , private boost::noncopyable
 {
@@ -48,13 +52,17 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
-                                          const ::mpp::EstablishMPPConnectionRequest * request,
-                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
+    ::grpc::Status EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
+
+    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
+    {
+        return EstablishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
+    }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
-private:
+
+protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     IServer & server;
@@ -63,6 +71,32 @@ private:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+};
+
+// a copy of WithAsyncMethod_EstablishMPPConnection, since we want both sync & async server, we need copy it and inherit from FlashService.
+class AsyncFlashService final : public FlashService
+{
+public:
+    // 48 is EstablishMPPConnection API ID of GRPC
+    // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
+    static constexpr int EstablishMPPConnectionApiID = 48;
+    explicit AsyncFlashService(IServer & server)
+        : FlashService(server)
+    {
+        ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);
+    }
+
+    // disable synchronous version of this method
+    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * /*context*/, const ::mpp::EstablishMPPConnectionRequest * /*request*/, ::grpc::ServerWriter<::mpp::MPPDataPacket> * /*writer*/) override
+    {
+        abort();
+        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+
+    void RequestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
+    {
+        ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
+    }
 };
 
 } // namespace DB

@@ -73,7 +73,7 @@ struct LocalExchangePacketReader : public ExchangePacketReader
     {
         if (tunnel)
         {
-            // In case that ExchangeReceiver throw error before finish reading from mpptunnel
+            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
             tunnel->consumerFinish("Receiver closed");
         }
     }

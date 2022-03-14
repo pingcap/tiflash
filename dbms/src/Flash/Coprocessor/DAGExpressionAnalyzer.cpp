@@ -386,12 +386,11 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     chain.finalize();
     chain.clear();
 
-    initChain(chain, getCurrentInputColumns());
-    const auto & actions = chain.getLastActions();
-    appendCastAfterAgg(actions, agg);
+    auto & after_agg_step = initAndGetLastStep(chain);
+    appendCastAfterAgg(after_agg_step.actions, agg);
     // after appendCastAfterAgg, current input columns has been modified.
     for (const auto & column : getCurrentInputColumns())
-        step.required_output.push_back(column.name);
+        after_agg_step.required_output.push_back(column.name);
 
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
