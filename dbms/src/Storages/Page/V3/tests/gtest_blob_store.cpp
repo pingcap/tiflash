@@ -38,9 +38,7 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
     ASSERT_TRUE(stats_copy.empty());
 
     EXPECT_EQ(stats.roll_id, 1);
-    auto next_file_id = stats.chooseNewStat();
-    EXPECT_EQ(next_file_id, 1);
-    EXPECT_NO_THROW(stats.createStat(next_file_id, stats.lock()));
+    EXPECT_NO_THROW(stats.createStat(stats.roll_id, stats.lock()));
 }
 
 TEST_F(BlobStoreStatsTest, Restore)
@@ -91,19 +89,9 @@ try
     // a new file bigger than restored `roll_id`
     EXPECT_ANY_THROW({ stats.createStat(14, stats.lock()); });
 
-    for (BlobFileId i = 1; i <= 20; ++i)
-    {
-        if (i == file_id1 || i == file_id2)
-        {
-            EXPECT_ANY_THROW({ stats.createStat(i, stats.lock()); });
-        }
-        else
-        {
-            auto new_file_id = stats.chooseNewStat();
-            EXPECT_EQ(new_file_id, i);
-            EXPECT_NO_THROW({ stats.createStat(new_file_id, stats.lock()); });
-        }
-    }
+    EXPECT_ANY_THROW({ stats.createStat(file_id1, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(file_id2, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(stats.roll_id + 1, stats.lock()); });
 }
 CATCH
 
@@ -125,13 +113,6 @@ TEST_F(BlobStoreStatsTest, testStats)
     stats.eraseStat(1, stats.lock());
     ASSERT_EQ(stats.stats_map.size(), 1);
     ASSERT_EQ(stats.roll_id, 3);
-    ASSERT_EQ(stats.old_ids.size(), 2);
-
-    auto old_it = stats.old_ids.begin();
-
-    ASSERT_EQ((*old_it++), 0);
-    ASSERT_EQ((*old_it++), 1);
-    ASSERT_EQ(old_it, stats.old_ids.end());
 }
 
 
@@ -245,11 +226,10 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100);
     ASSERT_EQ(offset, 100);
 
-    // Then choose stat , it should return the stat id 1
-    // cause in this time , stat which id is 1 have been earsed,
-    // and stat which id is 2 is full.
+    // Then choose stat , it should return the stat id 3
+    // Stat which id is 2 is full.
     std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
-    ASSERT_EQ(blob_file_id, 1);
+    ASSERT_EQ(blob_file_id, 3);
     ASSERT_FALSE(stat);
 }
 
