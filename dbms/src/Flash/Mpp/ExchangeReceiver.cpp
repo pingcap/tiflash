@@ -43,30 +43,12 @@ static constexpr Int32 MAX_RETRY_TIMES = 10;
 static constexpr Int32 BATCH_PACKET_COUNT = 16;
 
 template <typename RPCContext>
-struct AsyncRequestHandler : public UnaryCallback<bool>
+class AsyncRequestHandler : public UnaryCallback<bool>
 {
+public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
-
-    std::shared_ptr<RPCContext> rpc_context;
-    const Request * request; // won't be null
-    MPMCQueue<size_t> * notify_queue; // won't be null
-    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel; // won't be null
-
-    String req_info;
-    bool meet_error = false;
-    bool has_data = false;
-    String err_msg;
-    int retry_times = 0;
-    TimePoint start_waiting_retry_ts{Clock::duration::zero()};
-    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
-
-    std::shared_ptr<AsyncReader> reader;
-    MPPDataPacketPtrs packets;
-    size_t read_packet_index = 0;
-    Status finish_status = RPCContext::getStatusOK();
-    LogWithPrefixPtr log;
 
     AsyncRequestHandler(
         MPMCQueue<size_t> * queue,
@@ -86,11 +68,6 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
             packet = std::make_shared<MPPDataPacket>();
 
         start();
-    }
-
-    void notifyReactor()
-    {
-        notify_queue->push(request->source_index);
     }
 
     // execute will be called by RPC framework so it should be as light as possible.
@@ -182,6 +159,32 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
         return stage == AsyncRequestStage::FINISHED;
     }
 
+    bool waitingForRetry() const
+    {
+        return stage == AsyncRequestStage::WAIT_RETRY;
+    }
+
+    bool retry()
+    {
+        if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
+        {
+            ++retry_times;
+            start();
+            return true;
+        }
+        return false;
+    }
+
+    bool meetError() const { return meet_error; }
+    const String & getErrMsg() const { return err_msg; }
+    const LogWithPrefixPtr & getLog() const { return log; }
+
+private:
+    void notifyReactor()
+    {
+        notify_queue->push(request->source_index);
+    }
+
     MPPDataPacketPtr getErrorPacket() const
     {
         // only the last packet may has error, see execute().
@@ -193,11 +196,6 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
     bool retriable() const
     {
         return !has_data && retry_times + 1 < MAX_RETRY_TIMES;
-    }
-
-    bool waitingForRetry() const
-    {
-        return stage == AsyncRequestStage::WAIT_RETRY;
     }
 
     void setDone(String msg)
@@ -214,17 +212,6 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
     {
         stage = AsyncRequestStage::WAIT_MAKE_READER;
         rpc_context->makeAsyncReader(*request, reader, this);
-    }
-
-    bool retry()
-    {
-        if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
-        {
-            ++retry_times;
-            start();
-            return true;
-        }
-        return false;
     }
 
     void waitForRetryOrDone(String done_msg)
@@ -255,6 +242,25 @@ struct AsyncRequestHandler : public UnaryCallback<bool>
         }
         return true;
     }
+
+    std::shared_ptr<RPCContext> rpc_context;
+    const Request * request; // won't be null
+    MPMCQueue<size_t> * notify_queue; // won't be null
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel; // won't be null
+
+    String req_info;
+    bool meet_error = false;
+    bool has_data = false;
+    String err_msg;
+    int retry_times = 0;
+    TimePoint start_waiting_retry_ts{Clock::duration::zero()};
+    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
+
+    std::shared_ptr<AsyncReader> reader;
+    MPPDataPacketPtrs packets;
+    size_t read_packet_index = 0;
+    Status finish_status = RPCContext::getStatusOK();
+    LogWithPrefixPtr log;
 };
 } // namespace
 
@@ -308,6 +314,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
     }
 
+    // TODO: reduce this thread in the future.
     if (!async_requests.empty())
         thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] { reactor(async_requests); });
 }
@@ -343,7 +350,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
             if (handler.finished())
             {
                 --alive_async_connections;
-                connectionDone(handler.meet_error, handler.err_msg, handler.log);
+                connectionDone(handler.meetError(), handler.getErrMsg(), handler.getLog());
             }
             else if (handler.waitingForRetry())
             {
