@@ -205,11 +205,12 @@ void StoragePool::drop()
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
+    if (!owned_storage)
+        return false;
+
     {
         std::lock_guard<std::mutex> lock(mutex);
         // Just do gc for owned storage, otherwise the gc will be handled globally
-        if (!owned_storage)
-            return false;
 
         Timepoint now = Clock::now();
         if (now < (last_try_gc_time.load() + try_gc_period))
