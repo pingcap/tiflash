@@ -109,7 +109,7 @@ void CreatingSetsBlockInputStream::createAll()
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setBuildTableState(0);
+                    elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
             }
         }
         Stopwatch watch;
@@ -143,15 +143,14 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    std::stringstream log_msg;
-    log_msg << std::fixed << std::setprecision(3);
-    log_msg << (subquery.set ? "Creating set. " : "")
-            << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
-            << mpp_task_id.toString();
+    auto log_msg = fmt::format("{} for task {}", (subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
+                                                      : subquery.table                            ? "Filling temporary table. "
+                                                                                                  : ""),
+                               mpp_task_id.toString());
     Stopwatch watch;
     try
     {
-        LOG_FMT_DEBUG(log, "{}", log_msg.rdbuf()->str());
+        LOG_FMT_DEBUG(log, "{}", log_msg);
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -217,7 +216,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (subquery.join)
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
-            subquery.join->setBuildTableState(1);
+            subquery.join->setBuildTableState(Join::BuildTableState::SUCCEED);
         }
 
         if (table_out)
@@ -264,8 +263,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
-            subquery.join->setBuildTableState(-1);
-        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg.rdbuf()->str(), getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
+            subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
+        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg, getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
     }
 }
 
