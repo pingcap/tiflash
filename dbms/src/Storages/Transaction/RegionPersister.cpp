@@ -144,7 +144,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     {
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
-        // If the global StoragePool is initialized, then use v3 format
+        // If the GlobalStoragePool is initialized, then use v3 format
         bool use_v3_format = global_context.getGlobalStoragePool() != nullptr;
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
         auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
@@ -157,7 +157,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         {
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
 
-            LOG_INFO(log, "RegionPersister running in v3 mode");
+            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
             page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
                 delegator,
@@ -170,7 +170,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
 
-            LOG_INFO(log, "RegionPersister running in normal mode");
+            LOG_FMT_INFO(log, "RegionPersister running in normal mode");
             page_storage = std::make_unique<PS::V2::PageStorage>( //
                 "RegionPersister",
                 delegator,
@@ -180,7 +180,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         else
         {
-            LOG_INFO(log, "RegionPersister running in compatible mode");
+            LOG_FMT_INFO(log, "RegionPersister running in compatible mode");
             auto c = getV1PSConfig(config);
             stable_page_storage = std::make_unique<PS::V1::PageStorage>( //
                 "RegionPersister",

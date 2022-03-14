@@ -1055,7 +1055,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getFileProvider());
     // must initialize before the following operation:
     //   1. load data from disk(because this process may depend on the initialization of global StoragePool)
-    //   2. initialize kvstore service(because we use whether there are any files in kvstore directory to check whether this is the first startup of this node)
+    //   2. initialize KVStore service
+    //     1) because we need to check whether this is the first startup of this node, and we judge it based on whether there are any files in kvstore directory
+    //     2) KVStore service also choose its data format based on whether the GlobalStoragePool is initialized
     if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), storage_config.enable_v3_latest_on_new_node))
         LOG_FMT_INFO(log, "PageStorage V3 enabled.");
 
