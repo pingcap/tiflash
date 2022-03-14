@@ -29,7 +29,7 @@ doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     size_t num_streams,
-    bool wait_index_timeout_as_region_not_found,
+    bool for_batch_cop,
     Context & context,
     const LogWithPrefixPtr & log);
 
