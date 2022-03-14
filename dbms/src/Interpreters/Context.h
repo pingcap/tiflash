@@ -396,7 +396,7 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node);
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3);
 
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 

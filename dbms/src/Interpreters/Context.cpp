@@ -1560,7 +1560,7 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
+static bool isPageV3Enabled(const PathPool & path_pool, bool enable_ps_v3)
 {
     // Check whether v3 is already enabled
     bool v3_manifests_exists = false;
@@ -1576,7 +1576,7 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on
         return true;
 
     // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
-    if (!enable_v3_latest_on_new_node)
+    if (!enable_ps_v3)
         return false;
 
     // Check whether there are any files in kvstore path, if exists, then this is not a new node.
@@ -1585,6 +1585,9 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on
     for (const auto & path : path_pool.listKVStorePaths())
     {
         Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
         std::vector<std::string> files;
         dir.list(files);
         if (!files.empty())
@@ -1596,9 +1599,9 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on
     return is_new_node;
 }
 
-bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
 {
-    if (isPageV3Enabled(path_pool, enable_v3_latest_on_new_node))
+    if (isPageV3Enabled(path_pool, enable_ps_v3))
     {
         auto lock = getLock();
         try
