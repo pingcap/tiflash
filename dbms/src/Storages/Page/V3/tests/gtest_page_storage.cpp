@@ -844,6 +844,47 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, GcReuseSpaceThenRestore)
+try
+{
+    DB::UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        SCOPED_TRACE("fist gc");
+        page_storage->gc();
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage.reset();
+    page_storage = reopenWithConfig(config);
+}
+CATCH
+
 
 } // namespace PS::V3::tests
 } // namespace DB

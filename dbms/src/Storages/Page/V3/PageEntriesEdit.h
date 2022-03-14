@@ -68,6 +68,31 @@ enum class EditRecordType
     VAR_DELETE,
 };
 
+inline const char * typeToString(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::PUT:
+        return "PUT    ";
+    case EditRecordType::PUT_EXTERNAL:
+        return "EXT    ";
+    case EditRecordType::REF:
+        return "REF    ";
+    case EditRecordType::DEL:
+        return "DEL    ";
+    case EditRecordType::UPSERT:
+        return "UPSERT ";
+    case EditRecordType::VAR_ENTRY:
+        return "VAR_ENT";
+    case EditRecordType::VAR_REF:
+        return "VAR_REF";
+    case EditRecordType::VAR_EXTERNAL:
+        return "VAR_EXT";
+    case EditRecordType::VAR_DELETE:
+        return "VAR_DEL";
+    }
+}
+
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
 {
@@ -176,9 +201,27 @@ public:
         PageIdV3Internal ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
-        Int64 being_ref_count = 1;
+        Int64 being_ref_count;
+
+        EditRecord()
+            : page_id(0)
+            , ori_page_id(0)
+            , being_ref_count(1)
+        {}
     };
     using EditRecords = std::vector<EditRecord>;
+
+    static String toDebugString(const EditRecord & rec)
+    {
+        return fmt::format(
+            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+            typeToString(rec.type),
+            rec.page_id,
+            rec.ori_page_id,
+            rec.version,
+            DB::PS::V3::toDebugString(rec.entry),
+            rec.being_ref_count);
+    }
 
     void appendRecord(const EditRecord & rec)
     {
