@@ -143,8 +143,6 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
 
-        BlobFileId chooseNewStat();
-
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
@@ -167,7 +165,6 @@ public:
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
-        std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         mutable std::mutex lock_stats;
     };
