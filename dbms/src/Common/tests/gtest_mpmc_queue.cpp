@@ -590,10 +590,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-} // namespace tests
-} // namespace DB
-=======
 TEST_F(MPMCQueueTest, isNextOpNonBlocking)
 try
 {
