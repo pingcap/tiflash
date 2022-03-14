@@ -1,6 +1,5 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
-#include <Common/RedactHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -181,13 +180,6 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     writeIntBinary(checksum, write_buffer);
     writeString(header_buff.buffer().begin(), header_buff.count(), write_buffer);
     writeString(payload.position(), length, write_buffer);
-
-    LOG_FMT_DEBUG(
-        &Poco::Logger::get("fff"),
-        "CRC: {:08X} header: {} payload: {}",
-        checksum,
-        Redact::keyToHexString(header_buff.buffer().begin(), header_buff.count()),
-        Redact::keyToHexString(payload.position(), length));
 
     block_offset += header_size + length;
 }

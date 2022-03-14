@@ -1,7 +1,6 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/RedactHelpers.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
@@ -307,7 +306,6 @@ LogReader::deserializeHeader(LogReader::RecyclableHeader * hdr, size_t * drop_si
     readIntBinary(hdr->checksum, *file);
     readIntBinary(hdr->length, *file);
     readChar(hdr->type, *file);
-    LOG_FMT_DEBUG(&Poco::Logger::get("fff"), "Read crc: {:0X} length: {} type: {}", hdr->checksum, hdr->length, static_cast<int>(hdr->type));
     size_t header_size = Format::HEADER_SIZE;
     if (hdr->type >= Format::RecyclableFullType && hdr->type <= Format::RecyclableLastType)
     {
@@ -395,14 +393,6 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
                 hdr.length + header_size - Format::CHECKSUM_START_OFFSET);
             if (Format::ChecksumType actual_checksum = digest.checksum(); actual_checksum != hdr.checksum)
             {
-                LOG_FMT_DEBUG(
-                    &Poco::Logger::get("fff"),
-                    "checksum for pos:{}, size:{}, cks:{:0X}, exp_cks:{:0X}, c:{}",
-                    buffer.data() - header_pos,
-                    hdr.length + header_size - Format::CHECKSUM_START_OFFSET,
-                    actual_checksum,
-                    hdr.checksum,
-                    Redact::keyToHexString(header_pos + Format::CHECKSUM_START_OFFSET, hdr.length + header_size - Format::CHECKSUM_START_OFFSET));
                 // Drop the rest of the buffer since "length" itself may have
                 // been corrupted and if we trust it, we could find some
                 // fragment of a real log record that just happens to look
