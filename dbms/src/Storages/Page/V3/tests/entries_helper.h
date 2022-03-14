@@ -21,11 +21,6 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3::tests
 {
-inline String toString(const PageEntryV3 & entry)
-{
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
-}
-
 inline String toString(const PageIDAndEntriesV3 & entries)
 {
     FmtBuffer buf;
@@ -34,7 +29,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{},{}>", id_entry.first, toDebugString(id_entry.second));
+            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
         },
         ", ");
     buf.append("]");
@@ -71,8 +66,8 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * page_id_expr,
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
-    const PageDirectory & dir,
-    const PageId page_id,
+    const PageDirectoryPtr & dir,
+    const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
     auto check_id_entry = [&](const PageIDAndEntryV3 & expected_id_entry, const PageIDAndEntryV3 & actual_id_entry) -> ::testing::AssertionResult {
@@ -99,7 +94,7 @@ inline ::testing::AssertionResult getEntryCompare(
     String error;
     try
     {
-        auto id_entry = dir.get(page_id, snap);
+        auto id_entry = dir->get(page_id, snap);
         return check_id_entry({page_id, expected_entry}, id_entry);
     }
     catch (DB::Exception & ex)
@@ -120,9 +115,9 @@ inline ::testing::AssertionResult getEntryCompare(
 }
 
 #define ASSERT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
+    ASSERT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 #define EXPECT_ENTRY_EQ(expected_entry, dir, pid, snap) \
-    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
+    EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesCompare(
     const char * expected_entries_expr,
@@ -130,8 +125,8 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectory & dir,
-    const PageIds page_ids,
+    const PageDirectoryPtr & dir,
+    const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
     auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries, const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
@@ -176,7 +171,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     String error;
     try
     {
-        auto id_entries = dir.get(page_ids, snap);
+        auto id_entries = dir->get(page_ids, snap);
         return check_id_entries(expected_entries, id_entries);
     }
     catch (DB::Exception & ex)
@@ -204,20 +199,21 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageDirectory & dir,
-    const PageId page_id,
+    const PageDirectoryPtr & dir,
+    const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;
     try
     {
-        auto id_entry = dir.get(page_id, snap);
+        auto id_entry = dir->get(page_id, snap);
         error = fmt::format(
-            "Expect entry [id={}] from {} with snap{} not exist, but got <{}, {}>",
+            "Expect entry [id={}] from {} with snap{} not exist, but got <{}.{}, {}>",
             page_id_expr,
             dir_expr,
             snap_expr,
-            id_entry.first,
+            id_entry.first.high,
+            id_entry.first.low,
             toDebugString(id_entry.second));
     }
     catch (DB::Exception & ex)
@@ -235,20 +231,20 @@ inline ::testing::AssertionResult getEntryNotExist(
     return ::testing::AssertionFailure(::testing::Message(error.c_str()));
 }
 #define EXPECT_ENTRY_NOT_EXIST(dir, pid, snap) \
-    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, pid, snap)
+    EXPECT_PRED_FORMAT3(getEntryNotExist, dir, buildV3Id(TEST_NAMESPACE_ID, pid), snap)
 
 inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
     const char * page_ids_expr,
     const char * snap_expr,
-    const PageDirectory & dir,
-    const PageIds page_ids,
+    const PageDirectoryPtr & dir,
+    const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
     String error;
     try
     {
-        auto id_entry = dir.get(page_ids, snap);
+        auto id_entry = dir->get(page_ids, snap);
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got {}",
             page_ids_expr,
