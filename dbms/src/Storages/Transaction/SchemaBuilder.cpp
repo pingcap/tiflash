@@ -438,6 +438,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         for (auto && opt : diff.affected_opts)
         {
             auto db_info = getter.getDatabase(opt.schema_id);
+            if (db_info == nullptr)
+                throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
             applyRenameTable(db_info, opt.table_id);
         }
         return;
