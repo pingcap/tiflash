@@ -619,8 +619,8 @@ public:
                     // EstablishCallData will handle its lifecycle by itself.
                     EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
                 }
-                thread_manager->schedule(false, "async_poller", [cq, log] { handleRpcs(cq, log); });
-                thread_manager->schedule(false, "async_poller", [notify_cq, log] { handleRpcs(notify_cq, log); });
+                thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
+                thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
             }
         }
     }
