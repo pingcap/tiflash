@@ -147,14 +147,14 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GTDuration, "greater"},
     {tipb::ScalarFuncSig::GTJson, "greater"},
 
-    {tipb::ScalarFuncSig::GreatestInt, "greatest"},
-    {tipb::ScalarFuncSig::GreatestReal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
+    {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestString, "greatest"},
     {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "least"},
-    {tipb::ScalarFuncSig::LeastReal, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
+    {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
     {tipb::ScalarFuncSig::LeastString, "least"},
     {tipb::ScalarFuncSig::LeastDecimal, "least"},
     {tipb::ScalarFuncSig::LeastTime, "least"},
@@ -307,12 +307,18 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
     {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
     {tipb::ScalarFuncSig::BitNegSig, "bitNot"},
-    //{tipb::ScalarFuncSig::IntIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::RealIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::IntIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::RealIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsFalse, "cast"},
+    {tipb::ScalarFuncSig::IntIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::IntIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::RealIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::RealIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::DecimalIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::IntIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::IntIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::RealIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::RealIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
     //{tipb::ScalarFuncSig::LeftShift, "cast"},
     //{tipb::ScalarFuncSig::RightShift, "cast"},
@@ -1153,6 +1159,25 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
         order_descr.emplace_back(name, direction, nulls_direction, collator);
     }
     return order_descr;
+}
+
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators)
+{
+    assert(!collators.empty());
+    FmtBuffer buf;
+    buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
+    for (const auto & collator : collators)
+    {
+        if (collator)
+            buf.fmtAppend("_{}", collator->getCollatorId());
+        else
+            buf.append("_0");
+    }
+    buf.append(" ");
+    return buf.toString();
 }
 
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)

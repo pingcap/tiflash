@@ -59,6 +59,29 @@ enum class SchemaActionType : Int8
     RebaseAutoRandomBase = 40,
     AlterIndexVisibility = 41,
     ExchangeTablePartition = 42,
+    AddCheckConstraint = 43,
+    DropCheckConstraint = 44,
+    AlterCheckConstraint = 45,
+    AlterTableAlterPartition = 46,
+    RenameTables = 47,
+    DropIndexes = 48,
+    AlterTableAttributes = 49,
+    AlterTablePartitionAttributes = 50,
+    CreatePlacementPolicy = 51,
+    AlterPlacementPolicy = 52,
+    DropPlacementPolicy = 53,
+    AlterTablePartitionPlacement = 54,
+    ModifySchemaDefaultPlacement = 55,
+    AlterTablePlacement = 56,
+    AlterCacheTable = 57,
+    AlterTableStatsOptions = 58,
+    AlterNoCacheTable = 59,
+    CreateTables = 60,
+
+    // If we supporte new type from TiDB.
+    // MaxRecognizedType also needs to be changed.
+    // It should always be equal to the maximum supported type + 1
+    MaxRecognizedType = 61,
 };
 
 struct AffectedOption

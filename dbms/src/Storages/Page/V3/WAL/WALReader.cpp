@@ -16,7 +16,7 @@
 namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
-    PSDiskDelegatorPtr & delegator,
+    const PSDiskDelegatorPtr & delegator,
     Poco::Logger * logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
@@ -60,24 +60,60 @@ LogFilenameSet WALStoreReader::listAllFiles(
     return log_files;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files)
+std::tuple<std::optional<LogFilename>, LogFilenameSet>
+WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
-    auto reader = std::make_shared<WALStoreReader>(provider, std::move(files));
+    LogFilenameSet::const_iterator latest_checkpoint_iter = all_files.cend();
+    for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
+    {
+        if (iter->level_num > 0)
+        {
+            latest_checkpoint_iter = iter;
+        }
+    }
+    if (latest_checkpoint_iter == all_files.cend())
+    {
+        return {std::nullopt, std::move(all_files)};
+    }
+
+    LogFilename latest_checkpoint = *latest_checkpoint_iter;
+    for (auto iter = all_files.cbegin(); iter != all_files.cend(); /*empty*/)
+    {
+        if (iter->log_num < latest_checkpoint.log_num)
+        {
+            // TODO: clean useless file that is older than `checkpoint`
+            iter = all_files.erase(iter);
+        }
+        else
+        {
+            ++iter;
+        }
+    }
+    return {latest_checkpoint, std::move(all_files)};
+}
+
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter)
+{
+    auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
+    auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
 {
     Poco::Logger * logger = &Poco::Logger::get("WALStore");
     LogFilenameSet log_files = listAllFiles(delegator, logger);
-    return create(provider, std::move(log_files));
+    return create(provider, std::move(log_files), read_limiter);
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, LogFilenameSet && files_)
+WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
-    , files(std::move(files_))
-    , next_reading_file(files.begin())
+    , read_limiter(read_limiter_)
+    , checkpoint_read_done(!checkpoint.has_value())
+    , checkpoint_file(checkpoint)
+    , files_to_read(std::move(files_))
+    , next_reading_file(files_to_read.begin())
     , logger(&Poco::Logger::get("LogReader"))
 {}
 
@@ -88,7 +124,7 @@ bool WALStoreReader::remained() const
 
     if (!reader->isEOF())
         return true;
-    if (next_reading_file != files.end())
+    if (checkpoint_read_done && next_reading_file != files_to_read.end())
         return true;
     return false;
 }
@@ -116,15 +152,15 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
 
 bool WALStoreReader::openNextFile()
 {
-    if (next_reading_file == files.end())
+    if (checkpoint_read_done && next_reading_file == files_to_read.end())
     {
         return false;
     }
 
-    {
-        const auto & parent_path = next_reading_file->parent_path;
-        const auto log_num = next_reading_file->log_num;
-        const auto level_num = next_reading_file->level_num;
+    auto do_open = [this](const LogFilename & next_file) {
+        const auto & parent_path = next_file.parent_path;
+        const auto log_num = next_file.log_num;
+        const auto level_num = next_file.level_num;
         const auto filename = fmt::format("log_{}_{}", log_num, level_num);
         const auto fullname = fmt::format("{}/{}", parent_path, filename);
         LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
@@ -135,7 +171,7 @@ bool WALStoreReader::openNextFile()
             EncryptionPath{parent_path, filename},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
-            /*read_limiter*/ nullptr,
+            /*read_limiter*/ read_limiter,
             /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
         );
         reader = std::make_unique<LogReader>(
@@ -145,8 +181,17 @@ bool WALStoreReader::openNextFile()
             log_num,
             WALRecoveryMode::TolerateCorruptedTailRecords,
             logger);
+    };
+
+    if (!checkpoint_read_done)
+    {
+        do_open(*checkpoint_file);
     }
-    ++next_reading_file; // Note this will invalid `parent_path`
+    else
+    {
+        do_open(*next_reading_file);
+        ++next_reading_file;
+    }
     return true;
 }
 

@@ -106,7 +106,6 @@ struct Settings
     M(SettingCompressionMethod, network_compression_method, CompressionMethod::LZ4, "Allows you to select the method of data compression when writing.")                                                                                \
                                                                                                                                                                                                                                         \
     M(SettingInt64, network_zstd_compression_level, 1, "Allows you to select the level of ZSTD compression.")                                                                                                                           \
-                                                                                                                                                                                                                                        \
     M(SettingUInt64, priority, 0, "Priority of the query. 1 - the highest, higher value - lower priority; 0 - do not use priorities.")                                                                                                  \
                                                                                                                                                                                                                                         \
     M(SettingBool, log_queries, 0, "Log requests and write the log to the system table.")                                                                                                                                               \
@@ -304,7 +303,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
-                                                                                                                                                                                                                                        \
+    M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                     \
+    M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                             \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.")                                                                                               \
     M(SettingOverflowMode<false>, set_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.")                                                                                                                     \
@@ -337,7 +337,11 @@ struct Settings
     M(SettingBool, enable_elastic_threadpool, true, "Enable elastic thread pool for thread create usages.")                                                                                                                             \
     M(SettingUInt64, elastic_threadpool_init_cap, 400, "The size of elastic thread pool.")                                                                                                                                              \
     M(SettingUInt64, elastic_threadpool_shrink_period_ms, 300000, "The shrink period(ms) of elastic thread pool.")                                                                                                                      \
-    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
+    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")                                                                                                                                    \
+    M(SettingBool, enable_async_server, true, "Enable async rpc server.")                                                                                                                                                               \
+    M(SettingUInt64, async_pollers_per_cq, 100, "grpc async pollers per cqs")                                                                                                                                                             \
+    M(SettingUInt64, async_cqs, 1, "grpc async cqs")                                                                                                                                                                                   \
+    M(SettingUInt64, preallocated_request_count_per_poller, 20, "grpc preallocated_request_count_per_poller")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
