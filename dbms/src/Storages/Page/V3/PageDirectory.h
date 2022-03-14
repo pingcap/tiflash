@@ -2,6 +2,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/LogWithPrefix.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
@@ -16,8 +17,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
-
-#include "Encryption/FileProvider.h"
 
 namespace CurrentMetrics
 {
@@ -205,7 +204,6 @@ public:
      */
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
-        PageIdV3Internal page_id,
         std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
         PageEntriesV3 & entries_removed,
         const PageLock & page_lock);
