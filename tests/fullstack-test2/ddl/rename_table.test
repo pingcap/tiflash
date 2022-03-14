@@ -42,3 +42,33 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_n
 └───────────────┴───────────┘
 
 mysql> drop table if exists test.t_new;
+
+
+# test rename tables
+mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;
+mysql> drop table if exists test.r1;
+mysql> drop table if exists test.r2;
+mysql> create table test.t1(a int, b int);
+mysql> create table test.t2(a int, b int);
+mysql> insert into test.t1 values (1, 2);
+mysql> insert into test.t2 values (3, 4);
+mysql> rename table t1 to r1, t2 to r2;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
+ERROR 1146 (42S02) at line 1: Table 'test.t1' doesn't exist
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.r1;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    2 |
++------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2;
+ERROR 1146 (42S02) at line 1: Table 'test.t2' doesn't exist
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.r2;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    2 |
++------+------+
+mysql> drop table if exists test.r1;
+mysql> drop table if exists test.r2;
