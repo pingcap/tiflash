@@ -145,7 +145,7 @@ inline ::testing::AssertionResult getEntriesCompare(
                 {
                     // not the expected entry we want
                     String err_msg;
-                    auto expect_expr = fmt::format("Entry at {} [index={}]", idx);
+                    auto expect_expr = fmt::format("Entry at {} [index={}]", idx, idx);
                     auto actual_expr = fmt::format("Get entries {} from {} with snap {} [index={}", page_ids_expr, dir_expr, snap_expr, idx);
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
