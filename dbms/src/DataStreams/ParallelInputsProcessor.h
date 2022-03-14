@@ -87,7 +87,7 @@ public:
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
-        , log(getMPPTaskLog(log_, "ParallelInputsProcessor"))
+        , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
