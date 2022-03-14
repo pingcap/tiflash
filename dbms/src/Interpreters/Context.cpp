@@ -149,7 +149,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    DM::StoragePoolPtr storage_pool;
+    DM::GlobalStoragePoolPtr global_storage_pool;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1596,19 +1596,20 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_v3_latest_on
     return is_new_node;
 }
 
-void Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node)
 {
     if (isPageV3Enabled(path_pool, enable_v3_latest_on_new_node))
     {
         auto lock = getLock();
         try
         {
-            // create manifests file before initialize StoragePool
+            // create manifests file before initialize GlobalStoragePool
             for (const auto & path : path_pool.listGlobalPagePaths())
                 PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
 
-            shared->storage_pool = std::make_shared<DM::StoragePool>("__global__", path_pool, *this, settings);
-            shared->storage_pool->restore();
+            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
+            shared->global_storage_pool->restore();
+            return true;
         }
         catch (...)
         {
@@ -1618,14 +1619,15 @@ void Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool
     }
     else
     {
-        shared->storage_pool = nullptr;
+        shared->global_storage_pool = nullptr;
+        return false;
     }
 }
 
-DM::StoragePoolPtr Context::getGlobalStoragePool() const
+DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
-    return shared->storage_pool;
+    return shared->global_storage_pool;
 }
 
 UInt16 Context::getTCPPort() const

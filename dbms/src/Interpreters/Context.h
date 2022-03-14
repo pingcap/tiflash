@@ -90,8 +90,8 @@ namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
-class StoragePool;
-using StoragePoolPtr = std::shared_ptr<StoragePool>;
+class GlobalStoragePool;
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
 /// (database name, table name)
@@ -396,9 +396,9 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    void initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node);
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_v3_latest_on_new_node);
 
-    DM::StoragePoolPtr getGlobalStoragePool() const;
+    DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
     Compiler & getCompiler();
 

@@ -81,7 +81,6 @@ protected:
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
-                                                 *page_id_generator,
                                                  0,
                                                  /*min_version_*/ 0,
                                                  settings.not_compress_columns,
@@ -129,7 +128,7 @@ void appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefines col
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
     auto delegator = context.path_pool.getStableDiskDelegator();
-    auto file_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile

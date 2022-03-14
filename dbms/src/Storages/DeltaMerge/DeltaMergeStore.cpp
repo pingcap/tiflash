@@ -184,8 +184,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)
-    // for mock test, table_id_ should be DB::InvalidTableID
-    , storage_pool(db_name_ + "." + table_name_, table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_, path_pool, global_context, db_context.getSettingsRef())
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id)
@@ -200,13 +198,15 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 {
     LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
 
+    // for mock test, table_id_ should be DB::InvalidTableID
+    NamespaceId ns_id = table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_;
     if (auto global_storage_pool = global_context.getGlobalStoragePool(); global_storage_pool)
     {
-        storage_pool = std::make_shared<StoragePool>(global_storage_pool->log(), global_storage_pool->data(), global_storage_pool->meta(), global_context);
+        storage_pool = std::make_shared<StoragePool>(ns_id, *global_storage_pool, global_context);
     }
     else
     {
-        storage_pool = std::make_shared<StoragePool>(db_name_ + "." + table_name_, path_pool, global_context, db_context.getSettingsRef());
+        storage_pool = std::make_shared<StoragePool>(db_name_ + "." + table_name_, ns_id, path_pool, global_context, db_context.getSettingsRef());
     }
 
     // Restore existing dm files and set capacity for path_pool.
@@ -314,8 +314,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    callbacks.ns_id = storage_pool.getNamespaceId();
-    storage_pool.data()->registerExternalPagesCallbacks(callbacks);
+    callbacks.ns_id = storage_pool->getNamespaceId();
+    storage_pool->data()->registerExternalPagesCallbacks(callbacks);
 
     gc_handle = background_pool.addTask([this] { return storage_pool->gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });

@@ -53,6 +53,80 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
+GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
+    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+    log_storage(PageStorage::create("__global__.log",
+                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                    extractConfig(settings, StorageType::Log),
+                                    global_ctx.getFileProvider()))
+    ,
+    // The iops in data_storage is low, only use the first disk for storing data
+    data_storage(PageStorage::create("__global__.data",
+                                     path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                     extractConfig(settings, StorageType::Data),
+                                     global_ctx.getFileProvider()))
+    ,
+    // The iops in meta_storage is relatively high, use multi-disks if possible
+    meta_storage(PageStorage::create("__global__.meta",
+                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                     extractConfig(settings, StorageType::Meta),
+                                     global_ctx.getFileProvider()))
+    , global_context(global_ctx)
+{}
+
+void GlobalStoragePool::restore()
+{
+    log_storage->restore();
+    data_storage->restore();
+    meta_storage->restore();
+
+    gc_handle = global_context.getBackgroundPool().addTask(
+        [this] {
+            return this->gc(global_context.getSettingsRef());
+        },
+        false);
+}
+
+GlobalStoragePool::~GlobalStoragePool()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+}
+
+bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        Timepoint now = Clock::now();
+        if (now < (last_try_gc_time.load() + try_gc_period))
+            return false;
+
+        last_try_gc_time = now;
+    }
+
+    bool done_anything = false;
+    auto write_limiter = global_context.getWriteLimiter();
+    auto read_limiter = global_context.getReadLimiter();
+    auto config = extractConfig(settings, StorageType::Meta);
+    meta_storage->reloadSettings(config);
+    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Data);
+    data_storage->reloadSettings(config);
+    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Log);
+    log_storage->reloadSettings(config);
+    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    return done_anything;
+}
+
+
 StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
     : ns_id(ns_id_)
     ,
@@ -77,71 +151,56 @@ StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPoo
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
+    , owned_storage(true)
 {}
 
-StoragePool::StoragePool(const String & name, const PathPool & path_pool, const Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageStorage::create(name + ".log",
-                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
-                                    extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider(),
-                                    true))
-    ,
-    // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageStorage::create(name + ".data",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("data"),
-                                     extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider(),
-                                     true))
-    ,
-    // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageStorage::create(name + ".meta",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
-                                     extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider(),
-                                     true))
-    , log_storage_reader(ns_id, log_storage, nullptr)
-    , data_storage_reader(ns_id, data_storage, nullptr)
-    , meta_storage_reader(ns_id, meta_storage, nullptr)
-    , global_context(global_ctx)
-{}
-
-StoragePool::StoragePool(NamespaceId ns_id_, PageStoragePtr log_storage_, PageStoragePtr data_storage_, PageStoragePtr meta_storage_, const Context & global_ctx)
+StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, const Context & global_ctx)
     : ns_id(ns_id_)
-    , log_storage(std::move(log_storage_))
-    , data_storage(std::move(data_storage_))
-    , meta_storage(std::move(meta_storage_))
+    , log_storage(global_storage_pool.log())
+    , data_storage(global_storage_pool.data())
+    , meta_storage(global_storage_pool.meta())
     , log_storage_reader(ns_id, log_storage, nullptr)
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
-    , initialized(true)
+    , owned_storage(false)
 {}
 
 void StoragePool::restore()
 {
-    if (!initialized)
+    // If the storage instances is not global, we need to initialize it by ourselves.
+    if (owned_storage)
     {
         log_storage->restore();
         data_storage->restore();
         meta_storage->restore();
     }
-    max_log_page_id = log_storage->getMaxId();
-    max_data_page_id = data_storage->getMaxId();
-    max_meta_page_id = meta_storage->getMaxId();
+    max_log_page_id = log_storage->getMaxId(ns_id);
+    max_data_page_id = data_storage->getMaxId(ns_id);
+    max_meta_page_id = meta_storage->getMaxId(ns_id);
 }
 
 void StoragePool::drop()
 {
-    meta_storage->drop();
-    data_storage->drop();
-    log_storage->drop();
+    if (owned_storage)
+    {
+        meta_storage->drop();
+        data_storage->drop();
+        log_storage->drop();
+    }
+    else
+    {
+        // FIXME: drop data for this table
+    }
 }
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
+        // Just do gc for owned storage, otherwise the gc will be handled globally
+        if (!owned_storage)
+            return false;
 
         Timepoint now = Clock::now();
         if (now < (last_try_gc_time.load() + try_gc_period))
