@@ -164,7 +164,7 @@ public:
         return stage == AsyncRequestStage::WAIT_RETRY;
     }
 
-    bool retry()
+    bool retrySucceed()
     {
         if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
         {
@@ -368,7 +368,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
             std::vector<size_t> tmp;
             for (auto i : waiting_for_retry_requests)
             {
-                if (!handlers[i].retry())
+                if (!handlers[i].retrySucceed())
                     tmp.push_back(i);
             }
             waiting_for_retry_requests.swap(tmp);
