@@ -661,4 +661,3 @@ CATCH
 
 } // namespace
 } // namespace DB::tests
->>>>>>> f50e1a9114 (*: Fix memory leak when MPMCQueue destruct with non-poped elements (#4221))
