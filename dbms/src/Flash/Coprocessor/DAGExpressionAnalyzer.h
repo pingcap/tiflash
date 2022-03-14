@@ -12,6 +12,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
@@ -48,6 +49,10 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
+    std::vector<NameAndTypePair> appendWindowOrderBy(
+        ExpressionActionsChain & chain,
+        const tipb::Sort & window_sort);
+
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
@@ -57,6 +62,14 @@ public:
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
+
+    WindowDescription appendWindow(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window);
+
+    SortDescription getWindowSortDescription(
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems,
+        ExpressionActionsChain::Step & step);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -113,7 +126,9 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     NamesAndTypes buildOrderColumns(
         ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
@@ -121,6 +136,11 @@ private:
     void appendCastAfterAgg(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
+
+    void appendWindowSelect(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window,
+        const NamesAndTypes window_columns);
 
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
@@ -205,6 +225,8 @@ private:
     String buildFilterColumn(
         ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
+
+    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
 
     // all columns from table scan
     NamesAndTypes source_columns;

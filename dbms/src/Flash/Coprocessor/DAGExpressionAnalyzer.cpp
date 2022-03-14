@@ -20,6 +20,8 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
+#include <google/protobuf/util/json_util.h>
 
 namespace DB
 {
@@ -337,6 +339,121 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
+static bool checkWindowFunctionsInvalid(const tipb::Window & window)
+{
+    bool has_agg_func = false;
+    bool has_window_func = false;
+    for (const tipb::Expr & expr : window.func_desc())
+    {
+        has_agg_func = has_agg_func || isAggFunctionExpr(expr);
+        has_window_func = has_window_func || isWindowFunctionExpr(expr);
+    }
+
+    return has_agg_func && has_window_func;
+}
+
+SortDescription DAGExpressionAnalyzer::getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems, ExpressionActionsChain::Step & step)
+{
+    std::vector<NameAndTypePair> byItem_columns;
+    byItem_columns.reserve(byItems.size());
+    for (auto byItem : byItems)
+    {
+        String name = getActions(byItem.expr(), step.actions);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        byItem_columns.emplace_back(name, type);
+    }
+    return getSortDescription(byItem_columns, byItems);
+}
+
+
+void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step)
+{
+    for (auto col : getCurrentInputColumns())
+    {
+        step.required_output.push_back(col.name);
+    }
+}
+
+WindowDescription DAGExpressionAnalyzer::appendWindow(
+    ExpressionActionsChain & chain,
+    const tipb::Window & window)
+{
+    WindowDescription window_description;
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & step = chain.steps.back();
+    appendSourceColumnsToRequireOutput(step);
+
+    if (window.func_desc_size() == 0)
+    {
+        //should not reach here
+        throw TiFlashException("window executor without agg exprs/window exprs", Errors::Coprocessor::BadRequest);
+    }
+
+    if (checkWindowFunctionsInvalid(window))
+    {
+        throw TiFlashException("can not have window and agg functions together in one window.", Errors::Coprocessor::BadRequest);
+    }
+
+    std::vector<NameAndTypePair> window_columns;
+
+    if (window.has_frame())
+    {
+        window_description.setWindowFrame(window.frame());
+    }
+
+    for (const tipb::Expr & expr : window.func_desc())
+    {
+        if (isAggFunctionExpr(expr))
+        {
+            // for agg functions
+        }
+        else if (isWindowFunctionExpr(expr))
+        {
+            WindowFunctionDescription window_function_description;
+            String window_func_name = getWindowFunctionName(expr);
+            auto child_size = expr.children_size();
+            DataTypes types(child_size);
+            window_function_description.argument_names.resize(child_size);
+            TiDB::TiDBCollators arg_collators;
+            for (Int32 i = 0; i < child_size; i++)
+            {
+                String arg_name = getActions(expr.children(i), step.actions);
+                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                window_function_description.argument_names[i] = arg_name;
+                step.required_output.push_back(arg_name);
+            }
+            if (0 == child_size)
+                arg_collators.push_back({});
+
+            String func_string = DAGExpressionAnalyzerHelper::genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
+            window_function_description.column_name = func_string;
+            window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
+            DataTypePtr result_type = window_function_description.window_function->getReturnType();
+            window_description.window_functions_descriptions.push_back(window_function_description);
+            window_columns.emplace_back(func_string, result_type);
+        }
+        else
+        {
+            throw TiFlashException("unknow function expr.", Errors::Coprocessor::BadRequest);
+        }
+    }
+
+    window_description.before_window = chain.getLastActions();
+    window_description.partition_by = getWindowSortDescription(window.partition_by(), step);
+    window_description.order_by = getWindowSortDescription(window.order_by(), step);
+    chain.finalize();
+    chain.clear();
+
+    appendWindowSelect(chain, window, window_columns);
+    window_description.before_window_select = chain.getLastActions();
+    window_description.add_columns = window_columns;
+    chain.finalize();
+    chain.clear();
+
+    return window_description;
+}
+
+
 bool isUInt8Type(const DataTypePtr & type)
 {
     auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
@@ -450,6 +567,31 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
     throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
+}
+
+std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
+    ExpressionActionsChain & chain,
+    const tipb::Sort & window_sort)
+{
+    if (window_sort.byitems_size() == 0)
+    {
+        throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
+    }
+
+    std::vector<NameAndTypePair> order_columns;
+    order_columns.reserve(window_sort.byitems_size());
+
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsChain::Step & step = chain.steps.back();
+
+    for (const tipb::ByItem & order_by : window_sort.byitems())
+    {
+        String name = getActions(order_by.expr(), step.actions);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
+        step.required_output.push_back(name);
+    }
+    return order_columns;
 }
 
 NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
@@ -688,6 +830,50 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
+void DAGExpressionAnalyzer::appendWindowSelect(
+    ExpressionActionsChain & chain,
+    const tipb::Window & window,
+    const NamesAndTypes after_window_columns)
+{
+    initChain(chain, after_window_columns);
+    bool need_update_source_columns = false;
+    std::vector<NameAndTypePair> updated_after_window_columns;
+    ExpressionActionsChain::Step & step = chain.steps.back();
+
+    for (Int32 i = 0; i < window.func_desc_size(); i++)
+    {
+        const String & name = after_window_columns[i].name;
+        String updated_name = appendCastIfNeeded(window.func_desc(i), step.actions, name);
+        if (name != updated_name)
+        {
+            need_update_source_columns = true;
+            DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
+            updated_after_window_columns.emplace_back(updated_name, type);
+            step.required_output.push_back(updated_name);
+        }
+        else
+        {
+            updated_after_window_columns.emplace_back(name, after_window_columns[i].type);
+            step.required_output.push_back(name);
+        }
+    }
+
+    if (need_update_source_columns)
+    {
+        for (auto & col : updated_after_window_columns)
+        {
+            source_columns.emplace_back(col.name, col.type);
+        }
+    }
+    else
+    {
+        for (auto & col : after_window_columns)
+        {
+            source_columns.emplace_back(col.name, col.type);
+        }
+    }
+}
+
 void DAGExpressionAnalyzer::appendCastAfterAgg(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & aggregation)
@@ -909,6 +1095,11 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
+
+        std::string s;
+        google::protobuf::util::MessageToJsonString(expr.field_type(), &s);
+        std::cout << "expr.field_type : " << s << std::endl;
+        std::cout << "expected_type_name : " << expected_type->getName() << "----- actual_type_name : " << actual_type->getName() << std::endl;
         if (expected_type->getName() != actual_type->getName())
             return appendCast(expected_type, actions, expr_name);
     }

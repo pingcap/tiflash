@@ -28,6 +28,8 @@ bool isSourceNode(const tipb::Executor * root)
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String WINDOW_NAME("window");
+const static String WINDOW_SORT_NAME("window_sort");
 const static String HAVING_NAME("having");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
@@ -42,6 +44,18 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
     *to = from;
 }
 
+void collectOutPutFieldTypesFromWindow(std::vector<tipb::FieldType> & field_type, const tipb::Window & window)
+{
+    for (const auto & expr : window.func_desc())
+    {
+        if (!exprHasValidFieldType(expr))
+        {
+            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+        }
+        field_type.push_back(expr.field_type());
+    }
+}
+
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator & id_generator)
@@ -50,6 +64,8 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     , qb_column_prefix("__QB_" + std::to_string(id) + "_")
 {
     const tipb::Executor * current = root;
+    String window_name;
+    String window_sort_name;
     while (!isSourceNode(current) && current->has_executor_id())
     {
         switch (current->tp())
@@ -80,6 +96,24 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             assignOrThrowException(&aggregation, current, AGG_NAME);
             aggregation_name = current->executor_id();
             current = &current->aggregation().child();
+            break;
+        case tipb::ExecType::TypeWindow:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+            window_name = current->executor_id();
+            windows.insert({window_name, current});
+            window_op_list.push_back(window_name);
+            collectOutPutFieldTypesFromWindow(output_field_types, current->window());
+            current = &current->window().child();
+            break;
+        case tipb::ExecType::TypeSort:
+            // only isPartialSort = ture is for window function sort.
+            if (!current->sort().ispartialsort())
+                break;
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+            window_sort_name = current->executor_id();
+            window_sorts.insert({window_sort_name, current});
+            window_op_list.push_back(window_sort_name);
+            current = &current->sort().child();
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
@@ -141,6 +175,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     , root(nullptr)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
 {
+    String window_name;
+    String window_sort_name;
     for (int i = executors.size() - 1; i >= 0; i--)
     {
         switch (executors[i].tp())
@@ -174,6 +210,27 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             else
                 aggregation_name = std::to_string(i) + "_aggregation";
             break;
+        case tipb::ExecType::TypeWindow:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+            if (executors[i].has_executor_id())
+                window_name = executors[i].executor_id();
+            else
+                window_name = std::to_string(i) + "_window";
+            windows.insert({window_name, &executors[i]});
+            window_op_list.push_back(window_name);
+            collectOutPutFieldTypesFromWindow(output_field_types, executors[i].window());
+            break;
+        case tipb::ExecType::TypeSort:
+            if (!executors[i].sort().ispartialsort())
+                break;
+            GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();
+            if (executors[i].has_executor_id())
+                window_sort_name = executors[i].executor_id();
+            else
+                window_sort_name = std::to_string(i) + "_window";
+            windows.insert({window_sort_name, &executors[i]});
+            window_op_list.push_back(window_sort_name);
+            break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
             assignOrThrowException(&limit_or_topn, &executors[i], TOPN_NAME);
@@ -197,5 +254,4 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
         }
     }
 }
-
 } // namespace DB

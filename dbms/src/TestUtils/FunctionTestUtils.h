@@ -1,5 +1,6 @@
 #pragma once
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -598,6 +599,7 @@ public:
         try
         {
             DB::registerFunctions();
+            DB::registerAggregateFunctions();
         }
         catch (DB::Exception &)
         {
