@@ -24,7 +24,8 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
 {
     std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
     castDefaultValue = [&](const Field & value, const DataTypePtr & type) -> Field {
-        if (value.isNull()) return value;
+        if (value.isNull())
+            return value;
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:
