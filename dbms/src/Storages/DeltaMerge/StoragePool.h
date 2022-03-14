@@ -27,7 +27,6 @@ class GlobalStoragePool : private boost::noncopyable
 public:
     using Clock = std::chrono::system_clock;
     using Timepoint = Clock::time_point;
-    using Duration = Clock::duration;
     using Seconds = std::chrono::seconds;
 
     GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
@@ -40,6 +39,7 @@ public:
     PageStoragePtr data() const { return data_storage; }
     PageStoragePtr meta() const { return meta_storage; }
 
+    // TODO: maybe more frequent gc for GlobalStoragePool?
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
@@ -60,7 +60,6 @@ class StoragePool : private boost::noncopyable
 public:
     using Clock = std::chrono::system_clock;
     using Timepoint = Clock::time_point;
-    using Duration = Clock::duration;
     using Seconds = std::chrono::seconds;
 
     StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
