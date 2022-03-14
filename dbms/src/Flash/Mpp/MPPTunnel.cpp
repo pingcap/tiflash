@@ -219,7 +219,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         if (connected)
             throw Exception("MPPTunnel has connected");
         if (finished)
-            throw Exception("has finished");
+            throw Exception("MPPTunnel has finished");
 
         LOG_TRACE(log, "ready to connect");
         if (is_local)
