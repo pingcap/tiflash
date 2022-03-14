@@ -64,7 +64,7 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 {
     assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY);
 
-    writeIntBinary(EditRecordType::PUT, buf);
+    writeIntBinary(record.type, buf);
 
     UInt32 flags = 0;
     writeIntBinary(flags, buf);

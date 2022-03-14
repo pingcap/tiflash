@@ -35,12 +35,15 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         task = MPPTask::newTask(task_request.meta(), context);
 
         task->prepare(task_request);
-        for (const auto & region : context->getDAGContext()->getRegionsForRemoteRead())
+        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
         {
-            auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-            retry_region->mutable_region_epoch()->set_version(region.region_version);
+            for (const auto & region : table_region_info.second.remote_regions)
+            {
+                auto * retry_region = response->add_retry_regions();
+                retry_region->set_id(region.region_id);
+                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+                retry_region->mutable_region_epoch()->set_version(region.region_version);
+            }
         }
         if (task->isRootMPPTask())
         {
