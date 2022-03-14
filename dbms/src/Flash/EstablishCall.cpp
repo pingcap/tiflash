@@ -4,10 +4,11 @@
 
 namespace DB
 {
-EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
+EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<bool> & is_shutdown)
     : service(service)
     , cq(cq)
     , notify_cq(notify_cq)
+    , is_shutdown(is_shutdown)
     , responder(&ctx)
     , state(NEW_REQUEST)
 {
@@ -17,9 +18,9 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
-EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq)
+EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<bool> & is_shutdown)
 {
-    return new EstablishCallData(service, cq, notify_cq);
+    return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
 
 void EstablishCallData::tryFlushOne()
@@ -34,6 +35,12 @@ void EstablishCallData::tryFlushOne()
     }
     // there is a valid msg, do single write operation
     mpp_tunnel->sendJob(false);
+}
+
+void EstablishCallData::responderFinish(const grpc::Status & status)
+{
+    if (!(*is_shutdown))
+        responder.Finish(status, this);
 }
 
 void EstablishCallData::initRpc()
@@ -51,12 +58,14 @@ void EstablishCallData::initRpc()
     {
         state = FINISH;
         grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
-        responder.Finish(status, this);
+        responderFinish(status);
     }
 }
 
 bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
+    if (*is_shutdown)
+        return false;
     responder.Write(packet, this);
     return true;
 }
@@ -77,7 +86,7 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     {
         LOG_FMT_INFO(mpp_tunnel->getLogger(), "connection for {} cost {} ms.", mpp_tunnel->id(), stopwatch->elapsedMilliseconds());
     }
-    responder.Finish(status, this);
+    responderFinish(status);
 }
 
 void EstablishCallData::notifyReady()
@@ -93,10 +102,11 @@ void EstablishCallData::cancel()
         delete this;
         return;
     }
+    state = FINISH;
     if (mpp_tunnel)
         mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
-    responder.Finish(status, this);
+    responderFinish(status);
 }
 
 void EstablishCallData::proceed()
@@ -105,7 +115,7 @@ void EstablishCallData::proceed()
     {
         state = PROCESSING;
 
-        spawn(service, cq, notify_cq);
+        spawn(service, cq, notify_cq, is_shutdown);
         notifyReady();
         initRpc();
     }
