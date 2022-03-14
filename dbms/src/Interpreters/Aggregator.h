@@ -939,11 +939,11 @@ protected:
         AggregateDataPtr overflow_row) const;
 
     /// For case when there are no keys (all aggregate into one row).
-    void executeWithoutKeyImpl(
+    static void executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
         size_t rows,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena) const;
+        Arena * arena);
 
     template <typename Method>
     void writeToTemporaryFileImpl(
