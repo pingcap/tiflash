@@ -102,7 +102,7 @@ try
         if (!dag_context.retry_regions.empty())
         {
             coprocessor::BatchResponse response;
-            for (auto region : dag_context.retry_regions)
+            for (const auto & region : dag_context.retry_regions)
             {
                 auto * retry_region = response.add_retry_regions();
                 retry_region->set_id(region.region_id);
