@@ -671,7 +671,10 @@ try
                 }
                 else if (iter.name == EXTRA_TABLE_ID_COLUMN_NAME)
                 {
-                    ASSERT_EQ(c->getInt(i), 1);
+                    Field res;
+                    c->get(i, res);
+                    ASSERT(!res.isNull());
+                    ASSERT(res.get<Int64>() == 1);
                 }
             }
         }
