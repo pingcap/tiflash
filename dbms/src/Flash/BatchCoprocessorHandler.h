@@ -19,10 +19,10 @@ public:
 
     ~BatchCoprocessorHandler() = default;
 
-    grpc::Status execute();
+    grpc::Status execute() override;
 
 protected:
-    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
+    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg) override;
 
 protected:
     const coprocessor::BatchRequest * cop_request;

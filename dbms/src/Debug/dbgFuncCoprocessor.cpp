@@ -261,6 +261,18 @@ DAGProperties getDAGProperties(const String & prop_string)
     return ret;
 }
 
+void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
+{
+    tipb_region_info->set_region_id(region.first);
+    auto * meta = tipb_region_info->mutable_region_epoch();
+    meta->set_conf_ver(region.second->confVer());
+    meta->set_version(region.second->version());
+    auto * range = tipb_region_info->add_ranges();
+    auto handle_range = getHandleRangeByTable(region.second->getRange()->rawKeys(), table_id);
+    range->set_start(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+    range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+}
+
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
@@ -288,22 +300,44 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             if (table_id != -1)
             {
                 /// contains a table scan
-                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-                if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
-                    throw Exception("Not supported: table region num less than mpp partition num");
-                for (size_t i = 0; i < regions.size(); i++)
+                const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
+                if (table_info->is_partition_table)
                 {
-                    if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
-                        continue;
-                    auto * region = req->add_regions();
-                    region->set_region_id(regions[i].first);
-                    auto * meta = region->mutable_region_epoch();
-                    meta->set_conf_ver(regions[i].second->confVer());
-                    meta->set_version(regions[i].second->version());
-                    auto * range = region->add_ranges();
-                    auto handle_range = getHandleRangeByTable(regions[i].second->getRange()->rawKeys(), table_id);
-                    range->set_start(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
-                    range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+                    size_t current_region_size = 0;
+                    coprocessor::TableRegions * current_table_regions = nullptr;
+                    for (const auto & partition : table_info->partition.definitions)
+                    {
+                        const auto partition_id = partition.id;
+                        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(partition_id);
+                        for (size_t i = 0; i < regions.size(); ++i)
+                        {
+                            if ((current_region_size + i) % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
+                                continue;
+                            if (current_table_regions != nullptr && current_table_regions->physical_table_id() != partition_id)
+                                current_table_regions = nullptr;
+                            if (current_table_regions == nullptr)
+                            {
+                                current_table_regions = req->add_table_regions();
+                                current_table_regions->set_physical_table_id(partition_id);
+                            }
+                            setTipbRegionInfo(current_table_regions->add_regions(), regions[i], partition_id);
+                        }
+                        current_region_size += regions.size();
+                    }
+                    if (current_region_size < static_cast<size_t>(properties.mpp_partition_num))
+                        throw Exception("Not supported: table region num less than mpp partition num");
+                }
+                else
+                {
+                    auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+                    if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
+                        throw Exception("Not supported: table region num less than mpp partition num");
+                    for (size_t i = 0; i < regions.size(); ++i)
+                    {
+                        if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
+                            continue;
+                        setTipbRegionInfo(req->add_regions(), regions[i], table_id);
+                    }
                 }
             }
             pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
@@ -414,11 +448,12 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         static Poco::Logger * log = &Poco::Logger::get("MockDAG");
         LOG_INFO(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
         tipb::SelectResponse dag_response;
-        RegionInfoMap regions;
-        regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
+        TablesRegionsInfo tables_regions_info(true);
+        auto & table_regions_info = tables_regions_info.getSingleTableRegions();
+        table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
         DAGContext dag_context(dag_request);
-        dag_context.regions_for_local_read = regions;
+        dag_context.tables_regions_info = std::move(tables_regions_info);
         dag_context.log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("MockDAG"), "");
         context.setDAGContext(&dag_context);
         DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -1098,31 +1133,48 @@ struct TableScan : public Executor
         output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
                             output_schema.end());
     }
+
+    void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
+    {
+        auto column_name = splitQualifiedName(dag_column_info.first).second;
+        if (column_name == MutableSupport::tidb_pk_column_name)
+            ci->set_column_id(-1);
+        else
+            ci->set_column_id(table_info.getColumnID(column_name));
+        ci->set_tp(dag_column_info.second.tp);
+        ci->set_flag(dag_column_info.second.flag);
+        ci->set_columnlen(dag_column_info.second.flen);
+        ci->set_decimal(dag_column_info.second.decimal);
+        if (!dag_column_info.second.elems.empty())
+        {
+            for (const auto & pair : dag_column_info.second.elems)
+            {
+                ci->add_elems(pair.first);
+            }
+        }
+    }
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override
     {
-        tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
-        tipb_executor->set_executor_id(name);
-        auto * ts = tipb_executor->mutable_tbl_scan();
-        ts->set_table_id(table_info.id);
-        for (const auto & info : output_schema)
+        if (table_info.is_partition_table)
         {
-            tipb::ColumnInfo * ci = ts->add_columns();
-            auto column_name = splitQualifiedName(info.first).second;
-            if (column_name == MutableSupport::tidb_pk_column_name)
-                ci->set_column_id(-1);
-            else
-                ci->set_column_id(table_info.getColumnID(column_name));
-            ci->set_tp(info.second.tp);
-            ci->set_flag(info.second.flag);
-            ci->set_columnlen(info.second.flen);
-            ci->set_decimal(info.second.decimal);
-            if (!info.second.elems.empty())
-            {
-                for (const auto & pair : info.second.elems)
-                {
-                    ci->add_elems(pair.first);
-                }
-            }
+            tipb_executor->set_tp(tipb::ExecType::TypePartitionTableScan);
+            tipb_executor->set_executor_id(name);
+            auto * partition_ts = tipb_executor->mutable_partition_table_scan();
+            partition_ts->set_table_id(table_info.id);
+            for (const auto & info : output_schema)
+                setTipbColumnInfo(partition_ts->add_columns(), info);
+            for (const auto & partition : table_info.partition.definitions)
+                partition_ts->add_partition_ids(partition.id);
+        }
+        else
+        {
+            tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
+            tipb_executor->set_executor_id(name);
+            auto * ts = tipb_executor->mutable_tbl_scan();
+            ts->set_table_id(table_info.id);
+            for (const auto & info : output_schema)
+                setTipbColumnInfo(ts->add_columns(), info);
         }
         return true;
     }
@@ -2467,12 +2519,13 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     static Poco::Logger * log = &Poco::Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    RegionInfoMap regions;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
-    regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
     DAGContext dag_context(dag_request);
-    dag_context.regions_for_local_read = regions;
+    dag_context.tables_regions_info = std::move(tables_regions_info);
     dag_context.log = std::make_shared<LogWithPrefix>(log, "");
     context.setDAGContext(&dag_context);
 

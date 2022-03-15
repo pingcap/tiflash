@@ -101,6 +101,8 @@ public:
 
     void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
 
+    void renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map);
+
     void truncateTable(const String & database_name, const String & table_name);
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
