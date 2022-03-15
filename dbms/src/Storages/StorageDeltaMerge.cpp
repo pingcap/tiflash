@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -626,8 +627,9 @@ BlockInputStreams StorageDeltaMerge::read(
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
+    auto tracing_logger = query_info.logger;
 
-    LOG_FMT_DEBUG(log, "Read with tso: {}", mvcc_query_info.read_tso);
+    LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
     // Check whether tso is smaller than TiDB GcSafePoint
     const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
@@ -652,7 +654,7 @@ BlockInputStreams StorageDeltaMerge::read(
     check_read_tso(mvcc_query_info.read_tso);
 
     FmtBuffer fmt_buf;
-    if (unlikely(log->trace()))
+    if (unlikely(tracing_logger->trace()))
     {
         fmt_buf.append("orig, ");
         fmt_buf.joinStr(
@@ -685,9 +687,9 @@ BlockInputStreams StorageDeltaMerge::read(
         is_common_handle,
         rowkey_column_size,
         /*expected_ranges_count*/ num_streams,
-        log);
+        tracing_logger);
 
-    if (unlikely(log->trace()))
+    if (unlikely(tracing_logger->trace()))
     {
         fmt_buf.append(" merged, ");
         fmt_buf.joinStr(
@@ -697,7 +699,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 fb.append(range.toDebugString());
             },
             ",");
-        LOG_FMT_TRACE(log, "reading ranges: {}", fmt_buf.toString());
+        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -722,12 +724,11 @@ BlockInputStreams StorageDeltaMerge::read(
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_FILTER))
-            LOG_FMT_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
+            LOG_FMT_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
-        LOG_FMT_DEBUG(log, "Rough set filter is disabled.");
+        LOG_FMT_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    auto dummy_logger = getLogWithPrefix(nullptr);
     auto streams = store->read(
         context,
         context.getSettingsRef(),
@@ -736,7 +737,7 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
-        dummy_logger,
+        tracing_logger,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -744,7 +745,7 @@ BlockInputStreams StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_FMT_TRACE(log, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
+    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
@@ -799,6 +800,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
     return 0;
 }
 
+// just for testing
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
     size_t rows = 0;
@@ -822,6 +824,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
     return rows;
 }
 
+// just for testing
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
     auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)

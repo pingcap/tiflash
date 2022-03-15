@@ -15,15 +15,17 @@
 #pragma once
 
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 namespace DM
 {
 void sortRangesByStartEdge(RowKeyRanges & ranges);
 
-RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, Poco::Logger * log = nullptr);
+RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, const LogWithPrefixPtr & log = nullptr);
 
 } // namespace DM
 } // namespace DB

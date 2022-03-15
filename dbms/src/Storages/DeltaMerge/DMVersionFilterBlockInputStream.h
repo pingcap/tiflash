@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Columns/ColumnsCommon.h>
+#include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -41,12 +43,11 @@ public:
                                     const ColumnDefines & read_columns,
                                     UInt64 version_limit_,
                                     bool is_common_handle_,
-                                    const String & query_id_ = "")
+                                    const LogWithPrefixPtr & log_ = nullptr)
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
-        , query_id(query_id_)
-        , log(&Poco::Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
+        , log(getLogWithPrefix(log_, fmt::format("DMVersionFilterBlockInputStream<{}>", (MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT"))))
     {
         children.push_back(input);
 
@@ -60,15 +61,14 @@ public:
     ~DMVersionFilterBlockInputStream()
     {
         LOG_FMT_DEBUG(log,
-                      "Total rows: {}, pass: {:.2f}%, complete pass: {:.2f}%, complete not pass: {:.2f}%, not clean: {:.2f}%, effective: {:.2f}%, read tso: {}, query id: {}",
+                      "Total rows: {}, pass: {:.2f}%, complete pass: {:.2f}%, complete not pass: {:.2f}%, not clean: {:.2f}%, effective: {:.2f}%, read tso: {}",
                       total_rows,
                       passed_rows * 100.0 / total_rows,
                       complete_passed * 100.0 / total_blocks,
                       complete_not_passed * 100.0 / total_blocks,
                       not_clean_rows * 100.0 / passed_rows,
                       effective_num_rows * 100.0 / passed_rows,
-                      version_limit,
-                      (query_id.empty() ? "<non-query>" : query_id));
+                      version_limit);
     }
 
     void readPrefix() override;
@@ -192,7 +192,6 @@ private:
     const UInt64 version_limit;
     const bool is_common_handle;
     const Block header;
-    const String query_id;
 
     size_t handle_col_pos;
     size_t version_col_pos;
@@ -230,7 +229,7 @@ private:
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
 
-    Poco::Logger * const log;
+    const LogWithPrefixPtr log;
 };
 } // namespace DM
 } // namespace DB

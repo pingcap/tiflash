@@ -430,7 +430,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         columns_to_read,
         max_version,
         is_common_handle,
-        "");
+        dm_context.tracing_logger);
 
     LOG_FMT_TRACE(
         dm_context.tracing_logger,

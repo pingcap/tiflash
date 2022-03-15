@@ -34,6 +34,9 @@ struct DAGQueryInfo;
 class LogWithPrefix;
 using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 /** Query along with some additional data,
   *  that can be used during query processing
   *  inside storage engines.

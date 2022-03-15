@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Checksum.h>
+#include <Common/LogWithPrefix.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>

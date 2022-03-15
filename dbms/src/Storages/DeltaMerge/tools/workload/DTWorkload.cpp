@@ -32,6 +32,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
 
+#include "Common/LogWithPrefix.h"
+
 namespace DB::DM::tests
 {
 DB::Settings createSettings(const WorkloadOptions & opts)

@@ -67,6 +67,7 @@ public:
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
+    // TODO: Use a builder to replace these params
     DMFileReader(
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,

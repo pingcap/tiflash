@@ -270,6 +270,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
+        query_info.logger = log;
         return query_info;
     };
     if (table_scan.isPartitionTableScan())
