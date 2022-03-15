@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Page/Page.h>
@@ -67,6 +81,31 @@ enum class EditRecordType
     VAR_EXTERNAL,
     VAR_DELETE,
 };
+
+inline const char * typeToString(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::PUT:
+        return "PUT    ";
+    case EditRecordType::PUT_EXTERNAL:
+        return "EXT    ";
+    case EditRecordType::REF:
+        return "REF    ";
+    case EditRecordType::DEL:
+        return "DEL    ";
+    case EditRecordType::UPSERT:
+        return "UPSERT ";
+    case EditRecordType::VAR_ENTRY:
+        return "VAR_ENT";
+    case EditRecordType::VAR_REF:
+        return "VAR_REF";
+    case EditRecordType::VAR_EXTERNAL:
+        return "VAR_EXT";
+    case EditRecordType::VAR_DELETE:
+        return "VAR_DEL";
+    }
+}
 
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
@@ -176,9 +215,27 @@ public:
         PageIdV3Internal ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
-        Int64 being_ref_count = 1;
+        Int64 being_ref_count;
+
+        EditRecord()
+            : page_id(0)
+            , ori_page_id(0)
+            , being_ref_count(1)
+        {}
     };
     using EditRecords = std::vector<EditRecord>;
+
+    static String toDebugString(const EditRecord & rec)
+    {
+        return fmt::format(
+            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+            typeToString(rec.type),
+            rec.page_id,
+            rec.ori_page_id,
+            rec.version,
+            DB::PS::V3::toDebugString(rec.entry),
+            rec.being_ref_count);
+    }
 
     void appendRecord(const EditRecord & rec)
     {

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -82,7 +96,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
-    , have_finish_build(true)
+    , build_table_state(BuildTableState::SUCCEED)
     , log(getLogWithPrefix(log_, "Join"))
     , limits(limits)
 {
@@ -108,10 +122,10 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         throw Exception("Not supported: non right join with right conditions");
 }
 
-void Join::setFinishBuildTable(bool finish_)
+void Join::setBuildTableState(BuildTableState state_)
 {
     std::lock_guard<std::mutex> lk(build_table_mutex);
-    have_finish_build = finish_;
+    build_table_state = state_;
     build_table_cv.notify_all();
 }
 
@@ -1771,7 +1785,9 @@ void Join::joinBlock(Block & block) const
     {
         std::unique_lock lk(build_table_mutex);
 
-        build_table_cv.wait(lk, [&]() { return have_finish_build; });
+        build_table_cv.wait(lk, [&]() { return build_table_state != BuildTableState::WAITING; });
+        if (build_table_state == BuildTableState::FAILED) /// throw this exception once failed to build the hash table
+            throw Exception("Build failed before join probe!");
     }
 
     std::shared_lock lock(rwlock);

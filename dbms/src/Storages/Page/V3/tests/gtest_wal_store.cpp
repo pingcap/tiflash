@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -100,17 +114,17 @@ TEST(WALSeriTest, Upserts)
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver20_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p1_2);
     iter++;
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 3);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p3_2);
     iter++;
-    EXPECT_EQ(iter->type, EditRecordType::PUT); // deser as put
+    EXPECT_EQ(iter->type, EditRecordType::UPSERT);
     EXPECT_EQ(iter->page_id.low, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
@@ -212,6 +226,56 @@ protected:
     PSDiskDelegatorPtr delegator;
 };
 
+TEST_F(WALStoreTest, FindCheckpointFile)
+{
+    Poco::Logger * log = &Poco::Logger::get("WALStoreTest");
+    auto path = getTemporaryPath();
+
+    {
+        // no checkpoint
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_1_0", log),
+            LogFilename::parseFrom(path, "log_2_0", log),
+            LogFilename::parseFrom(path, "log_3_0", log),
+            LogFilename::parseFrom(path, "log_4_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_FALSE(cp.has_value());
+        EXPECT_EQ(files_to_read.size(), 4);
+    }
+
+    {
+        // checkpoint and some other logfiles
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_12_1", log),
+            LogFilename::parseFrom(path, "log_13_0", log),
+            LogFilename::parseFrom(path, "log_14_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_TRUE(cp.has_value());
+        EXPECT_EQ(cp->log_num, 12);
+        EXPECT_EQ(cp->level_num, 1);
+        EXPECT_EQ(files_to_read.size(), 2);
+    }
+
+    {
+        // some files before checkpoint left on disk
+        LogFilenameSet files{
+            LogFilename::parseFrom(path, "log_10_0", log),
+            LogFilename::parseFrom(path, "log_11_0", log),
+            LogFilename::parseFrom(path, "log_12_0", log),
+            LogFilename::parseFrom(path, "log_12_1", log),
+            LogFilename::parseFrom(path, "log_13_0", log),
+            LogFilename::parseFrom(path, "log_14_0", log),
+        };
+        auto [cp, files_to_read] = WALStoreReader::findCheckpoint(std::move(files));
+        ASSERT_TRUE(cp.has_value());
+        EXPECT_EQ(cp->log_num, 12);
+        EXPECT_EQ(cp->level_num, 1);
+        EXPECT_EQ(files_to_read.size(), 2);
+    }
+}
+
 TEST_F(WALStoreTest, Empty)
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -223,6 +287,7 @@ TEST_F(WALStoreTest, Empty)
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
+        (void)edit;
         if (!ok)
         {
             reader->throwIfError();

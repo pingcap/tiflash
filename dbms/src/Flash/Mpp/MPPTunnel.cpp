@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
@@ -217,7 +231,9 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     {
         std::unique_lock lk(mu);
         if (connected)
-            throw Exception("has connected");
+            throw Exception("MPPTunnel has connected");
+        if (finished)
+            throw Exception("MPPTunnel has finished");
 
         LOG_TRACE(log, "ready to connect");
         if (is_local)

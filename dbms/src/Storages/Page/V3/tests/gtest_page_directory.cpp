@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Encryption/FileProvider.h>
@@ -508,6 +522,36 @@ TEST_F(PageDirectoryTest, NewRefAfterDel)
     }
 }
 
+TEST_F(PageDirectoryTest, RefToExt)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(83);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(85, 83);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(83);
+        dir->apply(std::move(edit));
+    }
+    // The external id "83" is not changed,
+    // we may add ref to external "83" even
+    // if it is logical delete but have other
+    // alive reference page.
+    {
+        PageEntriesEdit edit;
+        edit.ref(86, 83);
+        dir->apply(std::move(edit));
+    }
+}
+CATCH
+
 TEST_F(PageDirectoryTest, NormalPageId)
 try
 {
@@ -583,16 +627,12 @@ CATCH
 class VersionedEntriesTest : public ::testing::Test
 {
 public:
-    void SetUp() override
-    {
-    }
-
     using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>>;
     std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), &deref_counter, removed_entries, entries.acquireLock());
+        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, removed_entries, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
@@ -664,6 +704,15 @@ TEST_F(VersionedEntriesTest, InsertGet)
     {
         ASSERT_FALSE(entries.getEntry(seq).has_value());
     }
+}
+
+TEST_F(VersionedEntriesTest, InsertWithLowerVersion)
+{
+    INSERT_ENTRY(5);
+    ASSERT_SAME_ENTRY(*entries.getEntry(5), entry_v5);
+    ASSERT_FALSE(entries.getEntry(2).has_value());
+    INSERT_ENTRY(2);
+    ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_v2);
 }
 
 TEST_F(VersionedEntriesTest, GC)
@@ -1550,6 +1599,117 @@ try
         auto outdated_entries = dir->gcInMemEntries();
         EXPECT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, GCOnRefedEntries2)
+try
+{
+    // 10->entry1, 11->10=>11->entry1; del 10->entry1
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(10, entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(12, 10);
+        edit.del(10);
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    // del 11->entry1
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        edit.del(12);
+        dir->apply(std::move(edit));
+    }
+    // entry1 get removed
+    {
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, UpsertOnRefedEntries)
+try
+{
+    // 10->entry1, 11->10, 12->10
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(10, entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(11, 10);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(12, 10);
+        edit.del(10);
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    // upsert 10->entry2
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        auto full_gc_entries = dir->getEntriesByBlobIds({1});
+        auto ids = full_gc_entries.first.at(1);
+        ASSERT_EQ(ids.size(), 1);
+        edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
+        dir->gcApply(std::move(edit));
+    }
+
+    auto removed_entries = dir->gcInMemEntries();
+    ASSERT_EQ(removed_entries.size(), 1);
+    EXPECT_SAME_ENTRY(removed_entries[0], entry1);
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_EQ(entry2, dir, 11, snap);
+        EXPECT_ENTRY_EQ(entry2, dir, 12, snap);
+    }
+
+    // del 11->entry2
+    {
+        PageEntriesEdit edit;
+        edit.del(11);
+        dir->apply(std::move(edit));
+        EXPECT_EQ(dir->gcInMemEntries().size(), 0);
+    }
+    // del 12->entry2
+    {
+        PageEntriesEdit edit;
+        edit.del(12);
+        dir->apply(std::move(edit));
+        // entry2 get removed
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry2, *outdated_entries.begin());
     }
 }
 CATCH
