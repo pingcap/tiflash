@@ -283,7 +283,7 @@ private:
     bool meet_exception = false;
     void handleException(std::exception_ptr & exception)
     {
-        std::unique_lock<std::mutex> lock(mu);
+        std::unique_lock lock(mu);
         if (meet_exception)
             return;
         meet_exception = true;
