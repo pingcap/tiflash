@@ -36,14 +36,19 @@ def main():
                         default=os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument('--suffix',
                         help='suffix of files to format, split by space', default=' '.join(default_suffix))
-    parser.add_argument('--ignore_suffix', help='ignore files with suffix, split by space')
-    parser.add_argument('--diff_from', help='commit hash/branch to check git diff', default='HEAD')
-    parser.add_argument('--check_formatted', help='exit -1 if NOT formatted', action='store_true')
-    parser.add_argument('--dump_diff_files_to', help='dump diff file names to specific path', default=None)
+    parser.add_argument('--ignore_suffix',
+                        help='ignore files with suffix, split by space')
+    parser.add_argument(
+        '--diff_from', help='commit hash/branch to check git diff', default='HEAD')
+    parser.add_argument('--check_formatted',
+                        help='exit -1 if NOT formatted', action='store_true')
+    parser.add_argument('--dump_diff_files_to',
+                        help='dump diff file names to specific path', default=None)
 
     args = parser.parse_args()
     default_suffix = args.suffix.strip().split(' ') if args.suffix else []
-    ignore_suffix = args.ignore_suffix.strip().split(' ') if args.ignore_suffix else []
+    ignore_suffix = args.ignore_suffix.strip().split(
+        ' ') if args.ignore_suffix else []
     tics_repo_path = args.repo_path
     if not os.path.isabs(tics_repo_path):
         raise Exception("path of repo should be absolute")
@@ -52,7 +57,8 @@ def main():
     os.chdir(tics_repo_path)
     files_to_check = run_cmd('git diff HEAD --name-only') if args.diff_from == 'HEAD' else run_cmd(
         'git diff {} --name-only'.format(args.diff_from))
-    files_to_check = [os.path.join(tics_repo_path, s.strip()) for s in files_to_check]
+    files_to_check = [os.path.join(tics_repo_path, s.strip())
+                      for s in files_to_check]
     files_to_format = []
     for f in files_to_check:
         if not any([f.endswith(e) for e in default_suffix]):
@@ -69,8 +75,10 @@ def main():
 
     if args.dump_diff_files_to:
         da = [e[len(tics_repo_path):] for e in files_to_format]
-        json.dump({'files': da, 'repo': tics_repo_path}, open(args.dump_diff_files_to, 'w'))
-        print('dump {} modified files info to {}'.format(len(da), args.dump_diff_files_to))
+        json.dump({'files': da, 'repo': tics_repo_path},
+                  open(args.dump_diff_files_to, 'w'))
+        print('dump {} modified files info to {}'.format(
+            len(da), args.dump_diff_files_to))
 
     if files_to_format:
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
@@ -84,7 +92,6 @@ def main():
             if diff_res:
                 print('Error: found files NOT formatted')
                 print(''.join(diff_res))
-                print(''.join(run_cmd('git diff')))
                 exit(-1)
             else:
                 print("Format check passed")
