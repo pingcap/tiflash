@@ -78,7 +78,7 @@ TablesRegionsInfo TablesRegionsInfo::create(
     const TMTContext & tmt_context)
 {
     assert(regions.empty() || table_regions.empty());
-    TablesRegionsInfo tables_regions_info(!regions.empty());
+    TablesRegionsInfo tables_regions_info(table_regions.empty());
     std::unordered_set<RegionID> local_region_id_set;
     if (!regions.empty())
         insertRegionInfoToTablesRegionInfo(regions, InvalidTableID, tables_regions_info, local_region_id_set, tmt_context);
