@@ -87,6 +87,11 @@ struct MockTiDBTable
     //   ./storage-client.sh "DBGInvoke create_tidb_tables(db_name, table_name, [table_name], ..., [table_name])"
     static void dbgFuncCreateTiDBTables(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+    // Trigger a rename tables ddl job.
+    // Usage:
+    //   ./storage-client.sh "DBGInvoke rename_tidb_tables(database-name, table-name, new-table-name, ..., [database-name, table-name, new-table-name])"
+    static void dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output);
+
 private:
     static void dbgFuncDropTiDBTableImpl(
         Context & context,
