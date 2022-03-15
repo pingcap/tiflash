@@ -80,7 +80,7 @@ TablesRegionsInfo TablesRegionsInfo::create(
     assert(regions.empty() || table_regions.empty());
     TablesRegionsInfo tables_regions_info(table_regions.empty());
     std::unordered_set<RegionID> local_region_id_set;
-    if (!regions.empty())
+    if (tables_regions_info.is_single_table)
         insertRegionInfoToTablesRegionInfo(regions, InvalidTableID, tables_regions_info, local_region_id_set, tmt_context);
     else
     {
