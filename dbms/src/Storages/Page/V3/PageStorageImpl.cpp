@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -43,19 +57,19 @@ void PageStorageImpl::drop()
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PageId PageStorageImpl::getMaxId()
+PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
 {
-    return page_directory->getMaxId();
+    return page_directory->getMaxId(ns_id);
 }
 
-PageId PageStorageImpl::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
+PageId PageStorageImpl::getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    return page_directory->getNormalPageId(page_id, snapshot);
+    return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot).low;
 }
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
@@ -78,7 +92,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
     page_directory->apply(std::move(edit), write_limiter);
 }
 
-DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -87,7 +101,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
 
     try
     {
-        const auto & [id, entry] = page_directory->get(page_id, snapshot);
+        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
@@ -107,40 +121,46 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
 }
 
-DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entry = page_directory->get(page_id, snapshot);
+    auto page_entry = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
     return blob_store.read(page_entry, read_limiter);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory->get(page_ids, snapshot);
+    PageIdV3Internals page_id_v3s;
+    for (auto p_id : page_ids)
+        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
+    auto page_entries = page_directory->get(page_id_v3s, snapshot);
     return blob_store.read(page_entries, read_limiter);
 }
 
-void PageStorageImpl::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
 
-    auto page_entries = page_directory->get(page_ids, snapshot);
+    PageIdV3Internals page_id_v3s;
+    for (auto p_id : page_ids)
+        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
+    auto page_entries = page_directory->get(page_id_v3s, snapshot);
     blob_store.read(page_entries, handler, read_limiter);
 }
 
-PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -150,9 +170,9 @@ PageMap PageStorageImpl::read(const std::vector<PageReadFields> & page_fields, c
     BlobStore::FieldReadInfos read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = page_directory->get(page_id, snapshot);
+        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
-        auto info = BlobStore::FieldReadInfo(page_id, entry, field_indices);
+        auto info = BlobStore::FieldReadInfo(buildV3Id(ns_id, page_id), entry, field_indices);
         read_infos.emplace_back(info);
     }
 
@@ -188,11 +208,15 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     });
 
     auto clean_external_page = [this]() {
-        if (external_pages_scanner && external_pages_remover)
+        std::scoped_lock lock{callbacks_mutex};
+        if (!callbacks_container.empty())
         {
-            auto pending_external_pages = external_pages_scanner();
-            auto alive_external_ids = page_directory->getAliveExternalIds();
-            external_pages_remover(pending_external_pages, alive_external_ids);
+            for (const auto & callbacks : callbacks_container)
+            {
+                auto pending_external_pages = callbacks.scanner();
+                auto alive_external_ids = page_directory->getAliveExternalIds(callbacks.ns_id);
+                callbacks.remover(pending_external_pages, alive_external_ids);
+            }
         }
     };
 
@@ -251,10 +275,17 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
 
 void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
+    std::scoped_lock lock{callbacks_mutex};
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
-    external_pages_scanner = callbacks.scanner;
-    external_pages_remover = callbacks.remover;
+    assert(callbacks.ns_id != MAX_NAMESPACE_ID);
+    callbacks_container.push_back(callbacks);
+}
+
+void PageStorageImpl::clearExternalPagesCallbacks()
+{
+    std::scoped_lock lock{callbacks_mutex};
+    callbacks_container.clear();
 }
 
 } // namespace PS::V3

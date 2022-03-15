@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -341,13 +355,13 @@ void PageStorage::restore()
     }
 }
 
-PageId PageStorage::getMaxId()
+PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
     return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
-PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
+PageId PageStorage::getNormalPageId(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -358,7 +372,7 @@ PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
     return is_ref_id ? normal_page_id : page_id;
 }
 
-DB::PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorage::getEntry(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -578,7 +592,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorage::read(NamespaceId /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -594,7 +608,7 @@ DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, 
     return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -637,7 +651,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimite
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -677,7 +691,7 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
     }
 }
 
-PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
         snapshot = this->getSnapshot();
@@ -741,7 +755,8 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
 
     for (const auto & p : file_and_pages)
     {
-        auto pages = read(p.second, nullptr, snapshot);
+        // namespace id is not used in V2, so it's value is not important here
+        auto pages = read(MAX_NAMESPACE_ID, p.second, nullptr, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);

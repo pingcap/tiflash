@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/TiFlashBuildInfo.h>
@@ -40,7 +54,8 @@ namespace DB
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
-        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                             \
+        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}),                             \
+        F(type_partition_ts, {"type", "partition_table_scan"}))                                                                           \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 30}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 30}),         \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 30}),                                                        \
@@ -164,7 +179,9 @@ namespace DB
         F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
         F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
         F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
-        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}))
+        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                             \
+        F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                             \
+        F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))
 // clang-format on
 
 struct ExpBuckets

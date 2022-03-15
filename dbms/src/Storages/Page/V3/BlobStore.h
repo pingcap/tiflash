@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -19,7 +33,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using PageIdAndVersionedEntries = std::vector<std::tuple<PageId, PageVersionType, PageEntryV3>>;
+using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersionType, PageEntryV3>>;
 
 class BlobStore : private Allocator<false>
 {
@@ -143,8 +157,6 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
 
-        BlobFileId chooseNewStat();
-
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
@@ -167,7 +179,6 @@ public:
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
-        std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
         mutable std::mutex lock_stats;
     };
@@ -193,11 +204,11 @@ public:
 
     struct FieldReadInfo
     {
-        PageId page_id;
+        PageIdV3Internal page_id;
         PageEntryV3 entry;
         std::vector<size_t> fields;
 
-        FieldReadInfo(PageId id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+        FieldReadInfo(PageIdV3Internal id_, PageEntryV3 entry_, std::vector<size_t> fields_)
             : page_id(id_)
             , entry(entry_)
             , fields(std::move(fields_))

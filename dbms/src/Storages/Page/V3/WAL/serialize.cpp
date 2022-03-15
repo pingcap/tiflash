@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -64,7 +78,7 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 {
     assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY);
 
-    writeIntBinary(EditRecordType::PUT, buf);
+    writeIntBinary(record.type, buf);
 
     UInt32 flags = 0;
     writeIntBinary(flags, buf);
@@ -155,7 +169,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 {
     assert(record_type == EditRecordType::DEL || record_type == EditRecordType::VAR_DELETE);
 
-    PageId page_id;
+    PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
     PageVersionType version;
     deserializeVersionFrom(buf, version);
