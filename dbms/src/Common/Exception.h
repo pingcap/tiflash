@@ -36,6 +36,12 @@ public:
         : Poco::Exception(exc.displayText())
     {}
 
+    Exception(const Poco::Exception & exc, const std::string & arg)
+        : Poco::Exception(exc.displayText())
+    {
+        extendedMessage(arg);
+    }
+
     const char * name() const throw() override { return "DB::Exception"; }
     const char * className() const throw() override { return "DB::Exception"; }
     DB::Exception * clone() const override { return new DB::Exception(*this); }

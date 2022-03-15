@@ -2008,7 +2008,7 @@ private:
                 src_offset = src_offsets[i];
                 dst_offset += src_length;
 
-                if (src_length > 1 && dst_data[dst_offset - 2] != trailing_char_str.front())
+                if (src_length > 1 && static_cast<signed char>(dst_data[dst_offset - 2]) != trailing_char_str.front())
                 {
                     dst_data[dst_offset - 1] = trailing_char_str.front();
                     dst_data[dst_offset] = 0;
@@ -2705,7 +2705,7 @@ private:
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
         static const std::string default_rem = " ";
-        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), reinterpret_cast<UInt8 *>(const_cast<char *>(default_rem.c_str())), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
     }
@@ -2726,7 +2726,7 @@ private:
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
             std::string data = data_col->getValue<String>();
-            constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+            constVector(is_ltrim, is_rtrim, reinterpret_cast<UInt8 *>(const_cast<char *>(data.c_str())), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
         {
@@ -2734,7 +2734,7 @@ private:
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
             std::string remstr = remstr_col->getValue<String>();
-            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)remstr.c_str(), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
+            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), reinterpret_cast<UInt8 *>(const_cast<char *>(remstr.c_str())), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
         {
@@ -4074,8 +4074,7 @@ class FunctionASCII : public IFunction
 {
 public:
     static constexpr auto name = "ascii";
-    explicit FunctionASCII(const Context & context)
-        : context(context)
+    explicit FunctionASCII(const Context &)
     {}
 
     static FunctionPtr create(const Context & context)
@@ -4119,17 +4118,13 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
-    const Context & context;
 };
 
 class FunctionLength : public IFunction
 {
 public:
     static constexpr auto name = "length";
-    explicit FunctionLength(const Context & context)
-        : context(context)
+    explicit FunctionLength(const Context &)
     {}
 
     static FunctionPtr create(const Context & context)
@@ -4172,17 +4167,13 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
-    const Context & context;
 };
 
 class FunctionPosition : public IFunction
 {
 public:
     static constexpr auto name = "position";
-    explicit FunctionPosition(const Context & context)
-        : context(context)
+    explicit FunctionPosition(const Context &)
     {}
 
     static FunctionPtr create(const Context & context)
@@ -4250,16 +4241,13 @@ private:
         const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
-
-    const Context & context;
 };
 
 class FunctionSubStringIndex : public IFunction
 {
 public:
     static constexpr auto name = "substringIndex";
-    explicit FunctionSubStringIndex(const Context & context_)
-        : context(context_)
+    explicit FunctionSubStringIndex(const Context &)
     {}
 
     static FunctionPtr create(const Context & context)
@@ -4516,8 +4504,6 @@ private:
         res_data[res_offset + (end - begin)] = '\0';
         res_offset += end - begin + 1;
     }
-
-    const Context & context;
 };
 
 template <typename Name, typename Format>
@@ -4525,8 +4511,8 @@ class FormatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit FormatImpl(const Context & context_)
-        : context(context_)
+    explicit FormatImpl(const Context & context)
+        : context(context)
     {}
 
     static FunctionPtr create(const Context & context_)
