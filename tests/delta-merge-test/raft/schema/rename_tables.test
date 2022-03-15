@@ -1,0 +1,31 @@
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('false')
+
+=> DBGInvoke __drop_tidb_table(default, t1)
+=> DBGInvoke __drop_tidb_table(default, t2)
+=> drop table if exists default.t1
+=> drop table if exists default.t2
+=> DBGInvoke __refresh_schemas()
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+
+=> DBGInvoke __create_tidb_tables(default, t1, t2)
+# rename table
+=> DBGInvoke __rename_tidb_tables(default, t1, r1, default, t2, r2)
+=> DBGInvoke __refresh_schemas()
+=> select database,name,engine from system.tables where database='default' and name='r1'
+┌─database─┬─name─┬─engine─────┐
+│ default  │ r1   │ DeltaMerge │
+└──────────┴──────┴────────────┘
+=> select database,name,engine from system.tables where database='default' and name='r2'
+┌─database─┬─name─┬─engine─────┐
+│ default  │ r2   │ DeltaMerge │
+└──────────┴──────┴────────────┘
+
+# clean
+=> DBGInvoke __drop_tidb_table(default, r1)
+=> DBGInvoke __drop_tidb_table(default, r2)
+=> drop table if exists default.r1
+=> drop table if exists default.r2
+=> DBGInvoke __enable_schema_sync_service('true')
