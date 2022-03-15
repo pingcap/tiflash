@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 clang_format=$(bash -c "compgen -c clang-format | grep 'clang-format' | sort --version-sort | head -n1")
 
 if [[ ! -z ${clang_format} ]]; then
