@@ -197,6 +197,7 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
+<<<<<<< HEAD
     std::lock_guard<std::mutex> lk(mu);
     if (connected)
         throw Exception("has connected");
@@ -206,6 +207,34 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
     connected = true;
     cv_for_connected.notify_all();
+=======
+    {
+        std::unique_lock lk(mu);
+        if (connected)
+            throw Exception("MPPTunnel has connected");
+        if (finished)
+            throw Exception("MPPTunnel has finished");
+
+        LOG_TRACE(log, "ready to connect");
+        if (is_local)
+            assert(writer_ == nullptr);
+        else
+        {
+            writer = writer_;
+            if (!is_async)
+            {
+                // communicate send_thread through `consumer_state`
+                // NOTE: if the thread creation failed, `connected` will still be `false`.
+                thread_manager->schedule(true, "MPPTunnel", [this] {
+                    sendJob();
+                });
+            }
+        }
+        connected = true;
+        cv_for_connected_or_finished.notify_all();
+    }
+    LOG_DEBUG(log, "connected");
+>>>>>>> b3a2cd587b (Fix a bug that MPP tasks may leak threads forever (#4241))
 }
 
 template <typename Writer>
