@@ -201,7 +201,6 @@ void StoragePool::enableGC()
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
 }
 
-
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     if (!owned_storage)
