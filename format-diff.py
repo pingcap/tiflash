@@ -74,11 +74,12 @@ def main():
 
     if files_to_format:
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
-
-        if args.check_formatted:
-            cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
+        for file in files_to_format:
+            cmd = 'clang-format -i {}'.format(file)
             if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
                 exit(-1)
+
+        if args.check_formatted:
             diff_res = run_cmd('git diff --name-only')
             if diff_res:
                 print('Error: found files NOT formatted')
