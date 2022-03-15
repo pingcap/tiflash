@@ -178,13 +178,13 @@ private:
 
         bool errHasSet() const
         {
-            return err_has_set;
+            return err_has_set.load();
         }
 
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
-        bool err_has_set = false;
+        std::atomic<bool> err_has_set{false};
     };
     ConsumerState consumer_state;
 
