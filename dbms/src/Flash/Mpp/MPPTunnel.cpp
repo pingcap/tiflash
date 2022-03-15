@@ -110,7 +110,33 @@ void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     std::lock_guard<std::mutex> lk(mu);
     if (connected)
     {
+<<<<<<< HEAD
         throw Exception("has connected");
+=======
+        std::unique_lock lk(mu);
+        if (connected)
+            throw Exception("MPPTunnel has connected");
+        if (finished)
+            throw Exception("MPPTunnel has finished");
+
+        LOG_TRACE(log, "ready to connect");
+        if (is_local)
+            assert(writer_ == nullptr);
+        else
+        {
+            writer = writer_;
+            if (!is_async)
+            {
+                // communicate send_thread through `consumer_state`
+                // NOTE: if the thread creation failed, `connected` will still be `false`.
+                thread_manager->schedule(true, "MPPTunnel", [this] {
+                    sendJob();
+                });
+            }
+        }
+        connected = true;
+        cv_for_connected_or_finished.notify_all();
+>>>>>>> b3a2cd587b (Fix a bug that MPP tasks may leak threads forever (#4241))
     }
     LOG_DEBUG(log, "ready to connect");
     connected = true;
