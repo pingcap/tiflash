@@ -245,6 +245,27 @@ public:
         return (flags & f);
     }
 
+    UInt64 getSQLMode() const
+    {
+        return sql_mode;
+    }
+    void setSQLMode(UInt64 f)
+    {
+        sql_mode = f;
+    }
+    void addSQLMode(UInt64 f)
+    {
+        sql_mode |= f;
+    }
+    void delSQLMode(UInt64 f)
+    {
+        sql_mode &= (~f);
+    }
+    bool hasSQLMode(UInt64 f) const
+    {
+        return sql_mode & f;
+    }
+
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 

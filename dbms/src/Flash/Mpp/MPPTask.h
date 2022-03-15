@@ -60,13 +60,13 @@ public:
 
     void prepare(const mpp::DispatchTaskRequest & task_request);
 
-    void preprocess();
-
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
-    int estimateCountOfNewThreads();
+    int getNeededThreads();
+
+    void scheduleThisTask();
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -89,6 +89,12 @@ private:
     void finishWrite();
 
     bool switchStatus(TaskStatus from, TaskStatus to);
+
+    void preprocess();
+
+    void scheduleOrWait();
+
+    int estimateCountOfNewThreads();
 
     tipb::DAGRequest dag_req;
 
@@ -118,6 +124,12 @@ private:
     Exception err;
 
     friend class MPPTaskManager;
+
+    int needed_threads;
+
+    std::mutex schedule_mu;
+    std::condition_variable schedule_cv;
+    bool scheduled;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

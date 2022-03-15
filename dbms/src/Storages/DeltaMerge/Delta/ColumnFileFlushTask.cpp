@@ -71,17 +71,10 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
         ColumnFilePersistedPtr new_column_file;
         if (auto * m_file = task.column_file->tryToInMemoryFile(); m_file)
         {
-            // Just keep cache for really small column file
-            ColumnFile::CachePtr column_file_cache = nullptr;
-            if (m_file->getRows() < context.delta_small_column_file_rows || m_file->getBytes() < context.delta_small_column_file_bytes)
-            {
-                column_file_cache = !task.sorted ? m_file->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data));
-            }
             new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
                                                                m_file->getRows(),
                                                                m_file->getBytes(),
-                                                               task.data_page,
-                                                               column_file_cache);
+                                                               task.data_page);
         }
         else if (auto * t_file = task.column_file->tryToTinyFile(); t_file)
         {

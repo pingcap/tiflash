@@ -135,6 +135,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBDateDiff>();
 
     factory.registerFunction<FunctionToTimeZone>();
+    factory.registerFunction<FunctionToLastDay>();
 }
 
 } // namespace DB

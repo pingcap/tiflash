@@ -29,6 +29,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
@@ -3255,6 +3256,118 @@ private:
     const Context & context;
 };
 
+template <typename ToFieldType>
+struct TiDBLastDayTransformerImpl
+{
+    static_assert(std::is_same_v<ToFieldType, DataTypeMyDate::FieldType>);
+    static constexpr auto name = "tidbLastDay";
+
+    static void execute(const Context & context,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
+    {
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
+        {
+            context.getDAGContext()->handleInvalidTime(
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
+            is_null = true;
+            return 0;
+        }
+        UInt8 last_day = getLastDay(val.year, val.month);
+        return MyDate(val.year, val.month, last_day).toPackedUInt();
+    }
+};
+
+// Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
+template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
+class FunctionMyDateOrMyDateTimeToSomething : public IFunction
+{
+private:
+    const Context & context;
+
+public:
+    using ToFieldType = typename ToDataType::FieldType;
+    static constexpr auto name = Transformer<ToFieldType>::name;
+
+    explicit FunctionMyDateOrMyDateTimeToSomething(const Context & context)
+        : context(context)
+    {}
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionMyDateOrMyDateTimeToSomething>(context); };
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (!arguments[0].type->isMyDateOrMyDateTime())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        DataTypePtr return_type = std::make_shared<ToDataType>();
+        if constexpr (return_nullable)
+            return_type = makeNullable(return_type);
+        return return_type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const DataTypePtr & from_type = block.getByPosition(arguments[0]).type;
+
+        if (from_type->isMyDateOrMyDateTime())
+        {
+            using FromFieldType = typename DataTypeMyTimeBase::FieldType;
+
+            const ColumnVector<FromFieldType> * col_from
+                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+
+            const size_t size = vec_from.size();
+            auto col_to = ColumnVector<ToFieldType>::create(size);
+            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
+
+            if constexpr (return_nullable)
+            {
+                ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(size, 0);
+                ColumnUInt8::Container & vec_null_map = col_null_map->getData();
+                Transformer<ToFieldType>::execute(context, vec_from, vec_to, vec_null_map);
+                block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+            }
+            else
+            {
+                Transformer<ToFieldType>::execute(context, vec_from, vec_to);
+                block.getByPosition(result).column = std::move(col_to);
+            }
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+};
+
+static constexpr bool return_nullable = true;
+static constexpr bool return_not_null = false;
+
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
 using FunctionToMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMonthImpl>;
@@ -3273,6 +3386,7 @@ using FunctionToStartOfFiveMinute = FunctionDateOrDateTimeToSomething<DataTypeDa
 using FunctionToStartOfFifteenMinutes = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToStartOfFifteenMinutesImpl>;
 using FunctionToStartOfHour = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToStartOfHourImpl>;
 using FunctionToTime = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToTimeImpl>;
+using FunctionToLastDay = FunctionMyDateOrMyDateTimeToSomething<DataTypeMyDate, TiDBLastDayTransformerImpl, return_nullable>;
 
 using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToRelativeYearNumImpl>;
 using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeQuarterNumImpl>;

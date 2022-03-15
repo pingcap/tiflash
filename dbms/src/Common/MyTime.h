@@ -206,4 +206,21 @@ bool isValidSeperator(char c, int previous_parts);
 // Note that this function will not check if the input is logically a valid datetime value.
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
+inline bool isLeapYear(UInt16 year)
+{
+    return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+}
+
+// Get last day of a month. Return 0 if month if invalid.
+inline UInt8 getLastDay(UInt16 year, UInt8 month)
+{
+    static constexpr UInt8 days_of_month_table[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    UInt8 last_day = 0;
+    if (month > 0 && month <= 12)
+        last_day = days_of_month_table[month];
+    if (month == 2 && isLeapYear(year))
+        last_day = 29;
+    return last_day;
+}
+
 } // namespace DB

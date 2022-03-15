@@ -25,6 +25,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
@@ -56,6 +57,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
     , mpp_task_statistics(id, meta.address())
+    , scheduled(false)
 {}
 
 MPPTask::~MPPTask()
@@ -265,7 +267,6 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
-
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -274,13 +275,16 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
     String err_msg;
-    LOG_INFO(log, "task starts running");
     try
     {
+        LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
+        needed_threads = estimateCountOfNewThreads();
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
 
-        int new_thd_cnt = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
+        scheduleOrWait();
+
+        LOG_FMT_INFO(log, "task starts running");
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -394,6 +398,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
+            scheduleThisTask();
             context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
@@ -408,11 +413,48 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
     return status.compare_exchange_strong(from, to);
 }
 
+void MPPTask::scheduleOrWait()
+{
+    if (!manager->tryToScheduleTask(shared_from_this()))
+    {
+        LOG_FMT_INFO(log, "task waits for schedule");
+        Stopwatch stopwatch;
+        {
+            std::unique_lock lock(schedule_mu);
+            schedule_cv.wait(lock, [&] { return scheduled; });
+        }
+        LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
+    }
+}
+
+void MPPTask::scheduleThisTask()
+{
+    std::unique_lock lock(schedule_mu);
+    if (!scheduled)
+    {
+        LOG_FMT_INFO(log, "task gets schedule");
+        scheduled = true;
+        schedule_cv.notify_one();
+    }
+}
+
 int MPPTask::estimateCountOfNewThreads()
 {
+    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
+        throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
+
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
     return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
+}
+
+int MPPTask::getNeededThreads()
+{
+    if (needed_threads == 0)
+    {
+        throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
+    }
+    return needed_threads;
 }
 
 } // namespace DB

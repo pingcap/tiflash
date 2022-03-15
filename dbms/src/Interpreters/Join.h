@@ -157,7 +157,13 @@ public:
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
     size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
-    void setFinishBuildTable(bool);
+    enum BuildTableState
+    {
+        WAITING,
+        FAILED,
+        SUCCEED
+    };
+    void setBuildTableState(BuildTableState state_);
 
     /// Reference to the row in block.
     struct RowRef
@@ -321,7 +327,7 @@ private:
 
     mutable std::mutex build_table_mutex;
     mutable std::condition_variable build_table_cv;
-    bool have_finish_build;
+    BuildTableState build_table_state;
 
     const LogWithPrefixPtr log;
 
