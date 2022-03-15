@@ -71,37 +71,51 @@ public:
     constexpr static const char * wal_folder_prefix = "/wal";
     using ChecksumClass = Digest::CRC64;
 
-    static WALStorePtr create(
-        std::function<void(PageEntriesEdit &&)> && restore_callback,
+    static std::pair<WALStorePtr, WALStoreReaderPtr>
+    create(
         FileProviderPtr & provider,
-        PSDiskDelegatorPtr & delegator,
+        PSDiskDelegatorPtr & delegator);
+
+    void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
+    void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+    struct FilesSnapshot
+    {
+        Format::LogNumberType current_writting_log_num;
+        LogFilenameSet persisted_log_files;
+
+        bool needSave() const
+        {
+            // TODO: Make it configurable and check the reasonable of this number
+            return persisted_log_files.size() > 4;
+        }
+    };
+
+    FilesSnapshot getFilesSnapshot() const;
+
+    bool saveSnapshot(
+        FilesSnapshot && files_snap,
+        PageEntriesEdit && directory_snap,
         const WriteLimiterPtr & write_limiter = nullptr);
-
-    void apply(PageEntriesEdit & edit, const PageVersionType & version);
-    void apply(const PageEntriesEdit & edit);
-
-    bool compactLogs();
 
 private:
     WALStore(
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
-        const WriteLimiterPtr & write_limiter_,
-        std::unique_ptr<LogWriter> && cur_log);
+        Format::LogNumberType last_log_num_);
 
     static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         PSDiskDelegatorPtr delegator,
         const FileProviderPtr & provider,
-        const WriteLimiterPtr & write_limiter,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         Poco::Logger * logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
-    const WriteLimiterPtr write_limiter;
-    std::mutex log_file_mutex;
+    mutable std::mutex log_file_mutex;
+    Format::LogNumberType last_log_num;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;

@@ -18,9 +18,11 @@ struct MockProxyRegion : MutexLockWrap
     uint64_t getLatestCommitIndex();
 
     void updateCommitIndex(uint64_t index);
+    void setSate(raft_serverpb::RegionLocalState);
 
-    MockProxyRegion();
+    explicit MockProxyRegion(uint64_t id);
 
+    const uint64_t id;
     raft_serverpb::RegionLocalState state;
     raft_serverpb::RaftApplyState apply;
 };

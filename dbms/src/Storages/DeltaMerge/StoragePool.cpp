@@ -53,8 +53,10 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
-StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
+    : ns_id(ns_id_)
+    ,
+    // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create(name + ".log",
                                     path_pool.getPSDiskDelegatorMulti("log"),
                                     extractConfig(settings, StorageType::Log),
@@ -71,9 +73,9 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                                      path_pool.getPSDiskDelegatorMulti("meta"),
                                      extractConfig(settings, StorageType::Meta),
                                      global_ctx.getFileProvider()))
-    , max_log_page_id(0)
-    , max_data_page_id(0)
-    , max_meta_page_id(0)
+    , log_storage_reader(ns_id, log_storage, nullptr)
+    , data_storage_reader(ns_id, data_storage, nullptr)
+    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
 {}
 
@@ -82,10 +84,6 @@ void StoragePool::restore()
     log_storage->restore();
     data_storage->restore();
     meta_storage->restore();
-
-    max_log_page_id = log_storage->getMaxId();
-    max_data_page_id = data_storage->getMaxId();
-    max_meta_page_id = meta_storage->getMaxId();
 }
 
 void StoragePool::drop()
@@ -93,36 +91,6 @@ void StoragePool::drop()
     meta_storage->drop();
     data_storage->drop();
     log_storage->drop();
-}
-
-PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
-{
-    // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
-    // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
-    // get a duplicated ID from the `storage_pool.data`. (tics#2756)
-    PageId dtfile_id;
-    do
-    {
-        dtfile_id = ++max_data_page_id;
-
-        auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
-        fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
-            static size_t fail_point_called = 0;
-            if (existed_path.empty() && fail_point_called % 10 == 0)
-            {
-                existed_path = "<mock for existed path>";
-            }
-            fail_point_called++;
-        });
-        if (likely(existed_path.empty()))
-        {
-            break;
-        }
-        // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_WARNING(&Poco::Logger::get(who),
-                    fmt::format("The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]", existed_path, dtfile_id));
-    } while (true);
-    return dtfile_id;
 }
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
@@ -155,5 +123,43 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     return done_anything;
 }
 
+void PageIdGenerator::restore(const StoragePool & storage_pool)
+{
+    max_log_page_id = storage_pool.log_storage_reader.getMaxId();
+    max_data_page_id = storage_pool.data_storage_reader.getMaxId();
+    max_meta_page_id = storage_pool.meta_storage_reader.getMaxId();
+}
+
+PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+{
+    // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
+    // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
+    // get a duplicated ID from the `storage_pool.data`. (tics#2756)
+    PageId dtfile_id;
+    do
+    {
+        dtfile_id = ++max_data_page_id;
+
+        auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
+        fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
+            static size_t fail_point_called = 0;
+            if (existed_path.empty() && fail_point_called % 10 == 0)
+            {
+                existed_path = "<mock for existed path>";
+            }
+            fail_point_called++;
+        });
+        if (likely(existed_path.empty()))
+        {
+            break;
+        }
+        // else there is a DTFile with that id, continue to acquire a new ID.
+        LOG_FMT_WARNING(&Poco::Logger::get(who),
+                        "The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]",
+                        existed_path,
+                        dtfile_id);
+    } while (true);
+    return dtfile_id;
+}
 } // namespace DM
 } // namespace DB

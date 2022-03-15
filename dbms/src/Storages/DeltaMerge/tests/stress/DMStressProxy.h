@@ -190,7 +190,7 @@ private:
     void write(const std::vector<Int64> & ids);
     UInt64 countRows(UInt32 rnd_break_prob);
     void genBlock(Block & block, const std::vector<Int64> & ids);
-    void joinThreads(std::vector<std::thread> & threads);
+    static void joinThreads(std::vector<std::thread> & threads);
     void insert();
     void update();
     void deleteRange();

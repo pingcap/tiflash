@@ -6,9 +6,17 @@ SCRIPTPATH="$(
   cd "$(dirname "$0")"
   pwd -P
 )"
-source ${SCRIPTPATH}/env.sh
+SRCPATH=${1:-$(
+  cd $SCRIPTPATH/../..
+  pwd -P
+)}
+
+source ${SRCPATH}/release-centos7-llvm/scripts/env.sh
 
 DOWNLOAD_TAR=${DOWNLOAD_TAR:-false}
+TAR_PATH=${SRCPATH}/tests/.build
+TIFLASH_CI_BUILD_URI_PREFIX="builds/pingcap/tiflash/ci-cache/tmp/pr-build"
+TIFLASH_CI_BUILD_PRE_FIX="http://fileserver.pingcap.net/download/${TIFLASH_CI_BUILD_URI_PREFIX}"
 
 rm -rf "${TAR_PATH}"
 mkdir -p "${TAR_PATH}"
