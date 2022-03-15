@@ -50,13 +50,15 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
+    void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;
+
     static bool isManifestsFileExists(const String & path);
 
     static void createManifestsFileIfNeed(const String & path);
 
-    void clearExternalPagesCallbacks();
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    void clearExternalPagesCallbacks();
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return read(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }

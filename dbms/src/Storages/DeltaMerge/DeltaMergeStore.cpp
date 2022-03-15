@@ -174,19 +174,18 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool data_path_contains_database_name,
                                  const String & db_name_,
                                  const String & table_name_,
-                                 TableID table_id_,
+                                 TableID physical_table_id_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_,
-                                 const TableID physical_table_id)
+                                 const Settings & settings_)
     : global_context(db_context.getGlobalContext())
     , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
     , settings(settings_)
     , db_name(db_name_)
     , table_name(table_name_)
-    , physical_table_id(physical_table_id)
+    , physical_table_id(physical_table_id_)
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
@@ -199,7 +198,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
 
     // for mock test, table_id_ should be DB::InvalidTableID
-    NamespaceId ns_id = table_id_ == DB::InvalidTableID ? TEST_NAMESPACE_ID : table_id_;
+    NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
     if (auto global_storage_pool = global_context.getGlobalStoragePool(); global_storage_pool)
     {
         storage_pool = std::make_shared<StoragePool>(ns_id, *global_storage_pool, global_context);
@@ -315,9 +314,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
     };
     callbacks.ns_id = storage_pool->getNamespaceId();
+    // remember to unregister it when shutdown
     storage_pool->data()->registerExternalPagesCallbacks(callbacks);
+    storage_pool->enableGC();
 
-    gc_handle = background_pool.addTask([this] { return storage_pool->gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
@@ -383,8 +383,10 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_FMT_TRACE(log, "Shutdown DeltaMerge start [{}.{}]", db_name, table_name);
-    background_pool.removeTask(gc_handle);
-    gc_handle = nullptr;
+    // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
+    // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
+    storage_pool->shutdown();
+    storage_pool->data()->unregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);

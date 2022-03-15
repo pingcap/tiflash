@@ -136,7 +136,7 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
 }
 
 
-StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
+StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, Context & global_ctx, const Settings & settings)
     : ns_id(ns_id_)
     ,
     // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
@@ -163,7 +163,7 @@ StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPoo
     , owned_storage(true)
 {}
 
-StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, const Context & global_ctx)
+StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, Context & global_ctx)
     : ns_id(ns_id_)
     , log_storage(global_storage_pool.log())
     , data_storage(global_storage_pool.data())
@@ -177,31 +177,30 @@ StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_st
 
 void StoragePool::restore()
 {
-    // If the storage instances is not global, we need to initialize it by ourselves.
+    // If the storage instances is not global, we need to initialize it by ourselves and add a gc task.
     if (owned_storage)
     {
         log_storage->restore();
         data_storage->restore();
         meta_storage->restore();
     }
+
     max_log_page_id = log_storage->getMaxId(ns_id);
     max_data_page_id = data_storage->getMaxId(ns_id);
     max_meta_page_id = meta_storage->getMaxId(ns_id);
 }
 
-void StoragePool::drop()
+StoragePool::~StoragePool()
+{
+    shutdown();
+}
+
+void StoragePool::enableGC()
 {
     if (owned_storage)
-    {
-        meta_storage->drop();
-        data_storage->drop();
-        log_storage->drop();
-    }
-    else
-    {
-        // FIXME: drop data for this table
-    }
+        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
 }
+
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
@@ -220,6 +219,31 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     }
 
     return doStoragePoolGC(global_context, settings, *this);
+}
+
+void StoragePool::shutdown()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+}
+
+void StoragePool::drop()
+{
+    shutdown();
+
+    if (owned_storage)
+    {
+        meta_storage->drop();
+        data_storage->drop();
+        log_storage->drop();
+    }
+    else
+    {
+        // FIXME: drop data for this table
+    }
 }
 
 PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
@@ -253,5 +277,6 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
     } while (true);
     return dtfile_id;
 }
+
 } // namespace DM
 } // namespace DB

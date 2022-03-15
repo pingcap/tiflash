@@ -39,6 +39,7 @@ public:
     PageStoragePtr data() const { return data_storage; }
     PageStoragePtr meta() const { return meta_storage; }
 
+private:
     // TODO: maybe more frequent gc for GlobalStoragePool?
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
@@ -62,11 +63,13 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
+    StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, Context & global_ctx, const Settings & settings);
 
-    StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, const Context & global_ctx);
+    StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, Context & global_ctx);
 
     void restore();
+
+    ~StoragePool();
 
     NamespaceId getNamespaceId() const { return ns_id; }
 
@@ -91,10 +94,14 @@ public:
         return PageReader(ns_id, meta_storage, snapshot_read ? meta_storage->getSnapshot() : nullptr, read_limiter);
     }
 
-    // Caller must cancel gc tasks before drop
-    void drop();
+    void enableGC();
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
+
+    void shutdown();
+
+    // Caller must cancel gc tasks before drop
+    void drop();
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
@@ -102,6 +109,7 @@ public:
 
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
+
 
 private:
     NamespaceId ns_id;
@@ -118,7 +126,7 @@ private:
 
     std::mutex mutex;
 
-    const Context & global_context;
+    Context & global_context;
 
     // whether the three storage instance is owned by this StoragePool
     bool owned_storage = false;
@@ -126,6 +134,8 @@ private:
     std::atomic<PageId> max_log_page_id = 0;
     std::atomic<PageId> max_data_page_id = 0;
     std::atomic<PageId> max_meta_page_id = 0;
+
+    BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
 };
 
 struct StorageSnapshot : private boost::noncopyable

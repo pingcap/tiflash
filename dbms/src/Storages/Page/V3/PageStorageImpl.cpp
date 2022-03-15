@@ -269,10 +269,14 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     callbacks_container.push_back(callbacks);
 }
 
-void PageStorageImpl::clearExternalPagesCallbacks()
+void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
     std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.clear();
+    callbacks_container.erase(
+        std::remove_if(callbacks_container.begin(),
+                       callbacks_container.end(),
+                       [&](const ExternalPageCallbacks & callbacks) { return callbacks.ns_id == ns_id; }),
+        callbacks_container.end());
 }
 
 const String PageStorageImpl::manifests_file_name = "manifests";
@@ -289,6 +293,12 @@ void PageStorageImpl::createManifestsFileIfNeed(const String & path)
     dir.createDirectories();
     Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
     file.createFile();
+}
+
+void PageStorageImpl::clearExternalPagesCallbacks()
+{
+    std::scoped_lock lock{callbacks_mutex};
+    callbacks_container.clear();
 }
 
 } // namespace PS::V3
