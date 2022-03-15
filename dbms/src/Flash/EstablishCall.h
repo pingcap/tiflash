@@ -35,7 +35,7 @@ public:
         AsyncFlashService * service,
         grpc::ServerCompletionQueue * cq,
         grpc::ServerCompletionQueue * notify_cq,
-        const std::shared_ptr<bool> & is_shutdown);
+        const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
     bool write(const mpp::MPPDataPacket & packet) override;
 
@@ -58,7 +58,7 @@ public:
         AsyncFlashService * service,
         grpc::ServerCompletionQueue * cq,
         grpc::ServerCompletionQueue * notify_cq,
-        const std::shared_ptr<bool> & is_shutdown);
+        const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
 private:
     void notifyReady();
@@ -74,7 +74,7 @@ private:
     // The producer-consumer queue where for asynchronous server notifications.
     ::grpc::ServerCompletionQueue * cq;
     ::grpc::ServerCompletionQueue * notify_cq;
-    std::shared_ptr<bool> is_shutdown;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     ::grpc::ServerContext ctx;
     ::grpc::Status err_status;
 

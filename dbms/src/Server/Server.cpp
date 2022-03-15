@@ -529,7 +529,7 @@ class Server::FlashGrpcServerHolder
 public:
     FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
-        , is_shutdown(std::make_shared<bool>(false))
+        , is_shutdown(std::make_shared<std::atomic<bool>>(false))
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -628,7 +628,7 @@ public:
 
 private:
     Poco::Logger * log;
-    std::shared_ptr<bool> is_shutdown;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;

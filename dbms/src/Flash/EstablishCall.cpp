@@ -4,7 +4,7 @@
 
 namespace DB
 {
-EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<bool> & is_shutdown)
+EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
     : service(service)
     , cq(cq)
     , notify_cq(notify_cq)
@@ -18,7 +18,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
-EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<bool> & is_shutdown)
+EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
 {
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
