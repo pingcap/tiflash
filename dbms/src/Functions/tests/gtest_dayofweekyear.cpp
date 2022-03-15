@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/MyTime.h>
 #include <Functions/FunctionFactory.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -71,6 +85,23 @@ try
     input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}).column, nullable_datetime_type_ptr, "input");
     output_col = createConstColumn<Nullable<UInt8>>(1, {});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
+
+    /// MyDate ColumnVector(non-null)
+    data_col_ptr = createColumn<DataTypeMyDate::FieldType>(
+                       {
+                           MyDate(1969, 1, 2).toPackedUInt(),
+                           MyDate(2022, 3, 13).toPackedUInt(),
+                           MyDate(2022, 3, 14).toPackedUInt(),
+                           MyDate(2022, 3, 15).toPackedUInt(),
+                           MyDate(2022, 3, 16).toPackedUInt(),
+                           MyDate(2022, 3, 17).toPackedUInt(),
+                           MyDate(2022, 3, 18).toPackedUInt(),
+                           MyDate(2022, 3, 19).toPackedUInt(),
+                       })
+                       .column;
+    input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
+    output_col = createColumn<UInt8>({5, 1, 2, 3, 4, 5, 6, 7});
+    ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 }
 CATCH
 
@@ -138,6 +169,26 @@ try
     /// ColumnConst(nullable(null))
     input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}).column, nullable_datetime_type_ptr, "input");
     output_col = createConstColumn<Nullable<UInt16>>(1, {});
+    ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
+
+    /// MyDate ColumnVector(non-null)
+    data_col_ptr = createColumn<DataTypeMyDate::FieldType>(
+                       {
+                           MyDate(1969, 1, 2).toPackedUInt(),
+                           MyDate(2022, 3, 13).toPackedUInt(),
+                           MyDate(2022, 3, 14).toPackedUInt(),
+                           MyDate(2022, 3, 15).toPackedUInt(),
+                           MyDate(2022, 3, 16).toPackedUInt(),
+                           MyDate(2022, 3, 17).toPackedUInt(),
+                           MyDate(2022, 3, 18).toPackedUInt(),
+                           MyDate(2022, 3, 19).toPackedUInt(),
+                           MyDate(1900, 12, 31).toPackedUInt(),
+                           MyDate(2020, 12, 31).toPackedUInt(),
+                           MyDate(2022, 12, 31).toPackedUInt(),
+                       })
+                       .column;
+    input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
+    output_col = createColumn<UInt16>({2, 72, 73, 74, 75, 76, 77, 78, 365, 366, 365});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 }
 CATCH
