@@ -653,7 +653,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         writeToTemporaryFileImpl(data_variants, *data_variants.NAME, block_out);
 
-    if (false)
+    if (false) // NOLINT
     {
     }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
