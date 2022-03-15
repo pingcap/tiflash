@@ -92,7 +92,7 @@ public:
 
     size_t getSourceNum() const { return source_num; }
 
-    int computeNewThreadCount() const { return getSourceNum(); }
+    int computeNewThreadCount() const { return thread_count; }
 
     void collectNewThreadCount(int & cnt)
     {
@@ -151,6 +151,7 @@ private:
     LogWithPrefixPtr exc_log;
 
     bool collected = false;
+    int thread_count = 0;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

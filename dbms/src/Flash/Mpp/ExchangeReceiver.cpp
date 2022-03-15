@@ -317,12 +317,18 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else
+        {
             thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
+            ++thread_count;
+        }
     }
 
     // TODO: reduce this thread in the future.
     if (!async_requests.empty())
+    {
         thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] { reactor(async_requests); });
+        ++thread_count;
+    }
 }
 
 template <typename RPCContext>
