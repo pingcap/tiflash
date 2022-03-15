@@ -491,7 +491,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void handleRpcs(grpc::ServerCompletionQueue * curcq)
+void handleRpcs(grpc::ServerCompletionQueue * curcq, Poco::Logger * log)
 {
     GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
     SCOPE_EXIT({
@@ -501,26 +501,51 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq)
     bool ok = false;
     while (true)
     {
-        // Block waiting to read the next event from the completion queue. The
-        // event is uniquely identified by its tag, which in this case is the
-        // memory address of a EstablishCallData instance.
-        // The return value of Next should always be checked. This return value
-        // tells us whether there is any kind of event or cq is shutting down.
-        if (!curcq->Next(&tag, &ok))
+        String err_msg;
+        try
         {
-            LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
-            break;
+            // Block waiting to read the next event from the completion queue. The
+            // event is uniquely identified by its tag, which in this case is the
+            // memory address of a EstablishCallData instance.
+            // The return value of Next should always be checked. This return value
+            // tells us whether there is any kind of event or cq is shutting down.
+            if (!curcq->Next(&tag, &ok))
+            {
+                LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
+                break;
+            }
+            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
+            SCOPE_EXIT({
+                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
+            });
+            // If ok is false, it means server is shutdown.
+            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
+            if (ok)
+                static_cast<EstablishCallData *>(tag)->proceed();
+            else
+                static_cast<EstablishCallData *>(tag)->cancel();
         }
-        GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
-        SCOPE_EXIT({
-            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
-        });
-        // If ok is false, it means server is shutdown.
-        // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-        if (ok)
-            static_cast<EstablishCallData *>(tag)->proceed();
-        else
-            static_cast<EstablishCallData *>(tag)->cancel();
+        catch (Exception & e)
+        {
+            err_msg = e.displayText();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
+        }
+        catch (pingcap::Exception & e)
+        {
+            err_msg = e.message();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (std::exception & e)
+        {
+            err_msg = e.what();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (...)
+        {
+            err_msg = "unrecovered error";
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            throw;
+        }
     }
 }
 
@@ -595,8 +620,8 @@ public:
                     // EstablishCallData will handle its lifecycle by itself.
                     EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
                 }
-                thread_manager->schedule(false, "async_poller", [cq] { handleRpcs(cq); });
-                thread_manager->schedule(false, "async_poller", [notify_cq] { handleRpcs(notify_cq); });
+                thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
+                thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
             }
         }
     }

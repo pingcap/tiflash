@@ -51,7 +51,8 @@ bool collectForReceiver(std::vector<tipb::FieldType> & output_field_types, const
     return false;
 }
 
-bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, const tipb::TableScan & tbl_scan)
+template <typename TableScanType>
+bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, const TableScanType & tbl_scan)
 {
     for (const auto & ci : tbl_scan.columns())
     {
@@ -133,6 +134,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:
         return collectForTableScan(output_field_types, executor.tbl_scan());
+    case tipb::ExecType::TypePartitionTableScan:
+        return collectForTableScan(output_field_types, executor.partition_table_scan());
     case tipb::ExecType::TypeJoin:
         return collectForJoin(output_field_types, executor);
     default:
