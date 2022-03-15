@@ -26,11 +26,11 @@ struct OutputData<StreamUnionMode::Basic>
     Block block;
     std::exception_ptr exception;
 
-    OutputData() {}
+    OutputData() = default;
     explicit OutputData(Block & block_)
         : block(block_)
     {}
-    explicit OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -43,12 +43,12 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     BlockExtraInfo extra_info;
     std::exception_ptr exception;
 
-    OutputData() {}
+    OutputData() = default;
     OutputData(Block & block_, BlockExtraInfo & extra_info_)
         : block(block_)
         , extra_info(extra_info_)
     {}
-    explicit OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -268,7 +268,13 @@ private:
         if (meet_exception)
             return;
         meet_exception = true;
+        /// The order of the rows matters. If it is changed, then the situation is possible,
+        /// when before exception, an empty block (end of data) will be put into the queue,
+        /// and the exception is lost.
         output_queue.emplace(exception);
+        /// can not cancel itself or the exception might be lost
+        /// kill the processor so ExchangeReceiver will be closed
+        processor.cancel(true);
     }
 
     struct Handler
@@ -300,14 +306,7 @@ private:
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
-            /// The order of the rows matters. If it is changed, then the situation is possible,
-            /// when before exception, an empty block (end of data) will be put into the queue,
-            /// and the exception is lost.
-
             parent.handleException(exception);
-            /// can not cancel parent inputStream or the exception might be lost
-            /// kill the processor so ExchangeReceiver will be closed
-            parent.processor.cancel(true);
         }
 
         String getName() const
