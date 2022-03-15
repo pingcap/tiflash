@@ -37,7 +37,7 @@ private:
 public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
-        const ExpressionActionsPtr & expression_,
+        const ExpressionActionsPtr & join_probe_actions_,
         const LogWithPrefixPtr & log_);
 
     String getName() const override { return name; }
@@ -49,7 +49,7 @@ protected:
 
 private:
     const LogWithPrefixPtr log;
-    ExpressionActionsPtr expression;
+    ExpressionActionsPtr join_probe_actions;
 };
 
 } // namespace DB
