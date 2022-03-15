@@ -42,6 +42,7 @@
 │ default  │ t3   │ DeltaMerge │
 └──────────┴──────┴────────────┘
 
+# clean
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __drop_tidb_table(default, t1)
 => DBGInvoke __drop_tidb_table(default, t2)
@@ -49,3 +50,4 @@
 => drop table if exists default.t1
 => drop table if exists default.t2
 => drop table if exists default.t3
+=> DBGInvoke __enable_schema_sync_service('true')

@@ -446,6 +446,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    if (diff.type == SchemaActionType::RenameTables)
+    {
+        for (auto && opt : diff.affected_opts)
+        {
+            auto db_info = getter.getDatabase(opt.schema_id);
+            if (db_info == nullptr)
+                throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
+            applyRenameTable(db_info, opt.table_id);
+        }
+        return;
+    }
+
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
     {
@@ -506,11 +518,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::SetTiFlashReplica:
     {
         applySetTiFlashReplica(db_info, diff.table_id);
-        break;
-    }
-    case SchemaActionType::RenameTables:
-    {
-        LOG_FMT_WARNING(log, "change type RenameTables is not supported");
         break;
     }
     default:
