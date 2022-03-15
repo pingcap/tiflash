@@ -35,15 +35,15 @@ class CoprocessorHandler
 public:
     CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_);
 
-    ~CoprocessorHandler() = default;
+    virtual ~CoprocessorHandler() = default;
 
-    grpc::Status execute();
+    virtual grpc::Status execute();
 
     static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> GenCopKeyRange(
         const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
 
 protected:
-    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
+    virtual grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
 
 protected:
     enum

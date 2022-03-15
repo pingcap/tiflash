@@ -1,6 +1,7 @@
 #include <Common/DNSCache.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -33,7 +34,10 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , schema_syncer(raft_config.pd_addrs.empty()
                         ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
                         : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster)))
-    , mpp_task_manager(std::make_shared<MPPTaskManager>())
+    , mpp_task_manager(std::make_shared<MPPTaskManager>(
+          std::make_unique<MinTSOScheduler>(
+              context.getSettingsRef().task_scheduler_thread_soft_limit,
+              context.getSettingsRef().task_scheduler_thread_hard_limit)))
     , engine(raft_config.engine)
     , disable_bg_flush(raft_config.disable_bg_flush)
     , replica_read_max_thread(1)
