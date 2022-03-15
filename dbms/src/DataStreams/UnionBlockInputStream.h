@@ -279,6 +279,16 @@ private:
       *  otherwise ParallelInputsProcessor can be blocked during insertion into the queue.
       */
     OutputQueue output_queue;
+    std::mutex mu;
+    bool meet_exception = false;
+    void handleException(std::exception_ptr & exception)
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        if (meet_exception)
+            return;
+        meet_exception = true;
+        output_queue.emplace(exception);
+    }
 
     struct Handler
     {
@@ -313,9 +323,10 @@ private:
             /// when before exception, an empty block (end of data) will be put into the queue,
             /// and the exception is lost.
 
-            parent.output_queue.emplace(exception);
+            parent.handleException(exception);
             /// can not cancel parent inputStream or the exception might be lost
-            parent.processor.cancel(false); /// Does not throw exceptions.
+            /// kill the processor so ExchangeReceiver will be closed
+            parent.processor.cancel(true);
         }
 
         String getName() const
