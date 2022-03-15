@@ -554,6 +554,7 @@ class Server::FlashGrpcServerHolder
 public:
     FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
+        , is_shutdown(std::make_shared<std::atomic<bool>>(false))
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -617,7 +618,7 @@ public:
                 for (int j = 0; j < preallocated_request_count_per_poller; ++j)
                 {
                     // EstablishCallData will handle its lifecycle by itself.
-                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq);
+                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
                 }
                 thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
                 thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
@@ -627,6 +628,9 @@ public:
 
     ~FlashGrpcServerHolder()
     {
+        *is_shutdown = true;
+        const int wait_calldata_after_shutdown_interval_ms = 500;
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_calldata_after_shutdown_interval_ms)); // sleep 500ms to let operations of calldata called by MPPTunnel done.
         /// Shut down grpc server.
         // wait 5 seconds for pending rpcs to gracefully stop
         gpr_timespec deadline{5, 0, GPR_TIMESPAN};
@@ -649,6 +653,7 @@ public:
 
 private:
     Poco::Logger * log;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
