@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (C) PingCAP, Inc.
 
 set -ueox pipefail
 

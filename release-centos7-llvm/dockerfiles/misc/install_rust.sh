@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (C) 2021 PingCAP, Inc.
 
 # Install Rust for CI/CD.
 # Require: curl

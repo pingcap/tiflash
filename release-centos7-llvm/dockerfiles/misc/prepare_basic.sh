@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (C) 2021 PingCAP, Inc.
 
 # Prepare basic environment for CI/CD.
 
