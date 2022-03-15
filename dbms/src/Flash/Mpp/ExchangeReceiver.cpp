@@ -279,7 +279,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
-    , max_buffer_size(std::max(source_num, max_streams_) * 2)
+    , max_buffer_size(std::max<size_t>(BATCH_PACKET_COUNT, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
