@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 mysql> drop table if exists test.t
 mysql> create table test.t( col_20 time default '22:04:02.00' not null , col_21 smallint default 15900 , col_22 blob(273) , col_23 text not null , col_24 text(459) not null , primary key idx_12 ( col_24(5),col_21 ) clustered, unique key idx_13 ( col_22(3),col_21 ) );
 mysql> insert into test.t values ( '03:24:15.00',-27200,'XcqRrDOS','EpP','' ) ;
