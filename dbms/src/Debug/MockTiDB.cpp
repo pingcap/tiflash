@@ -538,6 +538,45 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     version_diff[version] = diff;
 }
 
+void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map)
+{
+    std::lock_guard lock(tables_mutex);
+    version++;
+    SchemaDiff diff;
+    for (const auto & [database_name, table_name, new_table_name] : table_name_map)
+    {
+        TablePtr table = getTableByNameInternal(database_name, table_name);
+        String qualified_name = database_name + "." + table_name;
+        String new_qualified_name = database_name + "." + new_table_name;
+
+        TableInfo new_table_info = table->table_info;
+        new_table_info.name = new_table_name;
+        auto new_table = std::make_shared<Table>(database_name, table->database_id, new_table_name, std::move(new_table_info));
+
+        tables_by_id[new_table->table_info.id] = new_table;
+        tables_by_name.erase(qualified_name);
+        tables_by_name.emplace(new_qualified_name, new_table);
+
+        AffectedOption opt;
+        opt.schema_id = table->database_id;
+        opt.table_id = new_table->id();
+        opt.old_schema_id = table->database_id;
+        opt.old_table_id = table->id();
+        diff.affected_opts.push_back(std::move(opt));
+    }
+
+    if (diff.affected_opts.empty())
+        throw Exception("renameTables should have at least 1 affected_opts", ErrorCodes::LOGICAL_ERROR);
+
+    diff.type = SchemaActionType::RenameTables;
+    diff.schema_id = diff.affected_opts[0].schema_id;
+    diff.old_schema_id = diff.affected_opts[0].schema_id;
+    diff.table_id = diff.affected_opts[0].table_id;
+    diff.old_table_id = diff.affected_opts[0].old_table_id;
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
 void MockTiDB::truncateTable(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);
