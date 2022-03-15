@@ -3,6 +3,8 @@
 #include <Common/LogWithPrefix.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Flash/FlashService.h>
+#include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -26,6 +28,8 @@
 
 namespace DB
 {
+class EstablishCallData;
+
 /**
  * MPPTunnelBase represents the sender of an exchange connection.
  *
@@ -64,6 +68,7 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
+        bool is_async_ = false,
         const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
@@ -94,12 +99,19 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    void consumerFinish(const String & err_msg);
+    // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
+    void consumerFinish(const String & err_msg, bool need_lock = true);
+
+    bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }
+
+    // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
+    // In sync mode, as a background task to keep sending until done.
+    void sendJob(bool need_lock = true);
 
 private:
-    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
+    void finishSendQueue();
 
-    void sendLoop();
+    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void waitForConsumerFinish(bool allow_throw);
 
@@ -110,7 +122,9 @@ private:
 
     bool finished; // if the tunnel has finished its connection.
 
-    bool is_local; // if this tunnel used for local environment
+    bool is_local; // if the tunnel is used for local environment
+
+    bool is_async; // if the tunnel is used for async server.
 
     Writer * writer;
 
@@ -123,6 +137,8 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
+
+    std::shared_ptr<ThreadManager> thread_manager;
 
     /// Consumer can be sendLoop or local receiver.
     class ConsumerState
@@ -156,10 +172,10 @@ private:
     const LogWithPrefixPtr log;
 };
 
-class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>
+class MPPTunnel : public MPPTunnelBase<PacketWriter>
 {
 public:
-    using Base = MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
+    using Base = MPPTunnelBase<PacketWriter>;
     using Base::Base;
 };
 

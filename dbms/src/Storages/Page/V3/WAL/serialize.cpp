@@ -64,7 +64,7 @@ void serializePutTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 {
     assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY);
 
-    writeIntBinary(EditRecordType::PUT, buf);
+    writeIntBinary(record.type, buf);
 
     UInt32 flags = 0;
     writeIntBinary(flags, buf);
@@ -155,7 +155,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 {
     assert(record_type == EditRecordType::DEL || record_type == EditRecordType::VAR_DELETE);
 
-    PageId page_id;
+    PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
     PageVersionType version;
     deserializeVersionFrom(buf, version);

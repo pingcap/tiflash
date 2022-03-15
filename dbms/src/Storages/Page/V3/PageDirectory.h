@@ -2,6 +2,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/LogWithPrefix.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
@@ -16,8 +17,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
-
-#include "Encryption/FileProvider.h"
 
 namespace CurrentMetrics
 {
@@ -138,13 +137,13 @@ public:
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
 
-    bool createNewRef(const PageVersionType & ver, PageId ori_page_id);
+    bool createNewRef(const PageVersionType & ver, PageIdV3Internal ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersionType & ver);
+    std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersionType & ver);
 
     void createDelete(const PageVersionType & ver);
 
-    std::shared_ptr<PageId> fromRestored(const PageEntriesEdit::EditRecord & rec);
+    std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
     enum ResolveResult
     {
@@ -152,7 +151,7 @@ public:
         RESOLVE_TO_REF,
         RESOLVE_TO_NORMAL,
     };
-    std::tuple<ResolveResult, PageId, PageVersionType>
+    std::tuple<ResolveResult, PageIdV3Internal, PageVersionType>
     resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersionType & ver);
@@ -166,7 +165,7 @@ public:
      */
     PageSize getEntriesByBlobIds(
         const std::unordered_set<BlobFileId> & blob_ids,
-        PageId page_id,
+        PageIdV3Internal page_id,
         std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
 
     /**
@@ -205,18 +204,17 @@ public:
      */
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
-        PageId page_id,
-        std::map<PageId, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+        std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
         PageEntriesV3 & entries_removed,
         const PageLock & page_lock);
     bool derefAndClean(
         UInt64 lowest_seq,
-        PageId page_id,
+        PageIdV3Internal page_id,
         const PageVersionType & deref_ver,
         Int64 deref_count,
         PageEntriesV3 & entries_removed);
 
-    void collapseTo(UInt64 seq, PageId page_id, PageEntriesEdit & edit);
+    void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
     size_t size() const
     {
@@ -242,6 +240,7 @@ public:
 
 private:
     mutable std::mutex m;
+
     EditRecordType type;
     // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
     bool is_deleted;
@@ -252,11 +251,11 @@ private:
     // The deleted version, valid when type == VAR_REF/VAR_EXTERNAL && is_deleted = true
     PageVersionType delete_ver;
     // Original page id, valid when type == VAR_REF
-    PageId ori_page_id;
+    PageIdV3Internal ori_page_id;
     // Being ref counter, valid when type == VAR_EXTERNAL
     Int64 being_ref_count;
     // A shared ptr to a holder, valid when type == VAR_EXTERNAL
-    std::shared_ptr<PageId> external_holder;
+    std::shared_ptr<PageIdV3Internal> external_holder;
 };
 
 // `PageDirectory` store multi-versions entries for the same
@@ -277,27 +276,46 @@ public:
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
-    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_id, toConcreteSnapshot(snap));
     }
 
-    PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
-    PageIDAndEntriesV3 get(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_ids, toConcreteSnapshot(snap));
     }
 
-    PageId getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
-    PageId getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
         return getNormalPageId(page_id, toConcreteSnapshot(snap));
     }
+#ifndef NDEBUG
+    // Just for tests, refactor them out later
+    PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+    {
+        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
+    }
+    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+    }
+    PageIdV3Internal getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+    {
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
+    }
+    PageIdV3Internal getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+    }
+#endif
 
-    PageId getMaxId() const;
+    PageId getMaxId(NamespaceId ns_id) const;
 
-    std::set<PageId> getAllPageIds();
+    std::set<PageIdV3Internal> getAllPageIds();
 
     void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
@@ -310,7 +328,7 @@ public:
 
     PageEntriesV3 gcInMemEntries();
 
-    std::set<PageId> getAliveExternalIds() const;
+    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
@@ -333,7 +351,7 @@ private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
     // "No iterators or references are invalidated"
     // https://en.cppreference.com/w/cpp/container/map/insert
-    using MVCCMapType = std::map<PageId, VersionedPageEntriesPtr>;
+    using MVCCMapType = std::map<PageIdV3Internal, VersionedPageEntriesPtr>;
 
     static void applyRefEditRecord(
         MVCCMapType & mvcc_table_directory,
@@ -356,7 +374,7 @@ private:
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
     mutable std::mutex external_ids_mutex;
-    mutable std::list<std::weak_ptr<PageId>> external_ids;
+    mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
 
     WALStorePtr wal;
 
