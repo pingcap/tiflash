@@ -281,6 +281,7 @@ private:
     OutputQueue output_queue;
     std::mutex mu;
     bool meet_exception = false;
+
     void handleException(const std::exception_ptr & exception)
     {
         std::unique_lock lock(mu);
