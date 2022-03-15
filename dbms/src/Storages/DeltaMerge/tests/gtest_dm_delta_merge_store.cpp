@@ -3201,6 +3201,94 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, DisableSmallColumnCache)
+try
+{
+    auto settings = db_context->getSettings();
+
+    size_t num_rows_write_in_total = 0;
+    const size_t num_rows_per_write = 5;
+    while (true)
+    {
+        {
+            // write to store
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_rows_write_in_total + 1,
+                num_rows_write_in_total + 1 + num_rows_per_write,
+                false);
+
+            store->write(*db_context, settings, block);
+
+            store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+            num_rows_write_in_total += num_rows_per_write;
+            auto segment_stats = store->getSegmentStats();
+            size_t delta_cache_size = 0;
+            for (auto & stat : segment_stats)
+            {
+                delta_cache_size += stat.delta_cache_size;
+            }
+            EXPECT_EQ(delta_cache_size, 0);
+        }
+
+        {
+            // Let's reload the store to check the persistence system.
+            // Note: store must be released before load another, because some background task could be still running.
+            store.reset();
+            store = reload();
+
+            // read all columns from store
+            const auto & columns = store->getTableColumns();
+            BlockInputStreams ins = store->read(*db_context,
+                                                db_context->getSettingsRef(),
+                                                //                                                settings,
+                                                columns,
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                                /* num_streams= */ 1,
+                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                EMPTY_FILTER,
+                                                /* expected_block_size= */ 1024);
+            ASSERT_EQ(ins.size(), 1UL);
+            BlockInputStreamPtr in = ins[0];
+
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            Int64 expected_row_pk = 1;
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+                for (auto && iter : block)
+                {
+                    auto c = iter.column;
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        for (size_t i = 0; i < c->size(); ++i)
+                        {
+                            auto expected = expected_row_pk++;
+                            auto value = c->getInt(i);
+                            if (value != expected)
+                            {
+                                // Convenient for debug.
+                                EXPECT_EQ(expected, value);
+                            }
+                        }
+                    }
+                }
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+        }
+
+        // Reading with a large number of small DTFile ingested will greatly slow down the testing
+        if (num_rows_write_in_total >= 200)
+            break;
+    }
+}
+CATCH
+
 INSTANTIATE_TEST_CASE_P(TestMode, //
                         DeltaMergeStore_RWTest,
                         testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
