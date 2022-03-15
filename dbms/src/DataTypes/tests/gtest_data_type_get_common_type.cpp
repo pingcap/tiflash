@@ -259,9 +259,13 @@ try
         ASSERT_FALSE(type->isNumber()) << "type: " + type->getName();
 
         auto ntype = typeFromString("Nullable(" + c + ")");
-        ASSERT_TRUE(ntype->isNullable()) << "type: " + type->getName();
-        // not true for nullable
-        ASSERT_FALSE(ntype->isDateOrDateTime()) << "type: " + type->getName();
+        ASSERT_TRUE(ntype->isNullable()) << "ntype: " + ntype->getName();
+        // true for nullable
+        ASSERT_TRUE(ntype->isDateOrDateTime()) << "ntype: " + ntype->getName();
+        // these are false for date-like type
+        ASSERT_FALSE(ntype->isInteger()) << "ntype: " + ntype->getName();
+        ASSERT_FALSE(ntype->isUnsignedInteger()) << "ntype: " + ntype->getName();
+        ASSERT_FALSE(ntype->isNumber()) << "ntype: " + ntype->getName();
     }
 }
 CATCH
