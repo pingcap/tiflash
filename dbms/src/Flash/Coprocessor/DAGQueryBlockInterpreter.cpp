@@ -231,18 +231,18 @@ ExpressionActionsPtr generateProjectExpressionActions(
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    bool has_region_to_read = false;
-    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
-    {
-        const auto & table_regions_info = dagContext().getTableRegionsInfoByTableID(physical_table_id);
-        if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
-        {
-            has_region_to_read = true;
-            break;
-        }
-    }
-    if (!has_region_to_read)
-        throw TiFlashException(fmt::format("Dag Request does not have region to read for table: {}", table_scan.getLogicalTableID()), Errors::Coprocessor::BadRequest);
+    //    bool has_region_to_read = false;
+    //    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
+    //    {
+    //        const auto & table_regions_info = dagContext().getTableRegionsInfoByTableID(physical_table_id);
+    //        if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
+    //        {
+    //            has_region_to_read = true;
+    //            break;
+    //        }
+    //    }
+    //    if (!has_region_to_read)
+    //        throw TiFlashException(fmt::format("Dag Request does not have region to read for table: {}", table_scan.getLogicalTableID()), Errors::Coprocessor::BadRequest);
     // construct pushed down filter conditions.
     std::vector<const tipb::Expr *> conditions;
     if (query_block.selection)
