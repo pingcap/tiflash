@@ -197,22 +197,45 @@ TEST(WALLognameSetTest, ordering)
 }
 
 
-class WALStoreTest : public DB::base::TiFlashStorageTestBasic
+class WALStoreTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<bool>
 {
+public:
+    WALStoreTest()
+        : multi_paths(GetParam())
+    {
+    }
+
     void SetUp() override
     {
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
 
-        // TODO: multi-path
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+        if (!multi_paths)
+        {
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+        }
+        else
+        {
+            // mock 8 dirs for multi-paths
+            Strings paths;
+            for (size_t i = 0; i < 8; ++i)
+            {
+                paths.emplace_back(fmt::format("{}/path_{}", path, i));
+            }
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
+        }
     }
+
+private:
+    const bool multi_paths;
 
 protected:
     PSDiskDelegatorPtr delegator;
 };
 
-TEST_F(WALStoreTest, FindCheckpointFile)
+TEST_P(WALStoreTest, FindCheckpointFile)
 {
     Poco::Logger * log = &Poco::Logger::get("WALStoreTest");
     auto path = getTemporaryPath();
@@ -262,7 +285,7 @@ TEST_F(WALStoreTest, FindCheckpointFile)
     }
 }
 
-TEST_F(WALStoreTest, Empty)
+TEST_P(WALStoreTest, Empty)
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
     auto provider = ctx.getFileProvider();
@@ -285,7 +308,7 @@ TEST_F(WALStoreTest, Empty)
     ASSERT_EQ(num_callback_called, 0);
 }
 
-TEST_F(WALStoreTest, ReadWriteRestore)
+TEST_P(WALStoreTest, ReadWriteRestore)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -405,7 +428,7 @@ try
 }
 CATCH
 
-TEST_F(WALStoreTest, ReadWriteRestore2)
+TEST_P(WALStoreTest, ReadWriteRestore2)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -495,7 +518,7 @@ try
 }
 CATCH
 
-TEST_F(WALStoreTest, ManyEdits)
+TEST_P(WALStoreTest, ManyEdits)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -574,5 +597,16 @@ try
     // EXPECT_EQ(num_pages_read, page_id);
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    Disks,
+    WALStoreTest,
+    ::testing::Bool(),
+    [](const ::testing::TestParamInfo<WALStoreTest::ParamType> & info) -> String {
+        const auto multi_path = info.param;
+        if (multi_path)
+            return "multi_disks";
+        return "single_disk";
+    });
 
 } // namespace DB::PS::V3::tests

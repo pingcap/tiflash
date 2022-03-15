@@ -51,6 +51,7 @@ WALStore::WALStore(
     : delegator(delegator_)
     , provider(provider_)
     , last_log_num(last_log_num_)
+    , wal_paths_index(0)
     , logger(&Poco::Logger::get("WALStore"))
 {
 }
@@ -76,7 +77,7 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
         if (log_file == nullptr || log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
         {
             auto log_num = last_log_num++;
-            auto [new_log_file, filename] = createLogWriter(delegator, provider, {log_num, 0}, logger, false);
+            auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);
             (void)filename;
             log_file.swap(new_log_file);
         }
@@ -85,13 +86,8 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
     }
 }
 
-UInt16 WALStore::wal_paths_index = 0;
-
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
-    PSDiskDelegatorPtr delegator,
-    const FileProviderPtr & provider,
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-    Poco::Logger * logger,
     bool manual_flush)
 {
     String path;
@@ -179,7 +175,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         // Use {largest_log_num + 1, 1} to save the `edit`
         const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
         // Create a temporary file for saving directory snapshot
-        auto [compact_log, log_filename] = createLogWriter(delegator, provider, {log_num, 1}, logger, /*manual_flush*/ true);
+        auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
         {
             const String serialized = ser::serializeTo(directory_snap);
             ReadBufferFromString payload(serialized);
