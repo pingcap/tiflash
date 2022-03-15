@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/MutableSupport.h>
 
 
@@ -16,7 +30,8 @@ const DataTypePtr MutableSupport::tidb_pk_column_int_type = DataTypeFactory::ins
 const DataTypePtr MutableSupport::tidb_pk_column_string_type = DataTypeFactory::instance().get("String");
 const DataTypePtr MutableSupport::version_column_type = DataTypeFactory::instance().get("UInt64");
 const DataTypePtr MutableSupport::delmark_column_type = DataTypeFactory::instance().get("UInt8");
-const DataTypePtr MutableSupport::extra_table_id_column_type = DataTypeFactory::instance().get("Int64");
+/// it should not be nullable, but TiDB does not set not null flag for extra_table_id_column_type, so has to align with TiDB
+const DataTypePtr MutableSupport::extra_table_id_column_type = DataTypeFactory::instance().get("Nullable(Int64)");
 ;
 
 } // namespace DB
