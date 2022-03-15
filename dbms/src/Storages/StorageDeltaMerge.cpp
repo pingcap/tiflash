@@ -469,7 +469,8 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
                     break;
                 }
             }
-            else
+            // it's ok if some columns in block is not in storage header, because these columns should be dropped after generating the block
+            else if (header->has(col.name))
             {
                 auto & header_col = header->getByName(col.name);
                 if (col.column_id != header_col.column_id)
