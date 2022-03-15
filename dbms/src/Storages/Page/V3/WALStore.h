@@ -68,7 +68,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    constexpr static const String wal_folder_prefix = "/wal";
+    constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
