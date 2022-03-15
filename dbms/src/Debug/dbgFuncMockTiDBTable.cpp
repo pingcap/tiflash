@@ -324,7 +324,7 @@ void MockTiDBTable::dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & 
     std::vector<std::tuple<std::string, std::string, std::string>> table_map;
     for (ASTs::size_type i = 0; i < args.size() / 3; i++)
     {
-        const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 0]).name;
+        const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3 * i]).name;
         const String & table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 1]).name;
         const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 2]).name;
         table_map.emplace_back(database_name, table_name, new_table_name);
