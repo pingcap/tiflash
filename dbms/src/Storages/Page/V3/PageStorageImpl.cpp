@@ -295,11 +295,13 @@ void PageStorageImpl::createManifestsFileIfNeed(const String & path)
     file.createFile();
 }
 
+#ifndef NDEBUG
 void PageStorageImpl::clearExternalPagesCallbacks()
 {
     std::scoped_lock lock{callbacks_mutex};
     callbacks_container.clear();
 }
+#endif
 
 } // namespace PS::V3
 } // namespace DB
