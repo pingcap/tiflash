@@ -68,10 +68,17 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    for (size_t index = 0; index < source_num; ++index)
+    if (0 == source_num)
     {
-        auto req = rpc_context->makeRequest(index);
-        thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
+        msg_channel.finish();
+    }
+    else
+    {
+        for (size_t index = 0; index < source_num; ++index)
+        {
+            auto req = rpc_context->makeRequest(index);
+            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
+        }
     }
 }
 
