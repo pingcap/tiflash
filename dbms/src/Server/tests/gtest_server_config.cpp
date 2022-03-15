@@ -342,7 +342,7 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", *path_pool, global_ctx, global_ctx.getSettingsRef());
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", /*table_id*/ 100, *path_pool, global_ctx, global_ctx.getSettingsRef());
 
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();

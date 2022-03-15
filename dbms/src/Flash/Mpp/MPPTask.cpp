@@ -11,6 +11,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
@@ -42,6 +43,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
     , mpp_task_statistics(id, meta.address())
+    , scheduled(false)
 {}
 
 MPPTask::~MPPTask()
@@ -123,52 +125,20 @@ void MPPTask::unregisterTask()
     }
 }
 
-bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
-{
-    fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
-    RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
-    if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
-        return true;
-    auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    return meta_snap.ver != region_info.region_version;
-}
-
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    RegionInfoMap local_regions;
-    RegionInfoList remote_regions;
-
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context->getTMTContext();
-    /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
-    /// will never be used and can be removed later.
-    /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without
-    /// TableScan, their DispatchTaskRequests won't contain any region.
-    for (const auto & r : task_request.regions())
-    {
-        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
-        if (region_info.key_ranges.empty())
-        {
-            throw TiFlashException(
-                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
-                Errors::Coprocessor::BadRequest);
-        }
-        /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
-        /// region id, only the first region will be treated as local region
-        ///
-        /// 1. Currently TiDB can't provide a consistent snapshot of the region cache and it may be updated during the
-        ///    planning stage of a query. The planner may see multiple versions of one region (on one TiFlash node).
-        /// 2. Two regions with same region id won't have overlapping key ranges.
-        /// 3. TiFlash will pick the right version of region for local read and others for remote read.
-        /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
-        ///    is served by the same node (but still read from remote).
-        bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
+    /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
+    /// The ones defined in tipb::TableScan will never be used and can be removed later.
+    TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(task_request.regions(), task_request.table_regions(), tmt_context);
+    LOG_FMT_DEBUG(
+        log,
+        "{}: Handling {} regions from {} physical tables in MPP task",
+        __PRETTY_FUNCTION__,
+        tables_regions_info.regionCount(),
+        tables_regions_info.tableCount());
 
-        if (duplicated_region || needRemoteRead(region_info, tmt_context))
-            remote_regions.push_back(region_info);
-        else
-            local_regions.insert(std::make_pair(region_info.region_id, region_info));
-    }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
     auto start_ts = task_request.meta().start_ts();
@@ -208,8 +178,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
-    dag_context->regions_for_local_read = std::move(local_regions);
-    dag_context->regions_for_remote_read = std::move(remote_regions);
+    dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
     context->setDAGContext(dag_context.get());
 
@@ -233,7 +202,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, log);
+        bool is_async = !is_local && context->getSettingsRef().enable_async_server;
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log);
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -283,7 +253,6 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
-
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -292,13 +261,16 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
     String err_msg;
-    LOG_INFO(log, "task starts running");
     try
     {
+        LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
+        needed_threads = estimateCountOfNewThreads();
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
 
-        int new_thd_cnt = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_thds: {} , receiver_thds: {}", new_thd_cnt, dag_context->tunnel_set->getRemoteTunnelCnt(), dag_context->getNewThreadCountOfExchangeReceiver());
+        scheduleOrWait();
+
+        LOG_FMT_INFO(log, "task starts running");
         memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
@@ -359,6 +331,7 @@ void MPPTask::runImpl()
     }
     else
     {
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
@@ -411,6 +384,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
+            scheduleThisTask();
             context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
@@ -425,11 +399,48 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
     return status.compare_exchange_strong(from, to);
 }
 
+void MPPTask::scheduleOrWait()
+{
+    if (!manager->tryToScheduleTask(shared_from_this()))
+    {
+        LOG_FMT_INFO(log, "task waits for schedule");
+        Stopwatch stopwatch;
+        {
+            std::unique_lock lock(schedule_mu);
+            schedule_cv.wait(lock, [&] { return scheduled; });
+        }
+        LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
+    }
+}
+
+void MPPTask::scheduleThisTask()
+{
+    std::unique_lock lock(schedule_mu);
+    if (!scheduled)
+    {
+        LOG_FMT_INFO(log, "task gets schedule");
+        scheduled = true;
+        schedule_cv.notify_one();
+    }
+}
+
 int MPPTask::estimateCountOfNewThreads()
 {
+    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
+        throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
+
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
     return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
+}
+
+int MPPTask::getNeededThreads()
+{
+    if (needed_threads == 0)
+    {
+        throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
+    }
+    return needed_threads;
 }
 
 } // namespace DB

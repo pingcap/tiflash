@@ -79,9 +79,18 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     LogFilename latest_checkpoint = *latest_checkpoint_iter;
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); /*empty*/)
     {
-        if (iter->log_num < latest_checkpoint.log_num)
+        // We use <largest_num, 1> as the checkpoint, so all files less than or equal
+        // to latest_checkpoint.log_num can be erase
+        if (iter->log_num <= latest_checkpoint.log_num)
         {
-            // TODO: clean useless file that is older than `checkpoint`
+            if (iter->log_num == latest_checkpoint.log_num && iter->level_num != 0)
+            {
+                // the checkpoint file, not remove
+            }
+            else
+            {
+                // TODO: clean useless file that is older than `checkpoint`
+            }
             iter = all_files.erase(iter);
         }
         else
@@ -186,6 +195,7 @@ bool WALStoreReader::openNextFile()
     if (!checkpoint_read_done)
     {
         do_open(*checkpoint_file);
+        checkpoint_read_done = true;
     }
     else
     {

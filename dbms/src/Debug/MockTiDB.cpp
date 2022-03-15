@@ -257,6 +257,54 @@ TableID MockTiDB::newTable(
     return addTable(database_name, std::move(*table_info));
 }
 
+int MockTiDB::newTables(
+    const String & database_name,
+    const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
+    Timestamp tso,
+    const String & engine_type)
+{
+    std::lock_guard lock(tables_mutex);
+    if (databases.find(database_name) == databases.end())
+    {
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionType::CreateTables;
+    for (const auto & [table_name, columns, handle_pk_name] : tables)
+    {
+        String qualified_name = database_name + "." + table_name;
+        if (tables_by_name.find(qualified_name) != tables_by_name.end())
+        {
+            throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
+        }
+
+        auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
+        table_info.id = table_id_allocator++;
+        table_info.update_timestamp = tso;
+
+        auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+        tables_by_id.emplace(table->table_info.id, table);
+        tables_by_name.emplace(qualified_name, table);
+
+        AffectedOption opt;
+        opt.schema_id = table->database_id;
+        opt.table_id = table->id();
+        opt.old_schema_id = table->database_id;
+        opt.old_table_id = table->id();
+        diff.affected_opts.push_back(std::move(opt));
+    }
+
+    if (diff.affected_opts.empty())
+        throw Exception("MockTiDB CreateTables should have at lease 1 table", ErrorCodes::LOGICAL_ERROR);
+
+    diff.schema_id = diff.affected_opts[0].schema_id;
+    diff.version = version;
+    version_diff[version] = diff;
+    return 0;
+}
+
 TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
 {
     auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
