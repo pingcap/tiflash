@@ -358,6 +358,7 @@ public:
                            size_t num_streams,
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
+                           const LogWithPrefixPtr & tracing_logger,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -414,7 +415,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const LogWithPrefixPtr & tracing_logger = nullptr);
 
     static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 

@@ -442,7 +442,7 @@ void DeltaMergeStore::shutdown()
     LOG_FMT_TRACE(log, "Shutdown DeltaMerge end [{}.{}]", db_name, table_name);
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const LogWithPrefixPtr & tracing_logger)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -458,7 +458,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
-                               query_id);
+                               tracing_logger);
     return DMContextPtr(ctx);
 }
 
@@ -1018,7 +1018,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 {
     SegmentReadTasks tasks;
 
-    auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
+    auto dm_context = newDMContext(db_context, db_settings, getLogWithPrefix(nullptr, db_context.getCurrentQueryId()));
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1073,15 +1073,16 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t num_streams,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
+                                        const LogWithPrefixPtr & tracing_logger,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
 {
-    auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
+    auto dm_context = newDMContext(db_context, db_settings, tracing_logger);
 
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
 
-    LOG_FMT_DEBUG(log, "Read create segment snapshot done");
+    LOG_FMT_DEBUG(dm_context->tracing_logger, "Read create segment snapshot done");
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
@@ -1113,7 +1114,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         res.push_back(stream);
     }
 
-    LOG_FMT_DEBUG(log, "Read create stream done");
+    LOG_FMT_DEBUG(dm_context->tracing_logger, "Read create stream done");
 
     return res;
 }
@@ -2502,7 +2503,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     }
 
     LOG_FMT_DEBUG(
-        log,
+        dm_context.tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
         sorted_ranges.size(),
         tasks.size(),

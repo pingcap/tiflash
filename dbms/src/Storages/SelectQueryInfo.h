@@ -31,6 +31,8 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 struct MvccQueryInfo;
 struct DAGQueryInfo;
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -48,13 +50,15 @@ struct SelectQueryInfo
 
     std::unique_ptr<DAGQueryInfo> dag_query;
 
+    LogWithPrefixPtr logger;
+
+
     SelectQueryInfo();
-
-    SelectQueryInfo(const SelectQueryInfo & query_info_);
-
-    SelectQueryInfo(SelectQueryInfo && query_info_);
-
     ~SelectQueryInfo();
+
+    // support copying and moving
+    SelectQueryInfo(const SelectQueryInfo & rhs);
+    SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 
     bool fromAST() const { return dag_query == nullptr; };
 };

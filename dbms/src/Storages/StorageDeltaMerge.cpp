@@ -727,6 +727,7 @@ BlockInputStreams StorageDeltaMerge::read(
     else
         LOG_FMT_DEBUG(log, "Rough set filter is disabled.");
 
+    auto dummy_logger = getLogWithPrefix(nullptr);
     auto streams = store->read(
         context,
         context.getSettingsRef(),
@@ -735,6 +736,7 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
+        dummy_logger,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -809,7 +811,8 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         {range},
         1,
         std::numeric_limits<UInt64>::max(),
-        EMPTY_FILTER)[0];
+        EMPTY_FILTER,
+        Logger::get("StorageDeltaMerge", "getRows"))[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -832,7 +835,8 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             1,
             std::numeric_limits<UInt64>::max(),
-            EMPTY_FILTER)[0];
+            EMPTY_FILTER,
+            Logger::get("StorageDeltaMerge", "getRange"))[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

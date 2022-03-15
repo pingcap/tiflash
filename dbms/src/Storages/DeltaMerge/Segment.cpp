@@ -430,10 +430,10 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.query_id);
+        "");
 
     LOG_FMT_TRACE(
-        log,
+        dm_context.tracing_logger,
         "Segment [{}] is read by max_version: {}, {} ranges: {}",
         segment_id,
         max_version,

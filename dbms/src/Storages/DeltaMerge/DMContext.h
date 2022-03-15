@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -23,6 +24,9 @@
 namespace DB
 {
 class StoragePathPool;
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 
 namespace DM
 {
@@ -81,7 +85,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
-    const String query_id;
+    const LogWithPrefixPtr tracing_logger;
 
 public:
     DMContext(const Context & db_context_,
@@ -93,7 +97,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
-              const String & query_id_ = "")
+              const LogWithPrefixPtr & tracing_logger_ = nullptr)
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
@@ -117,7 +121,7 @@ public:
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
-        , query_id(query_id_)
+        , tracing_logger(tracing_logger_ ? tracing_logger_ : getLogWithPrefix(nullptr))
     {
     }
 
