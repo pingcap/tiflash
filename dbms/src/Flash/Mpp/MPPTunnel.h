@@ -28,7 +28,6 @@
 
 namespace DB
 {
-
 class EstablishCallData;
 
 /**
