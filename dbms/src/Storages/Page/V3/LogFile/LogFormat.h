@@ -29,7 +29,6 @@ static constexpr UInt8 MaxRecordType = RecyclableLastType;
 static constexpr UInt32 BLOCK_SIZE = 32 * 1024;
 static_assert(BLOCK_SIZE < std::numeric_limits<UInt16>::max());
 
-// CRC32 or CRC64; City128, XXH3 is not well tested for LogFile
 using ChecksumClass = Digest::CRC64;
 
 using ChecksumType = ChecksumClass::HashType;
