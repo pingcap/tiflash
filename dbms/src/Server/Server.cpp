@@ -649,7 +649,7 @@ public:
         // Wait all existed MPPTunnels done to prevent crash.
         // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
         while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1)
-            usleep(1000000); // sleep 1s
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         for (auto & cq : cqs)
             cq->Shutdown();
         for (auto & cq : notify_cqs)

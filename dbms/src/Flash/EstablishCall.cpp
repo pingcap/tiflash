@@ -62,7 +62,7 @@ void EstablishCallData::tryFlushOne()
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
-    if ((*is_shutdown))
+    if (*is_shutdown)
         finishTunnelAndResponder();
     else
         responder.Finish(status, this);
