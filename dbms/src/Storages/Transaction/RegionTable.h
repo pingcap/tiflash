@@ -218,13 +218,9 @@ struct RegionPreDecodeBlockData
         , data_list_read(std::move(data_list_read_))
     {}
     RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
-    void toString(std::stringstream & ss) const
+    String toString() const
     {
-        ss << " {";
-        ss << " schema_version: " << schema_version;
-        ss << ", data_list size: " << data_list_read.size();
-        ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
-        ss << " }";
+        return fmt::format("{{ schema_version: {}, data_list size: {}, block row: {} col: {} bytes: {} }}", schema_version, data_list_read.size(), block.rows(), block.columns(), block.bytes());
     }
 };
 
