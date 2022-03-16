@@ -54,7 +54,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(0);
         GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Set(0);
         GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Set(0);
-        GET_METRIC(tiflash_task_scheduler, type_over_hard_limit_count).Set(0);
+        GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Set(0);
     }
 }
 
@@ -193,7 +193,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         {
             auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso {}) {}, need {}, but used {} of the thread hard limit {}, {} active and {} waiting queries.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, estimated_thread_usage, thread_hard_limit, active_set.size(), waiting_set.size());
             LOG_FMT_ERROR(log, "{}", msg);
-            GET_METRIC(tiflash_task_scheduler, type_over_hard_limit_count).Increment();
+            GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
             throw Exception(msg);
         }
         if (!isWaiting)

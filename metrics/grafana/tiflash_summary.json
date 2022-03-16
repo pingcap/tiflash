@@ -2711,7 +2711,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"over_hard_limit_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"hard_limit_exceeded_count\"}) by (instance, type)",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}",
