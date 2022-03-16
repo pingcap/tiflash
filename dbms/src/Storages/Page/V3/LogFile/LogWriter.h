@@ -39,23 +39,23 @@ namespace PS::V3
  *       +-----+-------------+--+----+----------+------+-- ... ----+
  * File  | r0  |        r1   |P | r2 |    r3    |  r4  |           |
  *       +-----+-------------+--+----+----------+------+-- ... ----+
- *       <--- kBlockSize ------>|<-- kBlockSize ------>|
+ *       <---- BlockSize ------>|<--- BlockSize ------>|
  *  rn = variable size records
  *  P = Padding
  *
- * Data is written out in kBlockSize chunks. If next record does not fit
+ * Data is written out in BlockSize chunks. If next record does not fit
  * into the space left, the leftover space will be padded with \0.
  *
  * Legacy record format:
  *
  * +--------------+-----------+-----------+--- ... ---+
- * |CheckSum (4B) | Size (2B) | Type (1B) | Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Payload   |
  * +--------------+-----------+-----------+--- ... ---+
  *
- * CheckSum = 32bit hash computed over the record type and payload using checksum algo
+ * CheckSum = 64bit hash computed over the record type and payload using checksum algo (CRC64)
  * Size = Length of the payload data
  * Type = Type of record
- *        (kZeroType, kFullType, kFirstType, kLastType, kMiddleType )
+ *        (ZeroType, FullType, FirstType, LastType, MiddleType)
  *        The type is used to group a bunch of records together to represent
  *        blocks that are larger than kBlockSize
  * Payload = Byte stream as long as specified by the payload size
@@ -63,7 +63,7 @@ namespace PS::V3
  * Recyclable record format:
  *
  * +--------------+-----------+-----------+----------------+--- ... ---+
- * |CheckSum (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
  * +--------------+-----------+-----------+----------------+--- ... ---+
  *
  * Same as above, with the addition of
