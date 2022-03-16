@@ -461,6 +461,7 @@ int MPPTask::getNeededThreads()
     }
     return needed_threads;
 }
+
 bool MPPTask::isScheduled()
 {
     std::unique_lock lock(schedule_mu);
