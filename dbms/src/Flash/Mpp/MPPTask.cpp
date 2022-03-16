@@ -437,7 +437,7 @@ void MPPTask::scheduleThisTask(ScheduleState state)
     std::unique_lock lock(schedule_mu);
     if (schedule_state == ScheduleState::WAITING)
     {
-        LOG_FMT_INFO(log, "task gets schedule");
+        LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
     }
