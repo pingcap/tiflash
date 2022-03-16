@@ -82,7 +82,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    using ChecksumClass = Digest::CRC64;
+    constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
@@ -117,18 +117,17 @@ private:
         const FileProviderPtr & provider_,
         Format::LogNumberType last_log_num_);
 
-    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
+    std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
-        PSDiskDelegatorPtr delegator,
-        const FileProviderPtr & provider,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        Poco::Logger * logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;
     Format::LogNumberType last_log_num;
+    // select next path for creating new logfile
+    UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;
