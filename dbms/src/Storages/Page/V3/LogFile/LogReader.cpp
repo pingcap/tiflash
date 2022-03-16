@@ -397,7 +397,7 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
         }
         else if (err != 0)
             return err;
-        // else parse header successe.
+        // else parse header success.
 
         if (verify_checksum)
         {
