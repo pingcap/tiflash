@@ -24,7 +24,7 @@ namespace DB
 class TiDBTableScan
 {
 public:
-    TiDBTableScan(const tipb::Executor * table_scan_, const DAGContext & dag_context);
+    TiDBTableScan(const String & table_scan_name_, const tipb::Executor * table_scan_, const DAGContext & dag_context);
     bool isPartitionTableScan() const
     {
         return is_partition_table_scan;
@@ -48,10 +48,11 @@ public:
     }
     String getTableScanExecutorID() const
     {
-        return table_scan->executor_id();
+        return table_scan_name;
     }
 
 private:
+    const String table_scan_name;
     const tipb::Executor * table_scan;
     bool is_partition_table_scan;
     const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & columns;

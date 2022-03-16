@@ -50,9 +50,9 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const DAGQueryBlock & query_block_,
         const TiDBTableScan & table_scan,
-        const std::vector<const tipb::Expr *> & conditions_,
+        const String & pushed_down_selection_name_,
+        const std::vector<const tipb::Expr *> & pushed_down_conditions_,
         size_t max_streams_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
@@ -95,9 +95,9 @@ private:
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const DAGQueryBlock & query_block;
     const TiDBTableScan & table_scan;
-    const std::vector<const tipb::Expr *> & conditions;
+    const String & pushed_down_selection_name;
+    const std::vector<const tipb::Expr *> & pushed_down_conditions;
     size_t max_streams;
     LogWithPrefixPtr log;
 

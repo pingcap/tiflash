@@ -263,9 +263,10 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     {
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
+        assert(!query_block.selection_name.empty() && !conditions.empty());
     }
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, table_scan, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
@@ -1036,7 +1037,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, dagContext());
+        TiDBTableScan table_scan(query_block.source_name, query_block.source, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }

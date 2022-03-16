@@ -132,14 +132,14 @@ MakeRegionQueryInfos(
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const DAGQueryBlock & query_block_,
     const TiDBTableScan & table_scan_,
-    const std::vector<const tipb::Expr *> & conditions_,
+    const String & pushed_down_selection_name_,
+    const std::vector<const tipb::Expr *> & pushed_down_conditions_,
     size_t max_streams_)
     : context(context_)
-    , query_block(query_block_)
     , table_scan(table_scan_)
-    , conditions(conditions_)
+    , pushed_down_selection_name(pushed_down_selection_name_)
+    , pushed_down_conditions(pushed_down_conditions_)
     , max_streams(max_streams_)
     , log(getMPPTaskLog(*context.getDAGContext(), "DAGStorageInterpreter"))
     , logical_table_id(table_scan.getLogicalTableID())
@@ -147,6 +147,10 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , tmt(context.getTMTContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
+    if (pushed_down_selection_name.empty() != pushed_down_conditions.empty())
+    {
+        throw Exception("");
+    }
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
@@ -267,7 +271,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
+            pushde_down_conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -687,7 +691,8 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            query_block.selection,
+            pushde_down_selection_name,
+            pushde_down_conditions,
             log));
     }
 }

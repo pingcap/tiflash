@@ -18,7 +18,7 @@
 
 namespace DB
 {
-RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LogWithPrefixPtr & log)
+RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const String & selection_name, const std::vector<const tipb::Expr *> & conditions, LogWithPrefixPtr & log)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
         FmtBuffer buffer;
@@ -39,9 +39,9 @@ RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGCon
     if (selection != nullptr)
     {
         executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(selection->executor_id());
+        executor->set_executor_id(selection_name);
         auto * new_selection = executor->mutable_selection();
-        for (const auto & condition : selection->selection().conditions())
+        for (const auto & condition : conditions)
             *new_selection->add_conditions() = condition;
         executor = new_selection->mutable_child();
     }
