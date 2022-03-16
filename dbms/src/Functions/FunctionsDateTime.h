@@ -51,7 +51,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 namespace
 {
 static constexpr Int64 E6 = 1000000;
-}
+} // namespace
 
 /** Functions for working with date and time.
   *
