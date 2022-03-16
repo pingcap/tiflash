@@ -473,6 +473,10 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & windo
             {
                 String arg_name = getActions(expr.children(i), step.actions);
                 types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                if (removeNullable(types[i])->isString())
+                    arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+                else
+                    arg_collators.push_back({});
                 window_function_description.argument_names[i] = arg_name;
                 step.required_output.push_back(arg_name);
             }
