@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/Utils.h>
@@ -26,10 +27,16 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , responder(&ctx)
     , state(NEW_REQUEST)
 {
+    GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+}
+
+EstablishCallData::~EstablishCallData()
+{
+    GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
 }
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
@@ -53,7 +60,9 @@ void EstablishCallData::tryFlushOne()
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
-    if (!(*is_shutdown))
+    if (*is_shutdown)
+        finishTunnelAndResponder();
+    else
         responder.Finish(status, this);
 }
 
@@ -79,7 +88,10 @@ void EstablishCallData::initRpc()
 bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
     if (*is_shutdown)
-        return false;
+    {
+        finishTunnelAndResponder();
+        return true;
+    }
     responder.Write(packet, this);
     return true;
 }
@@ -116,11 +128,18 @@ void EstablishCallData::cancel()
         delete this;
         return;
     }
+    finishTunnelAndResponder();
+}
+
+void EstablishCallData::finishTunnelAndResponder()
+{
     state = FINISH;
     if (mpp_tunnel)
+    {
         mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
+    }
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
-    responderFinish(status);
+    responder.Finish(status, this);
 }
 
 void EstablishCallData::proceed()
