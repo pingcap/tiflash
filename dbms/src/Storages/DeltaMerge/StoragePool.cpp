@@ -84,7 +84,7 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
     ,
     // The iops in data_storage is low, only use the first disk for storing data
     data_storage(PageStorage::create("__global__.data",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                     path_pool.getPSDiskDelegatorGlobalSingle("data"),
                                      extractConfig(settings, StorageType::Data),
                                      global_ctx.getFileProvider(),
                                      true))
