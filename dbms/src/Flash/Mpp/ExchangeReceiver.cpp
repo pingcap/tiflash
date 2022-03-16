@@ -53,8 +53,8 @@ enum class AsyncRequestStage
 using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
-static constexpr Int32 max_retry_times = 10;
-static constexpr Int32 batch_packet_count = 16;
+constexpr Int32 max_retry_times = 10;
+constexpr Int32 batch_packet_count = 16;
 
 template <typename RPCContext>
 class AsyncRequestHandler : public UnaryCallback<bool>
