@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -217,6 +231,16 @@ const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext
 int DAGContext::getNewThreadCountOfExchangeReceiver() const
 {
     return new_thread_count_of_exchange_receiver;
+}
+
+bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+{
+    return tables_regions_info.containsRegionsInfoForTable(table_id);
+}
+
+const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+{
+    return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
 } // namespace DB

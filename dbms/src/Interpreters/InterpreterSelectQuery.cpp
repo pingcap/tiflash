@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/Collator.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
@@ -786,6 +800,15 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         if (!request_str.empty())
         {
+            TableID table_id = InvalidTableID;
+            if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
+            {
+                table_id = managed_storage->getTableInfo().id;
+            }
+            else
+            {
+                throw Exception("Not supported request on non-manageable storage");
+            }
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(request_str);
             auto obj = result.extract<Poco::JSON::Object::Ptr>();
@@ -798,11 +821,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 ::metapb::Region region;
                 ::google::protobuf::TextFormat::ParseFromString(str, &region);
 
-                RegionQueryInfo info;
-                info.region_id = region.id();
                 const auto & epoch = region.region_epoch();
-                info.version = epoch.version();
-                info.conf_version = epoch.conf_ver();
+                RegionQueryInfo info(region.id(), epoch.version(), epoch.conf_ver(), table_id);
                 if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
                 {
                     // Extract the handle range according to current table
@@ -1068,7 +1088,7 @@ void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool ha
 }
 
 
-void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, nullptr);
@@ -1169,7 +1189,7 @@ void InterpreterSelectQuery::executeMergeSorted(Pipeline & pipeline)
 }
 
 
-void InterpreterSelectQuery::executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, nullptr);
