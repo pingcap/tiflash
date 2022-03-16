@@ -151,7 +151,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
 {
     if (pushed_down_selection_name.empty() != pushed_down_conditions.empty())
     {
-        throw Exception("");
+        throw Exception("Both pushed_down_selection_name and pushed_down_conditions should be empty or neither should be empty");
     }
 }
 
