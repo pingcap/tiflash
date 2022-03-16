@@ -211,6 +211,7 @@ bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
     std::lock_guard lock(mu);
     return scheduler->tryToSchedule(task, *this);
 }
+
 void MPPTaskManager::releaseTaskThreadsFromScheduler(const MPPTaskPtr & task)
 {
     if (!task->isScheduled())
