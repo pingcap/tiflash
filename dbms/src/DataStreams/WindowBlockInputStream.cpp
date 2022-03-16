@@ -22,12 +22,12 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
     : window_description(window_description_)
 {
     children.push_back(input);
-    input_header = input->getHeader();
+    output_header = input->getHeader();
     for (auto & add_column : window_description_.add_columns)
     {
-        input_header.insert({add_column.type, add_column.name});
+        output_header.insert({add_column.type, add_column.name});
     }
-    auto input_columns = input_header.getColumns();
+    auto input_columns = output_header.getColumns();
 
     if (window_description.window_functions_descriptions.size() * window_description.aggregate_descriptions.size() != 0)
     {
@@ -47,14 +47,14 @@ void WindowBlockInputStream::initialPartitionByIndices()
     for (const auto & column : window_description.partition_by)
     {
         partition_by_indices.push_back(
-            input_header.getPositionByName(column.column_name));
+            output_header.getPositionByName(column.column_name));
     }
 
     order_by_indices.reserve(window_description.order_by.size());
     for (const auto & column : window_description.order_by)
     {
         order_by_indices.push_back(
-            input_header.getPositionByName(column.column_name));
+            output_header.getPositionByName(column.column_name));
     }
 }
 
@@ -345,7 +345,6 @@ void WindowBlockInputStream::advanceFrameStart()
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame begin type '{}' is not implemented",
                         window_description.frame.begin_type);
-        break;
     }
 
     assert(frame_start_before <= frame_start);
@@ -532,7 +531,8 @@ void WindowBlockInputStream::writeOutCurrentRow()
         }
         else
         {
-            // for agg functions
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                            "Unsupport agg function in window.");
         }
     }
 }
@@ -598,7 +598,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
 
         window_block.input_columns = current_block.getColumns();
 
-        assertSameColumns(input_header.getColumns(), window_block.input_columns);
+        assertSameColumns(output_header.getColumns(), window_block.input_columns);
     }
 
     for (;;)

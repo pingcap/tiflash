@@ -112,11 +112,11 @@ list (APPEND dbms_headers
 
 list (APPEND dbms_sources
         src/WindowFunctions/WindowFunctionFactory.cpp
-        src/WindowFunctions/WindowFunction.cpp)
+        src/WindowFunctions/IWindowFunction.cpp)
 
 list (APPEND dbms_headers
         src/WindowFunctions/WindowFunctionFactory.h
-        src/WindowFunctions/WindowFunction.h)
+        src/WindowFunctions/IWindowFunction.h)
 
 list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)

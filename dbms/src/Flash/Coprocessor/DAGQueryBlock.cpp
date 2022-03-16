@@ -55,8 +55,6 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     , qb_column_prefix("__QB_" + std::to_string(id) + "_")
 {
     const tipb::Executor * current = root;
-    String window_name;
-    String window_sort_name;
     while (!isSourceNode(current) && current->has_executor_id())
     {
         switch (current->tp())
@@ -162,8 +160,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     , root(nullptr)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
 {
-    String window_name;
-    String window_sort_name;
     for (int i = executors.size() - 1; i >= 0; i--)
     {
         switch (executors[i].tp())

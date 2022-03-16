@@ -74,8 +74,6 @@ struct AnalysisResult
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
     bool is_final_agg;
-
-    Names partition_keys;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -158,7 +156,7 @@ AnalysisResult analyzeExpressions(
             chain.addStep();
         }
     }
-    // Or TopN
+    // Or TopN, not both.
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
@@ -768,7 +766,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     }
     else
     {
-        throw TiFlashException("window block must have 1 input stream", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("window block must have 1 input stream", Errors::Coprocessor::Internal);
     }
 }
 
@@ -1057,11 +1055,10 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
-
     WindowDescription window_description = dag_analyzer.appendWindow(window);
-
     executeWindow(pipeline, window_description);
     executeExpression(pipeline, window_description.after_window);
+
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
 

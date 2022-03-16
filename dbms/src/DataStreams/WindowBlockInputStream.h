@@ -12,7 +12,7 @@ namespace DB
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
 {
-    AggregateFunctionPtr aggregate_function;
+    AggregateFunctionPtr aggregate_function = nullptr;
 
     // This field is set for pure window functions. When set, we ignore the
     // window_function.aggregate_function, and work through this interface
@@ -68,7 +68,7 @@ class WindowBlockInputStream : public IProfilingBlockInputStream
 public:
     WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_);
 
-    Block getHeader() const override { return input_header; };
+    Block getHeader() const override { return output_header; };
 
     String getName() const override { return "Window"; }
 
@@ -158,27 +158,6 @@ public:
         ++x.block;
     }
 
-    void retreatRowNumber(RowNumber & x) const
-    {
-        if (x.row > 0)
-        {
-            --x.row;
-            return;
-        }
-
-        --x.block;
-        assert(x.block >= first_block_number);
-        assert(x.block < first_block_number + window_blocks.size());
-        assert(blockAt(x).rows > 0);
-        x.row = blockAt(x).rows - 1;
-
-#ifndef NDEBUG
-        auto xx = x;
-        advanceRowNumber(xx);
-        assert(xx == x);
-#endif
-    }
-
     void assertValid(const RowNumber & x) const
     {
         assert(x.block >= first_block_number);
@@ -208,12 +187,10 @@ protected:
     Block readImpl() override;
 
 public:
-    bool has_input = false;
     bool input_is_finished = false;
-    bool has_output = false;
     UInt64 output_index = 0;
 
-    Block input_header;
+    Block output_header;
 
     WindowDescription window_description;
 

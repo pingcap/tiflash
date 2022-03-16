@@ -1,6 +1,6 @@
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <WindowFunctions/WindowFunction.h>
+#include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 
@@ -12,11 +12,11 @@ extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-struct WindowFunctionRank final : public WindowFunction
+struct WindowFunctionRank final : public IWindowFunction
 {
     WindowFunctionRank(const std::string & name_,
                        const DataTypes & argument_types_)
-        : WindowFunction(name_, argument_types_)
+        : IWindowFunction(name_, argument_types_)
     {}
 
     DataTypePtr getReturnType() const override
@@ -34,11 +34,11 @@ struct WindowFunctionRank final : public WindowFunction
     }
 };
 
-struct WindowFunctionDenseRank final : public WindowFunction
+struct WindowFunctionDenseRank final : public IWindowFunction
 {
     WindowFunctionDenseRank(const std::string & name_,
                             const DataTypes & argument_types_)
-        : WindowFunction(name_, argument_types_)
+        : IWindowFunction(name_, argument_types_)
     {}
 
     DataTypePtr getReturnType() const override
@@ -57,11 +57,11 @@ struct WindowFunctionDenseRank final : public WindowFunction
     }
 };
 
-struct WindowFunctionRowNumber final : public WindowFunction
+struct WindowFunctionRowNumber final : public IWindowFunction
 {
     WindowFunctionRowNumber(const std::string & name_,
                             const DataTypes & argument_types_)
-        : WindowFunction(name_, argument_types_)
+        : IWindowFunction(name_, argument_types_)
     {}
 
     DataTypePtr getReturnType() const override

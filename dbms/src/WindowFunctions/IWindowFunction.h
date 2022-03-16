@@ -12,11 +12,11 @@ namespace DB
 class WindowBlockInputStream;
 using WindowBlockInputStreamPtr = std::shared_ptr<WindowBlockInputStream>;
 
-class WindowFunction
+class IWindowFunction
 {
 public:
-    WindowFunction(const std::string & name_,
-                   const DataTypes & argument_types_)
+    IWindowFunction(const std::string & name_,
+                    const DataTypes & argument_types_)
         : name(name_)
         , argument_types(argument_types_)
     {}
@@ -26,7 +26,7 @@ public:
         return name;
     }
 
-    virtual ~WindowFunction() = default;
+    virtual ~IWindowFunction() = default;
 
     virtual DataTypePtr getReturnType() const = 0;
     // Must insert the result for current_row.
@@ -39,6 +39,6 @@ protected:
     DataTypes argument_types;
 };
 
-using WindowFunctionPtr = std::shared_ptr<WindowFunction>;
+using WindowFunctionPtr = std::shared_ptr<IWindowFunction>;
 
 } // namespace DB

@@ -400,14 +400,12 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 bool checkWindowFunctionsInvalid(const tipb::Window & window)
 {
     bool has_agg_func = false;
-    bool has_window_func = false;
     for (const tipb::Expr & expr : window.func_desc())
     {
         has_agg_func = has_agg_func || isAggFunctionExpr(expr);
-        has_window_func = has_window_func || isWindowFunctionExpr(expr);
     }
 
-    return has_agg_func && has_window_func;
+    return has_agg_func;
 }
 
 SortDescription DAGExpressionAnalyzer::getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems, ExpressionActionsChain::Step & step)

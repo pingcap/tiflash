@@ -9,7 +9,7 @@
 #include <DataTypes/IDataType.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Parsers/IAST.h>
-#include <WindowFunctions/WindowFunction.h>
+#include <WindowFunctions/IWindowFunction.h>
 #include <tipb/select.pb.h>
 
 

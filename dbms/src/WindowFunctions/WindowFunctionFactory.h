@@ -2,7 +2,7 @@
 
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <WindowFunctions/WindowFunction.h>
+#include <WindowFunctions/IWindowFunction.h>
 
 #include <ext/singleton.h>
 #include <functional>
