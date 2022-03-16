@@ -173,11 +173,18 @@ private:
         void setError(const String & err_msg)
         {
             promise.set_value(err_msg);
+            err_has_set = true;
+        }
+
+        bool errHasSet() const
+        {
+            return err_has_set.load();
         }
 
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
+        std::atomic<bool> err_has_set{false};
     };
     ConsumerState consumer_state;
 
