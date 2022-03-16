@@ -95,8 +95,9 @@ static void writeRegionDataToStorage(
         if (region.pre_decode_cache)
         {
             auto schema_version = storage->getTableInfo().schema_version;
-            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}",
-                          FUNCTION_NAME, region->toString(), region.pre_decode_cache->toString(), schema_version);
+            std::stringstream ss;
+            region.pre_decode_cache->toString(ss);
+            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
