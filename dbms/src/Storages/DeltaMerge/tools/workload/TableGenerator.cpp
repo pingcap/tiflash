@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
@@ -30,6 +44,11 @@ std::vector<std::string> TableInfo::toStrings() const
 class TablePkType
 {
 public:
+    TablePkType(const TablePkType &) = delete;
+    TablePkType(TablePkType &&) = delete;
+    TablePkType & operator=(const TablePkType &) = delete;
+    TablePkType && operator=(TablePkType &&) = delete;
+
     static TablePkType & instance()
     {
         static TablePkType table_pk_type;
@@ -111,11 +130,6 @@ private:
     };
 
     std::mt19937_64 rand_gen;
-
-    TablePkType(const TablePkType &) = delete;
-    TablePkType(TablePkType &&) = delete;
-    TablePkType & operator=(const TablePkType &) = delete;
-    TablePkType && operator=(TablePkType &&) = delete;
 };
 
 class TableDataType
@@ -187,7 +201,7 @@ private:
             enum_cnt = rand_gen() % max_value + 1;
         }
         typename DataTypeEnum<T>::Values values;
-        for (T i = 0; i < enum_cnt; i++)
+        for (T i = 0; i < static_cast<T>(enum_cnt); i++)
         {
             values.emplace_back(fmt::format("e_{}", i), i);
         }
@@ -229,8 +243,9 @@ public:
     {
         TableInfo table_info;
 
+        table_info.table_id = rand_gen();
         table_info.db_name = "workload";
-        table_info.table_name = fmt::format("random_table_{}", rand_gen());
+        table_info.table_name = fmt::format("random_table_{}", table_info.table_id);
 
         auto type = getPkType();
         table_info.columns = TablePkType::getDefaultColumns(type);
@@ -240,7 +255,7 @@ public:
         {
             int id = i + 3;
             auto name = fmt::format("col_{}", id);
-            auto data_type = getDataType();
+            auto data_type = RandomTableGenerator::getDataType();
             table_info.columns->emplace_back(ColumnDefine(id, name, data_type));
         }
         table_info.handle = (*table_info.columns)[0];
@@ -266,7 +281,7 @@ private:
         return TablePkType::instance().getPkType(pk_type);
     }
 
-    DataTypePtr getDataType()
+    static DataTypePtr getDataType()
     {
         return TableDataType::instance().randomDataType();
     }
@@ -284,6 +299,7 @@ class ConstantTableGenerator : public TableGenerator
     {
         TableInfo table_info;
 
+        table_info.table_id = 0;
         table_info.db_name = "workload";
         table_info.table_name = "constant";
 

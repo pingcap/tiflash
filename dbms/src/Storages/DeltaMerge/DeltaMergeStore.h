@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -276,11 +290,13 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    TableID table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS);
+                    const Settings & settings_ = EMPTY_SETTINGS,
+                    const TableID physical_table_id = 0);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -325,7 +341,8 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
-                              const SegmentIdSet & read_segments = {});
+                              const SegmentIdSet & read_segments = {},
+                              size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows with MVCC filtering
     /// `sorted_ranges` should be already sorted and merged
@@ -337,7 +354,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet & read_segments = {});
+                           const SegmentIdSet & read_segments = {},
+                           size_t extra_table_id_index = InvalidColumnID);
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)
@@ -436,6 +454,7 @@ private:
 
     String db_name;
     String table_name;
+    TableID physical_table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;

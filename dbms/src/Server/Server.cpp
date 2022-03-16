@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "Server.h"
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
@@ -9,9 +23,11 @@
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -489,11 +505,70 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
+void handleRpcs(grpc::ServerCompletionQueue * curcq, Poco::Logger * log)
+{
+    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
+    });
+    void * tag = nullptr; // uniquely identifies a request.
+    bool ok = false;
+    while (true)
+    {
+        String err_msg;
+        try
+        {
+            // Block waiting to read the next event from the completion queue. The
+            // event is uniquely identified by its tag, which in this case is the
+            // memory address of a EstablishCallData instance.
+            // The return value of Next should always be checked. This return value
+            // tells us whether there is any kind of event or cq is shutting down.
+            if (!curcq->Next(&tag, &ok))
+            {
+                LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
+                break;
+            }
+            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
+            SCOPE_EXIT({
+                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
+            });
+            // If ok is false, it means server is shutdown.
+            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
+            if (ok)
+                static_cast<EstablishCallData *>(tag)->proceed();
+            else
+                static_cast<EstablishCallData *>(tag)->cancel();
+        }
+        catch (Exception & e)
+        {
+            err_msg = e.displayText();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
+        }
+        catch (pingcap::Exception & e)
+        {
+            err_msg = e.message();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (std::exception & e)
+        {
+            err_msg = e.what();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (...)
+        {
+            err_msg = "unrecovered error";
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            throw;
+        }
+    }
+}
+
 class Server::FlashGrpcServerHolder
 {
 public:
     FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
+        , is_shutdown(std::make_shared<std::atomic<bool>>(false))
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -511,7 +586,11 @@ public:
         }
 
         /// Init and register flash service.
-        flash_service = std::make_unique<FlashService>(server);
+        bool enable_async_server = server.context().getSettingsRef().enable_async_server;
+        if (enable_async_server)
+            flash_service = std::make_unique<AsyncFlashService>(server);
+        else
+            flash_service = std::make_unique<FlashService>(server);
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
@@ -529,18 +608,53 @@ public:
         // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
+        thread_manager = DB::newThreadManager();
+        int async_cq_num = server.context().getSettingsRef().async_cqs;
+        if (enable_async_server)
+        {
+            for (int i = 0; i < async_cq_num; ++i)
+            {
+                cqs.emplace_back(builder.AddCompletionQueue());
+                notify_cqs.emplace_back(builder.AddCompletionQueue());
+            }
+        }
         flash_grpc_server = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
+        if (enable_async_server)
+        {
+            int preallocated_request_count_per_poller = server.context().getSettingsRef().preallocated_request_count_per_poller;
+            int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
+            for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
+            {
+                auto * cq = cqs[i / pollers_per_cq].get();
+                auto * notify_cq = notify_cqs[i / pollers_per_cq].get();
+                for (int j = 0; j < preallocated_request_count_per_poller; ++j)
+                {
+                    // EstablishCallData will handle its lifecycle by itself.
+                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
+                }
+                thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
+                thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
+            }
+        }
     }
 
     ~FlashGrpcServerHolder()
     {
+        *is_shutdown = true;
+        const int wait_calldata_after_shutdown_interval_ms = 500;
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_calldata_after_shutdown_interval_ms)); // sleep 500ms to let operations of calldata called by MPPTunnel done.
         /// Shut down grpc server.
         // wait 5 seconds for pending rpcs to gracefully stop
         gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown(deadline);
+        for (auto & cq : cqs)
+            cq->Shutdown();
+        for (auto & cq : notify_cqs)
+            cq->Shutdown();
+        thread_manager->wait();
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         LOG_FMT_INFO(log, "Shut down flash grpc server");
@@ -553,9 +667,14 @@ public:
 
 private:
     Poco::Logger * log;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
+    // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
+    std::shared_ptr<ThreadManager> thread_manager;
 };
 
 class Server::TcpHttpServersHolder

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
@@ -81,9 +95,9 @@ public:
 
     void drop() override;
 
-    PageId getMaxId() override;
+    PageId getMaxId(NamespaceId ns_id) override;
 
-    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot) override;
+    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot() override;
 
@@ -95,15 +109,15 @@ public:
 
     void write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
-    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) override;
+    DB::PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    DB::Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
+    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) override;
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
@@ -180,11 +194,14 @@ public:
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
-    DB::PageEntry getEntry(PageId page_id) { return getEntry(page_id, nullptr); }
-    DB::Page read(PageId page_id) { return read(page_id, nullptr, nullptr); }
-    PageMap read(const std::vector<PageId> & page_ids) { return read(page_ids, nullptr, nullptr); }
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return read(page_ids, handler, nullptr, nullptr); }
-    PageMap read(const std::vector<PageReadFields> & page_fields) { return read(page_fields, nullptr, nullptr); }
+    DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
+    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) { return getEntry(TEST_NAMESPACE_ID, page_id, snapshot); };
+    DB::Page read(PageId page_id) { return read(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }
+    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return read(TEST_NAMESPACE_ID, page_id, read_limiter, snapshot); }
+    PageMap read(const std::vector<PageId> & page_ids) { return read(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr); }
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return read(TEST_NAMESPACE_ID, page_ids, read_limiter, snapshot); };
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return read(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr); }
+    PageMap read(const std::vector<PageReadFields> & page_fields) { return read(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr); }
     void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverse(acceptor, nullptr); }
     bool gc() { return gc(false, nullptr, nullptr); }
 #endif
@@ -243,8 +260,8 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
-    ExternalPageCallbacks::V2ExternalPagesScanner external_pages_scanner = nullptr;
-    ExternalPageCallbacks::V2ExternalPagesRemover external_pages_remover = nullptr;
+    ExternalPageCallbacks::ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
 

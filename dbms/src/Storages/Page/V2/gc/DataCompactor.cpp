@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
@@ -132,7 +146,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     size_t num_migrate_pages = 0;
     size_t num_candidates_with_high_rate = 0;
     size_t candidate_total_size_with_lower_rate = 0;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (unlikely(page_file.getType() != PageFile::Type::Formal))
         {
@@ -148,7 +162,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         if (auto it = files_valid_pages.find(page_file.fileIdLevel()); it != files_valid_pages.end())
         {
             valid_size = it->second.first;
-            valid_rate = (float)valid_size / file_size;
+            valid_rate = static_cast<float>(valid_size) / file_size;
             valid_page_count = it->second.second.size();
         }
 
@@ -379,15 +393,15 @@ DataCompactor<SnapshotPtr>::migratePages( //
                               << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
                               << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
-        PageEntriesEdit edit_;
-        if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
+        PageEntriesEdit edit;
+        if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit))
         {
             hard_link_file.destroy();
             continue;
         }
 
         hard_link_file.setFormal();
-        gc_file_edit.concate(edit_);
+        gc_file_edit.concate(edit);
         // After the hard link file is created, the original file will be removed later and subtract its data size from the delegator.
         // So we need to increase the data size for the hard link file for correctness on the disk data usage in a longer time dimension.
         delegator->addPageFileUsedSize(
@@ -442,10 +456,10 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
     // Next time we recover pages' meta from disk, recover checkpoint first, then merge all pages' meta
     // according to the tuple <Sequence, PageFileId, PageFileLevel> is OK.
 
-    for (auto iter = files_valid_pages.cbegin(); iter != files_valid_pages.cend(); ++iter)
+    for (const auto & files_valid_page : files_valid_pages)
     {
-        const auto & file_id_level = iter->first;
-        const auto & [_valid_bytes, valid_page_ids_in_file] = iter->second;
+        const auto & file_id_level = files_valid_page.first;
+        const auto & [_valid_bytes, valid_page_ids_in_file] = files_valid_page.second;
         (void)_valid_bytes;
 
         auto reader_iter = data_readers.find(file_id_level);
@@ -461,7 +475,8 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             auto migrate_entries =
                 [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
                 const PageMap pages = data_reader->read(entries, read_limiter);
-                WriteBatch wb;
+                // namespace id in v2 is useless
+                WriteBatch wb{MAX_NAMESPACE_ID};
                 wb.setSequence(compact_sequence);
                 for (const auto & [page_id, entry] : entries)
                 {
@@ -478,10 +493,10 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             };
 
 #ifndef NDEBUG
-            size_t MAX_BATCH_PER_MOVEMENT = 1000;
+            size_t MAX_BATCH_PER_MOVEMENT = 1000; // NOLINT(readability-identifier-naming)
             fiu_do_on(FailPoints::force_set_page_data_compact_batch, { MAX_BATCH_PER_MOVEMENT = 3; });
 #else
-            constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000;
+            constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000; // NOLINT(readability-identifier-naming)
 #endif
             if (page_id_and_entries.size() <= MAX_BATCH_PER_MOVEMENT)
             {

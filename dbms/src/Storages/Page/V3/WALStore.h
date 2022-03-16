@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -70,21 +84,38 @@ class WALStore
 public:
     using ChecksumClass = Digest::CRC64;
 
-    static WALStorePtr create(
-        std::function<void(PageEntriesEdit &&)> && restore_callback,
+    static std::pair<WALStorePtr, WALStoreReaderPtr>
+    create(
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator);
 
     void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool compactLogs(const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    struct FilesSnapshot
+    {
+        Format::LogNumberType current_writting_log_num;
+        LogFilenameSet persisted_log_files;
+
+        bool needSave() const
+        {
+            // TODO: Make it configurable and check the reasonable of this number
+            return persisted_log_files.size() > 4;
+        }
+    };
+
+    FilesSnapshot getFilesSnapshot() const;
+
+    bool saveSnapshot(
+        FilesSnapshot && files_snap,
+        PageEntriesEdit && directory_snap,
+        const WriteLimiterPtr & write_limiter = nullptr);
 
 private:
     WALStore(
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
-        std::unique_ptr<LogWriter> && cur_log);
+        Format::LogNumberType last_log_num_);
 
     static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
@@ -96,7 +127,8 @@ private:
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
-    std::mutex log_file_mutex;
+    mutable std::mutex log_file_mutex;
+    Format::LogNumberType last_log_num;
     std::unique_ptr<LogWriter> log_file;
 
     Poco::Logger * logger;
