@@ -102,6 +102,7 @@ private:
 
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;
+    std::atomic<Int32> first_exception_index{-1};
 
     struct ThreadData
     {
