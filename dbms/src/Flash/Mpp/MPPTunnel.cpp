@@ -49,11 +49,15 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , log(getMPPTaskLog(log_, tunnel_id))
 {
     assert(!(is_local && is_async));
+    GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 
 template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Decrement();
+    });
     try
     {
         {
@@ -308,6 +312,9 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_loc
     send_queue.finish();
 
     auto rest_work = [this, &err_msg] {
+        // it's safe to call it multiple times
+        if (finished && consumer_state.errHasSet())
+            return;
         finished = true;
         // must call setError in the critical area to keep consistent with `finished` from outside.
         consumer_state.setError(err_msg);
