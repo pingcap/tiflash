@@ -191,7 +191,7 @@ namespace DB
         F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                               \
         F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                         \
         F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
-        F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                                 \
+        F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                         \
     M(tiflash_task_scheduler_waiting_duration_seconds, "Bucketed histogram of task waiting for scheduling duration", Histogram,           \
         F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.0005, 2, 20}))
 
