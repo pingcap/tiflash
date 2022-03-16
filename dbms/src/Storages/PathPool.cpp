@@ -813,8 +813,8 @@ String PSDiskDelegatorGlobalSingle::choosePath(const PageFileIdAndLevel & /*id_l
 
 size_t PSDiskDelegatorGlobalSingle::addPageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
-    size_t size_to_add,
-    const String & pf_parent_path,
+    size_t /*size_to_add*/,
+    const String & /*pf_parent_path*/,
     bool /*need_insert_location*/)
 {
     throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
@@ -825,7 +825,7 @@ String PSDiskDelegatorGlobalSingle::getPageFilePath(const PageFileIdAndLevel & /
     throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
+void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/)
 {
     throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
 }

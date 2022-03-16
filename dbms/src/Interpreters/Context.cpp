@@ -1601,9 +1601,9 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_ps_v3)
 
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
 {
+    auto lock = getLock();
     if (isPageV3Enabled(path_pool, enable_ps_v3))
     {
-        auto lock = getLock();
         try
         {
             // create manifests file before initialize GlobalStoragePool
