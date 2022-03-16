@@ -44,19 +44,24 @@ namespace tests
 {
 void assertBlocksEqual(const Blocks & blocks1, const Blocks & blocks2)
 {
-    ASSERT_EQ(blocks1.size(), blocks2.size());
-    for (size_t i = 0; i < blocks1.size(); ++i)
-        ASSERT_EQ(blocks1[i].rows(), blocks2[i].rows());
-
-    // use hash to check the read results
+    // use rows and hash to check the read results
+    size_t rows1 = 0;
     SipHash hash1;
     for (const auto & block : blocks1)
+    {
+        rows1 += block.rows();
         block.updateHash(hash1);
+    }
 
+    size_t rows2 = 0;
     SipHash hash2;
     for (const auto & block : blocks2)
+    {
+        rows2 += block.rows();
         block.updateHash(hash2);
+    }
 
+    ASSERT_EQ(rows1, rows2);
     ASSERT_EQ(hash1.get64(), hash2.get64());
 }
 
@@ -128,21 +133,23 @@ protected:
     static constexpr size_t num_rows_write_per_batch = 100;
 };
 
-void appendBlockToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, UInt64 tso = 2)
+Block appendBlockToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, UInt64 tso = 2)
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
     delta->appendToCache(context, block, 0, block.rows());
+    return block;
 }
 
-void appendColumnFileTinyToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
+Block appendColumnFileTinyToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
     auto tiny_file = ColumnFileTiny::writeColumnFile(context, block, 0, block.rows(), wbs);
     wbs.writeLogAndData();
     delta->appendColumnFile(context, tiny_file);
+    return block;
 }
 
-void appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefines column_defines, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
+Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr column_defines, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
     auto delegator = context.path_pool.getStableDiskDelegator();
@@ -150,7 +157,7 @@ void appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefines col
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile
-        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(column_defines), input_stream, file_id, store_path, {});
+        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*column_defines), input_stream, file_id, store_path, {});
     delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
     auto & pk_column = block.getByPosition(0).column;
@@ -162,148 +169,107 @@ void appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefines col
     wbs.data.putExternal(file_id, 0);
     wbs.writeLogAndData();
     delta->ingestColumnFiles(context, RowKeyRange::fromHandleRange(range), {column_file}, false);
+    return block;
+}
+
+// This function do the following check
+// 1. read all rows using `DeltaValueReader` and verify its correctness
+// 2. read rows in the `handle_range` and verify the rows matches
+static void checkDeltaValueSpaceData(
+    const DeltaValueSpacePtr & delta,
+    DMContext & dm_context,
+    const ColumnDefinesPtr & table_columns,
+    const Blocks & expected_all_blocks,
+    size_t expected_all_rows,
+    const HandleRange & handle_range,
+    size_t expected_range_rows)
+{
+    ASSERT(!expected_all_blocks.empty());
+    auto snapshot = delta->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
+    auto rows = snapshot->getRows();
+    ASSERT_EQ(rows, expected_all_rows);
+
+    {
+        auto reader = std::make_shared<DeltaValueReader>(
+            dm_context,
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1));
+        auto columns = expected_all_blocks[0].cloneEmptyColumns();
+        ASSERT_EQ(reader->readRows(columns, 0, expected_all_rows, nullptr), expected_all_rows);
+        Blocks result_blocks;
+        result_blocks.push_back(expected_all_blocks[0].cloneWithColumns(std::move(columns)));
+        assertBlocksEqual(expected_all_blocks, result_blocks);
+    }
+
+    // read with a specific range
+    {
+        // For `ColumnFileBig`, the same column file reader cannot be used twice, wo we create a new `DeltaValueReader` here.
+        auto reader = std::make_shared<DeltaValueReader>(
+            dm_context,
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1));
+        auto columns = expected_all_blocks[0].cloneEmptyColumns();
+        RowKeyRange read_range = RowKeyRange::fromHandleRange(handle_range);
+        ASSERT_EQ(reader->readRows(columns, 0, expected_all_rows, &read_range), expected_range_rows);
+    }
 }
 
 TEST_F(DeltaValueSpaceTest, WriteRead)
 {
     Blocks write_blocks;
     size_t total_rows_write = 0;
-    // write data to memory and read it
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    // `ColumnFileInMemory`, `ColumnFileTiny`, `ColumnFileDeleteRange` and `ColumnFileBig` in `MemTableSet`
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
-        write_blocks.push_back(block);
-        delta->appendToCache(dmContext(), block, 0, block.rows());
+        // `ColumnFileInMemory`
+        write_blocks.push_back(appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch));
         total_rows_write += num_rows_write_per_batch;
-        // read
-        auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto rows = snapshot->getRows();
-        ASSERT_EQ(rows, total_rows_write);
-        auto reader = std::make_shared<DeltaValueReader>(
-            dmContext(),
-            snapshot,
-            table_columns,
-            RowKeyRange::newAll(false, 1));
-        {
-            auto columns = block.cloneEmptyColumns();
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, nullptr), total_rows_write);
-            Blocks result_blocks;
-            result_blocks.push_back(block.cloneWithColumns(std::move(columns)));
-            assertBlocksEqual(write_blocks, result_blocks);
-        }
-        // read with a specific range
-        {
-            auto columns = block.cloneEmptyColumns();
-            RowKeyRange read_range = RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch / 2));
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, &read_range), num_rows_write_per_batch / 2);
-        }
+
+        // `ColumnFileDeleteRange`
+        // the actual delete range value doesn't matter
+        delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
+
+        // `ColumnFileTiny`
+        write_blocks.push_back(appendColumnFileTinyToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, wbs));
+        total_rows_write += num_rows_write_per_batch;
+
+        // `ColumnFileBig`
+        write_blocks.push_back(appendColumnFileBigToDeltaValueSpace(dmContext(), table_columns, delta, total_rows_write, num_rows_write_per_batch, wbs));
+        total_rows_write += num_rows_write_per_batch;
+
+        checkDeltaValueSpaceData(delta, dmContext(), table_columns, write_blocks, total_rows_write, HandleRange(total_rows_write - num_rows_write_per_batch, total_rows_write - num_rows_write_per_batch / 2), num_rows_write_per_batch / 2);
     }
 
-    // flush data to disk and read again
+    // `ColumnFileInMemory`, `ColumnFileTiny`, `ColumnFileDeleteRange` and `ColumnFileBig` in `ColumnFilePersistedSet`
     {
         ASSERT_EQ(delta->getUnsavedRows(), total_rows_write);
         delta->flush(dmContext());
         ASSERT_EQ(delta->getUnsavedRows(), 0);
-        auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto rows = snapshot->getRows();
-        ASSERT_EQ(rows, total_rows_write);
-        auto reader = std::make_shared<DeltaValueReader>(
-            dmContext(),
-            snapshot,
-            table_columns,
-            RowKeyRange::newAll(false, 1));
-        {
-            auto columns = write_blocks[0].cloneEmptyColumns();
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, nullptr), total_rows_write);
-            Blocks result_blocks;
-            result_blocks.push_back(write_blocks[0].cloneWithColumns(std::move(columns)));
-            assertBlocksEqual(write_blocks, result_blocks);
-        }
-        // read with a specific range
-        {
-            auto columns = write_blocks[0].cloneEmptyColumns();
-            RowKeyRange read_range = RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch / 2));
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, &read_range), num_rows_write_per_batch / 2);
-        }
+        checkDeltaValueSpaceData(delta, dmContext(), table_columns, write_blocks, total_rows_write, HandleRange(total_rows_write - num_rows_write_per_batch, total_rows_write - num_rows_write_per_batch / 2), num_rows_write_per_batch / 2);
     }
 
-    // write more data to memory and read again
+    // `ColumnFileInMemory`, `ColumnFileTiny`, `ColumnFileDeleteRange` and `ColumnFileBig` in `MemTableSet`
+    // `ColumnFileInMemory`, `ColumnFileTiny`, `ColumnFileDeleteRange` and `ColumnFileBig` in `ColumnFilePersistedSet`
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(total_rows_write, total_rows_write + num_rows_write_per_batch, false);
-        write_blocks.push_back(block);
-        delta->appendToCache(dmContext(), block, 0, block.rows());
+        // `ColumnFileInMemory`
+        write_blocks.push_back(appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch));
         total_rows_write += num_rows_write_per_batch;
-        // read
-        auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto rows = snapshot->getRows();
-        ASSERT_EQ(rows, total_rows_write);
-        auto reader = std::make_shared<DeltaValueReader>(
-            dmContext(),
-            snapshot,
-            table_columns,
-            RowKeyRange::newAll(false, 1));
-        {
-            size_t total_read_rows = 0;
-            Blocks result_blocks;
-            while (total_read_rows < total_rows_write)
-            {
-                auto columns = block.cloneEmptyColumns();
-                size_t read_rows = reader->readRows(columns, total_read_rows, num_rows_write_per_batch, nullptr);
-                ASSERT_EQ(read_rows, num_rows_write_per_batch);
-                total_read_rows += read_rows;
-                result_blocks.push_back(block.cloneWithColumns(std::move(columns)));
-            }
-            ASSERT_EQ(total_read_rows, total_rows_write);
-            assertBlocksEqual(write_blocks, result_blocks);
-        }
-        // read with a specific range
-        {
-            auto columns = block.cloneEmptyColumns();
-            RowKeyRange read_range = RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch + num_rows_write_per_batch / 2));
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, &read_range), num_rows_write_per_batch + num_rows_write_per_batch / 2);
-        }
-    }
 
-    // flush to disk, write a delete range and write more data
-    {
-        ASSERT_EQ(delta->getUnsavedRows(), num_rows_write_per_batch);
-        delta->flush(dmContext());
-        ASSERT_EQ(delta->getUnsavedRows(), 0);
+        // `ColumnFileDeleteRange`
         // the actual delete range value doesn't matter
         delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
 
-        Block block = DMTestEnv::prepareSimpleWriteBlock(total_rows_write, total_rows_write + num_rows_write_per_batch, false);
-        write_blocks.push_back(block);
-        delta->appendToCache(dmContext(), block, 0, block.rows());
+        // `ColumnFileTiny`
+        write_blocks.push_back(appendColumnFileTinyToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, wbs));
         total_rows_write += num_rows_write_per_batch;
-        // read
-        auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto rows = snapshot->getRows();
-        ASSERT_EQ(rows, total_rows_write);
-        auto reader = std::make_shared<DeltaValueReader>(
-            dmContext(),
-            snapshot,
-            table_columns,
-            RowKeyRange::newAll(false, 1));
-        {
-            size_t total_read_rows = 0;
-            Blocks result_blocks;
-            while (total_read_rows < total_rows_write)
-            {
-                auto columns = block.cloneEmptyColumns();
-                size_t read_rows = reader->readRows(columns, total_read_rows, num_rows_write_per_batch, nullptr);
-                ASSERT_EQ(read_rows, num_rows_write_per_batch);
-                total_read_rows += read_rows;
-                result_blocks.push_back(block.cloneWithColumns(std::move(columns)));
-            }
-            ASSERT_EQ(total_read_rows, total_rows_write);
-            assertBlocksEqual(write_blocks, result_blocks);
-        }
-        // read with a specific range
-        {
-            auto columns = block.cloneEmptyColumns();
-            RowKeyRange read_range = RowKeyRange::fromHandleRange(HandleRange(0, 2 * num_rows_write_per_batch + num_rows_write_per_batch / 2));
-            ASSERT_EQ(reader->readRows(columns, 0, total_rows_write, &read_range), 2 * num_rows_write_per_batch + num_rows_write_per_batch / 2);
-        }
+
+        // `ColumnFileBig`
+        write_blocks.push_back(appendColumnFileBigToDeltaValueSpace(dmContext(), table_columns, delta, total_rows_write, num_rows_write_per_batch, wbs));
+        total_rows_write += num_rows_write_per_batch;
+
+        checkDeltaValueSpaceData(delta, dmContext(), table_columns, write_blocks, total_rows_write, HandleRange(total_rows_write - num_rows_write_per_batch, total_rows_write - num_rows_write_per_batch / 2), num_rows_write_per_batch / 2);
     }
 }
 
@@ -575,7 +541,7 @@ TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
             appendColumnFileTinyToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, wbs);
             total_rows_write += num_rows_write_per_batch;
             // ColumnFileBig
-            appendColumnFileBigToDeltaValueSpace(dmContext(), *table_columns, delta, total_rows_write, num_rows_write_per_batch, wbs);
+            appendColumnFileBigToDeltaValueSpace(dmContext(), table_columns, delta, total_rows_write, num_rows_write_per_batch, wbs);
             total_rows_write += num_rows_write_per_batch;
             if (i == 0)
                 delta->flush(dmContext());
