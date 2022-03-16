@@ -86,9 +86,11 @@ struct WindowDescription
 
     ExpressionActionsPtr before_window;
 
-    ExpressionActionsPtr before_window_select;
+    ExpressionActionsPtr after_window;
 
-    std::vector<NameAndTypePair> add_columns;
+    NamesAndTypes add_columns;
+
+    NamesAndTypes after_window_columns;
 
     // We don't care about the particular order of keys for PARTITION BY, only
     // that they are sorted. For now we always require ASC, but we could be more

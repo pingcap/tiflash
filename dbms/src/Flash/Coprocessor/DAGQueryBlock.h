@@ -43,9 +43,6 @@ public:
     String selection_name;
     const tipb::Executor * aggregation = nullptr;
     String aggregation_name;
-    std::map<String, const tipb::Executor *> windows;
-    std::map<String, const tipb::Executor *> window_sorts;
-    std::vector<String> window_op_list;
     const tipb::Executor * having = nullptr;
     String having_name;
     const tipb::Executor * limit_or_topn = nullptr;

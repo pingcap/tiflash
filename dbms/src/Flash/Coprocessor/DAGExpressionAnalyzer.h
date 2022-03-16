@@ -49,9 +49,7 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
-    std::vector<NameAndTypePair> appendWindowOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::Sort & window_sort);
+    NamesAndTypes appendWindowOrderBy(const tipb::Sort & window_sort);
 
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
@@ -64,9 +62,7 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    WindowDescription appendWindow(
-        ExpressionActionsChain & chain,
-        const tipb::Window & window);
+    WindowDescription appendWindow(const tipb::Window & window);
 
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems,
@@ -129,6 +125,13 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
+
+    NamesAndTypes appendWindowSelect(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window,
+        const NamesAndTypes window_columns);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -139,11 +142,6 @@ private:
     void appendCastAfterAgg(
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
-
-    void appendWindowSelect(
-        ExpressionActionsChain & chain,
-        const tipb::Window & window,
-        const NamesAndTypes window_columns);
 
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
@@ -263,8 +261,6 @@ private:
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
-
-    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
 
     // all columns from table scan
     NamesAndTypes source_columns;

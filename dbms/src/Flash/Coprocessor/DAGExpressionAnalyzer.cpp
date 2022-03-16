@@ -397,7 +397,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
-static bool checkWindowFunctionsInvalid(const tipb::Window & window)
+bool checkWindowFunctionsInvalid(const tipb::Window & window)
 {
     bool has_agg_func = false;
     bool has_window_func = false;
@@ -432,13 +432,11 @@ void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActions
     }
 }
 
-WindowDescription DAGExpressionAnalyzer::appendWindow(
-    ExpressionActionsChain & chain,
-    const tipb::Window & window)
+WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & window)
 {
+    ExpressionActionsChain chain;
     WindowDescription window_description;
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & step = chain.steps.back();
+    ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
     appendSourceColumnsToRequireOutput(step);
 
     if (window.func_desc_size() == 0)
@@ -463,7 +461,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     {
         if (isAggFunctionExpr(expr))
         {
-            // for agg functions
+            throw TiFlashException("Unsupport agg function in window.", Errors::Coprocessor::BadRequest);
         }
         else if (isWindowFunctionExpr(expr))
         {
@@ -483,7 +481,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
             if (0 == child_size)
                 arg_collators.push_back({});
 
-            String func_string = DAGExpressionAnalyzerHelper::genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
+            String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
             window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
             DataTypePtr result_type = window_function_description.window_function->getReturnType();
@@ -502,20 +500,13 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(
     chain.finalize();
     chain.clear();
 
-    appendWindowSelect(chain, window, window_columns);
-    window_description.before_window_select = chain.getLastActions();
+    window_description.after_window_columns = appendWindowSelect(chain, window, window_columns);
+    window_description.after_window = chain.getLastActions();
     window_description.add_columns = window_columns;
     chain.finalize();
     chain.clear();
 
     return window_description;
-}
-
-
-bool isUInt8Type(const DataTypePtr & type)
-{
-    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
-    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
 }
 
 String DAGExpressionAnalyzer::applyFunction(
@@ -626,20 +617,17 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
     throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
-std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendWindowOrderBy(
-    ExpressionActionsChain & chain,
-    const tipb::Sort & window_sort)
+NamesAndTypes DAGExpressionAnalyzer::appendWindowOrderBy(const tipb::Sort & window_sort)
 {
+    ExpressionActionsChain chain;
+    ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
+
     if (window_sort.byitems_size() == 0)
     {
         throw TiFlashException("window executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
-
     std::vector<NameAndTypePair> order_columns;
     order_columns.reserve(window_sort.byitems_size());
-
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & step = chain.steps.back();
 
     for (const tipb::ByItem & order_by : window_sort.byitems())
     {
@@ -903,7 +891,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-void DAGExpressionAnalyzer::appendWindowSelect(
+NamesAndTypes DAGExpressionAnalyzer::appendWindowSelect(
     ExpressionActionsChain & chain,
     const tipb::Window & window,
     const NamesAndTypes after_window_columns)
@@ -945,6 +933,8 @@ void DAGExpressionAnalyzer::appendWindowSelect(
             source_columns.emplace_back(col.name, col.type);
         }
     }
+
+    return source_columns;
 }
 
 void DAGExpressionAnalyzer::appendCastAfterAgg(

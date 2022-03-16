@@ -30,6 +30,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
@@ -75,9 +76,6 @@ struct AnalysisResult
     bool is_final_agg;
 
     Names partition_keys;
-    std::unordered_map<String, WindowDescription> window_description_map;
-    std::unordered_map<String, SortDescription> window_sort_description_map;
-    std::vector<String> window_op_list;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -164,58 +162,6 @@ AnalysisResult analyzeExpressions(
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
-    }
-
-    // Or window, not both.
-    if (!query_block.window_op_list.empty())
-    {
-        NamesAndTypes final_project_columns;
-        // window op list in query_block like : window4 -> window3 -> sort2 -> window2 -> window1 -> sort1
-        // so we need reverse the list to handle each op
-        for (auto reverse_iter = query_block.window_op_list.rbegin(); reverse_iter != query_block.window_op_list.rend(); ++reverse_iter)
-        {
-            res.window_op_list.push_back(*reverse_iter);
-        }
-        String name;
-        NamesAndTypes output_columns;
-        for (auto op_name : res.window_op_list)
-        {
-            auto iter = query_block.windows.find(op_name);
-            if (iter != query_block.windows.end())
-            {
-                name = iter->first;
-                auto & window = iter->second;
-                if (window && window->tp() == tipb::ExecType::TypeWindow)
-                {
-                    WindowDescription window_description = analyzer.appendWindow(
-                        chain,
-                        window->window());
-                    res.window_description_map.insert({name, window_description});
-                    for (auto & col : window_description.add_columns)
-                    {
-                        final_project_columns.emplace_back(col);
-                    }
-                    continue;
-                }
-            }
-
-            iter = query_block.window_sorts.find(op_name);
-            if (iter != query_block.window_sorts.end())
-            {
-                name = iter->first;
-                auto & window_sort = iter->second;
-                std::vector<bool> sort_orders;
-                if (window_sort && window_sort->tp() == tipb::ExecType::TypeSort)
-                {
-                    std::vector<NameAndTypePair> columns = analyzer.appendWindowOrderBy(chain, window_sort->sort());
-                    res.window_sort_description_map.insert({name, getSortDescription(columns, window_sort->sort().byitems())});
-                    continue;
-                }
-            }
-
-            // should not reach here
-            throw TiFlashException(fmt::format("incorrect window or sort name {}", op_name), Errors::Coprocessor::BadRequest);
-        }
     }
 
     // Append final project results if needed.
@@ -815,16 +761,10 @@ void DAGQueryBlockInterpreter::executeWindow(
         }
     }
 
-    /*    for (auto & agg_descr : window_description.aggregate_descriptions)
-    {
-        // for agg functions
-    }*/
-
     if (pipeline.streams.size() == 1)
     {
         BlockInputStreams inputs;
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description);
-        recordProfileStreams(pipeline, window_description.window_name);
     }
     else
     {
@@ -932,11 +872,8 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
 void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription order_descr)
 {
     const Settings & settings = context.getSettingsRef();
-
-    Int64 limit = 0;
-
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), limit);
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), 0);
 
         /// Limits on sorting
         IProfilingBlockInputStream::LocalLimits limits;
@@ -955,7 +892,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
         pipeline.firstStream(),
         order_descr,
         settings.max_block_size,
-        limit,
+        0,
         settings.max_bytes_before_external_sort,
         context.getTemporaryPath(),
         taskLogger());
@@ -1113,6 +1050,34 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
+void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window window)
+{
+    std::vector<NameAndTypePair> input_columns;
+    pipeline.streams = input_streams_vec[0];
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+
+    WindowDescription window_description = dag_analyzer.appendWindow(window);
+
+    executeWindow(pipeline, window_description);
+    executeExpression(pipeline, window_description.after_window);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
+}
+
+void DAGQueryBlockInterpreter::handleWindowSort(DAGPipeline & pipeline, const tipb::Sort & window_sort)
+{
+    std::vector<NameAndTypePair> input_columns;
+    pipeline.streams = input_streams_vec[0];
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+    auto order_columns = dag_analyzer.appendWindowOrderBy(window_sort);
+    executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()));
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(input_columns), context);
+}
+
 // To execute a query block, you have to:
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
@@ -1151,6 +1116,16 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }
+    else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
+    {
+        handleWindow(pipeline, query_block.source->window());
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeSort)
+    {
+        handleWindowSort(pipeline, query_block.source->sort());
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
     else
     {
         throw TiFlashException(
@@ -1180,35 +1155,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         pipeline.streams.size());
     dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
 
-    if (!res.window_op_list.empty())
-    {
-        String name;
-        for (auto op_name : res.window_op_list)
-        {
-            auto window_iter = res.window_description_map.find(op_name);
-            if (window_iter != res.window_description_map.end())
-            {
-                name = window_iter->first;
-                WindowDescription window_description = window_iter->second;
-                executeWindow(pipeline, window_description);
-                executeExpression(pipeline, window_description.before_window_select);
-                continue;
-            }
-
-            auto sort_iter = res.window_sort_description_map.find(op_name);
-            if (sort_iter != res.window_sort_description_map.end())
-            {
-                name = sort_iter->first;
-                SortDescription window_sort_description = sort_iter->second;
-                executeWindowOrder(pipeline, window_sort_description);
-                continue;
-            }
-
-            // should not reach here
-            throw TiFlashException("incorrect window or sort name" + op_name, Errors::Coprocessor::BadRequest);
-        }
-    }
-
     if (res.before_aggregation)
     {
         // execute aggregation
@@ -1222,7 +1168,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.having_name);
     }
 
-    if (res.before_order_and_select && res.window_op_list.empty())
+    if (res.before_order_and_select)
     {
         executeExpression(pipeline, res.before_order_and_select);
     }
@@ -1244,7 +1190,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    restorePipelineConcurrency(pipeline);
+    if (query_block.source->tp() != tipb::ExecType::TypeWindow && query_block.source->tp() != tipb::ExecType::TypeSort)
+        restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
     if (query_block.exchange_sender)

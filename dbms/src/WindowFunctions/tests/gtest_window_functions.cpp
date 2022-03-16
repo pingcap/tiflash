@@ -96,24 +96,29 @@ protected:
     void mockExecuteTableScan(DAGPipeline & pipeline, ColumnsWithTypeAndName columns)
     {
         pipeline.streams.push_back(std::make_shared<MockTableScanBlockInputStream>(columns, context.getSettingsRef().max_block_size));
+        mock_interpreter->input_streams_vec.push_back(pipeline.streams);
     }
 
-    void mockExecuteWindowOrder(ExpressionActionsChain & chain, DAGPipeline & pipeline, std::string sort_json_str)
+    void mockExecuteWindowOrder(DAGPipeline & pipeline, std::string sort_json_str)
     {
         tipb::Sort sort;
         google::protobuf::util::JsonStringToMessage(sort_json_str, &sort);
-        std::vector<NameAndTypePair> columns = (*mock_interpreter->analyzer).appendWindowOrderBy(chain, sort);
-        mock_interpreter->executeWindowOrder(pipeline, getSortDescription(columns, sort.byitems()));
+        mock_interpreter->handleWindowSort(pipeline, sort);
+        mock_interpreter->input_streams_vec[0] = pipeline.streams;
+        NamesWithAliases final_project;
+        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
+        {
+            final_project.push_back({column.name, ""});
+        }
+        mockExecuteProject(pipeline, final_project);
     }
 
-    void mockExecuteWindow(ExpressionActionsChain & chain, DAGPipeline & pipeline, std::string window_json_str)
+    void mockExecuteWindow(DAGPipeline & pipeline, std::string window_json_str)
     {
         tipb::Window window;
         google::protobuf::util::JsonStringToMessage(window_json_str, &window);
-        WindowDescription window_description = (*mock_interpreter->analyzer).appendWindow(chain, window);
-        mock_interpreter->executeWindow(pipeline, window_description);
-        mock_interpreter->executeExpression(pipeline, window_description.before_window_select);
-
+        mock_interpreter->handleWindow(pipeline, window);
+        mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project;
         for (const auto & column : (*mock_interpreter->analyzer).source_columns)
         {
@@ -130,11 +135,6 @@ protected:
     void checkBlock(const Block & lhs, const Block & rhs)
     {
         size_t columns = rhs.columns();
-
-        for (size_t i = 0; i < columns; ++i)
-        {
-            std::cout << rhs.getByPosition(i).name << std::endl;
-        }
 
         ASSERT_TRUE(lhs.columns() == columns);
 
@@ -191,9 +191,9 @@ protected:
 
         mockExecuteTableScan(pipeline, source_columns);
 
-        mockExecuteWindowOrder(chain, pipeline, sort_json_str);
+        mockExecuteWindowOrder(pipeline, sort_json_str);
 
-        mockExecuteWindow(chain, pipeline, window_json_str);
+        mockExecuteWindow(pipeline, window_json_str);
 
         auto stream = pipeline.firstStream();
 
