@@ -51,6 +51,8 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    ~EstablishCallData();
+
     bool write(const mpp::MPPDataPacket & packet) override;
 
     void tryFlushOne() override;
@@ -78,6 +80,8 @@ private:
     void notifyReady();
 
     void initRpc();
+
+    void finishTunnelAndResponder();
 
     void responderFinish(const grpc::Status & status);
 

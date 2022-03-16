@@ -169,6 +169,9 @@ namespace DB
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_object_count, "Number of objects", Gauge,                                                                                   \
+        F(type_count_of_establish_calldata, {"type", "count_of_establish_calldata"}),                                                     \
+        F(type_count_of_mpptunnel, {"type", "count_of_mpptunnel"}))                                                                       \
     M(tiflash_thread_count, "Number of threads", Gauge,                                                                                   \
         F(type_max_threads_of_thdpool, {"type", "thread_pool_total_max"}),                                                                \
         F(type_active_threads_of_thdpool, {"type", "thread_pool_active"}),                                                                \

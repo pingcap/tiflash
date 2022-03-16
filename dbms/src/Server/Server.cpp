@@ -642,14 +642,17 @@ public:
 
     ~FlashGrpcServerHolder()
     {
-        *is_shutdown = true;
-        const int wait_calldata_after_shutdown_interval_ms = 500;
-        std::this_thread::sleep_for(std::chrono::milliseconds(wait_calldata_after_shutdown_interval_ms)); // sleep 500ms to let operations of calldata called by MPPTunnel done.
         /// Shut down grpc server.
-        // wait 5 seconds for pending rpcs to gracefully stop
-        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown(deadline);
+        flash_grpc_server->Shutdown();
+        *is_shutdown = true;
+        // Wait all existed MPPTunnels done to prevent crash.
+        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+        const int max_wait_cnt = 300;
+        int wait_cnt = 0;
+        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
         for (auto & cq : cqs)
             cq->Shutdown();
         for (auto & cq : notify_cqs)
