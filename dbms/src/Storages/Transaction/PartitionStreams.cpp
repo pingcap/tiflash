@@ -547,6 +547,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
+    LOG_FMT_DEBUG(&Poco::Logger::get("AtomicGetStorageSchema"), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);
