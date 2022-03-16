@@ -36,9 +36,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 
 EstablishCallData::~EstablishCallData()
 {
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
-    });
+    GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
 }
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
@@ -62,7 +60,7 @@ void EstablishCallData::tryFlushOne()
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
-    if ((*is_shutdown))
+    if (*is_shutdown)
         finishTunnelAndResponder();
     else
         responder.Finish(status, this);

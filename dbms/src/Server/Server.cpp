@@ -651,7 +651,7 @@ public:
         const int max_wait_cnt = 300;
         int wait_cnt = 0;
         while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
-            usleep(1000000); // sleep 1s
+            std::this_thread::sleep_for(std::chrono::seconds(1));
 
         for (auto & cq : cqs)
             cq->Shutdown();
