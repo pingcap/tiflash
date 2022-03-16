@@ -188,7 +188,7 @@ namespace DB
         F(type_active_queries_count, {"type", "active_queries_count"}),                                                                   \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                     \
         F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                       \
-        F(type_used_threads, {"type", "used_threads"}),                                                                                   \
+        F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                               \
         F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                         \
         F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
         F(type_over_hard_limit_count, {"type", "over_hard_limit_count"}))                                                                 \

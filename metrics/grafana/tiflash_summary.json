@@ -2256,7 +2256,7 @@
             "alertThreshold": false
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": true,
           "renderer": "flot",
@@ -2323,7 +2323,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": null,
-          "description": "used thread tickets in min-tso scheduler, and the sort/hard limit of thread tickets in scheduler.",
+          "description": "estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.",
           "fieldConfig": {
             "defaults": {
               "unit": "none"
@@ -2358,7 +2358,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": false,
           "renderer": "flot",
@@ -2377,7 +2377,7 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"used_threads\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"estimated_thread_usage\"}) by (instance, type)",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-{{type}}",
@@ -2398,7 +2398,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Thread Tickets Usage and Limit",
+          "title": "Estimated Thread Usage and Limit",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2478,7 +2478,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": false,
           "renderer": "flot",
@@ -2589,7 +2589,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": false,
           "renderer": "flot",
@@ -2665,7 +2665,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": null,
-          "description": "the count of used threads exceeded the hard limit where errors occur.",
+          "description": "the usage of estimated threads exceeded the hard limit where errors occur.",
           "fieldConfig": {
             "defaults": {
               "unit": "none"
@@ -2700,7 +2700,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": false,
           "renderer": "flot",
@@ -2801,7 +2801,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 1,
           "points": false,
           "renderer": "flot",
@@ -5207,7 +5207,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5338,7 +5338,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5456,7 +5456,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5572,7 +5572,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.11",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
