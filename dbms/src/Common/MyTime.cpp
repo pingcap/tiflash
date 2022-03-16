@@ -1,11 +1,11 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-#include <IO/WriteHelpers.h>
 
 #include <cctype>
 #include <initializer_list>
@@ -32,7 +32,7 @@ static constexpr int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
 // day number per years in every 4 years
 // note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
 static constexpr int DAY_NUM_PER_YEARS = 365;
-}
+} // namespace
 
 // adjustYear adjusts year according to y.
 // See https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html
@@ -846,20 +846,20 @@ Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
 
 String MyDateTime::toString(int fsp) const
 {
-const static String format = "%Y-%m-%d %H:%i:%s";
-String result;
-result.reserve(maxFormattedDateTimeStringLength(format));
-dateFormat(format, result);
-auto length = result.length();
-if (fsp > 0)
-{
-    result.append(".")
-        .append(int_to_2_width_string[micro_second / 10000])
-        .append(int_to_2_width_string[micro_second % 10000 / 100])
-        .append(int_to_2_width_string[micro_second % 100]);
-    result.resize(length + fsp + 1);
-}
-return result;
+    const static String format = "%Y-%m-%d %H:%i:%s";
+    String result;
+    result.reserve(maxFormattedDateTimeStringLength(format));
+    dateFormat(format, result);
+    auto length = result.length();
+    if (fsp > 0)
+    {
+        result.append(".")
+            .append(int_to_2_width_string[micro_second / 10000])
+            .append(int_to_2_width_string[micro_second % 10000 / 100])
+            .append(int_to_2_width_string[micro_second % 100]);
+        result.resize(length + fsp + 1);
+    }
+    return result;
 }
 
 //TODO: we can use modern c++ api instead.
