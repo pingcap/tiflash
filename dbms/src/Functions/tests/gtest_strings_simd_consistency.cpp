@@ -297,8 +297,8 @@ TEST(StringsLowerUpperAscii, Random)
     auto seed = device();
     std::cout << "seeded with: " << seed << std::endl;
     std::vector<UInt8> data(limit + 1);
-    std::vector<UInt8> res_new(limit + 1);
-    std::vector<UInt8> res_old(limit + 1);
+    std::vector<UInt8> res_new(limit + 1, 0);
+    std::vector<UInt8> res_old(limit + 1, 0);
     std::default_random_engine eng(seed);
     std::uniform_int_distribution<UInt8> dist(
         'A',
