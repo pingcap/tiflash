@@ -30,7 +30,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     if (!join_probe_actions || join_probe_actions->getActions().size() != 1
         || join_probe_actions->getActions().back().type != ExpressionAction::Type::JOIN)
     {
-        throw Exception("isn't join probe actions", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("isn't valid join probe actions", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
