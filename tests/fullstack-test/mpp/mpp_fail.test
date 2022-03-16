@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Preparation.
 => DBGInvoke __init_fail_point()
 
@@ -80,6 +94,38 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 ERROR 1105 (HY000) at line 1: other error for mpp stream: DB::Exception: Exchange receiver meet error : DB::Exception: Fail point FailPoints::exception_during_mpp_non_root_task_run is triggered.
 => DBGInvoke __disable_fail_point(exception_during_mpp_non_root_task_run)
 => DBGInvoke __disable_fail_point(exception_during_mpp_close_tunnel)
+
+## exception during mpp hash build
+## desc format='brief' select t1.id from test.t t1 join test.t t2 on t1.id = t2.id and t1.id <2 join (select id from test.t group by id) t3 on t2.id=t3.id;
+## +-----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------+
+## | id                                      | estRows | task              | access object | operator info                                                           |
+## +-----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------+
+## | Projection                              | 0.99    | root              |               | test.t.id                                                               |
+## | └─TableReader                           | 0.99    | root              |               | data:ExchangeSender                                                     |
+## |   └─ExchangeSender                      | 0.99    | batchCop[tiflash] |               | ExchangeType: PassThrough                                               |
+## |     └─HashJoin                          | 0.99    | batchCop[tiflash] |               | inner join, equal:[eq(test.t.id, test.t.id)]                            |
+## |       ├─HashJoin(Build)                 | 0.99    | batchCop[tiflash] |               | inner join, equal:[eq(test.t.id, test.t.id)]                            |
+## |       │ ├─ExchangeReceiver(Build)       | 1.00    | batchCop[tiflash] |               |                                                                         |
+## |       │ │ └─ExchangeSender              | 1.00    | batchCop[tiflash] |               | ExchangeType: HashPartition, Hash Cols: [name: test.t.id, collate: N/A] |
+## |       │ │   └─Selection                 | 1.00    | batchCop[tiflash] |               | lt(test.t.id, 2), not(isnull(test.t.id))                                |
+## |       │ │     └─TableFullScan           | 3.00    | batchCop[tiflash] | table:t1      | keep order:false, stats:pseudo                                          |
+## |       │ └─ExchangeReceiver(Probe)       | 1.00    | batchCop[tiflash] |               |                                                                         |
+## |       │   └─ExchangeSender              | 1.00    | batchCop[tiflash] |               | ExchangeType: HashPartition, Hash Cols: [name: test.t.id, collate: N/A] |
+## |       │     └─Selection                 | 1.00    | batchCop[tiflash] |               | lt(test.t.id, 2), not(isnull(test.t.id))                                |
+## |       │       └─TableFullScan           | 3.00    | batchCop[tiflash] | table:t2      | keep order:false, stats:pseudo                                          |
+## |       └─Projection(Probe)               | 2.40    | batchCop[tiflash] |               | test.t.id                                                               |
+## |         └─HashAgg                       | 2.40    | batchCop[tiflash] |               | group by:test.t.id, funcs:firstrow(test.t.id)->test.t.id                |
+## |           └─ExchangeReceiver            | 2.40    | batchCop[tiflash] |               |                                                                         |
+## |             └─ExchangeSender            | 2.40    | batchCop[tiflash] |               | ExchangeType: HashPartition, Hash Cols: [name: test.t.id, collate: N/A] |
+## |               └─HashAgg                 | 2.40    | batchCop[tiflash] |               | group by:test.t.id,                                                     |
+## |                 └─Selection             | 3.00    | batchCop[tiflash] |               | not(isnull(test.t.id))                                                  |
+## |                   └─TableFullScan       | 3.00    | batchCop[tiflash] | table:t       | keep order:false, stats:pseudo                                          |
+## +-----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------+
+## ensure build1, build2-probe1, probe2 in the CreatingSets, test the bug where build1 throw exception but not change the build state, thus block the build2-probe1, at last this query hangs.
+=> DBGInvoke __enable_fail_point(exception_mpp_hash_build)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; set @@tidb_broadcast_join_threshold_count=0; set @@tidb_broadcast_join_threshold_size=0; select t1.id from test.t t1 join test.t t2 on t1.id = t2.id and t1.id <2 join (select id from test.t group by id) t3 on t2.id=t3.id;
+ERROR 1105 (HY000) at line 1: other error for mpp stream: DB::Exception: Fail point FailPoints::exception_mpp_hash_build is triggered.
+=> DBGInvoke __disable_fail_point(exception_mpp_hash_build)
 
 # Clean up.
 mysql> drop table if exists test.t

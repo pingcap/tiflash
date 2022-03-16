@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -9,6 +23,7 @@ namespace DM
 {
 struct WriteBatches : private boost::noncopyable
 {
+    NamespaceId ns_id;
     WriteBatch log;
     WriteBatch data;
     WriteBatch meta;
@@ -26,7 +41,13 @@ struct WriteBatches : private boost::noncopyable
     WriteLimiterPtr write_limiter;
 
     WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : storage_pool(storage_pool_)
+        : log(storage_pool_.getNamespaceId())
+        , data(storage_pool_.getNamespaceId())
+        , meta(storage_pool_.getNamespaceId())
+        , removed_log(storage_pool_.getNamespaceId())
+        , removed_data(storage_pool_.getNamespaceId())
+        , removed_meta(storage_pool_.getNamespaceId())
+        , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {
     }
@@ -103,10 +124,10 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        WriteBatch log_wb;
+        WriteBatch log_wb(ns_id);
         for (auto p : writtenLog)
             log_wb.delPage(p);
-        WriteBatch data_wb;
+        WriteBatch data_wb(ns_id);
         for (auto p : writtenData)
             data_wb.delPage(p);
 

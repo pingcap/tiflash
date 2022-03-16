@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -51,7 +65,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool.data()->getNormalPageId(file_ref_id);
+    auto file_id = context.storage_pool.dataReader().getNormalPageId(file_ref_id);
     auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
