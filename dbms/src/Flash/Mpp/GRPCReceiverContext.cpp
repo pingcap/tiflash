@@ -208,7 +208,7 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     return req;
 }
 
-bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request)
+bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) const
 {
     return enable_async_grpc && !request.is_local;
 }

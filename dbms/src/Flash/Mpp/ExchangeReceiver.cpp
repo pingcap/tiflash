@@ -53,8 +53,8 @@ enum class AsyncRequestStage
 using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
-static constexpr Int32 MAX_RETRY_TIMES = 10;
-static constexpr Int32 BATCH_PACKET_COUNT = 16;
+static constexpr Int32 max_retry_times = 10;
+static constexpr Int32 batch_packet_count = 16;
 
 template <typename RPCContext>
 class AsyncRequestHandler : public UnaryCallback<bool>
@@ -77,7 +77,7 @@ public:
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(getMPPTaskLog(log_, req_info))
     {
-        packets.resize(BATCH_PACKET_COUNT);
+        packets.resize(batch_packet_count);
         for (auto & packet : packets)
             packet = std::make_shared<MPPDataPacket>();
 
@@ -97,7 +97,7 @@ public:
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
-            if (!ok || read_packet_index == BATCH_PACKET_COUNT || packets[read_packet_index - 1]->has_error())
+            if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->has_error())
                 notifyReactor();
             else
                 reader->read(packets[read_packet_index], thisAsUnaryCallback());
@@ -138,7 +138,7 @@ public:
                 setDone("Exchange receiver meet error : " + packet->error().msg());
             else if (!sendPackets())
                 setDone("Exchange receiver meet error : push packets fail");
-            else if (read_packet_index < BATCH_PACKET_COUNT)
+            else if (read_packet_index < batch_packet_count)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
                 reader->finish(finish_status, thisAsUnaryCallback());
@@ -209,7 +209,7 @@ private:
 
     bool retriable() const
     {
-        return !has_data && retry_times + 1 < MAX_RETRY_TIMES;
+        return !has_data && retry_times + 1 < max_retry_times;
     }
 
     void setDone(String msg)
@@ -293,7 +293,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
-    , max_buffer_size(std::max<size_t>(BATCH_PACKET_COUNT, std::max(source_num, max_streams_) * 2))
+    , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , thread_manager(newThreadManager())
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
@@ -409,7 +409,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < MAX_RETRY_TIMES; ++i)
+        for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
             bool has_data = false;
@@ -449,7 +449,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             }
             else
             {
-                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
+                bool retriable = !has_data && i + 1 < max_retry_times;
                 LOG_FMT_WARNING(
                     log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",

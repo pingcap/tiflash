@@ -79,7 +79,7 @@ public:
 
     ExchangeRecvRequest makeRequest(int index) const;
 
-    bool supportAsync(const ExchangeRecvRequest & request);
+    bool supportAsync(const ExchangeRecvRequest & request) const;
 
     ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
 
