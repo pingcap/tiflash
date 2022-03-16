@@ -91,7 +91,7 @@ void MinTSOScheduler::deleteAQuery(const UInt64 tso)
         return;
     }
 
-    LOG_FMT_INFO(log, "query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
+    LOG_FMT_DEBUG(log, "query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
     /// delete from sets
     active_set.erase(tso);
     waiting_set.erase(tso);
