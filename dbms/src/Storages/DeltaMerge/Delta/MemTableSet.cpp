@@ -155,9 +155,9 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     }
 }
 
-ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
+ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(nullptr);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

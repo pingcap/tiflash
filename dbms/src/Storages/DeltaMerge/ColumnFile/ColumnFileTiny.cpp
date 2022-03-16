@@ -46,7 +46,6 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
 
     Columns columns(num_columns_read); // allocate empty columns
 
-    LOG_FMT_DEBUG(&Poco::Logger::get("ColumnFileTiny"), "Columns read num {}", num_columns_read);
     PageStorage::PageReadFields fields;
     fields.first = data_page_id;
     for (size_t index = col_start; index < col_end; ++index)
@@ -63,7 +62,6 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
             columns[index - col_start] = createColumnWithDefaultValue(cd, rows);
         }
     }
-    LOG_FMT_DEBUG(&Poco::Logger::get("ColumnFileTiny"), "PageStorage::PageReadFields generated done, page id {}, fields size {}", data_page_id, fields.second.size());
 
     auto page_map = page_reader.read({fields});
     Page page = page_map[data_page_id];

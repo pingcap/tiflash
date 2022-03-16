@@ -58,10 +58,6 @@ public:
         : storage_snap{storage_snap_}
     {}
 
-    explicit ColumnFileSetSnapshot(StorageSnapshotPtr && storage_snap_)
-        : storage_snap{std::move(storage_snap_)}
-    {}
-
     ColumnFileSetSnapshotPtr clone()
     {
         auto c = std::make_shared<ColumnFileSetSnapshot>(storage_snap);

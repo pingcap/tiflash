@@ -452,10 +452,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     return true;
 }
 
-ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const DMContext & context)
+ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
 {
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(std::move(storage_snap));
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;
