@@ -158,10 +158,14 @@ RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_range
 
 
     if (log)
-        LOG_TRACE(log,
-                  __FUNCTION__ << " [original ranges: " << ori_size << "] [expected ranges: " << expected_ranges_count
-                               << "] [after merged ranges: " << after_merge_count
-                               << "] [final ranges: " << do_merge_ranges.currentRangesCount() << "]");
+        LOG_FMT_TRACE(
+            log,
+            "{} [original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]",
+            __FUNCTION__,
+            ori_size,
+            expected_ranges_count,
+            after_merge_count,
+            do_merge_ranges.currentRangesCount());
 
     return do_merge_ranges.getRanges();
 }

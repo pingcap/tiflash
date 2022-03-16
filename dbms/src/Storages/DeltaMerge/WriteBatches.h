@@ -3,6 +3,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+
 namespace DB
 {
 namespace DM
@@ -13,8 +15,8 @@ struct WriteBatches : private boost::noncopyable
     WriteBatch data;
     WriteBatch meta;
 
-    PageIds writtenLog;
-    PageIds writtenData;
+    PageIds written_log;
+    PageIds written_data;
 
     WriteBatch removed_log;
     WriteBatch removed_data;
@@ -25,7 +27,7 @@ struct WriteBatches : private boost::noncopyable
 
     WriteLimiterPtr write_limiter;
 
-    WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
+    explicit WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
         : storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {
@@ -72,12 +74,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type == WriteBatch::WriteType::DEL))
                         throw Exception("Unexpected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(log, "log", logger);
@@ -93,9 +95,9 @@ struct WriteBatches : private boost::noncopyable
         storage_pool.data()->write(std::move(data), write_limiter);
 
         for (auto page_id : log_write_pages)
-            writtenLog.push_back(page_id);
+            written_log.push_back(page_id);
         for (auto page_id : data_write_pages)
-            writtenData.push_back(page_id);
+            written_data.push_back(page_id);
 
         log.clear();
         data.clear();
@@ -104,10 +106,10 @@ struct WriteBatches : private boost::noncopyable
     void rollbackWrittenLogAndData()
     {
         WriteBatch log_wb;
-        for (auto p : writtenLog)
+        for (auto p : written_log)
             log_wb.delPage(p);
         WriteBatch data_wb;
-        for (auto p : writtenData)
+        for (auto p : written_data)
             data_wb.delPage(p);
 
         if constexpr (DM_RUN_CHECK)
@@ -117,12 +119,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Rollback remove from " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Rollback remove from {} : {}", what, wb.toString());
             };
 
             check(log_wb, "log_wb", logger);
@@ -132,8 +134,8 @@ struct WriteBatches : private boost::noncopyable
         storage_pool.log()->write(std::move(log_wb), write_limiter);
         storage_pool.data()->write(std::move(data_wb), write_limiter);
 
-        writtenLog.clear();
-        writtenData.clear();
+        written_log.clear();
+        written_data.clear();
     }
 
     void writeMeta()
@@ -145,12 +147,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::PUT))
                         throw Exception("Expected puts in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(meta, "meta", logger);
@@ -169,12 +171,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(removed_log, "removed_log", logger);
@@ -204,8 +206,8 @@ struct WriteBatches : private boost::noncopyable
         data.clear();
         meta.clear();
 
-        writtenLog.clear();
-        writtenData.clear();
+        written_log.clear();
+        written_data.clear();
 
         removed_log.clear();
         removed_data.clear();

@@ -24,7 +24,7 @@ void DeltaIndexManager::removeOverflow(std::vector<DeltaIndexPtr> & removed)
         const Holder & holder = it->second;
         if (auto p = holder.index.lock(); p)
         {
-            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+            LOG_FMT_TRACE(log, "{}Free DeltaIndex, [size {}]", __FUNCTION__, p->getBytes());
 
             // We put the evicted index into removed list, and free them later.
             auto tmp = std::make_shared<DeltaIndex>();
@@ -100,7 +100,7 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
         Holder & holder = it->second;
         if (auto p = holder.index.lock(); p)
         {
-            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+            LOG_FMT_TRACE(log, "{}Free DeltaIndex, [size {}]", __FUNCTION__, p->getBytes());
 
             // Free it out of lock scope.
             p->swap(empty);

@@ -108,15 +108,23 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 
     if (tmt.isBgFlushDisabled())
     {
-        LOG_TRACE(log,
-                  __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
-                               << region->dataSize() << " bytes");
+        LOG_FMT_TRACE(
+            log,
+            "{}: table {}, {} original {} bytes",
+            __FUNCTION__,
+            region->getMappedTableID(),
+            region->toString(false),
+            region->dataSize());
     }
     else
     {
-        LOG_INFO(log,
-                 __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
-                              << region->dataSize() << " bytes");
+        LOG_FMT_INFO(
+            log,
+            "{}: table {}, {} original {} bytes",
+            __FUNCTION__,
+            region->getMappedTableID(),
+            region->toString(false),
+            region->dataSize());
     }
 
     /// Write region data into corresponding storage.
@@ -139,15 +147,23 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 
         if (tmt.isBgFlushDisabled())
         {
-            LOG_TRACE(log,
-                      __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                                   << " bytes");
+            LOG_FMT_TRACE(
+                log,
+                "{}: table {}, {} after flush {} bytes",
+                __FUNCTION__,
+                region->getMappedTableID(),
+                region->toString(false),
+                cache_size);
         }
         else
         {
-            LOG_INFO(log,
-                     __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                                  << " bytes");
+            LOG_FMT_INFO(
+                log,
+                "{}: table {}, {} after flush {} bytes",
+                __FUNCTION__,
+                region->getMappedTableID(),
+                region->toString(false),
+                cache_size);
         }
     }
 

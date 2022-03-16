@@ -141,9 +141,14 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_schema_version, std::move(block_ptr));
 
-        LOG_TRACE(log,
-                  FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
-                                << ", write part " << write_part_cost << "] ms");
+        LOG_FMT_TRACE(
+            log,
+            "{}: table {}, region {}, cost [region decode {}, write part {}] ms",
+            FUNCTION_NAME,
+            table_id,
+            region->id(),
+            region_decode_cost,
+            write_part_cost);
         return true;
     };
 

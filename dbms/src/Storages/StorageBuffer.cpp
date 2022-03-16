@@ -249,7 +249,7 @@ public:
         {
             if (!storage.no_destination)
             {
-                LOG_TRACE(storage.log, "Writing block with " << rows << " rows, " << bytes << " bytes directly.");
+                LOG_FMT_TRACE(storage.log, "Writing block with {} rows, {} bytes directly.", rows, bytes);
                 storage.writeBlockToDestination(block, destination);
             }
             return;
@@ -487,7 +487,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
 
     ProfileEvents::increment(ProfileEvents::StorageBufferFlush);
 
-    LOG_TRACE(log, "Flushing buffer with " << rows << " rows, " << bytes << " bytes, age " << time_passed << " seconds.");
+    LOG_FMT_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
 
     if (no_destination)
         return;

@@ -228,7 +228,7 @@ void SystemLog<LogElement>::flush()
 {
     try
     {
-        LOG_TRACE(log, "Flushing system log");
+        LOG_FMT_TRACE(log, "Flushing system log");
 
         /// We check for existence of the table and create it as needed at every flush.
         /// This is done to allow user to drop the table at any moment (new empty table will be created automatically).

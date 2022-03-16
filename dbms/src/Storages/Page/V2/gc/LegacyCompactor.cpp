@@ -127,7 +127,7 @@ std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageF
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files)
 {
     PageStorage::MetaMergingQueue merging_queue;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         PageFile::MetaMergingReaderPtr reader;
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
@@ -233,7 +233,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         else
         {
             // We apply all edit of belonging PageFile, do compaction on it.
-            LOG_TRACE(log, storage_name << " collectPageFilesToCompact try to compact: " + reader->belongingPageFile().toString());
+            LOG_FMT_TRACE(log, "{} collectPageFilesToCompact try to compact: {}", storage_name, reader->belongingPageFile().toString());
             page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }

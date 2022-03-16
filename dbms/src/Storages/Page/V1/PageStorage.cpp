@@ -468,9 +468,14 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_TRACE(log,
-              storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], upserts[" << upserts
-                           << "]");
+    LOG_FMT_TRACE(
+        log,
+        "{} Before gc, deletes[{}], puts[{}], refs[{}], upserts[{}]",
+        storage_name,
+        deletes,
+        puts,
+        refs,
+        upserts);
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -579,9 +584,12 @@ bool PageStorage::gc()
     }
 
     if (!should_merge)
-        LOG_TRACE(log,
-                  storage_name << " GC exit without merging. merge file size: " << merge_files.size()
-                               << ", candidate size: " << candidate_total_size);
+        LOG_FMT_TRACE(
+            log,
+            "{} GC exit without merging. merge file size: {}, candidate size: {}",
+            storage_name,
+            merge_files.size(),
+            candidate_total_size);
     return should_merge;
 }
 
@@ -827,10 +835,13 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
             if (it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
-                LOG_TRACE(log,
-                          storage_name << " No valid pages from PageFile_" //
-                                       << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
-                                       << gc_file.getFileId() << "_" << gc_file.getLevel());
+                LOG_FMT_TRACE(log,
+                              "{} No valid pages from PageFile_{}_{} to PageFile_{}_{}",
+                              storage_name,
+                              file_id_level.first,
+                              file_id_level.second,
+                              gc_file.getFileId(),
+                              gc_file.getLevel());
                 continue;
             }
 
@@ -876,10 +887,15 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
                 gc_file_writer->write(wb, gc_file_edit);
             }
 
-            LOG_TRACE(log,
-                      storage_name << " Migrate " << page_id_and_entries.size() << " pages from PageFile_" //
-                                   << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
-                                   << gc_file.getFileId() << "_" << gc_file.getLevel());
+            LOG_FMT_TRACE(
+                log,
+                "{} Migrate {} pages from PageFile_{}_{} to PageFile_{}_{}",
+                storage_name,
+                page_id_and_entries.size(),
+                file_id_level.first,
+                file_id_level.second,
+                gc_file.getFileId(),
+                gc_file.getLevel());
         }
 
 #if 0

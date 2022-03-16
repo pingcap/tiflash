@@ -155,9 +155,13 @@ DMFileReader::Stream::Stream(
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
-    LOG_TRACE(log,
-              "file size: " << data_file_size << ", estimated read size: " << estimated_size << ", buffer_size: " << buffer_size
-                            << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
+    LOG_FMT_TRACE(log,
+                  "file size: {}, estimated read size: {}, buffer_size: {} (aio_threshold: {}, max_read_buffer_size: {})",
+                  data_file_size,
+                  estimated_size,
+                  buffer_size,
+                  aio_threshold,
+                  max_read_buffer_size);
 
     if (!reader.dmfile->configuration)
     {
@@ -301,7 +305,7 @@ Block DMFileReader::read()
     // 0 means no limit
     size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
-    auto & pack_stats = dmfile->getPackStats();
+    const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
 
@@ -368,7 +372,7 @@ Block DMFileReader::read()
                 }
                 else if (cd.id == TAG_COLUMN_ID)
                 {
-                    column = cd.type->createColumnConst(read_rows, Field((UInt64)(pack_stats[start_pack_id].first_tag)));
+                    column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
                 }
 
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
@@ -439,9 +443,13 @@ Block DMFileReader::read()
                 }
                 else
                 {
-                    LOG_TRACE(log,
-                              "Column [id:" << cd.id << ",name:" << cd.name << ",type:" << cd.type->getName()
-                                            << "] not found, use default value. DMFile: " << dmfile->path());
+                    LOG_FMT_TRACE(
+                        log,
+                        "Column [id: {},name: {},type: {}] not found, use default value. DMFile: {}",
+                        cd.id,
+                        cd.name,
+                        cd.type->getName(),
+                        dmfile->path());
                     // New column after ddl is not exist in this DMFile, fill with default value
                     ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
                     res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});

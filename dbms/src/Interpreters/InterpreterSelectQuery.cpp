@@ -208,21 +208,21 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
-        if (!storage_)
+        auto storage = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
+        if (!storage)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
-        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_);
+        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         if (!managed_storage
             || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DT))
         {
-            throw Exception("Specifying schema_version for storage: " + storage_->getName()
+            throw Exception("Specifying schema_version for storage: " + storage->getName()
                                 + ", table: " + qualified_name + " is not allowed",
                             ErrorCodes::LOGICAL_ERROR);
         }
 
         /// Lock storage.
-        auto lock = storage_->lockForShare(context.getCurrentQueryId());
+        auto lock = storage->lockForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -238,20 +238,20 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return std::make_tuple(storage, lock, storage_schema_version, true);
         // From now on the schema was not synced.
         // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
         // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
         // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
         if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return std::make_tuple(storage, lock, storage_schema_version, true);
         // From now on we have global < query.
         // Return false for outer to sync and retry.
         return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
     };
 
     /// Try get storage and lock once.
-    StoragePtr storage_;
+    StoragePtr storage;
     TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
@@ -260,11 +260,11 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     };
     bool ok;
     {
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(false);
+        std::tie(storage, lock, storage_schema_version, ok) = get_and_lock_storage(false);
         if (ok)
         {
             log_schema_version("OK, no syncing required.");
-            storage = storage_;
+            storage = storage;
             table_lock = lock;
             return;
         }
@@ -278,11 +278,11 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema sync cost " << schema_sync_cost << "ms.");
 
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
+        std::tie(storage, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)
         {
             log_schema_version("OK after syncing.");
-            storage = storage_;
+            storage = storage;
             table_lock = lock;
             return;
         }
@@ -463,7 +463,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         throw Exception("Distributed on Distributed is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
     if (!dry_run)
-        LOG_TRACE(log, QueryProcessingStage::toString(from_stage) << " -> " << QueryProcessingStage::toString(to_stage));
+        LOG_FMT_TRACE(log, "{} -> {}", QueryProcessingStage::toString(from_stage), QueryProcessingStage::toString(to_stage));
 
     AnalysisResult expressions = analyzeExpressions(from_stage);
 

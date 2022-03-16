@@ -105,7 +105,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     const WritingFilesSnapshot & writing_files) const
 {
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-    LOG_TRACE(log, storage_name << " input size of candidates: " << page_files.size());
+    LOG_FMT_TRACE(log, "{} input size of candidates: {}", storage_name, page_files.size());
 #endif
 
     /**
@@ -132,7 +132,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     size_t num_migrate_pages = 0;
     size_t num_candidates_with_high_rate = 0;
     size_t candidate_total_size_with_lower_rate = 0;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (unlikely(page_file.getType() != PageFile::Type::Formal))
         {
@@ -148,7 +148,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         if (auto it = files_valid_pages.find(page_file.fileIdLevel()); it != files_valid_pages.end())
         {
             valid_size = it->second.first;
-            valid_rate = (float)valid_size / file_size;
+            valid_rate = static_cast<float>(valid_size) / file_size;
             valid_page_count = it->second.second.size();
         }
 
@@ -159,9 +159,13 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
                 || config.gc_max_valid_rate >= 1.0 // all page file will be picked
             );
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-        LOG_TRACE(log,
-                  storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
-                               << "] [file size=" << file_size << "]");
+        LOG_FMT_TRACE(
+            log,
+            "{} {}" < < < < " [valid rate={:.2f}] [file size={}]",
+            storage_name,
+            page_file.toString(),
+            valid_rate,
+            file_size);
 #endif
         if (!is_candidate)
         {
@@ -379,15 +383,15 @@ DataCompactor<SnapshotPtr>::migratePages( //
                               << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
                               << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
-        PageEntriesEdit edit_;
-        if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
+        PageEntriesEdit edit;
+        if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit))
         {
             hard_link_file.destroy();
             continue;
         }
 
         hard_link_file.setFormal();
-        gc_file_edit.concate(edit_);
+        gc_file_edit.concate(edit);
         // After the hard link file is created, the original file will be removed later and subtract its data size from the delegator.
         // So we need to increase the data size for the hard link file for correctness on the disk data usage in a longer time dimension.
         delegator->addPageFileUsedSize(
@@ -442,10 +446,10 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
     // Next time we recover pages' meta from disk, recover checkpoint first, then merge all pages' meta
     // according to the tuple <Sequence, PageFileId, PageFileLevel> is OK.
 
-    for (auto iter = files_valid_pages.cbegin(); iter != files_valid_pages.cend(); ++iter)
+    for (const auto & files_valid_page : files_valid_pages)
     {
-        const auto & file_id_level = iter->first;
-        const auto & [_valid_bytes, valid_page_ids_in_file] = iter->second;
+        const auto & file_id_level = files_valid_page.first;
+        const auto & [_valid_bytes, valid_page_ids_in_file] = files_valid_page.second;
         (void)_valid_bytes;
 
         auto reader_iter = data_readers.find(file_id_level);
@@ -478,12 +482,12 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             };
 
 #ifndef NDEBUG
-            size_t MAX_BATCH_PER_MOVEMENT = 1000;
-            fiu_do_on(FailPoints::force_set_page_data_compact_batch, { MAX_BATCH_PER_MOVEMENT = 3; });
+            size_t max_batch_per_movement = 1000;
+            fiu_do_on(FailPoints::force_set_page_data_compact_batch, { max_batch_per_movement = 3; });
 #else
             constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000;
 #endif
-            if (page_id_and_entries.size() <= MAX_BATCH_PER_MOVEMENT)
+            if (page_id_and_entries.size() <= max_batch_per_movement)
             {
                 bytes_written += migrate_entries(page_id_and_entries);
             }
@@ -495,10 +499,10 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                 size_t entries_migrated = 0;
 #endif
                 PageIdAndEntries entries_batch;
-                entries_batch.reserve(MAX_BATCH_PER_MOVEMENT);
+                entries_batch.reserve(max_batch_per_movement);
                 for (size_t start_idx = 0; start_idx < page_id_and_entries.size(); /**/)
                 {
-                    size_t end_idx = std::min(start_idx + MAX_BATCH_PER_MOVEMENT, page_id_and_entries.size());
+                    size_t end_idx = std::min(start_idx + max_batch_per_movement, page_id_and_entries.size());
                     entries_batch.clear();
                     entries_batch.assign(page_id_and_entries.begin() + start_idx, page_id_and_entries.begin() + end_idx);
 #ifndef NDEBUG
