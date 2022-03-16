@@ -48,8 +48,8 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , thread_manager(newThreadManager())
     , log(getMPPTaskLog(log_, tunnel_id))
 {
-    GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
     assert(!(is_local && is_async));
+    GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 
 template <typename Writer>
