@@ -1,0 +1,124 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+tmp_path = "/tmp/tiflash/data/tmp"
+display_name = "TiFlash"
+
+## Deprecated storage path setting style. Check [storage] section for new style.
+path = "/tmp/tiflash/data/db"
+capacity = "10737418240"
+## Deprecated storage path setting style of multi-disks. Check [storage] section for new style.
+# path = "/tmp/tiflash/data/db,/tmp/tiflash1,/tmp/tiflash2"
+# capacity = "0"
+
+mark_cache_size = 5368709120
+minmax_index_cache_size = 5368709120
+tcp_port = 9000
+http_port = 8123
+
+## Storage paths settings.
+# [storage]
+## The storage format version in storage engine. Valid values: 1, 2 (experimental).
+## format_version = 1
+
+## If there are multiple SSD disks on the machine,
+## specify the path list on `storage.main.dir` can improve TiFlash performance.
+
+## If there are multiple disks with different IO metrics (e.g. one SSD and some HDDs)
+## on the machine, 
+## set `storage.latest.dir` to store the latest data on SSD (disks with higher IOPS metrics)
+## set `storage.main.dir` to store the main data on HDD (disks with lower IOPS metrics)
+## can improve TiFlash performance.
+
+# [storage.main]
+## The path to store main data.
+# e.g.
+# dir = [ "/data0/tiflash" ] 
+# or
+# dir = [ "/data0/tiflash", "/data1/tiflash" ]
+
+## Store capacity of each path, i.e. max data size allowed.
+## If it is not set, or is set to 0s, the actual disk capacity is used.
+## Note that we don't support human-readable big numbers(like "10GB") yet.
+## Please set in the specified number of bytes.
+# e.g.
+# capacity = [ 10737418240, 10737418240 ]
+
+# [storage.latest]
+## The path(s) to store latest data.
+## If not set, it will be the same with `storage.main.dir`.
+# dir = [ ]
+
+## Store capacity of each path, i.e. max data size allowed.
+## If it is not set, or is set to 0s, the actual disk capacity is used.
+# e.g.
+# capacity = [ 10737418240, 10737418240 ]
+
+# [storage.raft]
+## The path(s) to store Raft data.
+## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
+# dir = [ ]
+
+# [storage.io_rate_limit]
+## The max I/O bandwith. Default value is 0 and I/O rate limit is disabled.
+# max_bytes_per_sec = 268435456
+## max_read_bytes_per_sec and max_write_bytes_per_sec are the same meaning as max_bytes_per_sec,
+## but for disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
+# max_read_bytes_per_sec = 0
+# max_write_bytes_per_sec = 0
+
+[flash]
+tidb_status_addr = "tidb0:10080"
+service_addr = "0.0.0.0:3930"
+[flash.flash_cluster]
+update_rule_interval = 5
+[flash.proxy]
+addr = "0.0.0.0:20170"
+advertise-addr = "tiflash0:20170"
+data-dir = "/data"
+config = "/proxy.toml"
+log-file = "/log/proxy.log"
+engine-addr = "tiflash0:3930"
+status-addr = "0.0.0.0:20181"
+advertise-status-addr = "tiflash0:20181"
+
+[logger]
+count = 10
+errorlog = "/tmp/tiflash/log/error.log"
+size = "1000M"
+log = "/tmp/tiflash/log/server.log"
+level = "trace"
+
+[application]
+runAsDaemon = true
+
+[raft]
+pd_addr = "pd0:2379"
+ignore_databases = "system,default"
+# specify which storage engine we use. tmt or dt 
+storage_engine = "dt"
+# Deprecated Raft data storage path setting style. Check [storage.raft] section for new style.
+# If it is not set, it will be the first path of "path" appended with "/kvstore".
+# kvstore_path = ""
+
+[raft.snapshot]
+# The way to apply snapshot data
+# The value is one of "block" / "file1" / "file2".
+# method = "file1"
+
+[profiles]
+[profiles.default]
+enable_local_tunnel = 0
+enable_async_grpc_client = 0
+# max_memory_usage = 0
