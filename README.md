@@ -53,8 +53,6 @@ Or you can also use system-wise toolchain if you can install `clang/compiler-rt/
 
 ###### TiFlash Env
 
-> For faster access to precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tiflash-env-x86_64.tar.xz).
-
 TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
 
 ```bash

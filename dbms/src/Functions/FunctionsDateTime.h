@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnArray.h>
@@ -471,12 +485,34 @@ struct ToDayOfWeekImpl
     {
         return time_zone.toDayOfWeek(DayNum(d));
     }
-    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    static inline UInt8 execute(UInt64 d, const DateLUTImpl &)
     {
-        throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        MyDateTime my_time(d);
+        return UInt8(my_time.weekDay() + 1);
     }
 
     using FactorTransform = ToMondayImpl;
+};
+
+struct ToDayOfYearImpl
+{
+    static constexpr auto name = "toDayOfYear";
+
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDayOfYear(t);
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDayOfYear(DayNum(d));
+    }
+    static inline UInt16 execute(UInt64 d, const DateLUTImpl &)
+    {
+        MyDateTime my_time(d);
+        return UInt16(my_time.yearDay());
+    }
+
+    using FactorTransform = ToStartOfYearImpl;
 };
 
 struct ToHourImpl
@@ -3359,6 +3395,7 @@ using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQua
 using FunctionToMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMonthImpl>;
 using FunctionToDayOfMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfMonthImpl>;
 using FunctionToDayOfWeek = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
+using FunctionToDayOfYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToDayOfYearImpl>;
 using FunctionToHour = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToHourImpl>;
 using FunctionToMinute = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMinuteImpl>;
 using FunctionToSecond = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToSecondImpl>;
