@@ -374,6 +374,11 @@ TEST_F(PageStorageTest, IngestFile)
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
 }
 
 // TBD : enable after wal apply and restore
@@ -834,7 +839,7 @@ try
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(0), 0);
     };
-    page_storage->clearExternalPagesCallbacks();
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("gc with snapshot released");

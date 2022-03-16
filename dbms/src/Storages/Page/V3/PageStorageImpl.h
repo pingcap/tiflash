@@ -58,7 +58,6 @@ public:
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
-    void clearExternalPagesCallbacks();
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return read(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }
@@ -86,7 +85,7 @@ private:
     const static String manifests_file_name;
 
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::vector<ExternalPageCallbacks>;
+    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 

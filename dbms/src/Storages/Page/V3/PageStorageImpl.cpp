@@ -198,10 +198,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
         std::scoped_lock lock{callbacks_mutex};
         if (!callbacks_container.empty())
         {
-            for (const auto & callbacks : callbacks_container)
+            for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = page_directory->getAliveExternalIds(callbacks.ns_id);
+                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
                 callbacks.remover(pending_external_pages, alive_external_ids);
             }
         }
@@ -266,17 +266,14 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
     assert(callbacks.ns_id != MAX_NAMESPACE_ID);
-    callbacks_container.push_back(callbacks);
+    assert(callbacks_container.count(callbacks.ns_id) == 0);
+    callbacks_container.emplace(callbacks.ns_id, callbacks);
 }
 
 void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
     std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.erase(
-        std::remove_if(callbacks_container.begin(),
-                       callbacks_container.end(),
-                       [&](const ExternalPageCallbacks & callbacks) { return callbacks.ns_id == ns_id; }),
-        callbacks_container.end());
+    callbacks_container.erase(ns_id);
 }
 
 const String PageStorageImpl::manifests_file_name = "manifests";
@@ -294,14 +291,6 @@ void PageStorageImpl::createManifestsFileIfNeed(const String & path)
     Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
     file.createFile();
 }
-
-#ifndef NDEBUG
-void PageStorageImpl::clearExternalPagesCallbacks()
-{
-    std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.clear();
-}
-#endif
 
 } // namespace PS::V3
 } // namespace DB
