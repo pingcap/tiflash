@@ -179,6 +179,7 @@ namespace DB
         F(type_total_threads_of_thdpool, {"type", "thread_pool_total"}),                                                                  \
         F(type_max_threads_of_raw, {"type", "total_max"}),                                                                                \
         F(type_total_threads_of_raw, {"type", "total"}),                                                                                  \
+        F(type_threads_of_client_cq_pool, {"type", "rpc_client_cq_pool"}),                                                                \
         F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
         F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
         F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
