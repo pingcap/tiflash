@@ -423,42 +423,26 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 else
                 {
                     // Throw an exception for TiDB / TiSpark to retry
-                    if (table_id == logical_table_id)
-                        e.addMessage(
-                            fmt::format(
-                                "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
-                                storage->getDatabaseName(),
-                                storage->getTableName(),
-                                table_id));
-                    else
-                        e.addMessage(
-                            fmt::format(
-                                "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
-                                storage->getDatabaseName(),
-                                storage->getTableName(),
-                                table_id,
-                                logical_table_id));
+                    e.addMessage(
+                        fmt::format(
+                            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}{})",
+                            storage->getDatabaseName(),
+                            storage->getTableName(),
+                            table_id,
+                            table_id == logical_table_id ? "" : fmt::format(", logical_table_id: {}", logical_table_id)));
                     throw;
                 }
             }
             catch (DB::Exception & e)
             {
                 /// Other unknown exceptions
-                if (table_id == logical_table_id)
-                    e.addMessage(
-                        fmt::format(
-                            "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
-                            storage->getDatabaseName(),
-                            storage->getTableName(),
-                            table_id));
-                else
-                    e.addMessage(
-                        fmt::format(
-                            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
-                            storage->getDatabaseName(),
-                            storage->getTableName(),
-                            table_id,
-                            logical_table_id));
+                e.addMessage(
+                    fmt::format(
+                        "(while creating InputStreams from storage `{}`.`{}`, table_id: {}{})",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        table_id,
+                        table_id == logical_table_id ? "" : fmt::format(", logical_table_id: {}", logical_table_id)));
                 throw;
             }
         }
