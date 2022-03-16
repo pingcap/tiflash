@@ -1,5 +1,0 @@
-FROM hub.pingcap.net/tiflash/tiflash-ci-base
-
-COPY tiflash /tiflash
-
-ENTRYPOINT ["/tiflash/tiflash", "server"]
