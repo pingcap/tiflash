@@ -38,10 +38,10 @@ public:
     /// NOTE: call deleteCancelledQuery under the lock protection of MPPTaskManager
     void deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager);
 
-    /// delete the query in the active set and waiting set and release threads, then schedule waiting tasks.
-    /// NOTE: call deleteAQuery under the lock protection of MPPTaskManager,
+    /// delete the query in the active set and waiting set
+    /// NOTE: call deleteFinishedQuery under the lock protection of MPPTaskManager,
     /// so this func is called exactly once for a query.
-    void deleteQuery(const UInt64 tso);
+    void deleteFinishedQuery(const UInt64 tso);
 
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 

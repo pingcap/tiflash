@@ -65,6 +65,11 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
 /// the cancelled query maybe hang, so trigger scheduling as needed.
 void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager)
 {
+    if (isDisabled())
+    {
+        return;
+    }
+
     active_set.erase(tso);
     waiting_set.erase(tso);
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
@@ -84,7 +89,7 @@ void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & ta
     }
 }
 
-void MinTSOScheduler::deleteAQuery(const UInt64 tso)
+void MinTSOScheduler::deleteFinishedQuery(const UInt64 tso)
 {
     if (isDisabled())
     {
@@ -109,7 +114,6 @@ void MinTSOScheduler::releaseThreadsThenSchedule(const int need_threads, MPPTask
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);
 }
-
 
 void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 {

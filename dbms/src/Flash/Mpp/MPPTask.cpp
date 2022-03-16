@@ -69,6 +69,8 @@ MPPTask::~MPPTask()
     closeAllTunnels("");
     if (schedule_state == ScheduleState::SCHEDULED)
     {
+        /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
+        /// TODO: finish all threads before here, except the current one.
         manager->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
