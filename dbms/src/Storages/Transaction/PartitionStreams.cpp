@@ -95,7 +95,8 @@ static void writeRegionDataToStorage(
         if (region.pre_decode_cache)
         {
             auto schema_version = storage->getTableInfo().schema_version;
-            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), region.pre_decode_cache->toString(), schema_version);
+            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}",
+                          FUNCTION_NAME, region->toString(), region.pre_decode_cache->toString(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
@@ -466,7 +467,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__), "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.", e.displayText());
+            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+                            "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
+                            e.displayText());
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();
         }

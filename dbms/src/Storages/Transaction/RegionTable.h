@@ -220,7 +220,12 @@ struct RegionPreDecodeBlockData
     RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
     String toString() const
     {
-        return fmt::format("{{ schema_version: {}, data_list size: {}, block row: {} col: {} bytes: {} }}", schema_version, data_list_read.size(), block.rows(), block.columns(), block.bytes());
+        return fmt::format("{{ schema_version: {}, data_list size: {}, block row: {} col: {} bytes: {} }}",
+                           schema_version,
+                           data_list_read.size(),
+                           block.rows(),
+                           block.columns(),
+                           block.bytes());
     }
 };
 
