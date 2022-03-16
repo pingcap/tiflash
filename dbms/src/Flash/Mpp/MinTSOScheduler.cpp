@@ -72,7 +72,7 @@ void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & ta
     {
         while (!query_task_set->waiting_tasks.empty())
         {
-            query_task_set->waiting_tasks.front()->scheduleThisTask();
+            query_task_set->waiting_tasks.front()->scheduleThisTask(MPPTask::ScheduleState::FAILED);
             query_task_set->waiting_tasks.pop();
         }
     }
@@ -84,29 +84,33 @@ void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & ta
     }
 }
 
-void MinTSOScheduler::deleteThenSchedule(const UInt64 tso, MPPTaskManager & task_manager)
+void MinTSOScheduler::deleteAQuery(const UInt64 tso)
 {
     if (isDisabled())
     {
         return;
     }
-    auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
-    /// return back threads
-    if (query_task_set)
-    {
-        used_threads -= query_task_set->used_threads;
-        query_task_set->used_threads = 0;
-        query_task_set->scheduled_task = 0;
-    }
+
     LOG_FMT_INFO(log, "query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
-    /// delete from working set and return threads for finished or cancelled queries
+    /// delete from sets
     active_set.erase(tso);
     waiting_set.erase(tso);
     updateMinTSO(tso, true, "as deleting it.");
+}
 
-    /// as deleted query release some threads, so some tasks would get scheduled.
+void MinTSOScheduler::releaseThreadsThenSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager)
+{
+    if (isDisabled())
+    {
+        return;
+    }
+
+    auto need_threads = task->getNeededThreads();
+    used_threads -= need_threads;
+    /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);
 }
+
 
 void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 {
@@ -148,11 +152,8 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
     {
         updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
         active_set.insert(tso);
-        ++query_task_set->scheduled_task;
-        query_task_set->used_threads += needed_threads;
         used_threads += needed_threads;
-        if (isWaiting)
-            task->scheduleThisTask();
+        task->scheduleThisTask(MPPTask::ScheduleState::SCHEDULED);
         LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), isWaiting ? " from the waiting set" : " directly", needed_threads, used_threads, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
         return true;
     }
@@ -196,4 +197,5 @@ bool MinTSOScheduler::updateMinTSO(const UInt64 tso, const bool retired, const S
         LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_tso, min_tso, msg, used_threads, active_set.size(), waiting_set.size());
     return force_scheduling;
 }
+
 } // namespace DB
