@@ -1364,6 +1364,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (size == 0)
             size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        GET_METRIC(tiflash_thread_count, type_threads_of_grpc_completion_queue_pool).Set(size);
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
