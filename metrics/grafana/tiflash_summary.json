@@ -2323,7 +2323,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": null,
-          "description": "used threads in min-tso scheduler, and the sort/hard limit of threads in scheduler.",
+          "description": "used thread tickets in min-tso scheduler, and the sort/hard limit of thread tickets in scheduler.",
           "fieldConfig": {
             "defaults": {
               "unit": "none"
@@ -2387,7 +2387,7 @@
             {
               "exemplar": true,
               "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_hard_limit\"}) by (instance, type)",
-              "hide": true,
+              "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-{{type}}",
               "queryType": "randomWalk",
@@ -2398,7 +2398,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Threads Usage and Limit",
+          "title": "Thread Tickets Usage and Limit",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2417,7 +2417,7 @@
               "decimals": null,
               "format": "none",
               "label": "Threads",
-              "logBase": 1,
+              "logBase": 10,
               "max": null,
               "min": null,
               "show": true
@@ -2665,7 +2665,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": null,
-          "description": "the count of used threads over the hard limit where errors occur.",
+          "description": "the count of used threads exceeded the hard limit where errors occur.",
           "fieldConfig": {
             "defaults": {
               "unit": "none"
@@ -2723,7 +2723,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Over Hard Limit Count",
+          "title": "hard_limit_exceeded_count",
           "tooltip": {
             "shared": true,
             "sort": 0,
