@@ -33,8 +33,6 @@ extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-namespace
-{
 // day number per 400 years, from the year that year % 400 = 1
 static constexpr int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
 // day number per 100 years in every 400 years, from the year that year % 100 = 1
@@ -46,7 +44,6 @@ static constexpr int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
 // day number per years in every 4 years
 // note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
 static constexpr int DAY_NUM_PER_YEARS = 365;
-} // namespace
 
 // adjustYear adjusts year according to y.
 // See https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html
@@ -1240,7 +1237,7 @@ void addMonths(MyDateTime & t, Int64 months)
     Int64 current_month = t.month - 1;
     current_month += months;
     Int64 current_year = 0;
-    Int64 year = (Int64)t.year;
+    Int64 year = static_cast<Int64>(t.year);
     if (current_month >= 0)
     {
         current_year = current_month / 12;
