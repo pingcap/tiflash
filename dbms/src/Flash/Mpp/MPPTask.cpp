@@ -69,7 +69,7 @@ MPPTask::~MPPTask()
     closeAllTunnels("");
     if (schedule_state == ScheduleState::SCHEDULED)
     {
-        manager->releaseTaskThreadsFromScheduler(shared_from_this());
+        manager->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());

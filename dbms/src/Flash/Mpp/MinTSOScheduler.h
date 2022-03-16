@@ -43,7 +43,7 @@ public:
     /// so this func is called exactly once for a query.
     void deleteAQuery(const UInt64 tso);
 
-    void releaseThreadsThenSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager);
+    void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
     bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting);

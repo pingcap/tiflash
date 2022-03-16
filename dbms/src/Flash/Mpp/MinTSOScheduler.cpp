@@ -98,14 +98,13 @@ void MinTSOScheduler::deleteAQuery(const UInt64 tso)
     updateMinTSO(tso, true, "as deleting it.");
 }
 
-void MinTSOScheduler::releaseThreadsThenSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager)
+void MinTSOScheduler::releaseThreadsThenSchedule(const int need_threads, MPPTaskManager & task_manager)
 {
     if (isDisabled())
     {
         return;
     }
 
-    auto need_threads = task->getNeededThreads();
     used_threads -= need_threads;
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);

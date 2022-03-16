@@ -75,7 +75,7 @@ public:
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
-    void releaseTaskThreadsFromScheduler(const MPPTaskPtr & task);
+    void releaseThreadsFromScheduler(const int need_threads);
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 
