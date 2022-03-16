@@ -110,7 +110,6 @@ public:
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
 
-
 private:
     NamespaceId ns_id;
 
