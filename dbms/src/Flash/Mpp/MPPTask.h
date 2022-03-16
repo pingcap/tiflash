@@ -66,7 +66,7 @@ public:
 
     int getNeededThreads();
 
-    enum ScheduleState
+    enum class ScheduleState
     {
         WAITING,
         SCHEDULED,
