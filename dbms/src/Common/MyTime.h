@@ -23,6 +23,8 @@ namespace DB
 {
 struct MyTimeBase
 {
+    static constexpr Int64 SECOND_IN_ONE_DAY = 86400;
+
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
     static const UInt64 YEAR_BIT_FIELD_OFFSET = 50, YEAR_BIT_FIELD_WIDTH = 14;
@@ -222,5 +224,9 @@ inline UInt8 getLastDay(UInt16 year, UInt8 month)
         last_day = 29;
     return last_day;
 }
+
+UInt64 addSeconds(UInt64 t, Int64 delta);
+void addDays(MyDateTime & t, Int64 days);
+void addMonths(MyDateTime & t, Int64 months);
 
 } // namespace DB
