@@ -450,7 +450,7 @@ void RBTreeSpaceMap::freeSmap()
     }
 }
 
-String RBTreeSpaceMap::smapStats()
+String RBTreeSpaceMap::toDebugString()
 {
     struct rb_node * node = nullptr;
     struct SmapRbEntry * entry;

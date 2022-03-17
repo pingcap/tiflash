@@ -43,7 +43,7 @@ protected:
         free_map.insert({start, end});
     }
 
-    String smapStats() override
+    String toDebugString() override
     {
         UInt64 count = 0;
 

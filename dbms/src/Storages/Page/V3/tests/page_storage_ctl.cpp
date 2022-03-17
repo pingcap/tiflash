@@ -101,7 +101,7 @@ String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
         stat_str += fmt::format("      valid rate: {}\n", stat->sm_valid_rate);
         stat_str += fmt::format("      max cap: {}\n", stat->sm_max_caps);
 
-        stat_str += stat->smap->getStats();
+        stat_str += stat->smap->toDebugString();
         stat_str += "\n";
         return stat_str;
     };

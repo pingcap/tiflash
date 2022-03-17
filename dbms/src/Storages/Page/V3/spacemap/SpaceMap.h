@@ -100,13 +100,12 @@ public:
     /**
      * Log the status of space map
      */
-    void logStats();
-
+    void logDebugString();
 
     /**
      * return the status of space map
      */
-    String getStats();
+    virtual String toDebugString() = 0;
 
     SpaceMapType getType() const
     {
@@ -130,9 +129,6 @@ protected:
     SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
     virtual ~SpaceMap() = default;
-
-    /* get space maps status  */
-    virtual String smapStats() = 0;
 
     // Return true if space [offset, offset+size) are all free
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
