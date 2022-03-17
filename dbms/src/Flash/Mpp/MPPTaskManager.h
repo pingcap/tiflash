@@ -35,8 +35,6 @@ struct MPPQueryTaskSet
     bool to_be_cancelled = false;
     MPPTaskMap task_map;
     /// only used in scheduler
-    UInt32 scheduled_task = 0;
-    UInt32 estimated_thread_usage = 0;
     std::queue<MPPTaskPtr> waiting_tasks;
 };
 
@@ -76,6 +74,8 @@ public:
     void unregisterTask(MPPTask * task);
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
+
+    void releaseThreadsFromScheduler(const int needed_threads);
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 
