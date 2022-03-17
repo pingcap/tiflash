@@ -565,37 +565,48 @@ private:
         {
             output << std::endl;
             auto sym_info = _tiflash_symbolize(frames[f]);
-            auto address = fmt::format("{}", frames[f]);;
+            auto address = fmt::format("{}", frames[f]);
             output << address;
 
-            if (sym_info.symbol_name) {
+            if (sym_info.symbol_name)
+            {
                 size_t length = 0;
                 int status = 0;
-                auto* demangled = abi::__cxa_demangle(sym_info.symbol_name, nullptr, &length, &status);
-                if (status == 0) {
+                auto * demangled = abi::__cxa_demangle(sym_info.symbol_name, nullptr, &length, &status);
+                if (status == 0)
+                {
                     std::string_view view(demangled, length - 1);
                     output << "\t" << view;
-                } else {
+                }
+                else
+                {
                     output << "\t" << sym_info.symbol_name;
                 }
-            } else {
-                output << "\t" << "<unknown symbol>";
+            }
+            else
+            {
+                output << "\t"
+                       << "<unknown symbol>";
             }
 
             std::fill(address.begin(), address.end(), ' ');
             std::fill(address.begin(), address.end(), ' ');
 
-            if (sym_info.object_name) {
-                output << " [" <<  ::basename(sym_info.object_name) << "+" << sym_info.svma << "]";
+            if (sym_info.object_name)
+            {
+                output << " [" << ::basename(sym_info.object_name) << "+" << sym_info.svma << "]";
             }
 
-            if (sym_info.source_filename) {
+            if (sym_info.source_filename)
+            {
                 output << std::endl;
                 std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
-                if(view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
+                if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
                 {
                     output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno << "";
-                } else {
+                }
+                else
+                {
                     output << address << "\t" << view << ":" << sym_info.lineno << "";
                 }
             }
