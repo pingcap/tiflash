@@ -34,3 +34,4 @@ if (USE_MYSQL)
 endif ()
 
 add_subdirectory (libconsistent-hashing)
+add_subdirectory (libsymbolization)
