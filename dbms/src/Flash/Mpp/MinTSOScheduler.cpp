@@ -123,16 +123,22 @@ void MinTSOScheduler::deleteFinishedQuery(const UInt64 tso)
     updateMinTSO(tso, true, "as deleting it.");
 }
 
-void MinTSOScheduler::releaseThreadsThenSchedule(const int need_threads, MPPTaskManager & task_manager)
+void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager)
 {
     if (isDisabled())
     {
         return;
     }
 
-    estimated_thread_usage -= need_threads;
+    estimated_thread_usage -= needed_threads;
+    if (estimated_thread_usage < 0)
+    {
+        auto msg = fmt::format("estimated_thread_usage should not be smaller than 0, actually is {}.", estimated_thread_usage);
+        LOG_FMT_ERROR(log, "{}", msg);
+        throw Exception(msg);
+    }
     GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-    GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Decrement(1);
+    GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(task_manager);
 }

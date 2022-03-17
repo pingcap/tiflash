@@ -211,10 +211,10 @@ bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
     return scheduler->tryToSchedule(task, *this);
 }
 
-void MPPTaskManager::releaseThreadsFromScheduler(const int need_threads)
+void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
 {
     std::lock_guard lock(mu);
-    scheduler->releaseThreadsThenSchedule(need_threads, *this);
+    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
 } // namespace DB
