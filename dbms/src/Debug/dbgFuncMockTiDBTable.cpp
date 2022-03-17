@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/Context.h>
@@ -315,6 +329,22 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
         engine_type = "tmt";
     MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
     output("");
+}
+
+void MockTiDBTable::dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() % 3 != 0)
+        throw Exception("Args not matched, should be: database-name, table-name, new-table-name, ..., [database-name, table-name, new-table-name]", ErrorCodes::BAD_ARGUMENTS);
+    std::vector<std::tuple<std::string, std::string, std::string>> table_map;
+    for (ASTs::size_type i = 0; i < args.size() / 3; i++)
+    {
+        const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3 * i]).name;
+        const String & table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 1]).name;
+        const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 2]).name;
+        table_map.emplace_back(database_name, table_name, new_table_name);
+    }
+    MockTiDB::instance().renameTables(table_map);
+    output(fmt::format("renamed tables"));
 }
 
 } // namespace DB

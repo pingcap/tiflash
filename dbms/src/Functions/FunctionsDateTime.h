@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnArray.h>
@@ -471,12 +485,34 @@ struct ToDayOfWeekImpl
     {
         return time_zone.toDayOfWeek(DayNum(d));
     }
-    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    static inline UInt8 execute(UInt64 d, const DateLUTImpl &)
     {
-        throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        MyDateTime my_time(d);
+        return UInt8(my_time.weekDay() + 1);
     }
 
     using FactorTransform = ToMondayImpl;
+};
+
+struct ToDayOfYearImpl
+{
+    static constexpr auto name = "toDayOfYear";
+
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDayOfYear(t);
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDayOfYear(DayNum(d));
+    }
+    static inline UInt16 execute(UInt64 d, const DateLUTImpl &)
+    {
+        MyDateTime my_time(d);
+        return UInt16(my_time.yearDay());
+    }
+
+    using FactorTransform = ToStartOfYearImpl;
 };
 
 struct ToHourImpl
@@ -3278,6 +3314,76 @@ struct TiDBLastDayTransformerImpl
     }
 };
 
+template <typename ToFieldType>
+struct TiDBDayOfWeekTransformerImpl
+{
+    static constexpr auto name = "tidbDayOfWeek";
+
+    static void execute(const Context & context,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
+    {
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
+        {
+            context.getDAGContext()->handleInvalidTime(
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
+            is_null = true;
+            return 0;
+        }
+        /// Behavior differences from TiDB:
+        /// for date in ['0000-01-01', '0000-03-01'), dayOfWeek is the same with MySQL, while TiDB is offset by one day
+        /// In TiDB dayOfWeek('0000-01-01') = 7, in MySQL/TiFlash dayOfWeek('0000-01-01') = 1
+        return static_cast<ToFieldType>(val.weekDay() + 1);
+    }
+};
+
+template <typename ToFieldType>
+struct TiDBDayOfYearTransformerImpl
+{
+    static constexpr auto name = "tidbDayOfYear";
+
+    static void execute(const Context & context,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
+    {
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
+        {
+            context.getDAGContext()->handleInvalidTime(
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
+            is_null = true;
+            return 0;
+        }
+        return static_cast<ToFieldType>(val.yearDay());
+    }
+};
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
 template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
@@ -3359,6 +3465,7 @@ using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQua
 using FunctionToMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMonthImpl>;
 using FunctionToDayOfMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfMonthImpl>;
 using FunctionToDayOfWeek = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
+using FunctionToDayOfYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToDayOfYearImpl>;
 using FunctionToHour = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToHourImpl>;
 using FunctionToMinute = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMinuteImpl>;
 using FunctionToSecond = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToSecondImpl>;
@@ -3373,6 +3480,8 @@ using FunctionToStartOfFifteenMinutes = FunctionDateOrDateTimeToSomething<DataTy
 using FunctionToStartOfHour = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToStartOfHourImpl>;
 using FunctionToTime = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToTimeImpl>;
 using FunctionToLastDay = FunctionMyDateOrMyDateTimeToSomething<DataTypeMyDate, TiDBLastDayTransformerImpl, return_nullable>;
+using FunctionToTiDBDayOfWeek = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt16, TiDBDayOfWeekTransformerImpl, return_nullable>;
+using FunctionToTiDBDayOfYear = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt16, TiDBDayOfYearTransformerImpl, return_nullable>;
 
 using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToRelativeYearNumImpl>;
 using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeQuarterNumImpl>;
