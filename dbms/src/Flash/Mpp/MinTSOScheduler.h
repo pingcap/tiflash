@@ -43,6 +43,7 @@ public:
     /// so this func is called exactly once for a query.
     void deleteFinishedQuery(const UInt64 tso);
 
+    /// all scheduled tasks should finally call this function to release threads and schedule new tasks
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
