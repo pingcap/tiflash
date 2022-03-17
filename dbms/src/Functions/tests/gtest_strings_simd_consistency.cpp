@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <common/types.h>
 #include <gtest/gtest.h>
 
@@ -282,9 +296,9 @@ TEST(StringsLowerUpperAscii, Random)
     std::random_device device;
     auto seed = device();
     std::cout << "seeded with: " << seed << std::endl;
-    std::vector<UInt8> data(limit);
-    std::vector<UInt8> res_new(limit);
-    std::vector<UInt8> res_old(limit);
+    std::vector<UInt8> data(limit + 1);
+    std::vector<UInt8> res_new(limit + 1, 0);
+    std::vector<UInt8> res_old(limit + 1, 0);
     std::default_random_engine eng(seed);
     std::uniform_int_distribution<UInt8> dist(
         'A',
@@ -293,6 +307,7 @@ TEST(StringsLowerUpperAscii, Random)
     {
         i = dist(eng);
     }
+    data.back() = 0;
     {
         {
             auto begin = high_resolution_clock::now();
@@ -318,9 +333,9 @@ TEST(StringsLowerUpperUtf8, Random)
     std::random_device device;
     auto seed = device();
     std::cout << "seeded with: " << seed << std::endl;
-    std::vector<UInt8> data(limit);
-    std::vector<UInt8> res_new(limit, 0);
-    std::vector<UInt8> res_old(limit, 0);
+    std::vector<UInt8> data(limit + 1);
+    std::vector<UInt8> res_new(limit + 1, 0);
+    std::vector<UInt8> res_old(limit + 1, 0);
     std::default_random_engine eng(seed);
     std::uniform_int_distribution<UInt8> dist(
         std::numeric_limits<UInt8>::min(),
@@ -329,6 +344,7 @@ TEST(StringsLowerUpperUtf8, Random)
     {
         i = dist(eng);
     }
+    data.back() = 0;
     {
         {
             auto begin = high_resolution_clock::now();

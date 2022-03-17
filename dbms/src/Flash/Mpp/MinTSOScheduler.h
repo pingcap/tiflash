@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
@@ -24,10 +38,13 @@ public:
     /// NOTE: call deleteCancelledQuery under the lock protection of MPPTaskManager
     void deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager);
 
-    /// delete the query in the active set and waiting set and release threads, then schedule waiting tasks.
-    /// NOTE: call deleteThenSchedule under the lock protection of MPPTaskManager,
+    /// delete the query in the active set and waiting set
+    /// NOTE: call deleteFinishedQuery under the lock protection of MPPTaskManager,
     /// so this func is called exactly once for a query.
-    void deleteThenSchedule(const UInt64 tso, MPPTaskManager & task_manager);
+    void deleteFinishedQuery(const UInt64 tso);
+
+    /// all scheduled tasks should finally call this function to release threads and schedule new tasks
+    void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
     bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting);
@@ -42,7 +59,7 @@ private:
     UInt64 min_tso;
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
-    UInt64 used_threads;
+    UInt64 estimated_thread_usage;
     /// to prevent from too many queries just issue a part of tasks to occupy threads, in proportion to the hardware cores.
     size_t active_set_soft_limit;
     Poco::Logger * log;

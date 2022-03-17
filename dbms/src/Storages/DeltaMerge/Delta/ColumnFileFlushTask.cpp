@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
@@ -57,17 +71,10 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
         ColumnFilePersistedPtr new_column_file;
         if (auto * m_file = task.column_file->tryToInMemoryFile(); m_file)
         {
-            // Just keep cache for really small column file
-            ColumnFile::CachePtr column_file_cache = nullptr;
-            if (m_file->getRows() < context.delta_small_column_file_rows || m_file->getBytes() < context.delta_small_column_file_bytes)
-            {
-                column_file_cache = !task.sorted ? m_file->getCache() : std::make_shared<ColumnFile::Cache>(std::move(task.block_data));
-            }
             new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
                                                                m_file->getRows(),
                                                                m_file->getBytes(),
-                                                               task.data_page,
-                                                               column_file_cache);
+                                                               task.data_page);
         }
         else if (auto * t_file = task.column_file->tryToTinyFile(); t_file)
         {
