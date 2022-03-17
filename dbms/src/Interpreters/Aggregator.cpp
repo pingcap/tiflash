@@ -2017,7 +2017,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             result.aggregates_pools.push_back(std::make_shared<Arena>());
             Arena * aggregates_pool = result.aggregates_pools.back().get();
 
-            auto task = [merge_bucket, bucket, aggregates_pool] {
+            auto task = [&merge_bucket, bucket, aggregates_pool] {
                 return merge_bucket(bucket, aggregates_pool);
             };
 
