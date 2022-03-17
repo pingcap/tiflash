@@ -134,6 +134,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBTimestampDiff>();
     factory.registerFunction<FunctionExtractMyDateTime>();
     factory.registerFunction<FunctionTiDBDateDiff>();
+    factory.registerFunction<FunctionToTiDBDayOfWeek>();
+    factory.registerFunction<FunctionToTiDBDayOfYear>();
 
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
