@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/MyDuration.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
