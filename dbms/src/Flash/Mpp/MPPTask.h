@@ -66,7 +66,17 @@ public:
 
     int getNeededThreads();
 
-    void scheduleThisTask();
+    enum class ScheduleState
+    {
+        WAITING,
+        SCHEDULED,
+        FAILED,
+        COMPLETED
+    };
+
+    void scheduleThisTask(ScheduleState state);
+
+    bool isScheduled();
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -127,7 +137,7 @@ private:
 
     std::mutex schedule_mu;
     std::condition_variable schedule_cv;
-    bool scheduled;
+    ScheduleState schedule_state;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

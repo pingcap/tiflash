@@ -451,16 +451,3 @@ MUL_BENCHMARK(CastToDecimalBench, 128);
 MUL_BENCHMARK(CastToDecimalBench, 256);
 } // namespace tests
 } // namespace DB
-
-int main(int argc, char * argv[])
-{
-    benchmark::Initialize(&argc, argv);
-    DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
-    if (::benchmark::ReportUnrecognizedArguments(argc, argv))
-        return 1;
-    ::benchmark::RunSpecifiedBenchmarks();
-    DB::tests::TiFlashTestEnv::shutdown();
-    ::benchmark::Shutdown();
-    return 0;
-}

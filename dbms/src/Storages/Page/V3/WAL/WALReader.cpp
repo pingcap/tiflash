@@ -36,17 +36,21 @@ LogFilenameSet WALStoreReader::listAllFiles(
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
     Strings filenames;
-    for (const auto & p : delegator->listPaths())
+    for (const auto & parent_path : delegator->listPaths())
     {
-        Poco::File directory(p);
+        String wal_parent_path = parent_path + WALStore::wal_folder_prefix;
+        Poco::File directory(wal_parent_path);
         if (!directory.exists())
+        {
             directory.createDirectories();
+            continue;
+        }
+
         filenames.clear();
         directory.list(filenames);
-        all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
+        all_filenames.emplace_back(std::make_pair(wal_parent_path, std::move(filenames)));
         filenames.clear();
     }
-    assert(all_filenames.size() == 1); // TODO: multi-path
 
     LogFilenameSet log_files;
     for (const auto & [parent_path, filenames] : all_filenames)
