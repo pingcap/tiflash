@@ -122,7 +122,7 @@ void StressWorkload::startBackgroundTimer()
 
 void StressWorkloadManger::runWorkload()
 {
-    if (options.situation_mask == NORMAL_WORKLOAD)
+    if (options.just_init_pages || options.situation_mask == NORMAL_WORKLOAD)
     {
         String name;
         WorkloadCreator func;
@@ -130,7 +130,10 @@ void StressWorkloadManger::runWorkload()
         auto workload = std::shared_ptr<StressWorkload>(func(options));
         LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
         workload->run();
-        workload->onDumpResult();
+        if (!options.just_init_pages)
+        {
+            workload->onDumpResult();
+        }
         return;
     }
 

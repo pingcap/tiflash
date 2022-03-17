@@ -450,25 +450,26 @@ void RBTreeSpaceMap::freeSmap()
     }
 }
 
-void RBTreeSpaceMap::smapStats()
+String RBTreeSpaceMap::smapStats()
 {
     struct rb_node * node = nullptr;
     struct SmapRbEntry * entry;
     UInt64 count = 0;
     UInt64 max_size = 0;
     UInt64 min_size = ULONG_MAX;
+    String stats_str = "";
 
     if (rb_tree->root.rb_node == nullptr)
     {
-        LOG_ERROR(log, "Tree have not been inited.");
-        return;
+        stats_str += "Tree have not been inited.";
+        return stats_str;
     }
 
-    LOG_DEBUG(log, "RB-Tree entries status: ");
+    stats_str += "    RB-Tree entries status: \n";
     for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        LOG_FMT_DEBUG(log, "  Space: {} start: {} size: {}", count, entry->start, entry->count);
+        stats_str += fmt::format("      Space: {} start: {} size: {} \n", count, entry->start, entry->count);
         count++;
         if (entry->count > max_size)
         {
@@ -480,6 +481,8 @@ void RBTreeSpaceMap::smapStats()
             min_size = entry->count;
         }
     }
+
+    return stats_str;
 }
 
 bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)

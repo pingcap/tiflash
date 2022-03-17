@@ -43,16 +43,19 @@ protected:
         free_map.insert({start, end});
     }
 
-    void smapStats() override
+    String smapStats() override
     {
         UInt64 count = 0;
 
-        LOG_DEBUG(log, "STD-Map entries status: ");
+        String stats_str = "    STD-Map entries status: \n";
+
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            LOG_DEBUG(log, "  Space: " << count << " start:" << it->first << " size : " << it->second);
+            stats_str += fmt::format("      Space: {} start: {} size : {}\n", count, it->first, it->second);
             count++;
         }
+
+        return stats_str;
     }
 
     std::pair<UInt64, UInt64> getSizes() const override

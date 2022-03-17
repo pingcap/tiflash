@@ -47,7 +47,12 @@ bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 
 void SpaceMap::logStats()
 {
-    smapStats();
+    LOG_DEBUG(log, smapStats());
+}
+
+String SpaceMap::getStats()
+{
+    return smapStats();
 }
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
