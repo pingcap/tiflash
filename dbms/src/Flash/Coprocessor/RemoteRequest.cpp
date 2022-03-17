@@ -36,13 +36,14 @@ RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGCon
     DAGSchema schema;
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
-    if (selection != nullptr)
+    if (!conditions.empty())
     {
+        assert(!selection_name.empty());
         executor->set_tp(tipb::ExecType::TypeSelection);
         executor->set_executor_id(selection_name);
         auto * new_selection = executor->mutable_selection();
         for (const auto & condition : conditions)
-            *new_selection->add_conditions() = condition;
+            *new_selection->add_conditions() = *condition;
         executor = new_selection->mutable_child();
     }
 
