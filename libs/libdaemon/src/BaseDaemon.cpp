@@ -564,7 +564,6 @@ private:
         for (int f = 0; f < frames_size; ++f)
         {
             output << std::endl;
-            /// Perform demangling of names. Name is in parentheses, before '+' character.
             auto sym_info = _tiflash_symbolize(frames[f]);
             auto address = fmt::format("{}", frames[f]);;
             output << address;
@@ -583,6 +582,7 @@ private:
                 output << "\t" << "<unknown symbol>";
             }
 
+            std::fill(address.begin(), address.end(), ' ');
             std::fill(address.begin(), address.end(), ' ');
 
             if (sym_info.object_name) {

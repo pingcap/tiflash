@@ -32,7 +32,7 @@ pub struct SymbolInfo {
     /// filename of the source.
     pub source_filename: *const c_char,
     /// length of source filename.
-    /// this is needed because source filename may not have terminate string.
+    /// this is needed because source filename may not have terminate nul.
     pub source_filename_length: usize,
     /// source line number.
     pub lineno: usize,
