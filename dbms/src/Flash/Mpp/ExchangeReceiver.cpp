@@ -57,7 +57,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
+    , exc_log(log_)
     , collected(false)
 {
     rpc_context->fillSchema(schema);
