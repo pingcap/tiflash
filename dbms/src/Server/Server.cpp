@@ -41,6 +41,7 @@
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -642,14 +643,17 @@ public:
 
     ~FlashGrpcServerHolder()
     {
-        *is_shutdown = true;
-        const int wait_calldata_after_shutdown_interval_ms = 500;
-        std::this_thread::sleep_for(std::chrono::milliseconds(wait_calldata_after_shutdown_interval_ms)); // sleep 500ms to let operations of calldata called by MPPTunnel done.
         /// Shut down grpc server.
-        // wait 5 seconds for pending rpcs to gracefully stop
-        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown(deadline);
+        flash_grpc_server->Shutdown();
+        *is_shutdown = true;
+        // Wait all existed MPPTunnels done to prevent crash.
+        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+        const int max_wait_cnt = 300;
+        int wait_cnt = 0;
+        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
         for (auto & cq : cqs)
             cq->Shutdown();
         for (auto & cq : notify_cqs)
@@ -1356,6 +1360,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+
+    if (settings.enable_async_grpc_client)
+    {
+        auto size = settings.grpc_completion_queue_pool_size;
+        if (size == 0)
+            size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+    }
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);

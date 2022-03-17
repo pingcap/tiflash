@@ -1,0 +1,36 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: PingCAP, Ltd.
+  paths-ignore:
+    - '.gitignore'
+    - '.gitattributes'
+    - '.gitmodules'
+    - '.clang-format'
+    - '.clang-tidy'
+    - 'Jenkinsfile'
+    - 'LICENSE'
+    - 'NOTICE'
+    - 'tiflash-architecture.png'
+    - 'contrib/'
+    - '.github/'
+    - 'docs/'
+    - 'tests/testsdata/'
+    - 'release-centos7-llvm/dockerfiles/'    
+    - '**/.gitignore'
+    - '**/*.md'
+    - '**/*.json'
+    - '**/*.h.in'
+    - '**/*.cpp.in'
+    - '**/LICENSE.TXT'
+    - '**/cipher-file-256'
+    - '**/asan.suppression'
+    - '**/LICENSE.TXT'
+    - '**/LICENSE'
+    - '**/README'
+    - '**/COPYRIGHT'
+    - '**/NOTICE'
+    - 'dbms/src/IO/tests/limit_read_buffer.reference'
+    - 'dbms/src/IO/tests/DevicePixelRatio'
+
+  comment: on-failure
