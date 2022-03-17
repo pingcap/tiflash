@@ -35,7 +35,6 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
-NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
@@ -52,7 +51,7 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DRUN_HAVE_STD_REGEX=0 \
       -GNinja
 
-cmake --build . --target tiflash --parallel ${NPROC}
+cmake --build . --target tiflash --parallel
 cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 
 # unset LD_LIBRARY_PATH before test
