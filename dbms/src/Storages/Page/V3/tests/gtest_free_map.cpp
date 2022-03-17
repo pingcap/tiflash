@@ -356,6 +356,25 @@ TEST_P(SpaceMapTest, TestGetSizes)
     }
 }
 
+
+TEST_P(SpaceMapTest, TestGetMaxCap)
+{
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(50, 10));
+        ASSERT_TRUE(smap->markUsed(80, 10));
+
+        ASSERT_EQ(smap->getMaxCapability(), 50);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+
+        ASSERT_EQ(smap->getMaxCapability(), 0);
+    }
+}
+
 INSTANTIATE_TEST_CASE_P(
     Type,
     SpaceMapTest,

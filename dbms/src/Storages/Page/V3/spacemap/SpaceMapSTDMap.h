@@ -243,6 +243,17 @@ protected:
         return std::make_pair(offset, hint_biggest_cap);
     }
 
+    UInt64 getMaxCapability() override
+    {
+        UInt64 max_cap = 0;
+        for (const auto & [start, size] : free_map)
+        {
+            (void)start;
+            max_cap = std::max(max_cap, size);
+        }
+        return max_cap;
+    }
+
     bool markFreeImpl(UInt64 offset, size_t length) override
     {
         auto it = free_map.find(offset);

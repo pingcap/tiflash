@@ -28,6 +28,8 @@ public:
 
     std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
 
+    UInt64 getMaxCapability() override;
+
     std::pair<UInt64, UInt64> getSizes() const override;
 
     UInt64 getRightMargin() override;

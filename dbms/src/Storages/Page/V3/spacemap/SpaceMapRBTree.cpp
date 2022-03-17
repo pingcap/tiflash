@@ -650,6 +650,27 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     return std::make_pair(offset, max_cap);
 }
 
+UInt64 RBTreeSpaceMap::getMaxCapability()
+{
+    struct rb_node * node = nullptr;
+    struct SmapRbEntry * entry;
+    UInt64 max_cap = 0;
+
+    node = rb_tree_first(&rb_tree->root);
+    if (node == nullptr)
+    {
+        return max_cap;
+    }
+
+    for (; node != nullptr; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        max_cap = std::max(max_cap, entry->count);
+    }
+
+    return max_cap;
+}
+
 std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
 {
     struct rb_node * node = rb_tree_last(&rb_tree->root);
