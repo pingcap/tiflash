@@ -55,7 +55,6 @@ public:
 public:
     explicit PageEntriesVersionSetWithDelta(String name_, const MVCC::VersionSetConfig & config_, Poco::Logger * log_)
         : current(VersionType::createBase())
-        , snapshots()
         , config(config_)
         , name(std::move(name_))
         , log(log_)
@@ -78,7 +77,7 @@ public:
 
     size_t sizeUnlocked() const;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    SnapshotsStatistics getSnapshotsStat() const;
 
     std::string toDebugString() const
     {
@@ -121,16 +120,18 @@ public:
         PageEntriesView view;
 
         using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
-        const unsigned t_id;
+        const unsigned create_thread;
+        const String tracing_id;
 
     private:
         const TimePoint create_time;
 
     public:
-        Snapshot(PageEntriesVersionSetWithDelta * vset_, VersionPtr tail_)
+        Snapshot(PageEntriesVersionSetWithDelta * vset_, VersionPtr tail_, const String & tracing_id_)
             : vset(vset_)
             , view(std::move(tail_))
-            , t_id(Poco::ThreadNumber::get())
+            , create_thread(Poco::ThreadNumber::get())
+            , tracing_id(tracing_id_)
             , create_time(std::chrono::steady_clock::now())
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
@@ -163,7 +164,7 @@ public:
     using SnapshotPtr = std::shared_ptr<Snapshot>;
     using SnapshotWeakPtr = std::weak_ptr<Snapshot>;
 
-    SnapshotPtr getSnapshot();
+    SnapshotPtr getSnapshot(const String & tracing_id = "");
 
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
 
@@ -213,7 +214,7 @@ private:
     // Return < num of snapshots,
     //          living time(seconds) of the oldest snapshot,
     //          created thread id of the oldest snapshot      >
-    std::tuple<size_t, double, unsigned> removeExpiredSnapshots() const;
+    SnapshotsStatistics removeExpiredSnapshots() const;
 
     static void collectLiveFilesFromVersionList( //
         const PageEntriesView & view,

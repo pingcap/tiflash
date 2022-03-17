@@ -38,7 +38,8 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->is_update = for_update;
     snap->_delta = this->shared_from_this();
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
+    // TODO: Add tracing_id from mpp task or background tasks
+    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), /*tracing_id*/"", true);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
     snap->shared_delta_index = delta_index;
 
