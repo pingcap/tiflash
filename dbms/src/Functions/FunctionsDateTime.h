@@ -34,6 +34,10 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
+namespace
+{
+static constexpr Int64 E6 = 1000000;
+}
 
 /** Functions for working with date and time.
   *
@@ -836,50 +840,6 @@ public:
         }
     }
 };
-
-static inline void addMonths(MyDateTime & t, Int64 months)
-{
-    // month in my_time start from 1
-    Int64 current_month = t.month - 1;
-    current_month += months;
-    Int64 current_year = 0;
-    Int64 year = (Int64)t.year;
-    if (current_month >= 0)
-    {
-        current_year = current_month / 12;
-        current_month = current_month % 12;
-        year += current_year;
-    }
-    else
-    {
-        current_year = (-current_month) / 12;
-        if ((-current_month) % 12 != 0)
-            current_year++;
-        current_month += current_year * 12;
-        year -= current_year;
-    }
-    if (year < 0 || year > 9999)
-    {
-        throw Exception("datetime overflow");
-    }
-    else if (year == 0)
-    {
-        t.year = 0;
-        t.month = 0;
-        t.day = 0;
-        return;
-    }
-    t.year = year;
-    static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    int max_day = 0;
-    if (t.year % 400 == 0 || (t.year % 100 != 0 && t.year % 4 == 0))
-        max_day = day_num_in_month_leap_year[current_month];
-    else
-        max_day = day_num_in_month[current_month];
-    t.month = current_month + 1;
-    t.day = t.day > max_day ? max_day : t.day;
-}
 
 struct AddSecondsImpl
 {
