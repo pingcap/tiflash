@@ -27,7 +27,7 @@ add_custom_command(OUTPUT ${_SYMBOLIZATION_LIBRARY}
                 "${_SYMBOLIZATION_SOURCE_DIR}/Cargo.toml"
                 "${_SYMBOLIZATION_SOURCE_DIR}/rust-toolchain")
 
-add_custom_target(_symbolization ALL DEPENDS ${_SYMBOLIZATION_LIBRARY})
+add_custom_target(_symbolization ALL DEPENDS ${_SYMBOLIZATION_LIBRARY} JOB_POOL rust_job_pool)
 add_library(symbolization STATIC IMPORTED GLOBAL)
 set_target_properties(symbolization PROPERTIES IMPORTED_LOCATION ${_SYMBOLIZATION_LIBRARY})
 add_dependencies(symbolization _symbolization)
