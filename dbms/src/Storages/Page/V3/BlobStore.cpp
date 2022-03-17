@@ -866,10 +866,10 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     {
         if (!stat->isReadOnly()
             && stat->sm_max_caps >= buf_size
-            && stat->sm_total_size + buf_size < file_limit_size
+            // && stat->sm_total_size + buf_size < file_limit_size
             && stat->sm_valid_rate < smallest_valid_rate)
         {
-            smallest_valid_rate = stat->sm_valid_size;
+            smallest_valid_rate = stat->sm_valid_rate;
             stat_ptr = stat;
         }
     }
