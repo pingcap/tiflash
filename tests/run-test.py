@@ -256,7 +256,6 @@ class Matcher:
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
             self.outputs, err = self.executor_curl_tidb.exe(self.query)
-            self.outputs = map(lambda x: x.strip(), self.outputs)
             if err != None:
                 return False
             self.matches = []
