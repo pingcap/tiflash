@@ -34,11 +34,12 @@ CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 verbose = False
 
 def exec_func(cmd):
-    p = os.popen(cmd.strip())
+    cmd = cmd.strip()
+    p = os.popen(cmd)
     output = p.readlines()
     err = p.close()
     if err != None:
-        print('Execution of "{}" exits with error, output is {}'.format(output))
+        print('Execution of "{}" exits with error, output is {}'.format(cmd, output))
         sys.exit(1)
     return output
 
