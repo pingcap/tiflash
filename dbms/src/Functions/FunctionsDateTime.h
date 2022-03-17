@@ -48,77 +48,10 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-static const Int64 SECOND_IN_ONE_DAY = 86400;
-static const Int64 E6 = 1000000;
-
-// day number per 400 years, from the year that year % 400 = 1
-static const int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
-// day number per 100 years in every 400 years, from the year that year % 100 = 1
-// note the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
-static const int DAY_NUM_PER_100_YEARS = 365 * 100 + 24;
-// day number per 4 years in every 100 years, from the year that year % 4 = 1
-// note the day number of the last 4 years should be DAY_NUM_PER_4_YEARS - 1
-static const int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
-// day number per years in every 4 years
-// note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
-static const int DAY_NUM_PER_YEARS = 365;
-
-inline void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulated_days_per_month)
+namespace
 {
-    month = day_num / 31;
-    if (accumulated_days_per_month[month] < day_num)
-        month++;
-    day = day_num - (month == 0 ? 0 : accumulated_days_per_month[month - 1] + 1);
-}
-
-inline void fromDayNum(MyDateTime & t, int day_num)
-{
-    // day_num is the days from 0000-01-01
-    if (day_num < 0)
-        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
-    int year = 0, month = 0, day = 0;
-    if (likely(day_num >= 366))
-    {
-        // year 0000 is leap year
-        day_num -= 366;
-
-        int num_of_400_years = day_num / DAY_NUM_PER_400_YEARS;
-        day_num = day_num % DAY_NUM_PER_400_YEARS;
-
-        int num_of_100_years = day_num / DAY_NUM_PER_100_YEARS;
-        // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
-        // so can not use day_num % DAY_NUM_PER_100_YEARS
-        day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
-
-        int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
-        // can not use day_num % DAY_NUM_PER_4_YEARS
-        day_num = day_num - (num_of_4_years * DAY_NUM_PER_4_YEARS);
-
-        int num_of_years = day_num / DAY_NUM_PER_YEARS;
-        // can not use day_num % DAY_NUM_PER_YEARS
-        day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
-
-        year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
-    }
-    static const int ACCUMULATED_DAYS_PER_MONTH[] = {30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364};
-    static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
-    bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
-    fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
-    if (year < 0 || year > 9999)
-    {
-        throw Exception("datetime overflow");
-    }
-    else if (year == 0)
-    {
-        t.year = 0;
-        t.month = 0;
-        t.day = 0;
-        return;
-    }
-    t.year = year;
-    t.month = month + 1;
-    t.day = day + 1;
-}
+static constexpr Int64 E6 = 1000000;
+} // namespace
 
 /** Functions for working with date and time.
   *
@@ -944,57 +877,6 @@ public:
     }
 };
 
-static inline void addDays(MyDateTime & t, Int64 days)
-{
-    Int32 current_days = calcDayNum(t.year, t.month, t.day);
-    current_days += days;
-    fromDayNum(t, current_days);
-}
-
-static inline void addMonths(MyDateTime & t, Int64 months)
-{
-    // month in my_time start from 1
-    Int64 current_month = t.month - 1;
-    current_month += months;
-    Int64 current_year = 0;
-    Int64 year = (Int64)t.year;
-    if (current_month >= 0)
-    {
-        current_year = current_month / 12;
-        current_month = current_month % 12;
-        year += current_year;
-    }
-    else
-    {
-        current_year = (-current_month) / 12;
-        if ((-current_month) % 12 != 0)
-            current_year++;
-        current_month += current_year * 12;
-        year -= current_year;
-    }
-    if (year < 0 || year > 9999)
-    {
-        throw Exception("datetime overflow");
-    }
-    else if (year == 0)
-    {
-        t.year = 0;
-        t.month = 0;
-        t.day = 0;
-        return;
-    }
-    t.year = year;
-    static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    int max_day = 0;
-    if (t.year % 400 == 0 || (t.year % 100 != 0 && t.year % 4 == 0))
-        max_day = day_num_in_month_leap_year[current_month];
-    else
-        max_day = day_num_in_month[current_month];
-    t.month = current_month + 1;
-    t.day = t.day > max_day ? max_day : t.day;
-}
-
 struct AddSecondsImpl
 {
     static constexpr auto name = "addSeconds";
@@ -1011,35 +893,7 @@ struct AddSecondsImpl
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
     {
-        // todo support zero date
-        if (t == 0)
-        {
-            return t;
-        }
-        MyDateTime my_time(t);
-        Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
-        current_second += delta;
-        if (current_second >= 0)
-        {
-            Int64 days = current_second / SECOND_IN_ONE_DAY;
-            current_second = current_second % SECOND_IN_ONE_DAY;
-            if (days != 0)
-                addDays(my_time, days);
-        }
-        else
-        {
-            Int64 days = (-current_second) / SECOND_IN_ONE_DAY;
-            if ((-current_second) % SECOND_IN_ONE_DAY != 0)
-            {
-                days++;
-            }
-            current_second += days * SECOND_IN_ONE_DAY;
-            addDays(my_time, -days);
-        }
-        my_time.hour = current_second / 3600;
-        my_time.minute = (current_second % 3600) / 60;
-        my_time.second = current_second % 60;
-        return my_time.toPackedUInt();
+        return addSeconds(t, delta);
     }
 
     // TODO: need do these in vector mode in the future
@@ -1783,7 +1637,7 @@ private:
         Int64 days_y = calcDayNum(y.year, y.month, y.day);
         Int64 days = days_y - days_x;
 
-        Int64 tmp = (days * SECOND_IN_ONE_DAY + y.hour * 3600LL + y.minute * 60LL + y.second - (x.hour * 3600LL + x.minute * 60LL + x.second)) * E6 + y.micro_second - x.micro_second;
+        Int64 tmp = (days * MyTimeBase::SECOND_IN_ONE_DAY + y.hour * 3600LL + y.minute * 60LL + y.second - (x.hour * 3600LL + x.minute * 60LL + x.second)) * E6 + y.micro_second - x.micro_second;
         if (tmp < 0)
         {
             tmp = -tmp;
@@ -1893,7 +1747,7 @@ private:
     {
         static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
-            return seconds / SECOND_IN_ONE_DAY / 7 * neg_value;
+            return seconds / MyTimeBase::SECOND_IN_ONE_DAY / 7 * neg_value;
         }
     };
 
@@ -1901,7 +1755,7 @@ private:
     {
         static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
-            return seconds / SECOND_IN_ONE_DAY * neg_value;
+            return seconds / MyTimeBase::SECOND_IN_ONE_DAY * neg_value;
         }
     };
 
