@@ -46,12 +46,6 @@ public:
         return *this;
     }
 
-    PageDirectoryFactory & setStopSequence(UInt64 seq)
-    {
-        stopped_version.sequence = seq;
-        return *this;
-    }
-
     PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
     // just for test
@@ -62,9 +56,6 @@ private:
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
 
     BlobStore::BlobStats * blob_stats = nullptr;
-
-    PageVersionType stopped_version;
-    bool stopped = false;
 };
 
 } // namespace PS::V3

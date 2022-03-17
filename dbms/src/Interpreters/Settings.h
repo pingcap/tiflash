@@ -294,7 +294,6 @@ struct Settings
                                                         "`dt_stroage_num_max_expect_legacy_files`")                                                                                                                                     \
     M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes.")                                                                                                                           \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_v3, false, "REMOVE ME later!!!")     \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.")                                                                                                                             \
     M(SettingUInt64, dt_storage_pool_log_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                    \
     M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                            \

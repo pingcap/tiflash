@@ -81,14 +81,6 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
             iter->second = std::make_shared<VersionedPageEntries>();
         }
 
-        LOG_FMT_DEBUG(&Poco::Logger::get("fff"), "{}", PageEntriesEdit::toDebugString(r));
-        if (stopped_version.sequence > 0 && r.version.epoch == 0 && r.version.sequence > stopped_version.sequence)
-        {
-            LOG_FMT_DEBUG(&Poco::Logger::get("fff"), " restore stopped");
-            stopped = true;
-            break;
-        }
-
         const auto & version_list = iter->second;
         const auto & restored_version = r.version;
         try
@@ -144,7 +136,7 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
 
 void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
 {
-    while (reader->remained() && !stopped)
+    while (reader->remained())
     {
         auto [ok, edit] = reader->next();
         if (!ok)

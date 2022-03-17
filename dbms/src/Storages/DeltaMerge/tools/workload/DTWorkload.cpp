@@ -71,7 +71,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
         true,
         table_info->db_name,
         table_info->table_name,
-        table_info->table_id, 
+        table_info->table_id,
         *table_info->columns,
         table_info->handle,
         table_info->is_common_handle,
@@ -269,25 +269,25 @@ void DTWorkload::scanAll(uint64_t i)
             read(columns, stream_count, count_row);
             double read_sec = sw.elapsedSeconds();
 
-        stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
-        stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
+            stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-        LOG_FMT_INFO(
-            log,
-            "scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}",
-            i,
-            columns.size(),
-            stream_count,
-            read_count.load(std::memory_order_relaxed),
-            read_sec,
-            handle_table->count());
+            LOG_FMT_INFO(
+                log,
+                "scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}",
+                i,
+                columns.size(),
+                stream_count,
+                read_count.load(std::memory_order_relaxed),
+                read_sec,
+                handle_table->count());
+        }
     }
-}
-catch (...)
-{
-    tryLogCurrentException("exception thrown in scanAll");
-    throw;
-}
+    catch (...)
+    {
+        tryLogCurrentException("exception thrown in scanAll");
+        throw;
+    }
 }
 
 void DTWorkload::run(uint64_t r)

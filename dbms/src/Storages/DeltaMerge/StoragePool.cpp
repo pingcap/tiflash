@@ -158,22 +158,19 @@ StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPoo
     log_storage(PageStorage::create(name + ".log",
                                     path_pool.getPSDiskDelegatorMulti("log"),
                                     extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider(),
-                                    settings.enable_v3))
+                                    global_ctx.getFileProvider()))
     ,
     // The iops in data_storage is low, only use the first disk for storing data
     data_storage(PageStorage::create(name + ".data",
                                      path_pool.getPSDiskDelegatorSingle("data"),
                                      extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider(),
-                                     settings.enable_v3))
+                                     global_ctx.getFileProvider()))
     ,
     // The iops in meta_storage is relatively high, use multi-disks if possible
     meta_storage(PageStorage::create(name + ".meta",
                                      path_pool.getPSDiskDelegatorMulti("meta"),
                                      extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider(),
-                                     settings.enable_v3))
+                                     global_ctx.getFileProvider()))
     , log_storage_reader(ns_id, log_storage, nullptr)
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
