@@ -77,8 +77,11 @@ class CurlTiDBExecutor:
         request.get_method = lambda: method
         if request.get_method() == 'POST' or request.get_method() == 'PUT':
             request.data = context[2]
-        response = urllib2.urlopen(request).read().strip()
-        return [response] if request.get_method() == 'GET' and response else None, None
+        try:
+            response = urllib2.urlopen(request).read().strip()
+            return [response] if request.get_method() == 'GET' and response else None, None
+        except urllib2.HTTPError as e:
+            return ['Error: {}. Uri: {}'.format(e, uri)], e
 
 
 def parse_line(line):
