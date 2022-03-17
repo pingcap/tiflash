@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -263,10 +277,45 @@ int MockTiDB::newTables(
     Timestamp tso,
     const String & engine_type)
 {
+    std::lock_guard lock(tables_mutex);
+    if (databases.find(database_name) == databases.end())
+    {
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionType::CreateTables;
     for (const auto & [table_name, columns, handle_pk_name] : tables)
     {
-        newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
+        String qualified_name = database_name + "." + table_name;
+        if (tables_by_name.find(qualified_name) != tables_by_name.end())
+        {
+            throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
+        }
+
+        auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
+        table_info.id = table_id_allocator++;
+        table_info.update_timestamp = tso;
+
+        auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+        tables_by_id.emplace(table->table_info.id, table);
+        tables_by_name.emplace(qualified_name, table);
+
+        AffectedOption opt;
+        opt.schema_id = table->database_id;
+        opt.table_id = table->id();
+        opt.old_schema_id = table->database_id;
+        opt.old_table_id = table->id();
+        diff.affected_opts.push_back(std::move(opt));
     }
+
+    if (diff.affected_opts.empty())
+        throw Exception("MockTiDB CreateTables should have at lease 1 table", ErrorCodes::LOGICAL_ERROR);
+
+    diff.schema_id = diff.affected_opts[0].schema_id;
+    diff.version = version;
+    version_diff[version] = diff;
     return 0;
 }
 
@@ -499,6 +548,45 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     diff.schema_id = table->database_id;
     diff.old_schema_id = table->database_id;
     diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map)
+{
+    std::lock_guard lock(tables_mutex);
+    version++;
+    SchemaDiff diff;
+    for (const auto & [database_name, table_name, new_table_name] : table_name_map)
+    {
+        TablePtr table = getTableByNameInternal(database_name, table_name);
+        String qualified_name = database_name + "." + table_name;
+        String new_qualified_name = database_name + "." + new_table_name;
+
+        TableInfo new_table_info = table->table_info;
+        new_table_info.name = new_table_name;
+        auto new_table = std::make_shared<Table>(database_name, table->database_id, new_table_name, std::move(new_table_info));
+
+        tables_by_id[new_table->table_info.id] = new_table;
+        tables_by_name.erase(qualified_name);
+        tables_by_name.emplace(new_qualified_name, new_table);
+
+        AffectedOption opt;
+        opt.schema_id = table->database_id;
+        opt.table_id = new_table->id();
+        opt.old_schema_id = table->database_id;
+        opt.old_table_id = table->id();
+        diff.affected_opts.push_back(std::move(opt));
+    }
+
+    if (diff.affected_opts.empty())
+        throw Exception("renameTables should have at least 1 affected_opts", ErrorCodes::LOGICAL_ERROR);
+
+    diff.type = SchemaActionType::RenameTables;
+    diff.schema_id = diff.affected_opts[0].schema_id;
+    diff.old_schema_id = diff.affected_opts[0].schema_id;
+    diff.table_id = diff.affected_opts[0].table_id;
+    diff.old_table_id = diff.affected_opts[0].old_table_id;
     diff.version = version;
     version_diff[version] = diff;
 }
