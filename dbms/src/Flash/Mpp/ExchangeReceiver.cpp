@@ -63,9 +63,10 @@ public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
+    using Self = AsyncRequestHandler<RPCContext>;
 
     AsyncRequestHandler(
-        MPMCQueue<size_t> * queue,
+        MPMCQueue<Self *> * queue,
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
@@ -178,9 +179,9 @@ public:
         return stage == AsyncRequestStage::WAIT_RETRY;
     }
 
-    bool retrySucceed()
+    bool retrySucceed(TimePoint now)
     {
-        if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
+        if (now >= expected_retry_ts)
         {
             ++retry_times;
             start();
@@ -196,7 +197,7 @@ public:
 private:
     void notifyReactor()
     {
-        notify_queue->push(request->source_index);
+        notify_queue->push(this);
     }
 
     MPPDataPacketPtr getErrorPacket() const
@@ -232,7 +233,7 @@ private:
     {
         if (retriable())
         {
-            start_waiting_retry_ts = Clock::now();
+            expected_retry_ts = Clock::now() + std::chrono::seconds(1);
             stage = AsyncRequestStage::WAIT_RETRY;
             reader.reset();
         }
@@ -265,7 +266,7 @@ private:
 
     std::shared_ptr<RPCContext> rpc_context;
     const Request * request; // won't be null
-    MPMCQueue<size_t> * notify_queue; // won't be null
+    MPMCQueue<Self *> * notify_queue; // won't be null
     MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel; // won't be null
 
     String req_info;
@@ -273,7 +274,7 @@ private:
     bool has_data = false;
     String err_msg;
     int retry_times = 0;
-    TimePoint start_waiting_retry_ts{Clock::duration::zero()};
+    TimePoint expected_retry_ts{Clock::duration::zero()};
     AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
 
     std::shared_ptr<AsyncReader> reader;
@@ -348,11 +349,12 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
+    using AsyncHandler = AsyncRequestHandler<RPCContext>;
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
-    MPMCQueue<size_t> ready_requests(alive_async_connections * 2);
-    std::vector<size_t> waiting_for_retry_requests;
+    MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
+    std::vector<AsyncHandler *> waiting_for_retry_requests;
 
     std::vector<AsyncRequestHandler<RPCContext>> handlers;
     handlers.reserve(alive_async_connections);
@@ -361,35 +363,40 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
 
     while (alive_async_connections > 0)
     {
-        // to avoid waiting_for_retry_requests starvation.
-        static constexpr Int32 check_waiting_requests_freq = 100;
+        // to avoid waiting_for_retry_requests starvation, so the max continuously popping
+        // won't exceed 100ms (check_waiting_requests_freq * timeout) too much.
+        static constexpr Int32 check_waiting_requests_freq = 10;
         static constexpr auto timeout = std::chrono::milliseconds(10);
-        size_t source_index = 0;
 
         for (Int32 i = 0; i < check_waiting_requests_freq; ++i)
         {
-            if (unlikely(!ready_requests.tryPop(source_index, timeout)))
+            AsyncHandler * handler = nullptr;
+            if (unlikely(!ready_requests.tryPop(handler, timeout)))
                 break;
 
-            auto & handler = handlers[source_index];
-            handler.handle();
-            if (handler.finished())
+            handler->handle();
+            if (handler->finished())
             {
                 --alive_async_connections;
-                connectionDone(handler.meetError(), handler.getErrMsg(), handler.getLog());
+                connectionDone(handler->meetError(), handler->getErrMsg(), handler->getLog());
             }
-            else if (handler.waitingForRetry())
+            else if (handler->waitingForRetry())
             {
-                waiting_for_retry_requests.push_back(source_index);
+                waiting_for_retry_requests.push_back(handler);
+            }
+            else
+            {
+                // do nothing
             }
         }
         if (unlikely(!waiting_for_retry_requests.empty()))
         {
-            std::vector<size_t> tmp;
-            for (auto i : waiting_for_retry_requests)
+            auto now = Clock::now();
+            std::vector<AsyncHandler *> tmp;
+            for (auto * handler : waiting_for_retry_requests)
             {
-                if (!handlers[i].retrySucceed())
-                    tmp.push_back(i);
+                if (!handler->retrySucceed(now))
+                    tmp.push_back(handler);
             }
             waiting_for_retry_requests.swap(tmp);
         }
