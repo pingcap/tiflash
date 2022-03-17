@@ -130,13 +130,13 @@ void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTa
         return;
     }
 
-    estimated_thread_usage -= needed_threads;
-    if (estimated_thread_usage < 0)
+    if (static_cast<Int64>(estimated_thread_usage) < needed_threads)
     {
-        auto msg = fmt::format("estimated_thread_usage should not be smaller than 0, actually is {}.", estimated_thread_usage);
+        auto msg = fmt::format("estimated_thread_usage should not be smaller than 0, actually is {}.", static_cast<Int64>(estimated_thread_usage) - needed_threads);
         LOG_FMT_ERROR(log, "{}", msg);
         throw Exception(msg);
     }
+    estimated_thread_usage -= needed_threads;
     GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
     GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
