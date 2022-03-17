@@ -105,7 +105,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
-            scheduler->deleteThenSchedule(query_id, *this);
             mpp_query_map.erase(it);
         }
     }
@@ -156,7 +155,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteThenSchedule(task->id.start_ts, *this);
+                scheduler->deleteFinishedQuery(task->id.start_ts);
                 mpp_query_map.erase(it);
             }
             return;
@@ -210,6 +209,12 @@ bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
 {
     std::lock_guard lock(mu);
     return scheduler->tryToSchedule(task, *this);
+}
+
+void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
+{
+    std::lock_guard lock(mu);
+    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
 } // namespace DB
