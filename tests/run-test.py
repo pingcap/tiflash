@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import subprocess
 import sys
 import time
 import urllib2
@@ -33,13 +34,21 @@ CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
 verbose = False
 
+def exec_func(cmd):
+    p = os.popen(cmd.strip())
+    output = p.readlines()
+    err = p.close()
+    if err != None:
+        print('Execution of "{}" exits with error, output is {}'.format(output))
+        sys.exit(1)
+    return output
 
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
     def exe(self, cmd):
-        return os.popen((self.dbc + ' "' + cmd + '" 2>&1').strip()).readlines()
+        return exec_func(self.dbc + ' "' + cmd + '" 2>&1')
 
 
 class ShellFuncExecutor:
@@ -47,7 +56,7 @@ class ShellFuncExecutor:
         self.dbc = dbc
 
     def exe(self, cmd):
-        return os.popen((cmd + ' "' + self.dbc + '" 2>&1').strip()).readlines()
+        return exec_func(cmd + ' "' + self.dbc + '" 2>&1')
 
 
 class CurlTiDBExecutor:
