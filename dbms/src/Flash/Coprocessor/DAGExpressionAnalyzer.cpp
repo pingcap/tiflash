@@ -1,6 +1,5 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
-#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -27,7 +26,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
@@ -410,21 +408,21 @@ bool checkWindowFunctionsInvalid(const tipb::Window & window)
 
 SortDescription DAGExpressionAnalyzer::getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems, ExpressionActionsChain::Step & step)
 {
-    std::vector<NameAndTypePair> byItem_columns;
-    byItem_columns.reserve(byItems.size());
-    for (auto byItem : byItems)
+    std::vector<NameAndTypePair> byitem_columns;
+    byitem_columns.reserve(byItems.size());
+    for (const auto & byitem : byItems)
     {
-        String name = getActions(byItem.expr(), step.actions);
+        String name = getActions(byitem.expr(), step.actions);
         auto type = step.actions->getSampleBlock().getByName(name).type;
-        byItem_columns.emplace_back(name, type);
+        byitem_columns.emplace_back(name, type);
     }
-    return getSortDescription(byItem_columns, byItems);
+    return getSortDescription(byitem_columns, byItems);
 }
 
 
 void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step)
 {
-    for (auto col : getCurrentInputColumns())
+    for (const auto & col : getCurrentInputColumns())
     {
         step.required_output.push_back(col.name);
     }
@@ -485,7 +483,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & windo
 
             String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
-            window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types, 0, window.partition_by_size() == 0);
+            window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, types);
             DataTypePtr result_type = window_function_description.window_function->getReturnType();
             window_description.window_functions_descriptions.push_back(window_function_description);
             window_columns.emplace_back(func_string, result_type);
@@ -923,14 +921,14 @@ NamesAndTypes DAGExpressionAnalyzer::appendWindowSelect(
 
     if (need_update_source_columns)
     {
-        for (auto & col : updated_after_window_columns)
+        for (const auto & col : updated_after_window_columns)
         {
             source_columns.emplace_back(col.name, col.type);
         }
     }
     else
     {
-        for (auto & col : after_window_columns)
+        for (const auto & col : after_window_columns)
         {
             source_columns.emplace_back(col.name, col.type);
         }

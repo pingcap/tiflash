@@ -54,6 +54,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/getMemoryAmount.h>
@@ -966,6 +967,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     registerFunctions();
     registerAggregateFunctions();
+    registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 

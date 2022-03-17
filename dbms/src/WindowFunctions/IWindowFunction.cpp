@@ -84,15 +84,12 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
 {
     factory.registerFunction(
         "rank",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRank>(name, argument_types); },
-        WindowFunctionFactory::CaseInsensitive);
+        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRank>(name, argument_types); });
     factory.registerFunction(
         "dense_rank",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionDenseRank>(name, argument_types); },
-        WindowFunctionFactory::CaseInsensitive);
+        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionDenseRank>(name, argument_types); });
     factory.registerFunction(
         "row_number",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRowNumber>(name, argument_types); },
-        WindowFunctionFactory::CaseInsensitive);
+        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRowNumber>(name, argument_types); });
 }
 } // namespace DB

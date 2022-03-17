@@ -25,6 +25,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 
 #include "StatusFile.h"
@@ -268,6 +269,7 @@ try
 
     registerFunctions();
     registerAggregateFunctions();
+    registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 

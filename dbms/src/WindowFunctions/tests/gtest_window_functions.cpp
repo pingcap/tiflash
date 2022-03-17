@@ -3,6 +3,7 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/MockTableScanBlockInputStream.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <google/protobuf/util/json_util.h>
 
 namespace DB::tests
@@ -15,7 +16,7 @@ protected:
     void SetUp() override
     {
         DB::tests::FunctionTest::SetUp();
-        DB::registerAggregateFunctions();
+        DB::registerWindowFunctions();
     }
 
     template <typename T>

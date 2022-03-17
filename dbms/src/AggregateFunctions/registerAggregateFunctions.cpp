@@ -1,7 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <WindowFunctions/WindowFunctionFactory.h>
 
 
 namespace DB
@@ -31,7 +30,6 @@ void registerAggregateFunctionCombinatorState(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorMerge(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory &);
 
-void registerWindowFunctions(WindowFunctionFactory & factory);
 
 void registerAggregateFunctions()
 {
@@ -55,9 +53,6 @@ void registerAggregateFunctions()
         registerAggregateFunctionTopK(factory);
         registerAggregateFunctionsBitwise(factory);
         registerAggregateFunctionsMaxIntersections(factory);
-
-        auto & window_factory = WindowFunctionFactory::instance();
-        registerWindowFunctions(window_factory);
     }
 
     {

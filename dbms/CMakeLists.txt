@@ -37,7 +37,6 @@ include_directories (src)
 add_subdirectory (src)
 
 set(dbms_headers)
-set(dbms_sources)
 
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
@@ -75,6 +74,7 @@ add_headers_and_sources(dbms src/Storages/Page/V2)
 add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+add_headers_and_sources(dbms src/WindowFunctions)
 if (ENABLE_V3_PAGESTORAGE)
     add_headers_and_sources(dbms src/Storages/Page/V3)
     add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
@@ -109,14 +109,6 @@ list (APPEND dbms_headers
     src/AggregateFunctions/AggregateFunctionState.h
     src/AggregateFunctions/FactoryHelpers.h
     src/AggregateFunctions/parseAggregateFunctionParameters.h)
-
-list (APPEND dbms_sources
-        src/WindowFunctions/WindowFunctionFactory.cpp
-        src/WindowFunctions/IWindowFunction.cpp)
-
-list (APPEND dbms_headers
-        src/WindowFunctions/WindowFunctionFactory.h
-        src/WindowFunctions/IWindowFunction.h)
 
 list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
