@@ -99,6 +99,7 @@ String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
         stat_str += fmt::format("      total size: {}\n", stat->sm_total_size);
         stat_str += fmt::format("      valid size: {}\n", stat->sm_valid_size);
         stat_str += fmt::format("      valid rate: {}\n", stat->sm_valid_rate);
+        stat_str += fmt::format("      max cap: {}\n", stat->sm_max_caps);
 
         stat_str += stat->smap->getStats();
         stat_str += "\n";
@@ -173,19 +174,20 @@ String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt6
 String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
 {
     UInt64 longest_version_chaim = 0;
-    UInt64 lowest_version_chaim = UINT64_MAX;
+    UInt64 shortest_version_chaim = UINT64_MAX;
 
     String dir_summary_info = "  Directory summary info: \n";
 
     for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
     {
+        (void)internal_id;
         longest_version_chaim = std::max(longest_version_chaim, versioned_entries->size());
-        lowest_version_chaim = std::min(lowest_version_chaim, versioned_entries->size());
+        shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
     }
-    dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , lowest version chaim: {} \n\n",
+    dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
                                     mvcc_table_directory.size(),
                                     longest_version_chaim,
-                                    lowest_version_chaim);
+                                    shortest_version_chaim);
 
     String stats_str = "  Blobs summary info: \n";
     for (const auto & stat : blob_store.blob_stats.getStats())
@@ -194,8 +196,7 @@ String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobSto
         stats_str += fmt::format("      total size: {}\n", stat->sm_total_size);
         stats_str += fmt::format("      valid size: {}\n", stat->sm_valid_size);
         stats_str += fmt::format("      valid rate: {}\n", stat->sm_valid_rate);
-
-        // stats_str += stat->smap->getStats();
+        stats_str += fmt::format("      max cap: {}\n", stat->sm_max_caps);
     }
 
 
