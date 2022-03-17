@@ -241,8 +241,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CMD_PREFIX_TIDB):]
-            output, err = self.executor_tidb.exe(self.query)
-            self.outputs = [output.strip()]
+            self.outputs, err = self.executor_tidb.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
             if err != None:
                 return False
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
@@ -256,8 +256,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
-            output, err = self.executor_curl_tidb.exe(self.query)
-            self.outputs = [output.strip()]
+            self.outputs, err = self.executor_curl_tidb.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
             if err != None:
                 return False
             self.matches = []
@@ -269,8 +269,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX):]
-            output, err = self.executor.exe(self.query)
-            self.outputs = [output.strip()]
+            self.outputs, err = self.executor.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
             if err != None:
                 return False
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
@@ -283,8 +283,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX_FUNC):]
-            output, err = self.executor_func.exe(self.query)
-            self.outputs = [output.strip()]
+            self.outputs, err = self.executor_func.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
             if err != None:
                 return False
             self.outputs = []
