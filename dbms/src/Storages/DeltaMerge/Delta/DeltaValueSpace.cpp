@@ -236,7 +236,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_FMT_DEBUG(log, "{} Nothing to compact", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool.log()->getSnapshot(/*tracing_id*/ "");
+        log_storage_snap = context.storage_pool.log()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     // do compaction task
