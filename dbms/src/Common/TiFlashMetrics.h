@@ -179,12 +179,26 @@ namespace DB
         F(type_total_threads_of_thdpool, {"type", "thread_pool_total"}),                                                                  \
         F(type_max_threads_of_raw, {"type", "total_max"}),                                                                                \
         F(type_total_threads_of_raw, {"type", "total"}),                                                                                  \
+        F(type_threads_of_client_cq_pool, {"type", "rpc_client_cq_pool"}),                                                                \
         F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
         F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
         F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
         F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                             \
         F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                             \
-        F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))
+        F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))                                                               \
+    M(tiflash_task_scheduler, "Min-tso task scheduler", Gauge,                                                                            \
+        F(type_min_tso, {"type", "min_tso"}),                                                                                             \
+        F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                                 \
+        F(type_active_queries_count, {"type", "active_queries_count"}),                                                                   \
+        F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                     \
+        F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                       \
+        F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                               \
+        F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                         \
+        F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
+        F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                         \
+    M(tiflash_task_scheduler_waiting_duration_seconds, "Bucketed histogram of task waiting for scheduling duration", Histogram,           \
+        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.0005, 2, 20}))
+
 // clang-format on
 
 struct ExpBuckets

@@ -58,7 +58,7 @@ private:
     UInt64 min_tso;
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
-    UInt64 used_threads;
+    UInt64 estimated_thread_usage;
     /// to prevent from too many queries just issue a part of tasks to occupy threads, in proportion to the hardware cores.
     size_t active_set_soft_limit;
     Poco::Logger * log;
