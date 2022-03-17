@@ -89,7 +89,7 @@ public:
     void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range);
 
     /// Create a constant snapshot for read.
-    ColumnFileSetSnapshotPtr createSnapshot();
+    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
 
     /// Build a flush task which will try to flush all column files in MemTableSet now
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);

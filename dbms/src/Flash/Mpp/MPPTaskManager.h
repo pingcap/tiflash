@@ -36,7 +36,7 @@ struct MPPQueryTaskSet
     MPPTaskMap task_map;
     /// only used in scheduler
     UInt32 scheduled_task = 0;
-    UInt32 used_threads = 0;
+    UInt32 estimated_thread_usage = 0;
     std::queue<MPPTaskPtr> waiting_tasks;
 };
 
