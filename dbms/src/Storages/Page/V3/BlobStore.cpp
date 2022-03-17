@@ -851,7 +851,7 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_gu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &)
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 /*file_limit_size*/, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
     double smallest_valid_rate = 2;
@@ -988,7 +988,7 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
 
 void BlobStore::BlobStats::BlobStat::recalculateCapability()
 {
-    sm_max_caps = smap->getMaxCapability();
+    sm_max_caps = smap->updateAccurateMaxCapacity();
 }
 
 } // namespace PS::V3

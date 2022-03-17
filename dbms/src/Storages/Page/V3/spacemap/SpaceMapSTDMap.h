@@ -243,14 +243,22 @@ protected:
         return std::make_pair(offset, hint_biggest_cap);
     }
 
-    UInt64 getMaxCapability() override
+    UInt64 updateAccurateMaxCapacity() override
     {
+        UInt64 max_offset = 0;
         UInt64 max_cap = 0;
+
         for (const auto & [start, size] : free_map)
         {
-            (void)start;
-            max_cap = std::max(max_cap, size);
+            if (size > max_cap)
+            {
+                max_cap = size;
+                max_offset = start;
+            }
         }
+        hint_biggest_offset = max_offset;
+        hint_biggest_cap = max_cap;
+
         return max_cap;
     }
 

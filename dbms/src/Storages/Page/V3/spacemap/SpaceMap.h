@@ -85,7 +85,7 @@ public:
     /**
      * Get the max of capability of space map.
      */
-    virtual UInt64 getMaxCapability() = 0;
+    virtual UInt64 updateAccurateMaxCapacity() = 0;
 
     /**
      * Return the size of file and the size contains valid data.
