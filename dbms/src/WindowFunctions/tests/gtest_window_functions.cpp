@@ -205,6 +205,8 @@ protected:
         }
 
         Block actual_block = mergeBlocks(actual_blocks);
+
+        // Check that input columns is properly split to many blocks
         ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.getSettingsRef().max_block_size + 1);
         checkBlock(except_block, actual_block);
     }

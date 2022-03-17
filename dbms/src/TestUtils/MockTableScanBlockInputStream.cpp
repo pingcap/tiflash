@@ -12,8 +12,8 @@ MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndN
     {
         if (elem.column)
         {
+            assert(rows == 0 || rows == elem.column->size());
             rows = elem.column->size();
-            break;
         }
     }
 }

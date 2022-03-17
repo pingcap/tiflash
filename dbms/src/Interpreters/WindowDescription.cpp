@@ -11,21 +11,6 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 }
 
-std::string WindowFrame::getFrameTypeName(FrameType type) const
-{
-    switch (type)
-    {
-    case FrameType::Rows:
-        return "rows";
-    case FrameType::Groups:
-        return "groups";
-    case FrameType::Ranges:
-        return "range";
-    default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid frame type", type);
-    }
-}
-
 WindowFrame::BoundaryType getBoundaryTypeFromTipb(tipb::WindowFrameBound bound)
 {
     if (bound.type() == tipb::WindowBoundType::CurrentRow)

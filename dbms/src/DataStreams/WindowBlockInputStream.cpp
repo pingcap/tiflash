@@ -1,14 +1,9 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnConst.h>
 #include <Common/Arena.h>
-#include <Common/FieldVisitors.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/convertFieldToType.h>
-#include <common/arithmeticOverflow.h>
 
 namespace DB
 {
@@ -23,11 +18,10 @@ WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input
 {
     children.push_back(input);
     output_header = input->getHeader();
-    for (auto & add_column : window_description_.add_columns)
+    for (const auto & add_column : window_description_.add_columns)
     {
         output_header.insert({add_column.type, add_column.name});
     }
-    auto input_columns = output_header.getColumns();
 
     if (window_description.window_functions_descriptions.size() * window_description.aggregate_descriptions.size() != 0)
     {
@@ -63,12 +57,11 @@ void WindowBlockInputStream::initialWorkspaces()
     // Initialize window function workspaces.
     workspaces.reserve(window_description.window_functions_descriptions.size() + window_description.aggregate_descriptions.size());
 
-    for (auto window_function_description : window_description.window_functions_descriptions)
+    for (const auto & window_function_description : window_description.window_functions_descriptions)
     {
         WindowFunctionWorkspace workspace;
         workspace.window_function = window_function_description.window_function;
         workspace.column_name = window_function_description.column_name;
-        workspace.argument_column_indices = window_function_description.arguments;
         workspace.argument_columns.assign(window_function_description.argument_names.size(), nullptr);
         workspace.is_agg_workspace = false;
         workspaces.push_back(std::move(workspace));
@@ -81,11 +74,9 @@ void WindowBlockInputStream::initialWorkspaces()
     }
 }
 
-bool WindowBlockInputStream::outputBlockEmpty()
+bool WindowBlockInputStream::outputBlockEmpty() const
 {
-    if (output_index >= output_blocks.size())
-        return true;
-    return false;
+    return output_index >= output_blocks.size();
 }
 
 Block WindowBlockInputStream::getOutputBlock()
@@ -293,6 +284,7 @@ std::tuple<RowNumber, int64_t> WindowBlockInputStream::moveRowNumberNoCheck(cons
             }
 
             --x.block;
+            assert(x.block >= 0);
             offset += 1;
             x.row = blockRowsNumber(x) - 1;
         }
@@ -505,7 +497,6 @@ void WindowBlockInputStream::advanceFrameEnd()
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
                         window_description.frame.end_type);
-        break;
     }
 
     // We might not have advanced the frame end if we found out we reached the
@@ -716,7 +707,6 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
         frame_start = partition_start;
         frame_end = partition_start;
         prev_frame_start = partition_start;
-        prev_frame_end = partition_start;
         assert(current_row == partition_start);
         current_row_number = 1;
         peer_group_start = partition_start;

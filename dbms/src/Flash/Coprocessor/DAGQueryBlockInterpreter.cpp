@@ -748,17 +748,6 @@ void DAGQueryBlockInterpreter::executeWindow(
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, taskLogger()); });
     Block header = pipeline.firstStream()->getHeader();
 
-    for (auto & window_descr : window_description.window_functions_descriptions)
-    {
-        if (window_descr.arguments.empty())
-        {
-            for (const auto & name : window_descr.argument_names)
-            {
-                window_descr.arguments.push_back(header.getPositionByName(name));
-            }
-        }
-    }
-
     if (pipeline.streams.size() == 1)
     {
         BlockInputStreams inputs;

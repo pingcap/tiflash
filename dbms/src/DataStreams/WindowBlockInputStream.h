@@ -19,8 +19,6 @@ struct WindowFunctionWorkspace
     // instead.
     WindowFunctionPtr window_function = nullptr;
 
-    std::vector<size_t> argument_column_indices;
-
     // Argument columns. Be careful, this is a per-block cache.
     std::vector<const IColumn *> argument_columns;
     uint64_t cached_block_number = std::numeric_limits<uint64_t>::max();
@@ -85,7 +83,7 @@ public:
     void writeOutCurrentRow();
 
     Block getOutputBlock();
-    bool outputBlockEmpty();
+    bool outputBlockEmpty() const;
 
     void initialWorkspaces();
     void initialPartitionByIndices();
@@ -176,11 +174,6 @@ public:
         return RowNumber{first_block_number + window_blocks.size(), 0};
     }
 
-    RowNumber blocksBegin() const
-    {
-        return RowNumber{first_block_number, 0};
-    }
-
     void appendBlock(Block & current_block);
 
 protected:
@@ -211,8 +204,6 @@ public:
     std::vector<WindowBlock> window_blocks;
     std::vector<Block> output_blocks;
     uint64_t first_block_number = 0;
-    // The next block we are going to pass to the consumer.
-    uint64_t next_output_block_number = 0;
     // The first row for which we still haven't calculated the window functions.
     // Used to determine which resulting blocks we can pass to the consumer.
     RowNumber first_not_ready_row;
@@ -258,7 +249,6 @@ public:
     // aggregate function. We use them to determine how to update the aggregation
     // state after we find the new frame.
     RowNumber prev_frame_start;
-    RowNumber prev_frame_end;
 };
 
 } // namespace DB

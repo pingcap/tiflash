@@ -19,7 +19,6 @@ struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
     Array parameters;
-    ColumnNumbers arguments;
     Names argument_names;
     std::string column_name;
 };
@@ -63,8 +62,6 @@ struct WindowFrame
     Field end_offset = Field(UInt64(0));
     bool end_preceding = false;
 
-    std::string getFrameTypeName(FrameType type) const;
-
     bool operator==(const WindowFrame & other) const
     {
         // We don't compare is_default because it's not a real property of the
@@ -82,8 +79,6 @@ class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 struct WindowDescription
 {
-    std::string window_name;
-
     ExpressionActionsPtr before_window;
 
     ExpressionActionsPtr after_window;
@@ -106,12 +101,7 @@ struct WindowDescription
 
     AggregateDescriptions aggregate_descriptions;
 
-    std::string dump() const;
-
-
     void setWindowFrame(tipb::WindowFrame frame);
 };
-
-using WindowDescriptions = std::vector<WindowDescription>;
 
 } // namespace DB
