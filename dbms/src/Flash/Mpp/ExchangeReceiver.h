@@ -106,7 +106,7 @@ public:
 
     size_t getSourceNum() const { return source_num; }
 
-    int computeNewThreadCount() const { return getSourceNum(); }
+    int computeNewThreadCount() const { return thread_count; }
 
     void collectNewThreadCount(int & cnt)
     {
@@ -127,6 +127,7 @@ private:
 
     void setUpConnection();
     void readLoop(const Request & req);
+    void reactor(const std::vector<Request> & async_requests);
 
     void setState(ExchangeReceiverState new_state);
     ExchangeReceiverState getState();
@@ -164,6 +165,7 @@ private:
     LogWithPrefixPtr exc_log;
 
     bool collected = false;
+    int thread_count = 0;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

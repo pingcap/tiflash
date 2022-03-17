@@ -78,6 +78,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToMonth>();
     factory.registerFunction<FunctionToDayOfMonth>();
     factory.registerFunction<FunctionToDayOfWeek>();
+    factory.registerFunction<FunctionToDayOfYear>();
     factory.registerFunction<FunctionToHour>();
     factory.registerFunction<FunctionToMinute>();
     factory.registerFunction<FunctionToSecond>();
@@ -133,6 +134,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBTimestampDiff>();
     factory.registerFunction<FunctionExtractMyDateTime>();
     factory.registerFunction<FunctionTiDBDateDiff>();
+    factory.registerFunction<FunctionToTiDBDayOfWeek>();
+    factory.registerFunction<FunctionToTiDBDayOfYear>();
 
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
