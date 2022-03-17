@@ -268,10 +268,9 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX):]
-            self.outputs, err = self.executor.exe(self.query)
+            # for commands ignore errors since they may be part of the test logic.
+            self.outputs, _ = self.executor.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
-            if err != None:
-                return False
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
