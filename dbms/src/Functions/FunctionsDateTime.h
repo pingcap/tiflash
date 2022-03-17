@@ -3344,6 +3344,9 @@ struct TiDBDayOfWeekTransformerImpl
             is_null = true;
             return 0;
         }
+        /// Behavior differences from TiDB:
+        /// for date in ['0000-01-01', '0000-03-01'), dayOfWeek is the same with MySQL, while TiDB is offset by one day
+        /// In TiDB dayOfWeek('0000-01-01') = 7, in MySQL/TiFlash dayOfWeek('0000-01-01') = 1
         return static_cast<ToFieldType>(val.weekDay() + 1);
     }
 };
