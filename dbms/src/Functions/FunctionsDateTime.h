@@ -3314,6 +3314,73 @@ struct TiDBLastDayTransformerImpl
     }
 };
 
+template <typename ToFieldType>
+struct TiDBDayOfWeekTransformerImpl
+{
+    static constexpr auto name = "tidbDayOfWeek";
+
+    static void execute(const Context & context,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
+    {
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
+        {
+            context.getDAGContext()->handleInvalidTime(
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
+            is_null = true;
+            return 0;
+        }
+        return static_cast<ToFieldType>(val.weekDay() + 1);
+    }
+};
+
+template <typename ToFieldType>
+struct TiDBDayOfYearTransformerImpl
+{
+    static constexpr auto name = "tidbDayOfYear";
+
+    static void execute(const Context & context,
+                        const ColumnVector<DataTypeMyTimeBase::FieldType>::Container & vec_from,
+                        typename ColumnVector<ToFieldType>::Container & vec_to,
+                        typename ColumnVector<UInt8>::Container & vec_null_map)
+    {
+        for (size_t i = 0; i < vec_from.size(); ++i)
+        {
+            bool is_null = false;
+            MyTimeBase val(vec_from[i]);
+            vec_to[i] = execute(context, val, is_null);
+            vec_null_map[i] = is_null;
+        }
+    }
+
+    static ToFieldType execute(const Context & context, const MyTimeBase & val, bool & is_null)
+    {
+        // TiDB also considers NO_ZERO_DATE sql_mode. But sql_mode is not handled by TiFlash for now.
+        if (val.month == 0 || val.day == 0)
+        {
+            context.getDAGContext()->handleInvalidTime(
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
+            is_null = true;
+            return 0;
+        }
+        return static_cast<ToFieldType>(val.yearDay());
+    }
+};
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
 template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
@@ -3410,6 +3477,8 @@ using FunctionToStartOfFifteenMinutes = FunctionDateOrDateTimeToSomething<DataTy
 using FunctionToStartOfHour = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToStartOfHourImpl>;
 using FunctionToTime = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToTimeImpl>;
 using FunctionToLastDay = FunctionMyDateOrMyDateTimeToSomething<DataTypeMyDate, TiDBLastDayTransformerImpl, return_nullable>;
+using FunctionToTiDBDayOfWeek = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt16, TiDBDayOfWeekTransformerImpl, return_nullable>;
+using FunctionToTiDBDayOfYear = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt16, TiDBDayOfYearTransformerImpl, return_nullable>;
 
 using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToRelativeYearNumImpl>;
 using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeQuarterNumImpl>;
