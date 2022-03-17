@@ -241,10 +241,9 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CMD_PREFIX_TIDB):]
-            self.outputs, err = self.executor_tidb.exe(self.query)
+            # for mysql commands ignore errors since they may be part of the test logic.
+            self.outputs, _ = self.executor_tidb.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
-            if err != None:
-                return False
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
