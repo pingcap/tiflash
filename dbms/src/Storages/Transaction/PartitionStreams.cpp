@@ -95,9 +95,9 @@ static void writeRegionDataToStorage(
         if (region.pre_decode_cache)
         {
             auto schema_version = storage->getTableInfo().schema_version;
-            LOG_DEBUG(log, FUNCTION_NAME << ": " << region->toString() << " got pre-decode cache";
-                      region.pre_decode_cache->toString(oss_internal_rare);
-                      oss_internal_rare << ", storage schema version: " << schema_version);
+            std::stringstream ss;
+            region.pre_decode_cache->toString(ss);
+            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
@@ -106,7 +106,7 @@ static void writeRegionDataToStorage(
             }
             else
             {
-                LOG_DEBUG(log, FUNCTION_NAME << ": schema version not equal, try to re-decode region cache into block");
+                LOG_FMT_DEBUG(log, "{}: schema version not equal, try to re-decode region cache into block", FUNCTION_NAME);
                 region.pre_decode_cache->block.clear();
             }
         }
@@ -155,9 +155,7 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_schema_version, std::move(block_ptr));
 
-        LOG_TRACE(log,
-                  FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
-                                << ", write part " << write_part_cost << "] ms");
+        LOG_FMT_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -470,8 +468,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
-                        "Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+                            "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
+                            e.displayText());
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();
         }
@@ -547,6 +546,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
+    LOG_FMT_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);
