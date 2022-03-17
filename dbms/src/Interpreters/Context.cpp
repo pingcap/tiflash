@@ -1574,20 +1574,16 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isPageV3Enabled(const PathPool & path_pool, bool enable_ps_v3)
+static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
 {
     // Check whether v3 is already enabled
-    bool v3_manifests_exists = false;
     for (const auto & path : path_pool.listGlobalPagePaths())
     {
         if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
         {
-            v3_manifests_exists = true;
-            break;
+            return true;
         }
     }
-    if (v3_manifests_exists)
-        return true;
 
     // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
     if (!enable_ps_v3)
@@ -1616,7 +1612,7 @@ static bool isPageV3Enabled(const PathPool & path_pool, bool enable_ps_v3)
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
 {
     auto lock = getLock();
-    if (isPageV3Enabled(path_pool, enable_ps_v3))
+    if (isUsingPageStorageV3(path_pool, enable_ps_v3))
     {
         try
         {
