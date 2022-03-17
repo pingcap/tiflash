@@ -26,7 +26,7 @@ namespace DB
 template <typename A, typename B>
 struct BinaryGreatestBaseImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfBinaryGreatest<A, B>::Type;
+    using ResultType = typename NumberTraits::ResultOfBinaryLeastGreatest<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -65,73 +65,6 @@ struct RowbasedGreatestImpl
 };
 namespace tests
 {
-class FunctionBench : public benchmark::Fixture
-{
-public:
-    void SetUp(const benchmark::State &) override
-    {
-        try
-        {
-            DB::registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registered, ignore exception here.
-        }
-    }
-
-    template <typename... Args>
-    ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
-    {
-        ColumnsWithTypeAndName vec({first_column, columns...});
-        return executeFunction(context, func_name, vec);
-    }
-
-    template <typename... Args>
-    ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
-    {
-        ColumnsWithTypeAndName vec({first_column, columns...});
-        return executeFunction(context, func_name, argument_column_numbers, vec);
-    }
-
-    static ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns)
-    {
-        auto & factory = FunctionFactory::instance();
-
-        Block block(columns);
-        ColumnNumbers cns;
-        for (size_t i = 0; i < columns.size(); ++i)
-            cns.push_back(i);
-
-        auto bp = factory.tryGet(func_name, context);
-        if (!bp)
-            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-
-        auto func = bp->build(columns);
-
-        block.insert({nullptr, func->getReturnType(), "res"});
-        func->execute(block, cns, columns.size());
-        return block.getByPosition(columns.size());
-    }
-
-    static ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
-    {
-        auto & factory = FunctionFactory::instance();
-        Block block(columns);
-        ColumnsWithTypeAndName arguments;
-        for (size_t i = 0; i < argument_column_numbers.size(); ++i)
-            arguments.push_back(columns.at(i));
-        auto bp = factory.tryGet(func_name, context);
-        if (!bp)
-            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-        auto func = bp->build(arguments);
-        block.insert({nullptr, func->getReturnType(), "res"});
-        func->execute(block, argument_column_numbers, columns.size());
-        return block.getByPosition(columns.size());
-    }
-};
-
-
 template <typename Impl, typename SpecializedFunction>
 class FunctionRowbasedLeastGreatest : public IFunction
 {
@@ -238,14 +171,14 @@ struct NameGreatest               { static constexpr auto name = "greatest"; };
 using FunctionBinaryRowbasedGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
 using FunctionTiDBRowbasedGreatest = FunctionRowbasedLeastGreatest<RowbasedGreatestImpl, FunctionBinaryRowbasedGreatest>;
 } // namespace
-class LeastBench : public FunctionBench
+class LeastBench : public benchmark::Fixture
 {
 public:
-    void SetUp(const benchmark::State & state) override
+    void SetUp(const benchmark::State &) override
     {
-        FunctionBench::SetUp(state);
         try
         {
+            DB::registerFunctions();
             auto & factory = FunctionFactory::instance();
             factory.registerFunction<FunctionTiDBRowbasedGreatest>();
         }
@@ -447,16 +380,3 @@ BENCHMARK_REGISTER_F(LeastBench, benchNormalMoreCols)->Iterations(100);
 
 } // namespace tests
 } // namespace DB
-
-int main(int argc, char * argv[])
-{
-    benchmark::Initialize(&argc, argv);
-    DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
-    if (::benchmark::ReportUnrecognizedArguments(argc, argv))
-        return 1;
-    ::benchmark::RunSpecifiedBenchmarks();
-    DB::tests::TiFlashTestEnv::shutdown();
-    ::benchmark::Shutdown();
-    return 0;
-}

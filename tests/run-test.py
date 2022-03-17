@@ -33,13 +33,19 @@ CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
 verbose = False
 
+def exec_func(cmd):
+    cmd = cmd.strip()
+    p = os.popen(cmd)
+    output = p.readlines()
+    err = p.close()
+    return output, err
 
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
     def exe(self, cmd):
-        return os.popen((self.dbc + ' "' + cmd + '" 2>&1').strip()).readlines()
+        return exec_func(self.dbc + ' "' + cmd + '" 2>&1')
 
 
 class ShellFuncExecutor:
@@ -47,7 +53,7 @@ class ShellFuncExecutor:
         self.dbc = dbc
 
     def exe(self, cmd):
-        return os.popen((cmd + ' "' + self.dbc + '" 2>&1').strip()).readlines()
+        return exec_func(cmd + ' "' + self.dbc + '" 2>&1')
 
 
 class CurlTiDBExecutor:
@@ -71,8 +77,11 @@ class CurlTiDBExecutor:
         request.get_method = lambda: method
         if request.get_method() == 'POST' or request.get_method() == 'PUT':
             request.data = context[2]
-        response = urllib2.urlopen(request).read().strip()
-        return [response] if request.get_method() == 'GET' and response else None
+        try:
+            response = urllib2.urlopen(request).read().strip()
+            return [response] if request.get_method() == 'GET' and response else None, None
+        except urllib2.HTTPError as e:
+            return ['Error: {}. Uri: {}'.format(e, uri)], e
 
 
 def parse_line(line):
@@ -235,7 +244,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CMD_PREFIX_TIDB):]
-            self.outputs = self.executor_tidb.exe(self.query)
+            # for mysql commands ignore errors since they may be part of the test logic.
+            self.outputs, _ = self.executor_tidb.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
@@ -248,7 +258,9 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
-            self.outputs = self.executor_curl_tidb.exe(self.query)
+            self.outputs, err = self.executor_curl_tidb.exe(self.query)
+            if err != None:
+                return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if verbose: print 'running', line
@@ -258,7 +270,8 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX):]
-            self.outputs = self.executor.exe(self.query)
+            # for commands ignore errors since they may be part of the test logic.
+            self.outputs, _ = self.executor.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
@@ -270,7 +283,10 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX_FUNC):]
-            self.executor_func.exe(self.query)
+            self.outputs, err = self.executor_func.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
+            if err != None:
+                return False
             self.outputs = []
             self.matches = []
         else:
