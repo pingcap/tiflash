@@ -110,6 +110,14 @@ public:
              * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
              */
             void recalculateSpaceMap();
+
+            /**
+             * After GC we removed out of date data.
+             * But we can't calculate the `sm_max_cap`.It can only be updated through spacemap.
+             * 
+             * Also after restore, we need call this method to recalculate the `sm_max_cap`.
+             */
+            void recalculateCapability();
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
@@ -143,7 +151,7 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
 
         std::list<BlobStatPtr> getStats() const
         {
