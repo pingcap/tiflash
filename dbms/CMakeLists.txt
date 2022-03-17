@@ -177,7 +177,6 @@ target_link_libraries (clickhouse_common_io
     cpptoml
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-target_include_directories (clickhouse_common_io BEFORE PUBLIC ${kvproto_SOURCE_DIR} ${tipb_SOURCE_DIR} ${Protobuf_INCLUDE_DIR} ${gRPC_INCLUDE_DIRS})
 
 target_link_libraries (dbms
     clickhouse_parsers

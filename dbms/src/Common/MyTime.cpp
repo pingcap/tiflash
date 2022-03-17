@@ -1,11 +1,11 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Functions/FunctionsDateTime.h>
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
+#include <IO/WriteHelpers.h>
 
 #include <cctype>
 #include <initializer_list>
@@ -528,10 +528,6 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
 
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
-    // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
-    // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
-    static const DateLUTImpl & lut = DateLUT::instance("UTC");
-
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
     bool is_date = false;
@@ -768,7 +764,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             if (micro_second >= std::pow(10, fsp))
             {
                 MyDateTime datetime(year, month, day, hour, minute, second, 0);
-                UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, lut);
+                UInt64 result = addSeconds(datetime.toPackedUInt(), 1);
                 MyDateTime result_datetime(result);
                 year = result_datetime.year;
                 month = result_datetime.month;
@@ -820,7 +816,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         {
             offset = -offset;
         }
-        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, lut);
+        auto tmp = addSeconds(result.toPackedUInt(), -offset);
         result = MyDateTime(tmp);
     }
 
@@ -835,20 +831,20 @@ Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
 
 String MyDateTime::toString(int fsp) const
 {
-    const static String format = "%Y-%m-%d %H:%i:%s";
-    String result;
-    result.reserve(maxFormattedDateTimeStringLength(format));
-    dateFormat(format, result);
-    auto length = result.length();
-    if (fsp > 0)
-    {
-        result.append(".")
-            .append(int_to_2_width_string[micro_second / 10000])
-            .append(int_to_2_width_string[micro_second % 10000 / 100])
-            .append(int_to_2_width_string[micro_second % 100]);
-        result.resize(length + fsp + 1);
-    }
-    return result;
+const static String format = "%Y-%m-%d %H:%i:%s";
+String result;
+result.reserve(maxFormattedDateTimeStringLength(format));
+dateFormat(format, result);
+auto length = result.length();
+if (fsp > 0)
+{
+    result.append(".")
+        .append(int_to_2_width_string[micro_second / 10000])
+        .append(int_to_2_width_string[micro_second % 10000 / 100])
+        .append(int_to_2_width_string[micro_second % 100]);
+    result.resize(length + fsp + 1);
+}
+return result;
 }
 
 //TODO: we can use modern c++ api instead.
