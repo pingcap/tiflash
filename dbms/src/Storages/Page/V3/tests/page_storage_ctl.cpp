@@ -43,7 +43,10 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
 
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "produce help message") //
-        ("paths,P", value<std::vector<std::string>>(), "store path(s)")("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution.")("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.")("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.");
+        ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
+        ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution.") //
+        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
+        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.");
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
     static_assert(sizeof(DB::BlobFileId) == sizeof(UInt32));
@@ -220,10 +223,25 @@ int main(int argc, char ** argv)
 
     PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
 
-    std::cout << (options.display_mode == ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO ? getSummaryInfo(mvcc_table_directory, blob_store) : options.display_mode == ControlOptions::DisplayType::DISPLAY_BLOBS_INFO ? getBlobsInfo(blob_store, options.query_blob_id)
-                      : options.display_mode == ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO                                                                                                                      ? getDirectoryInfo(mvcc_table_directory, options.query_page_id)
-                                                                                                                                                                                                                         : "error")
-              << std::endl;
+    switch (options.display_mode)
+    {
+    case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+    {
+        std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
+        break;
+    }
+    case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
+    {
+        std::cout << getDirectoryInfo(mvcc_table_directory, options.query_page_id) << std::endl;
+        break;
+    }
+    case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
+        std::cout << getBlobsInfo(blob_store, options.query_blob_id) << std::endl;
+        break;
+    default:
+        std::cout << "Invalid display mode." << std::endl;
+        break;
+    }
 
     return 0;
 }
