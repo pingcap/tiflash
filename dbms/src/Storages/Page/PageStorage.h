@@ -173,13 +173,10 @@ public:
 
     virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
-    virtual SnapshotPtr getSnapshot() = 0;
+    virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
-    // Return < num of snapshots,
-    //          living time(seconds) of the oldest snapshot,
-    //          created thread id of the oldest snapshot      >
-    virtual std::tuple<size_t, double, unsigned> getSnapshotsStat() const = 0;
+    virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
     virtual void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) = 0;
 
@@ -222,9 +219,7 @@ public:
     explicit PageReader(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage(storage_)
-        , snap()
         , read_limiter(read_limiter_)
-
     {}
     /// Snapshot read.
     PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)

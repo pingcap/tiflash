@@ -344,7 +344,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
+        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         ASSERT_EQ(compaction_task->getCompactionSourceLevel(), 0);
         // There should be two compaction sub_tasks.
@@ -392,7 +392,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
+                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;
