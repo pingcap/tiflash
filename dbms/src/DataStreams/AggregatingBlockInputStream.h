@@ -44,7 +44,7 @@ public:
         const FileProviderPtr & file_provider_,
         bool final_,
         const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, NAME))
+        : log(getLogWithPrefix(NAME, log_))
         , params(params_)
         , aggregator(params, log)
         , file_provider{file_provider_}

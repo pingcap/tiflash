@@ -65,7 +65,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , keep_session_timezone_info(keep_session_timezone_info_)
     , max_streams(max_streams_)
     , subqueries_for_sets(subqueries_for_sets_)
-    , log(getMPPTaskLog(dagContext(), "DAGQueryBlockInterpreter"))
+    , log(getLogWithPrefix("DAGQueryBlockInterpreter", dagContext().log))
 {}
 
 namespace

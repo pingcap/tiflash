@@ -625,7 +625,7 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
 PageDirectory::PageDirectory(WALStorePtr && wal_)
     : sequence(0)
     , wal(std::move(wal_))
-    , log(getLogWithPrefix(nullptr, "PageDirectory"))
+    , log(getLogWithPrefix("PageDirectory"))
 {
 }
 

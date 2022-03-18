@@ -27,7 +27,7 @@ class ExchangeSenderBlockInputStream : public IProfilingBlockInputStream
 public:
     ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : writer(std::move(writer))
-        , log(getLogWithPrefix(log_, name))
+        , log(getLogWithPrefix(name, log_))
     {
         children.push_back(input);
     }

@@ -35,7 +35,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, NAME))
+    : log(getLogWithPrefix(NAME, log_))
     , params(params_)
     , aggregator(params, log)
     , file_provider(file_provider_)

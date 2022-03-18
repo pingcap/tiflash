@@ -162,7 +162,7 @@ Block Aggregator::Params::getHeader(
 
 Aggregator::Aggregator(const Params & params_, const LogWithPrefixPtr & log_)
     : params(params_)
-    , log(getLogWithPrefix(log_, "Aggregator"))
+    , log(getLogWithPrefix("Aggregator", log_))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
@@ -1469,7 +1469,7 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : log(getLogWithPrefix(aggregator_.log, "MergingAndConvertingBlockInputStream"))
+        : log(getLogWithPrefix("MergingAndConvertingBlockInputStream", aggregator_.log))
         , aggregator(aggregator_)
         , data(data_)
         , final(final_)

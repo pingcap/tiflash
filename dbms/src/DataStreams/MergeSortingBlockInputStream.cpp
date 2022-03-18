@@ -88,7 +88,7 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     , limit(limit_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
     , tmp_path(tmp_path_)
-    , log(getMPPTaskLog(log_, NAME))
+    , log(getLogWithPrefix(NAME, log_))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -198,7 +198,7 @@ MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , log(getMPPTaskLog(log_, NAME))
+    , log(getLogWithPrefix(NAME, log_))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)

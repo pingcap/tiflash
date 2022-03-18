@@ -14,9 +14,8 @@
 
 #pragma once
 
-#include <Common/Exception.h>
-#include <common/logger_useful.h>
-#include <common/types.h>
+#include <Poco/Logger.h>
+#include <fmt/format.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -28,7 +27,7 @@ using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 /** LogWithPrefix could print formalized logs.
   * For example, adding prefix for a Poco::Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
   * 
-  * Moreover, we can append prefix at any time with the function "append(const String & str)".
+  * Moreover, we can append prefix at any time with the function "append(const std::string & str)".
   * For example, call append("[InputStream]") could print logs with prefix "[task 1 query 2333] [InputStream]".
   * 
   * Interfaces in LogWithPrefix are definitely the same with the Poco::Logger, so that they could use the same
@@ -37,60 +36,37 @@ using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 class LogWithPrefix : private boost::noncopyable
 {
 public:
-    LogWithPrefix(Poco::Logger * log_, const String & prefix_)
-        : logger(log_)
-        , prefix(addSuffixSpace(prefix_))
+    LogWithPrefix(const std::string & source, const std::string & identifier)
+        : logger(&Poco::Logger::get(source))
+        , id(identifier)
     {
-        if (logger == nullptr)
-            throw Exception("LogWithPrefix receives nullptr");
     }
 
-    bool trace() const { return logger->trace(); }
-
-    void trace(const std::string & msg)
-    {
-        auto m = prefix + msg;
-        logger->trace(m);
+#define M(level) \
+    bool level() const { return logger->level(); }\
+    void level(const std::string & msg) const\
+    {\
+        logger->level(wrapMsg(msg));\
     }
 
-    bool debug() const { return logger->debug(); }
+    M(trace)
+    M(debug)
+    M(information)
+    M(warning)
+    M(error)
+    M(fatal)
+#undef M
 
-    void debug(const std::string & msg)
+    void log(const Poco::Message & msg) const
     {
-        auto m = prefix + msg;
-        logger->debug(m);
+        return logger->log(Poco::Message(msg, wrapMsg(msg.getText())));
     }
 
-    bool information() const { return logger->information(); }
-
-    void information(const std::string & msg)
+    void log(Poco::Message & msg) const
     {
-        auto m = prefix + msg;
-        logger->information(m);
+        msg.setText(wrapMsg(msg.getText()));
+        return logger->log(msg);
     }
-
-    bool warning() const { return logger->warning(); }
-
-    void warning(const std::string & msg)
-    {
-        auto m = prefix + msg;
-        logger->warning(m);
-    }
-
-    bool error() const { return logger->error(); }
-
-    void error(const std::string & msg)
-    {
-        auto m = prefix + msg;
-        logger->error(m);
-    }
-
-    Poco::Logger * getLog() const { return logger; }
-
-    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(logger, prefix + str); }
-
-
-    void log(const Poco::Message & msg) { return logger->log(Poco::Message(msg, prefix + msg.getText())); }
 
     bool is(int level) const { return logger->is(level); }
 
@@ -98,28 +74,33 @@ public:
 
     const std::string & name() const { return logger->name(); }
 
-private:
-    Poco::Logger * logger;
-    // prefix must be ascii.
-    const String prefix;
+    const std::string & identifier() const { return id; }
 
-    static String addSuffixSpace(const String & str)
+    Poco::Logger * getLog() const { return logger; }
+
+private:
+    std::string wrapMsg(const std::string & msg) const
     {
-        if (str.empty() || std::isspace(str.back()))
-            return str;
+        if (!id.empty())
+            return fmt::format("{} {}", id, msg);
         else
-            return str + ' ';
+            return msg;
     }
+
+    Poco::Logger * logger;
+    const std::string id;
 };
 
-inline LogWithPrefixPtr getLogWithPrefix(const LogWithPrefixPtr & log = nullptr, const String & name = "name: N/A")
+inline LogWithPrefixPtr getLogWithPrefix(const std::string & name, const std::string & identifier = "")
 {
-    if (log == nullptr)
-    {
-        return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), "");
-    }
+    return std::make_shared<LogWithPrefix>(name, identifier);
+}
 
-    return log->append(name);
+inline LogWithPrefixPtr getLogWithPrefix(const std::string & name, const LogWithPrefixPtr & log)
+{
+    if (log)
+        return getLogWithPrefix(name, log->identifier());
+    return getLogWithPrefix(name);
 }
 
 } // namespace DB

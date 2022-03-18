@@ -16,23 +16,13 @@
 
 namespace DB
 {
-LogWithPrefixPtr getMPPTaskLog(const String & name, const MPPTaskId & mpp_task_id_)
-{
-    return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), mpp_task_id_.toString());
-}
-
-LogWithPrefixPtr getMPPTaskLog(const DAGContext & dag_context, const String & name)
-{
-    return getMPPTaskLog(dag_context.log, name, dag_context.getMPPTaskId());
-}
-
 LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_)
 {
-    if (log == nullptr)
+    if (log)
     {
-        return getMPPTaskLog(name, mpp_task_id_);
+        assert(log->identifier() == mpp_task_id_.toString());
+        return getLogWithPrefix(name, log);
     }
-
-    return log->append(name);
+    return getLogWithPrefix(name, mpp_task_id_.toString());
 }
 } // namespace DB

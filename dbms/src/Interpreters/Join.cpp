@@ -97,7 +97,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
-    , log(getLogWithPrefix(log_, "Join"))
+    , log(getLogWithPrefix("Join", log_))
     , limits(limits)
 {
     build_set_exceeded.store(false);

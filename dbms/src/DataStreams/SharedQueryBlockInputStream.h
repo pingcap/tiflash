@@ -35,7 +35,7 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
         : queue(clients)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getLogWithPrefix(NAME, log_))
         , in(in_)
     {
         children.push_back(in);

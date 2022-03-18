@@ -32,7 +32,7 @@ public:
         size_t stream_index_,
         const LogWithPrefixPtr & log_)
         : stream_index(stream_index_)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getLogWithPrefix(NAME, log_))
     {
         children.push_back(input);
         join = join_;

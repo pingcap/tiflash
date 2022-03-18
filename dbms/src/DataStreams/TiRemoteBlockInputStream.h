@@ -173,7 +173,7 @@ public:
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(getMPPTaskLog(log_, name))
+        , log(getLogWithPrefix(name, log_))
         , total_rows(0)
     {
         // generate sample block

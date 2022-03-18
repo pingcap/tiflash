@@ -103,7 +103,7 @@ public:
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getLogWithPrefix(NAME, log_))
     {
         children = inputs;
         if (additional_input_at_end)

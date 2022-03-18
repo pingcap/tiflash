@@ -21,7 +21,7 @@ namespace DB
 {
 ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const LogWithPrefixPtr & log_)
     : expression(expression_)
-    , log(getMPPTaskLog(log_, NAME))
+    , log(getLogWithPrefix(NAME, log_))
 {
     children.push_back(input);
 }

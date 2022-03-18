@@ -22,7 +22,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, name))
+    : log(getLogWithPrefix(name, log_))
     , join_probe_actions(join_probe_actions_)
 {
     children.push_back(input);

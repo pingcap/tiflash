@@ -55,7 +55,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
-    , log(getMPPTaskLog("MPPTask", id))
+    , log(getLogWithPrefix("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
     , schedule_state(ScheduleState::WAITING)
 {}
@@ -379,7 +379,7 @@ void MPPTask::writeErrToAllTunnels(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log->getLog(), "Failed to write error " + e + " to tunnel: " + it.second->id());
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }

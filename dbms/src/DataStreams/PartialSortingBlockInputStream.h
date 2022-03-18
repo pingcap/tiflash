@@ -37,7 +37,7 @@ public:
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getLogWithPrefix(NAME, log_))
     {
         children.push_back(input_);
     }

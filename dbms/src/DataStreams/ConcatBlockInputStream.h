@@ -30,7 +30,7 @@ class ConcatBlockInputStream : public IProfilingBlockInputStream
 
 public:
     ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, NAME))
+        : log(getLogWithPrefix(NAME, log_))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
