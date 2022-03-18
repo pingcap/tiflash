@@ -151,7 +151,8 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
 
 
 StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : ns_id(ns_id_)
+    : owned_storage(true)
+    , ns_id(ns_id_)
     ,
     // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create(name + ".log",
@@ -174,11 +175,11 @@ StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPoo
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
-    , owned_storage(true)
 {}
 
 StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, Context & global_ctx)
-    : ns_id(ns_id_)
+    : owned_storage(false)
+    , ns_id(ns_id_)
     , log_storage(global_storage_pool.log())
     , data_storage(global_storage_pool.data())
     , meta_storage(global_storage_pool.meta())
@@ -186,7 +187,6 @@ StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_st
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
-    , owned_storage(false)
 {}
 
 void StoragePool::restore()

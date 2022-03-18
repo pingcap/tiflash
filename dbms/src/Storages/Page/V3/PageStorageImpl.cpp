@@ -226,6 +226,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     // And get the expired entries.
     [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
     const auto & del_entries = page_directory->gcInMemEntries();
+    LOG_FMT_DEBUG(log, "Remove entries from memory [num_entries={}]", del_entries.size());
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.

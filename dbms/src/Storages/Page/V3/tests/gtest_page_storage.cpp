@@ -25,6 +25,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -903,7 +904,6 @@ try
     page_storage = reopenWithConfig(config);
 }
 CATCH
-
 
 } // namespace PS::V3::tests
 } // namespace DB

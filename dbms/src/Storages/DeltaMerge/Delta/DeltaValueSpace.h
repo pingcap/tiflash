@@ -55,7 +55,8 @@ struct DMContext;
 struct WriteBatches;
 class StoragePool;
 
-class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
+class DeltaValueSpace
+    : public std::enable_shared_from_this<DeltaValueSpace>
     , private boost::noncopyable
 {
 public:
@@ -166,7 +167,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_DEBUG(log, simpleInfo() << " Stop create snapshot because updating");
+            LOG_FMT_DEBUG(log, "{} Stop create snapshot because updating", simpleInfo());
             return false;
         }
         return true;
@@ -177,7 +178,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_ERROR(log, "!!!=========================delta [" << getId() << "] is expected to be updating=========================!!!");
+            LOG_FMT_ERROR(log, "!!!=========================delta [ {}] is expected to be updating=========================!!!", getId());
             return false;
         }
         else
