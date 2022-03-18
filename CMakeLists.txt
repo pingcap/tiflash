@@ -437,11 +437,13 @@ add_subdirectory (libs)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
-include (cmake/sequential.cmake)
 
 # Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
 # finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
 # to be invoked sequentially by adding linear dependency relations between them.
+# Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
+# with a large number of threads.
+include (cmake/sequential.cmake)
 if (USE_INTERNAL_TIFLASH_PROXY)
     build_sequentially (_symbolization tiflash_proxy)
 endif()
