@@ -59,11 +59,11 @@ public:
     {
     }
 
-#define M(level) \
-    bool level() const { return logger->level(); }\
-    void level(const std::string & msg) const\
-    {\
-        logger->level(wrapMsg(msg));\
+#define M(level)                                   \
+    bool level() const { return logger->level(); } \
+    void level(const std::string & msg) const      \
+    {                                              \
+        logger->level(wrapMsg(msg));               \
     }
 
     M(trace)
