@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
@@ -91,7 +105,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
-            scheduler->deleteThenSchedule(query_id, *this);
             mpp_query_map.erase(it);
         }
     }
@@ -142,7 +155,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteThenSchedule(task->id.start_ts, *this);
+                scheduler->deleteFinishedQuery(task->id.start_ts);
                 mpp_query_map.erase(it);
             }
             return;
@@ -196,6 +209,12 @@ bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
 {
     std::lock_guard lock(mu);
     return scheduler->tryToSchedule(task, *this);
+}
+
+void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
+{
+    std::lock_guard lock(mu);
+    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
 } // namespace DB
