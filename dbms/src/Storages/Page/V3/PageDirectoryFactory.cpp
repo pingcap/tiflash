@@ -26,8 +26,13 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     auto [wal, reader] = WALStore::create(file_provider, delegator);
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadFromDisk(dir, std::move(reader));
+
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+
+    // After we restore from disk.
+    // We need cleanup all invalid entries in memory.
+    dir->gcInMemEntries();
 
     if (blob_stats)
     {
@@ -38,7 +43,36 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
         for (const auto & [page_id, entries] : dir->mvcc_table_directory)
         {
             (void)page_id;
-            if (auto entry = entries->getEntry(max_applied_ver.sequence); entry)
+
+            // We must allow entry forward search.
+            // Otherwise, It is likely to cause data loss.
+            // for example:
+            //
+            //   page id 4927
+            //   {type:5, create_ver: <0,0>, is_deleted: false, delete_ver: <0,0>, ori_page_id: 0.0, being_ref_count: 1, num_entries: 2}
+            //     entry 0
+            //       sequence: 1802
+            //       epoch: 0
+            //       is del: false
+            //       blob id: 5
+            //       offset: 77661628
+            //       size: 2381165
+            //       crc: 0x1D1BEF504F12D3A0
+            //       field offset size: 0
+            //     entry 1
+            //       sequence: 2121
+            //       epoch: 0
+            //       is del: true
+            //       blob id: 0
+            //       offset: 0
+            //       size: 0
+            //       crc: 0x0
+            //       field offset size: 0
+            //   page id 5819
+            //   {type:6, create_ver: <2090,0>, is_deleted: false, delete_ver: <0,0>, ori_page_id: 0.4927, being_ref_count: 1, num_entries: 0}
+            //
+            // After getEntry, page id `4927` won't be restore by BlobStore.
+            if (auto entry = entries->getEntry(max_applied_ver.sequence, true); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }

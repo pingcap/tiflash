@@ -170,7 +170,7 @@ public:
 
     Int64 incrRefCount(const PageVersionType & ver);
 
-    std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+    std::optional<PageEntryV3> getEntry(UInt64 seq, bool allow_forward = false) const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and

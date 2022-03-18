@@ -337,7 +337,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
 }
 
-std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq, bool allow_forward) const
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -348,7 +348,32 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
         {
             // NORMAL
             if (iter->second.isEntry())
+            {
                 return iter->second.entry;
+            }
+            else if (allow_forward) // iter->second.isDelete()
+            {
+                if (iter == entries.begin())
+                {
+                    throw Exception(fmt::format("Can't restore the entries [seq={}]", seq));
+                }
+
+                // Check (Begin entry, last entry - 1]
+                while (iter != entries.begin())
+                {
+                    iter--;
+                    if (iter->second.isEntry())
+                    {
+                        return iter->second.entry;
+                    }
+                }
+
+                // Check Begin entry
+                if (iter->second.isEntry())
+                {
+                    return iter->second.entry;
+                }
+            }
         }
     }
     return std::nullopt;
