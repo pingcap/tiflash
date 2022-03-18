@@ -19,10 +19,6 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
-# Rust jobs may modify global toolchain settings. We make rust related jobs sequentially scheduled
-# by putting them in a job pool with single concurrency.
-set_property(GLOBAL PROPERTY JOB_POOLS rust_job_pool=1)
-
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
 if(CMAKE_PREFIX_PATH)
@@ -442,3 +438,10 @@ add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
 
+# Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
+# finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
+# to be invoked sequentially by adding linear dependency relations between them.
+# Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
+# with a large number of threads.
+include (cmake/sequential.cmake)
+build_sequentially (symbolization tiflash_proxy)
