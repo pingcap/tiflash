@@ -439,6 +439,9 @@ add_subdirectory (dbms)
 include (cmake/print_include_directories.cmake)
 include (cmake/sequential.cmake)
 
+# Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
+# finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
+# to be invoked sequentially by adding linear dependency relations between them.
 if (USE_INTERNAL_TIFLASH_PROXY)
     build_sequentially (_symbolization tiflash_proxy)
 endif()
