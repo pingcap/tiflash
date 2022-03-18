@@ -457,7 +457,7 @@ String RBTreeSpaceMap::toDebugString()
     UInt64 count = 0;
     UInt64 max_size = 0;
     UInt64 min_size = ULONG_MAX;
-    String stats_str = "";
+    String stats_str;
 
     if (rb_tree->root.rb_node == nullptr)
     {
