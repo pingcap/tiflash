@@ -106,7 +106,8 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
 
-    std::tm * local_tm = std::localtime(&tt);
+    std::tm buf_tm;
+    std::tm * local_tm = localtime_r(&tt, &buf_tm);
     int year = local_tm->tm_year + 1900;
     int month = local_tm->tm_mon + 1;
     int day = local_tm->tm_mday;
