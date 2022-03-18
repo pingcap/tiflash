@@ -13,10 +13,19 @@
 // limitations under the License.
 
 #pragma once
+#include <common/types.h>
+
 #include <memory>
 
 namespace DB
 {
+struct SnapshotsStatistics
+{
+    size_t num_snapshots = 0;
+    double longest_living_seconds = 0.0;
+    unsigned longest_living_from_thread_id = 0;
+    String longest_living_from_tracing_id;
+};
 class PageStorageSnapshot
 {
 public:

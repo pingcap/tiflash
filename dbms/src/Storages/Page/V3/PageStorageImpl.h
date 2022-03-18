@@ -16,6 +16,7 @@
 
 #include <Common/LogWithPrefix.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 
@@ -42,9 +43,9 @@ public:
 
     PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::PageStorage::SnapshotPtr getSnapshot() override;
+    DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
+    SnapshotsStatistics getSnapshotsStat() const override;
 
     void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
@@ -67,6 +68,7 @@ public:
     void clearExternalPagesCallbacks();
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return read(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }

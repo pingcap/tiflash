@@ -31,8 +31,7 @@ add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     DEPENDS "${_TIFLASH_PROXY_SRCS}" "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock" "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
 
 add_custom_target(tiflash_proxy ALL
-    DEPENDS ${_TIFLASH_PROXY_LIBRARY}
-    JOB_POOL rust_job_pool)
+    DEPENDS ${_TIFLASH_PROXY_LIBRARY})
 
 add_library(libtiflash_proxy SHARED IMPORTED GLOBAL)
 set_target_properties(libtiflash_proxy PROPERTIES IMPORTED_LOCATION ${_TIFLASH_PROXY_LIBRARY} IMPORTED_NO_SONAME ON)
