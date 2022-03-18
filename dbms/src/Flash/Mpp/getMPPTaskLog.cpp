@@ -21,8 +21,8 @@ LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name
     if (log)
     {
         assert(log->identifier() == mpp_task_id_.toString());
-        return getLogWithPrefix(name, log);
+        return LogWithPrefix::get(name, log->identifier());
     }
-    return getLogWithPrefix(name, mpp_task_id_.toString());
+    return LogWithPrefix::get(name, mpp_task_id_.toString());
 }
 } // namespace DB

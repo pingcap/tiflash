@@ -32,7 +32,7 @@ public:
         size_t stream_index_,
         const LogWithPrefixPtr & log_)
         : stream_index(stream_index_)
-        , log(getLogWithPrefix(NAME, log_))
+        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.push_back(input);
         join = join_;

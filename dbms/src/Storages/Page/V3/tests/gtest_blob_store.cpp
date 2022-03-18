@@ -34,7 +34,7 @@ class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     BlobStoreStatsTest()
-        : logger(getLogWithPrefix("BlobStoreStatsTest"))
+        : logger(LogWithPrefix::get("BlobStoreStatsTest"))
     {}
 
 protected:

@@ -77,7 +77,7 @@ LogWithPrefixPtr getLogger(const Context & context)
     auto * dag_context = context.getDAGContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
-        : getLogWithPrefix("executeQuery");
+        : LogWithPrefix::get("executeQuery");
 }
 
 /// Log query into text log (not into system table).

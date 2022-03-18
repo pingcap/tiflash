@@ -37,7 +37,7 @@ public:
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(getLogWithPrefix(NAME, log_))
+        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.push_back(input_);
     }

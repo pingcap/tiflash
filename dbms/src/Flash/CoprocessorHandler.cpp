@@ -104,7 +104,7 @@ grpc::Status CoprocessorHandler::execute()
 
             DAGContext dag_context(dag_request);
             dag_context.tables_regions_info = std::move(tables_regions_info);
-            dag_context.log = getLogWithPrefix("CoprocessorHandler");
+            dag_context.log = LogWithPrefix::get("CoprocessorHandler");
             dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);
 

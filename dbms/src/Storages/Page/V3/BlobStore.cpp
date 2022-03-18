@@ -55,7 +55,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     : file_provider(file_provider_)
     , path(path_)
     , config(config_)
-    , log(getLogWithPrefix("BlobStore"))
+    , log(LogWithPrefix::get("BlobStore"))
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {

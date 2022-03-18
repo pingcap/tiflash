@@ -22,7 +22,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
     const LogWithPrefixPtr & log_)
-    : log(getLogWithPrefix(name, log_))
+    : log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     , join_probe_actions(join_probe_actions_)
 {
     children.push_back(input);

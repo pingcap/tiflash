@@ -21,7 +21,7 @@ namespace DB
 {
 ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const LogWithPrefixPtr & log_)
     : expression(expression_)
-    , log(getLogWithPrefix(NAME, log_))
+    , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
 {
     children.push_back(input);
 }

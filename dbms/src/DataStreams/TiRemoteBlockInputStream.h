@@ -173,7 +173,7 @@ public:
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(getLogWithPrefix(name, log_))
+        , log(LogWithPrefix::get(name, log_ ? log_->identifier() : ""))
         , total_rows(0)
     {
         // generate sample block

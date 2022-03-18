@@ -65,7 +65,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(getLogWithPrefix(NAME, log_))
+        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     {
         if (extra_table_id_index != InvalidColumnID)
         {

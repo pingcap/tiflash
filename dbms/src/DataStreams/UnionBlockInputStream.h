@@ -103,7 +103,7 @@ public:
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(getLogWithPrefix(NAME, log_))
+        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     {
         children = inputs;
         if (additional_input_at_end)

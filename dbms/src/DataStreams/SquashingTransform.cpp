@@ -21,7 +21,7 @@ namespace DB
 SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const LogWithPrefixPtr & log_)
     : min_block_size_rows(min_block_size_rows)
     , min_block_size_bytes(min_block_size_bytes)
-    , log(getLogWithPrefix("SquashingTransform", log_))
+    , log(LogWithPrefix::get("SquashingTransform", log_ ? log_->identifier() : ""))
 {
     LOG_FMT_DEBUG(log, "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}", min_block_size_rows, min_block_size_bytes);
 }

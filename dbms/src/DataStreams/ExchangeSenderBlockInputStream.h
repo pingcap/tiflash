@@ -25,9 +25,9 @@ namespace DB
 class ExchangeSenderBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const LogWithPrefixPtr & log_)
         : writer(std::move(writer))
-        , log(getLogWithPrefix(name, log_))
+        , log(LogWithPrefix::get(name, log_ ? log_->identifier() : ""))
     {
         children.push_back(input);
     }

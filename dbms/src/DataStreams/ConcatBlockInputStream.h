@@ -30,7 +30,7 @@ class ConcatBlockInputStream : public IProfilingBlockInputStream
 
 public:
     ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
-        : log(getLogWithPrefix(NAME, log_))
+        : log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();

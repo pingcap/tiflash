@@ -77,7 +77,7 @@ public:
         , notify_queue(queue)
         , msg_channel(msg_channel_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(getLogWithPrefix("ExchangeReceiver", fmt::format("{} {}", log_->identifier(), req_info)))
+        , log(LogWithPrefix::get("ExchangeReceiver", log_->identifier(), req_info))
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -300,7 +300,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(getLogWithPrefix("ExchangeReceiver", log_))
+    , exc_log(LogWithPrefix::get("ExchangeReceiver", log_ ? log_->identifier() : ""))
     , collected(false)
 {
     rpc_context->fillSchema(schema);
@@ -423,7 +423,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-    LogWithPrefixPtr log = getLogWithPrefix("ExchangeReceiver", fmt::format("{} {}", exc_log->identifier(), req_info));
+    LogWithPrefixPtr log = LogWithPrefix::get("ExchangeReceiver", exc_log->identifier(), req_info);
 
     try
     {
