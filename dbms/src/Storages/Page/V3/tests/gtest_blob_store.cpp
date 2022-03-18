@@ -123,17 +123,17 @@ TEST_F(BlobStoreStatsTest, testStat)
 
     BlobStats stats(logger, config);
 
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     // still 0
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     stats.createStat(0, stats.lock());
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
 
@@ -210,7 +210,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Won't choose full one
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, stats.lock());
     ASSERT_EQ(blob_file_id, 2);
     ASSERT_FALSE(stat);
 
@@ -228,7 +228,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
 
     // Then choose stat , it should return the stat id 3
     // Stat which id is 2 is full.
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, stats.lock());
     ASSERT_EQ(blob_file_id, 3);
     ASSERT_FALSE(stat);
 }

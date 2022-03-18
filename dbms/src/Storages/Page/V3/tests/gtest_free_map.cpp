@@ -364,14 +364,14 @@ TEST_P(SpaceMapTest, TestGetMaxCap)
         ASSERT_TRUE(smap->markUsed(50, 10));
         ASSERT_TRUE(smap->markUsed(80, 10));
 
-        ASSERT_EQ(smap->getMaxCapability(), 50);
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 50);
     }
 
     {
         auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
         ASSERT_TRUE(smap->markUsed(0, 100));
 
-        ASSERT_EQ(smap->getMaxCapability(), 0);
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 0);
     }
 }
 
