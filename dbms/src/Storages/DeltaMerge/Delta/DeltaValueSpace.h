@@ -243,7 +243,8 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
-class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>
+class DeltaValueSnapshot
+    : public std::enable_shared_from_this<DeltaValueSnapshot>
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
@@ -261,7 +262,7 @@ private:
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
 
-    CurrentMetrics::Metric type;
+    const CurrentMetrics::Metric type;
 
 public:
     DeltaSnapshotPtr clone()
@@ -281,8 +282,8 @@ public:
     }
 
     explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
+        : type(type_)
     {
-        type = type_;
         CurrentMetrics::add(type);
     }
 
@@ -316,7 +317,6 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return persisted_files_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
 

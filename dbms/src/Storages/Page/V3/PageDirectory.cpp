@@ -630,9 +630,9 @@ PageDirectory::PageDirectory(WALStorePtr && wal_)
 {
 }
 
-PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
+PageDirectorySnapshotPtr PageDirectory::createSnapshot(const String & tracing_id) const
 {
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
@@ -642,12 +642,10 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
     return snap;
 }
 
-std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
+SnapshotsStatistics PageDirectory::getSnapshotsStat() const
 {
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotsStatistics stat;
     DB::Int64 num_snapshots_removed = 0;
-    size_t num_valid_snapshots = 0;
     {
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
@@ -667,12 +665,13 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
                 });
 
                 const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
-                if (snapshot_lifetime > longest_living_seconds)
+                if (snapshot_lifetime > stat.longest_living_seconds)
                 {
-                    longest_living_seconds = snapshot_lifetime;
-                    longest_living_from_thread_id = snapshot_ptr->getTid();
+                    stat.longest_living_seconds = snapshot_lifetime;
+                    stat.longest_living_from_thread_id = snapshot_ptr->create_thread;
+                    stat.longest_living_from_tracing_id = snapshot_ptr->tracing_id;
                 }
-                num_valid_snapshots++;
+                stat.num_snapshots++;
                 ++iter;
             }
         }
@@ -680,7 +679,7 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 
     CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
     // Return some statistics of the oldest living snapshot.
-    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+    return stat;
 }
 
 PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
@@ -1200,7 +1199,7 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
 {
     if (!snap)
     {
-        snap = createSnapshot();
+        snap = createSnapshot(/*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;

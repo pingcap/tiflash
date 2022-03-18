@@ -1,0 +1,15 @@
+[package]
+name = "symbolization"
+version = "0.0.1"
+license = "Apache-2.0"
+edition = "2018"
+publish = false
+
+[lib]
+name = "symbolization"
+crate-type = ["staticlib"]
+
+[dependencies]
+backtrace = "0.3"
+findshlibs = "0.10"
+lazy_static = "1.4"

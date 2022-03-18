@@ -15,6 +15,7 @@
 #include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
@@ -1264,6 +1265,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             auto it = segments.find(segment->getRowKeyRange().getEnd());
             // check legality
             if (it == segments.end())
+              
                 return {};
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
@@ -2269,12 +2271,14 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.avg_pack_rows_in_stable = static_cast<Float64>(stat.total_stable_rows) / stat.total_pack_count_in_stable;
     stat.avg_pack_size_in_stable = static_cast<Float64>(stat.total_stable_size) / stat.total_pack_count_in_stable;
 
+    static const String useless_tracing_id("DeltaMergeStore::getStat");
     {
-        std::tie(stat.storage_stable_num_snapshots, //
-                 stat.storage_stable_oldest_snapshot_lifetime,
-                 stat.storage_stable_oldest_snapshot_thread_id)
-            = storage_pool->data()->getSnapshotsStat();
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool->data()->getSnapshot();
+        auto snaps_stat = storage_pool.data()->getSnapshotsStat();
+        stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
+        stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+        stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+        stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
         if (concrete_snap)
         {
@@ -2291,11 +2295,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        std::tie(stat.storage_delta_num_snapshots, //
-                 stat.storage_delta_oldest_snapshot_lifetime,
-                 stat.storage_delta_oldest_snapshot_thread_id)
-            = storage_pool->log()->getSnapshotsStat();
-        PageStorage::SnapshotPtr log_snapshot = storage_pool->log()->getSnapshot();
+        auto snaps_stat = storage_pool.log()->getSnapshotsStat();
+        stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
+        stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+        stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+        stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
         if (concrete_snap)
         {
@@ -2312,11 +2317,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        std::tie(stat.storage_meta_num_snapshots, //
-                 stat.storage_meta_oldest_snapshot_lifetime,
-                 stat.storage_meta_oldest_snapshot_thread_id)
-            = storage_pool->meta()->getSnapshotsStat();
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool->meta()->getSnapshot();
+        auto snaps_stat = storage_pool.meta()->getSnapshotsStat();
+        stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
+        stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+        stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+        stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
         if (concrete_snap)
         {
@@ -2449,8 +2455,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
 
     LOG_FMT_DEBUG(
         log,
-        "{} [sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
-        __FUNCTION__,
+        "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
         sorted_ranges.size(),
         tasks.size(),
         result_tasks.size(),

@@ -32,6 +32,9 @@
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 namespace DM
 {
 class Segment;
@@ -118,6 +121,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_stable_num_snapshots = 0;
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    String storage_stable_oldest_snapshot_tracing_id;
     UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
     UInt64 storage_stable_max_page_id = 0;
@@ -125,6 +129,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    String storage_delta_oldest_snapshot_tracing_id;
     UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
     UInt64 storage_delta_max_page_id = 0;
@@ -132,6 +137,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    String storage_meta_oldest_snapshot_tracing_id;
     UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id = 0;
@@ -368,7 +374,7 @@ public:
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fregment packs into bigger one.
+    /// Compact fragment column files into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.

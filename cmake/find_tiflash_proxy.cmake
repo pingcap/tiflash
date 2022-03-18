@@ -50,3 +50,7 @@ endif()
 set(TIFLASH_PROXY_FOUND TRUE)
 
 message(STATUS "Using tiflash proxy: ${USE_INTERNAL_TIFLASH_PROXY} : ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}")
+
+if (NOT USE_INTERNAL_TIFLASH_PROXY)
+    add_custom_target(tiflash_proxy ALL DEPENDS ${TIFLASH_PROXY_LIBRARY})
+endif()

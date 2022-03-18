@@ -11,26 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
-#include <common/types.h>
+#include <cstddef>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#include <memory>
-
-namespace DB
+struct SymbolInfo
 {
-struct SnapshotsStatistics
-{
-    size_t num_snapshots = 0;
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
-    String longest_living_from_tracing_id;
+    const char * symbol_name;
+    const char * object_name;
+    const char * source_filename;
+    size_t source_filename_length;
+    size_t lineno;
+    size_t svma;
 };
-class PageStorageSnapshot
-{
-public:
-    virtual ~PageStorageSnapshot() = default;
-};
-using PageStorageSnapshotPtr = std::shared_ptr<PageStorageSnapshot>;
 
-} // namespace DB
+SymbolInfo _tiflash_symbolize(void * avma);
+
+#ifdef __cplusplus
+}
+#endif

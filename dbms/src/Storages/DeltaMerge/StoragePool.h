@@ -95,17 +95,17 @@ public:
     PageReader & dataReader() { return data_storage_reader; }
     PageReader & metaReader() { return meta_storage_reader; }
 
-    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, log_storage, snapshot_read ? log_storage->getSnapshot() : nullptr, read_limiter);
+        return PageReader(ns_id, log_storage, snapshot_read ? log_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
     }
-    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, data_storage, snapshot_read ? data_storage->getSnapshot() : nullptr, read_limiter);
+        return PageReader(ns_id, data_storage, snapshot_read ? data_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
     }
-    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read)
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, meta_storage, snapshot_read ? meta_storage->getSnapshot() : nullptr, read_limiter);
+        return PageReader(ns_id, meta_storage, snapshot_read ? meta_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
     }
 
     void enableGC();
@@ -152,10 +152,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
-        : log_reader(storage.newLogReader(read_limiter, snapshot_read))
-        , data_reader(storage.newDataReader(read_limiter, snapshot_read))
-        , meta_reader(storage.newMetaReader(read_limiter, snapshot_read))
+    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, const String & tracing_id, bool snapshot_read)
+        : log_reader(storage.newLogReader(read_limiter, snapshot_read, tracing_id))
+        , data_reader(storage.newDataReader(read_limiter, snapshot_read, tracing_id))
+        , meta_reader(storage.newMetaReader(read_limiter, snapshot_read, tracing_id))
     {}
 
     PageReader log_reader;

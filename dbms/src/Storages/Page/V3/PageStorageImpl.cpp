@@ -66,18 +66,18 @@ PageId PageStorageImpl::getNormalPageId(NamespaceId ns_id, PageId page_id, Snaps
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot).low;
 }
 
-DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
+DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing_id)
 {
-    return page_directory->createSnapshot();
+    return page_directory->createSnapshot(tracing_id);
 }
 
-std::tuple<size_t, double, unsigned> PageStorageImpl::getSnapshotsStat() const
+SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
 {
     return page_directory->getSnapshotsStat();
 }
@@ -96,7 +96,7 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     try
@@ -126,7 +126,7 @@ DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimi
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     auto page_entry = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
@@ -137,7 +137,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & pag
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     PageIdV3Internals page_id_v3s;
@@ -151,7 +151,7 @@ void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_i
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     PageIdV3Internals page_id_v3s;
@@ -165,7 +165,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadField
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     BlobStore::FieldReadInfos read_infos;
@@ -184,7 +184,7 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
