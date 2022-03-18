@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -53,8 +67,10 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
-StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
+    : ns_id(ns_id_)
+    ,
+    // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create(name + ".log",
                                     path_pool.getPSDiskDelegatorMulti("log"),
                                     extractConfig(settings, StorageType::Log),
@@ -71,6 +87,9 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                                      path_pool.getPSDiskDelegatorMulti("meta"),
                                      extractConfig(settings, StorageType::Meta),
                                      global_ctx.getFileProvider()))
+    , log_storage_reader(ns_id, log_storage, nullptr)
+    , data_storage_reader(ns_id, data_storage, nullptr)
+    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
 {}
 
@@ -120,9 +139,9 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 
 void PageIdGenerator::restore(const StoragePool & storage_pool)
 {
-    max_log_page_id = storage_pool.log_storage->getMaxId();
-    max_data_page_id = storage_pool.data_storage->getMaxId();
-    max_meta_page_id = storage_pool.meta_storage->getMaxId();
+    max_log_page_id = storage_pool.log_storage_reader.getMaxId();
+    max_data_page_id = storage_pool.data_storage_reader.getMaxId();
+    max_meta_page_id = storage_pool.meta_storage_reader.getMaxId();
 }
 
 PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)

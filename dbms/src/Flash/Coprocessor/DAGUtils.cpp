@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
@@ -307,12 +321,18 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
     {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
     {tipb::ScalarFuncSig::BitNegSig, "bitNot"},
-    //{tipb::ScalarFuncSig::IntIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::RealIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::IntIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::RealIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsFalse, "cast"},
+    {tipb::ScalarFuncSig::IntIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::IntIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::RealIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::RealIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::DecimalIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::IntIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::IntIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::RealIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::RealIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
     //{tipb::ScalarFuncSig::LeftShift, "cast"},
     //{tipb::ScalarFuncSig::RightShift, "cast"},
@@ -484,8 +504,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::DayName, "toDayName"},
     {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
-    //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
-    //{tipb::ScalarFuncSig::DayOfYear, "cast"},
+    {tipb::ScalarFuncSig::DayOfWeek, "tidbDayOfWeek"},
+    {tipb::ScalarFuncSig::DayOfYear, "tidbDayOfYear"},
 
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
@@ -554,7 +574,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Timestamp2Args, "cast"},
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
-    //{tipb::ScalarFuncSig::LastDay, "cast"},
+    {tipb::ScalarFuncSig::LastDay, "tidbLastDay"},
     {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
     {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
     // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},

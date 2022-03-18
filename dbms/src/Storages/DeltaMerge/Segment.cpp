@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -221,7 +235,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.meta()->read(segment_id, nullptr); // not limit restore
+    Page page = context.storage_pool.metaReader().read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -1312,7 +1326,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    LOG_FMT_DEBUG(log, "{} start", __FUNCTION__);
+    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo start", segment_id);
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1327,7 +1341,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(log, "{} end", __FUNCTION__);
+    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo end", segment_id);
 
     if (fully_indexed)
     {

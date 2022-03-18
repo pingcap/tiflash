@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -42,7 +56,7 @@ DMStressProxy::DMStressProxy(const StressOptions & opts_)
     cols->emplace_back(col_balance_define);
     cols->emplace_back(col_random_define);
     auto handle_col = (*cols)[0];
-    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, 100, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
     if (opts_.verify)
     {
         ColumnDefines columns;

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadBufferFromString.h>
@@ -359,7 +373,8 @@ try
         ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,0))")));
         Decimal32 expected_default_value;
         {
-            ReadBufferFromString buf(String("-5.4999999"));
+            String s("-5.4999999");
+            ReadBufferFromString buf(s);
             readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 0);
             DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 0);
             EXPECT_EQ(expected_default_field.toString(), "-5");
@@ -395,7 +410,8 @@ try
         ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,1))")));
         Decimal32 expected_default_value;
         {
-            ReadBufferFromString buf(String("0.050000001"));
+            String s("0.050000001");
+            ReadBufferFromString buf(s);
             readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 1);
             DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 1);
             EXPECT_EQ(expected_default_field.toString(), "0.1");

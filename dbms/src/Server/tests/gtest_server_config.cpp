@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -342,7 +356,7 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", *path_pool, global_ctx, global_ctx.getSettingsRef());
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", /*table_id*/ 100, *path_pool, global_ctx, global_ctx.getSettingsRef());
 
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();

@@ -1,0 +1,209 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 decimal(6, 4));
+mysql> insert into test.t1 values(99.9999);
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(60, 3)) from test.t1;
+cast(test.t1.c1 as decimal(60, 3))
+100.000
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(5, 3)) from test.t1;
+cast(test.t1.c1 as decimal(5, 3))
+99.999
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(7, 5)) from test.t1;
+cast(test.t1.c1 as decimal(7, 5))
+99.99990
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(6, 5)) from test.t1;
+cast(test.t1.c1 as decimal(6, 5))
+9.99999
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(tiny_col tinyint, tiny_unsigned_col tinyint unsigned, small_col smallint, small_unsigned_col smallint unsigned, med_col mediumint, med_unsigned_col mediumint unsigned, int_col int, int_unsigned_col int unsigned, big_col bigint, big_unsigned_col bigint unsigned);
+mysql> insert into test.t1 values(127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615);
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.tiny_col as decimal(3, 0)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.tiny_col as decimal(3, 0)) |
++-----------------------------------------+
+|                                     127 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.tiny_col as decimal(3, 1)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.tiny_col as decimal(3, 1)) |
++-----------------------------------------+
+|                                    99.9 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.tiny_unsigned_col as decimal(3, 0)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.tiny_unsigned_col as decimal(3, 0)) |
++--------------------------------------------------+
+|                                              255 |
++--------------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.tiny_unsigned_col as decimal(3, 1)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.tiny_unsigned_col as decimal(3, 1)) |
++--------------------------------------------------+
+|                                             99.9 |
++--------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.small_col as decimal(5, 0)) from test.t1;
++------------------------------------------+
+| cast(test.t1.small_col as decimal(5, 0)) |
++------------------------------------------+
+|                                    32767 |
++------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.small_col as decimal(5, 1)) from test.t1;
++------------------------------------------+
+| cast(test.t1.small_col as decimal(5, 1)) |
++------------------------------------------+
+|                                   9999.9 |
++------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.small_unsigned_col as decimal(5, 0)) from test.t1;
++---------------------------------------------------+
+| cast(test.t1.small_unsigned_col as decimal(5, 0)) |
++---------------------------------------------------+
+|                                             65535 |
++---------------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.small_unsigned_col as decimal(5, 1)) from test.t1;
++---------------------------------------------------+
+| cast(test.t1.small_unsigned_col as decimal(5, 1)) |
++---------------------------------------------------+
+|                                            9999.9 |
++---------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.med_col as decimal(10, 0)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.med_col as decimal(10, 0)) |
++-----------------------------------------+
+|                                 8388607 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.med_col as decimal(10, 1)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.med_col as decimal(10, 1)) |
++-----------------------------------------+
+|                               8388607.0 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.med_unsigned_col as decimal(10, 0)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.med_unsigned_col as decimal(10, 0)) |
++--------------------------------------------------+
+|                                         16777215 |
++--------------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.med_unsigned_col as decimal(10, 1)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.med_unsigned_col as decimal(10, 1)) |
++--------------------------------------------------+
+|                                       16777215.0 |
++--------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.big_col as decimal(20, 0)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.big_col as decimal(20, 0)) |
++-----------------------------------------+
+|                     9223372036854775807 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.big_col as decimal(20, 1)) from test.t1;
++-----------------------------------------+
+| cast(test.t1.big_col as decimal(20, 1)) |
++-----------------------------------------+
+|                   9223372036854775807.0 |
++-----------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.big_unsigned_col as decimal(20, 0)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.big_unsigned_col as decimal(20, 0)) |
++--------------------------------------------------+
+|                             18446744073709551615 |
++--------------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; select cast(test.t1.big_unsigned_col as decimal(20, 1)) from test.t1;
++--------------------------------------------------+
+| cast(test.t1.big_unsigned_col as decimal(20, 1)) |
++--------------------------------------------------+
+|                            9999999999999999999.9 |
++--------------------------------------------------+
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 decimal(50, 0));
+mysql> insert into test.t1 values(12345678901234567890123456789012345678901234567890);
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(c1 as decimal(35, 30)) from test.t1;
++--------------------------------------+
+| cast(c1 as decimal(35, 30))          |
++--------------------------------------+
+| 99999.999999999999999999999999999999 |
++--------------------------------------+
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 datetime(5));
+mysql> insert into test.t1 values('2022-10-10 10:10:10.12345');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(16, 3)) from test.t1;
++------------------------------------+
+| cast(test.t1.c1 as decimal(16, 3)) |
++------------------------------------+
+|                  9999999999999.999 |
++------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(17, 3)) from test.t1;
++------------------------------------+
+| cast(test.t1.c1 as decimal(17, 3)) |
++------------------------------------+
+|                 20221010101010.123 |
++------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(18, 3)) from test.t1;
++------------------------------------+
+| cast(test.t1.c1 as decimal(18, 3)) |
++------------------------------------+
+|                 20221010101010.123 |
++------------------------------------+
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 date);
+mysql> insert into test.t1 values('2020-10-10');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(7, 0)) from test.t1;
++-----------------------------------+
+| cast(test.t1.c1 as decimal(7, 0)) |
++-----------------------------------+
+|                           9999999 |
++-----------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(8, 0)) from test.t1;
++-----------------------------------+
+| cast(test.t1.c1 as decimal(8, 0)) |
++-----------------------------------+
+|                          20201010 |
++-----------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(9, 0)) from test.t1;
++-----------------------------------+
+| cast(test.t1.c1 as decimal(9, 0)) |
++-----------------------------------+
+|                          20201010 |
++-----------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(9, 1)) from test.t1;
++-----------------------------------+
+| cast(test.t1.c1 as decimal(9, 1)) |
++-----------------------------------+
+|                        20201010.0 |
++-----------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(test.t1.c1 as decimal(9, 2)) from test.t1;
++-----------------------------------+
+| cast(test.t1.c1 as decimal(9, 2)) |
++-----------------------------------+
+|                        9999999.99 |
++-----------------------------------+

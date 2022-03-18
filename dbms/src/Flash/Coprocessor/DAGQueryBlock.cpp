@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -22,7 +36,8 @@ class Context;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
+        || root->tp() == tipb::ExecType::TypePartitionTableScan;
 }
 
 const static String SOURCE_NAME("source");
@@ -131,6 +146,10 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypePartitionTableScan)
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
     }
 }
 
