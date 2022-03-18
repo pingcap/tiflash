@@ -52,9 +52,9 @@ void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
 {
     for (const auto & dir : data_dirs)
     {
-        auto cmd = fmt::format("rm -rf {}", dir);
-        LOG_ERROR(log, cmd);
-        [[maybe_unused]] int ret = system(cmd.c_str());
+        LOG_FMT_ERROR(log, "rm -rf {}", dir);
+        Poco::File d(dir);
+        d.remove(true);
     }
 }
 
