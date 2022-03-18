@@ -44,10 +44,10 @@ class PageDirectorySnapshot : public DB::PageStorageSnapshot
 public:
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-    UInt64 sequence;
-    explicit PageDirectorySnapshot(UInt64 seq)
+    explicit PageDirectorySnapshot(UInt64 seq, const String & tracing_id_)
         : sequence(seq)
-        , t_id(Poco::ThreadNumber::get())
+        , create_thread(Poco::ThreadNumber::get())
+        , tracing_id(tracing_id_)
         , create_time(std::chrono::steady_clock::now())
     {
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
@@ -67,11 +67,15 @@ public:
 
     unsigned getTid() const
     {
-        return t_id;
+        return create_thread;
     }
 
+public:
+    UInt64 sequence;
+    const unsigned create_thread;
+    const String tracing_id;
+
 private:
-    const unsigned t_id;
     const TimePoint create_time;
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
@@ -286,9 +290,9 @@ class PageDirectory
 public:
     explicit PageDirectory(WALStorePtr && wal);
 
-    PageDirectorySnapshotPtr createSnapshot() const;
+    PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    SnapshotsStatistics getSnapshotsStat() const;
 
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
