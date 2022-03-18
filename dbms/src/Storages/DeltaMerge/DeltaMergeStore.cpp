@@ -1265,7 +1265,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             auto it = segments.find(segment->getRowKeyRange().getEnd());
             // check legality
             if (it == segments.end())
-              
+
                 return {};
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
@@ -2273,12 +2273,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     static const String useless_tracing_id("DeltaMergeStore::getStat");
     {
-        auto snaps_stat = storage_pool.data()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->data()->getSnapshotsStat();
         stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool->data()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
         if (concrete_snap)
         {
@@ -2295,12 +2295,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        auto snaps_stat = storage_pool.log()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->log()->getSnapshotsStat();
         stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr log_snapshot = storage_pool->log()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
         if (concrete_snap)
         {
@@ -2317,12 +2317,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        auto snaps_stat = storage_pool.meta()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->meta()->getSnapshotsStat();
         stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool->meta()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
         if (concrete_snap)
         {
