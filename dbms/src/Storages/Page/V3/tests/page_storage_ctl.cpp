@@ -25,6 +25,7 @@ struct ControlOptions
         DISPLAY_SUMMARY_INFO = 1,
         DISPLAY_DIRECTORY_INFO = 2,
         DISPLAY_BLOBS_INFO = 3,
+        CHECK_ALL_DATA_CRC = 4,
     };
 
     std::vector<std::string> paths;
@@ -74,7 +75,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.query_page_id = options["query_page_id"].as<UInt64>();
     opt.query_blob_id = options["query_blob_id"].as<UInt32>();
 
-    if (opt.display_mode < DisplayType::DISPLAY_SUMMARY_INFO || opt.display_mode > DisplayType::DISPLAY_BLOBS_INFO)
+    if (opt.display_mode < DisplayType::DISPLAY_SUMMARY_INFO || opt.display_mode > DisplayType::CHECK_ALL_DATA_CRC)
     {
         std::cerr << "Invalid display mode: " << opt.display_mode << std::endl;
         std::cerr << desc << std::endl;
@@ -138,16 +139,28 @@ String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt6
         page_str += fmt::format("      {}\n", versioned_entries->toDebugString());
 
         size_t count = 0;
-        for (const auto & [version, entry] : versioned_entries->entries)
+        for (const auto & [version, entry_or_del] : versioned_entries->entries)
         {
+            const auto & entry = entry_or_del.entry;
             page_str += fmt::format("        entry {}\n", count++);
             page_str += fmt::format("          sequence: {} \n", version.sequence);
             page_str += fmt::format("          epoch: {} \n", version.epoch);
-            page_str += fmt::format("          is del: {} \n", entry.isDelete());
-            page_str += fmt::format("          blob id: {} \n", entry.entry.file_id);
-            page_str += fmt::format("          offset: {} \n", entry.entry.offset);
-            page_str += fmt::format("          size: {} \n", entry.entry.size);
-            page_str += fmt::format("          crc: {} \n", entry.entry.checksum);
+            page_str += fmt::format("          is del: {} \n", entry_or_del.isDelete());
+            page_str += fmt::format("          blob id: {} \n", entry.file_id);
+            page_str += fmt::format("          offset: {} \n", entry.offset);
+            page_str += fmt::format("          size: {} \n", entry.size);
+            page_str += fmt::format("          crc: 0x{:X} \n", entry.checksum);
+            page_str += fmt::format("          field offset size: {} \n", entry.field_offsets.size());
+
+            if (entry.field_offsets.size() != 0)
+            {
+                page_str += fmt::format("          field offset:\n");
+                for (const auto & [offset, crc] : entry.field_offsets)
+                {
+                    page_str += fmt::format("            offset: {} crc: 0x{:X}\n", offset, crc);
+                }
+                page_str += fmt::format("\n");
+            }
         }
         return page_str;
     };
@@ -187,6 +200,7 @@ String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobSto
         longest_version_chaim = std::max(longest_version_chaim, versioned_entries->size());
         shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
     }
+
     dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
                                     mvcc_table_directory.size(),
                                     longest_version_chaim,
@@ -204,6 +218,38 @@ String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobSto
 
 
     return dir_summary_info + stats_str;
+}
+
+String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+{
+    for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
+    {
+        for (const auto & [version, entry_or_del] : versioned_entries->entries)
+        {
+            if (entry_or_del.isEntry() && versioned_entries->type == EditRecordType::VAR_ENTRY)
+            {
+                if (internal_id.low == 4927)
+                {
+                    std::cout << 11 << std::endl;
+                }
+                try
+                {
+                    PageIDAndEntryV3 to_read_entry;
+                    PageIDAndEntriesV3 to_read;
+                    to_read_entry.first = internal_id;
+                    to_read_entry.second = entry_or_del.entry;
+
+                    to_read.emplace_back(to_read_entry);
+                    blob_store.read(to_read);
+                }
+                catch (DB::Exception & e)
+                {
+                    std::cout << e.displayText() << std::endl;
+                }
+            }
+        }
+    }
+    return "";
 }
 
 int main(int argc, char ** argv)
@@ -236,8 +282,15 @@ int main(int argc, char ** argv)
         break;
     }
     case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
+    {
         std::cout << getBlobsInfo(blob_store, options.query_blob_id) << std::endl;
         break;
+    }
+    case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
+    {
+        std::cout << checkAllDatasCrc(mvcc_table_directory, blob_store) << std::endl;
+        break;
+    }
     default:
         std::cout << "Invalid display mode." << std::endl;
         break;
