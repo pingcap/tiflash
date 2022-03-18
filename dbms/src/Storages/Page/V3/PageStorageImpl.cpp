@@ -34,7 +34,7 @@ PageStorageImpl::PageStorageImpl(
     const Config & config_,
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
-    , log(LogWithPrefix::get("PageStorage", name))
+    , log(Logger::get("PageStorage", name))
     , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
 }

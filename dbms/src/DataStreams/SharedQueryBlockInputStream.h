@@ -33,9 +33,9 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LoggerPtr & log_)
         : queue(clients)
-        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
         , in(in_)
     {
         children.push_back(in);
@@ -160,7 +160,7 @@ private:
 
     std::string exception_msg;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
     BlockInputStreamPtr in;
 };
 } // namespace DB

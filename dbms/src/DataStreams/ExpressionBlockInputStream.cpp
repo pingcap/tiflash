@@ -19,9 +19,9 @@
 
 namespace DB
 {
-ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const LogWithPrefixPtr & log_)
+ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const LoggerPtr & log_)
     : expression(expression_)
-    , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
 {
     children.push_back(input);
 }

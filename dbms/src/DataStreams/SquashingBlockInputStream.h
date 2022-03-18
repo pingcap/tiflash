@@ -31,7 +31,7 @@ public:
         const BlockInputStreamPtr & src,
         size_t min_block_size_rows,
         size_t min_block_size_bytes,
-        const LogWithPrefixPtr & log_);
+        const LoggerPtr & log_);
 
     String getName() const override { return NAME; }
 
@@ -41,7 +41,7 @@ protected:
     Block readImpl() override;
 
 private:
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
     SquashingTransform transform;
     bool all_read = false;
 };

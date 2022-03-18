@@ -71,13 +71,13 @@ public:
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const LogWithPrefixPtr & log_)
+        const LoggerPtr & log_)
         : rpc_context(context)
         , request(&req)
         , notify_queue(queue)
         , msg_channel(msg_channel_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(LogWithPrefix::get("ExchangeReceiver", log_->identifier(), req_info))
+        , log(Logger::get("ExchangeReceiver", log_->identifier(), req_info))
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -193,7 +193,7 @@ public:
 
     bool meetError() const { return meet_error; }
     const String & getErrMsg() const { return err_msg; }
-    const LogWithPrefixPtr & getLog() const { return log; }
+    const LoggerPtr & getLog() const { return log; }
 
 private:
     void notifyReactor()
@@ -282,7 +282,7 @@ private:
     MPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 } // namespace
 
@@ -291,7 +291,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
     size_t source_num_,
     size_t max_streams_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const std::shared_ptr<Logger> & log_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -300,7 +300,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(LogWithPrefix::get("ExchangeReceiver", log_ ? log_->identifier() : ""))
+    , exc_log(Logger::get("ExchangeReceiver", log_ ? log_->identifier() : ""))
     , collected(false)
 {
     rpc_context->fillSchema(schema);
@@ -423,7 +423,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-    LogWithPrefixPtr log = LogWithPrefix::get("ExchangeReceiver", exc_log->identifier(), req_info);
+    LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier(), req_info);
 
     try
     {
@@ -616,7 +616,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionDone(
     bool meet_error,
     const String & local_err_msg,
-    const LogWithPrefixPtr & log)
+    const LoggerPtr & log)
 {
     Int32 copy_live_conn = -1;
     {

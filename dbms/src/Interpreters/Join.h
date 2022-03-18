@@ -19,7 +19,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
@@ -107,7 +107,7 @@ public:
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
          const String & match_helper_name = "",
-         const LogWithPrefixPtr & log_ = nullptr);
+         const LoggerPtr & log_ = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -329,7 +329,7 @@ private:
     mutable std::condition_variable build_table_cv;
     BuildTableState build_table_state;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     /// Limits for maximum map size.
     SizeLimits limits;

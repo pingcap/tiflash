@@ -92,7 +92,7 @@ public:
         std::shared_ptr<RPCContext> rpc_context_,
         size_t source_num_,
         size_t max_streams_,
-        const LogWithPrefixPtr & log_);
+        const LoggerPtr & log_);
 
     ~ExchangeReceiverBase();
 
@@ -141,7 +141,7 @@ private:
     void connectionDone(
         bool meet_error,
         const String & local_err_msg,
-        const LogWithPrefixPtr & log);
+        const LoggerPtr & log);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -162,7 +162,7 @@ private:
     ExchangeReceiverState state;
     String err_msg;
 
-    LogWithPrefixPtr exc_log;
+    LoggerPtr exc_log;
 
     bool collected = false;
     int thread_count = 0;

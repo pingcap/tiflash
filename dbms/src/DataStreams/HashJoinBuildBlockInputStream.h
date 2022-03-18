@@ -30,9 +30,9 @@ public:
         const BlockInputStreamPtr & input,
         JoinPtr join_,
         size_t stream_index_,
-        const LogWithPrefixPtr & log_)
+        const LoggerPtr & log_)
         : stream_index(stream_index_)
-        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.push_back(input);
         join = join_;
@@ -46,7 +46,7 @@ protected:
 private:
     JoinPtr join;
     size_t stream_index;
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

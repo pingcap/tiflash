@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
@@ -78,7 +78,7 @@ public:
         bool final_,
         size_t reading_threads_,
         size_t merging_threads_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        const LoggerPtr & log_ = nullptr);
 
     ~MergingAggregatedMemoryEfficientBlockInputStream() override;
 
@@ -103,7 +103,7 @@ protected:
 private:
     static constexpr int NUM_BUCKETS = 256;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     Aggregator aggregator;
     bool final;

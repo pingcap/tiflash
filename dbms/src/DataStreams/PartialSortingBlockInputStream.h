@@ -33,11 +33,11 @@ public:
     PartialSortingBlockInputStream(
         const BlockInputStreamPtr & input_,
         SortDescription & description_,
-        const LogWithPrefixPtr & log_,
+        const LoggerPtr & log_,
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.push_back(input_);
     }
@@ -56,7 +56,7 @@ protected:
 private:
     SortDescription description;
     size_t limit;
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB

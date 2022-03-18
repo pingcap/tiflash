@@ -97,13 +97,13 @@ public:
         BlockInputStreams inputs,
         BlockInputStreamPtr additional_input_at_end,
         size_t max_threads,
-        const LogWithPrefixPtr & log_,
+        const LoggerPtr & log_,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -347,7 +347,7 @@ private:
     bool started = false;
     bool all_read = false;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB

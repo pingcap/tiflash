@@ -52,7 +52,7 @@ public:
         bool do_range_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
-        const LogWithPrefixPtr & log_)
+        const LoggerPtr & log_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -65,7 +65,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -171,7 +171,7 @@ private:
     SegmentPtr cur_segment;
     TableID physical_table_id;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DM

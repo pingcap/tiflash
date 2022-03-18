@@ -36,7 +36,7 @@ public:
     ExpressionBlockInputStream(
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & expression_,
-        const LogWithPrefixPtr & log);
+        const LoggerPtr & log);
 
     String getName() const override { return NAME; }
     Block getTotals() override;
@@ -47,7 +47,7 @@ protected:
 
 private:
     ExpressionActionsPtr expression;
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

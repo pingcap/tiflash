@@ -22,8 +22,8 @@ SquashingBlockInputStream::SquashingBlockInputStream(
     const BlockInputStreamPtr & src,
     size_t min_block_size_rows,
     size_t min_block_size_bytes,
-    const LogWithPrefixPtr & log_)
-    : log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    const LoggerPtr & log_)
+    : log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     , transform(min_block_size_rows, min_block_size_bytes, log)
 {
     children.emplace_back(src);

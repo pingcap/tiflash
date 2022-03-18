@@ -16,13 +16,13 @@
 
 namespace DB
 {
-LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_)
+LoggerPtr getMPPTaskLog(const LoggerPtr & log, const String & name, const MPPTaskId & mpp_task_id_)
 {
     if (log)
     {
         assert(log->identifier() == mpp_task_id_.toString());
-        return LogWithPrefix::get(name, log->identifier());
+        return Logger::get(name, log->identifier());
     }
-    return LogWithPrefix::get(name, mpp_task_id_.toString());
+    return Logger::get(name, mpp_task_id_.toString());
 }
 } // namespace DB

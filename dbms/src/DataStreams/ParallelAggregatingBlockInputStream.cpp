@@ -34,8 +34,8 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     bool final_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const LogWithPrefixPtr & log_)
-    : log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    const LoggerPtr & log_)
+    : log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     , params(params_)
     , aggregator(params, log)
     , file_provider(file_provider_)

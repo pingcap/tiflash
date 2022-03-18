@@ -27,7 +27,7 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
@@ -789,7 +789,7 @@ public:
     };
 
 
-    explicit Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
+    explicit Aggregator(const Params & params_, const LoggerPtr & log_ = nullptr);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
@@ -909,7 +909,7 @@ protected:
 
     std::mutex mutex;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     /// Returns true if you can abort the current task.
     CancellationHook isCancelled;

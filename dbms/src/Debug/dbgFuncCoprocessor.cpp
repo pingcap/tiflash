@@ -459,7 +459,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGProperties properties = getDAGProperties("");
         std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
-        static auto log = LogWithPrefix::get("MockDAG");
+        static auto log = Logger::get("MockDAG");
         LOG_INFO(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
         tipb::SelectResponse dag_response;
         TablesRegionsInfo tables_regions_info(true);
@@ -2530,7 +2530,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
-    static auto log = LogWithPrefix::get("MockDAG");
+    static auto log = Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
     TablesRegionsInfo tables_regions_info(true);

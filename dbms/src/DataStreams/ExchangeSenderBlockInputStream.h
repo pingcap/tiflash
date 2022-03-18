@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -25,9 +25,9 @@ namespace DB
 class ExchangeSenderBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const LogWithPrefixPtr & log_)
+    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const LoggerPtr & log_)
         : writer(std::move(writer))
-        , log(LogWithPrefix::get(name, log_ ? log_->identifier() : ""))
+        , log(Logger::get(name, log_ ? log_->identifier() : ""))
     {
         children.push_back(input);
     }
@@ -44,7 +44,7 @@ protected:
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
-    std::shared_ptr<LogWithPrefix> log;
+    std::shared_ptr<Logger> log;
 };
 
 } // namespace DB

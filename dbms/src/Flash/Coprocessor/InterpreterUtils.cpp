@@ -27,7 +27,7 @@ using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
-    const LogWithPrefixPtr & log)
+    const LoggerPtr & log)
 {
     if (concurrency > 1 && pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
     {
@@ -40,7 +40,7 @@ void restoreConcurrency(
 BlockInputStreamPtr combinedNonJoinedDataStream(
     DAGPipeline & pipeline,
     size_t max_threads,
-    const LogWithPrefixPtr & log,
+    const LoggerPtr & log,
     bool ignore_block)
 {
     BlockInputStreamPtr ret = nullptr;
@@ -60,7 +60,7 @@ BlockInputStreamPtr combinedNonJoinedDataStream(
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
-    const LogWithPrefixPtr & log,
+    const LoggerPtr & log,
     bool ignore_block)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())

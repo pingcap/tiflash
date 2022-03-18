@@ -34,9 +34,9 @@ FilterBlockInputStream::FilterBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & expression_,
     const String & filter_column_name,
-    const LogWithPrefixPtr & log_)
+    const LoggerPtr & log_)
     : expression(expression_)
-    , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
 {
     children.push_back(input);
 

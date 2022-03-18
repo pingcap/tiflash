@@ -29,8 +29,8 @@ class ConcatBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "Concat";
 
 public:
-    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
-        : log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    ConcatBlockInputStream(BlockInputStreams inputs_, const LoggerPtr & log_)
+        : log(Logger::get(NAME, log_ ? log_->identifier() : ""))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -70,7 +70,7 @@ protected:
 private:
     BlockInputStreams::iterator current_stream;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB

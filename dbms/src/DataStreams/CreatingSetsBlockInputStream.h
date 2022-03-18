@@ -33,14 +33,14 @@ public:
         const BlockInputStreamPtr & input,
         const SubqueriesForSets & subqueries_for_sets_,
         const SizeLimits & network_transfer_limits,
-        const LogWithPrefixPtr & log_);
+        const LoggerPtr & log_);
 
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits,
         const MPPTaskId & mpp_task_id_,
-        const LogWithPrefixPtr & log_);
+        const LoggerPtr & log_);
 
     ~CreatingSetsBlockInputStream()
     {
@@ -107,7 +107,7 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     void createAll();
     void createOne(SubqueryForSet & subquery);

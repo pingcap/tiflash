@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <fmt/core.h>
 
 namespace DB
 {
-LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_);
+LoggerPtr getMPPTaskLog(const LoggerPtr & log, const String & name, const MPPTaskId & mpp_task_id_);
 
 } // namespace DB

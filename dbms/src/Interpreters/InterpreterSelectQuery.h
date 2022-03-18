@@ -30,8 +30,8 @@ class ExpressionAnalyzer;
 class ASTSelectQuery;
 struct SubqueryForSet;
 
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -221,7 +221,7 @@ private:
     /// Used when we read from prepared input, not table or subquery.
     BlockInputStreamPtr input;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB

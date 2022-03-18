@@ -82,13 +82,13 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     size_t limit_,
     size_t max_bytes_before_external_sort_,
     const std::string & tmp_path_,
-    const LogWithPrefixPtr & log_)
+    const LoggerPtr & log_)
     : description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
     , tmp_path(tmp_path_)
-    , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -190,7 +190,7 @@ Block MergeSortingBlockInputStream::readImpl()
 MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
     Blocks & blocks_,
     SortDescription & description_,
-    const LogWithPrefixPtr & log_,
+    const LoggerPtr & log_,
     size_t max_merged_block_size_,
     size_t limit_)
     : blocks(blocks_)
@@ -198,7 +198,7 @@ MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , log(LogWithPrefix::get(NAME, log_ ? log_->identifier() : ""))
+    , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)

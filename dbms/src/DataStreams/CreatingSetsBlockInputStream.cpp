@@ -43,7 +43,7 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
     const SizeLimits & network_transfer_limits,
     const MPPTaskId & mpp_task_id_,
-    const LogWithPrefixPtr & log_)
+    const LoggerPtr & log_)
     : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
     , network_transfer_limits(network_transfer_limits)
     , mpp_task_id(mpp_task_id_)
@@ -56,7 +56,7 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
     const SubqueriesForSets & subqueries_for_sets,
     const SizeLimits & network_transfer_limits,
-    const LogWithPrefixPtr & log_)
+    const LoggerPtr & log_)
     : network_transfer_limits(network_transfer_limits)
     , log(getMPPTaskLog(log_, name, mpp_task_id))
 {
