@@ -85,7 +85,7 @@ LegacyCompactor::tryCompact(
     }
 
     // Build a version_set with snapshot
-    auto snapshot = version_set.getSnapshot();
+    auto snapshot = version_set.getSnapshot(/*tracing_id*/ "");
     auto wb = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
     {

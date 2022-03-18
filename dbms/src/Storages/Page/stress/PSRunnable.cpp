@@ -390,7 +390,7 @@ DB::PageIds PSWindowReader::genRandomPageIds()
 
 bool PSSnapshotReader::runImpl()
 {
-    snapshots.emplace_back(ps->getSnapshot());
+    snapshots.emplace_back(ps->getSnapshot(""));
     usleep(snapshot_get_interval_ms * 1000);
     return true;
 }
