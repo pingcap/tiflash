@@ -83,7 +83,7 @@ public:
     virtual UInt64 getRightMargin() = 0;
 
     /**
-     * Get the max of capability of space map.
+     * Get the accurate max capacity of the space map.
      */
     virtual UInt64 updateAccurateMaxCapacity() = 0;
 

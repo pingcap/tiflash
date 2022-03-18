@@ -217,7 +217,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         {
             {
                 auto lock = stat->lock();
-                stat->recalculateCapability();
+                stat->recalculateCapacity();
             }
             LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
         }
@@ -231,7 +231,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     auto lock_stat = [size, this, &stat]() -> std::lock_guard<std::mutex> {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
-        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size, lock_stats);
+        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, lock_stats);
 
         // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
@@ -765,7 +765,6 @@ void BlobStore::BlobStats::restore()
     for (const auto & stat : stats_map)
     {
         stat->recalculateSpaceMap();
-        stat->recalculateCapability();
         max_restored_file_id = std::max(stat->id, max_restored_file_id);
         existing_file_ids.insert(stat->id);
     }
@@ -851,7 +850,7 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_gu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 /*file_limit_size*/, const std::lock_guard<std::mutex> &)
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
     double smallest_valid_rate = 2;
@@ -866,7 +865,6 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     {
         if (!stat->isReadOnly()
             && stat->sm_max_caps >= buf_size
-            // && stat->sm_total_size + buf_size < file_limit_size
             && stat->sm_valid_rate < smallest_valid_rate)
         {
             smallest_valid_rate = stat->sm_valid_rate;
@@ -984,9 +982,10 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     sm_total_size = total_size;
     sm_valid_size = valid_size;
     sm_valid_rate = valid_size * 1.0 / total_size;
+    recalculateCapacity();
 }
 
-void BlobStore::BlobStats::BlobStat::recalculateCapability()
+void BlobStore::BlobStats::BlobStat::recalculateCapacity()
 {
     sm_max_caps = smap->updateAccurateMaxCapacity();
 }

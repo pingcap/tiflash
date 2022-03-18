@@ -112,12 +112,10 @@ public:
             void recalculateSpaceMap();
 
             /**
-             * After GC we removed out of date data.
-             * But we can't calculate the `sm_max_cap`.It can only be updated through spacemap.
-             * 
-             * Also after restore, we need call this method to recalculate the `sm_max_cap`.
+             * The `sm_max_cap` is not accurate after GC removes out-of-date data, or after restoring from disk.
+             * Caller should call this function to update the `sm_max_cap` so that we can reuse the space in this BlobStat.
              */
-            void recalculateCapability();
+            void recalculateCapacity();
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
@@ -149,7 +147,7 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
+        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
 
