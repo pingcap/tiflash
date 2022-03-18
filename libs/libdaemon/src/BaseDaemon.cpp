@@ -543,11 +543,12 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr int max_frames = 50;
+        int frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
         UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
@@ -555,7 +556,7 @@ private:
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
         }
 #endif
 
