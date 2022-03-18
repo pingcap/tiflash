@@ -1591,7 +1591,6 @@ static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
 
     // Check whether there are any files in kvstore path, if exists, then this is not a new node.
     // If it's a new node, then we enable v3. Otherwise, we use v2.
-    bool is_new_node = true;
     for (const auto & path : path_pool.listKVStorePaths())
     {
         Poco::File dir(path);
@@ -1602,11 +1601,10 @@ static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
         dir.list(files);
         if (!files.empty())
         {
-            is_new_node = false;
-            break;
+            return false;
         }
     }
-    return is_new_node;
+    return true;
 }
 
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
