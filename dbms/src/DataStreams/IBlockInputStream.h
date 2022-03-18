@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
@@ -122,7 +123,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+    void dumpTree(FmtBuffer & buffer, size_t indent = 0, size_t multiplier = 1);
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
