@@ -27,7 +27,7 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -72,6 +72,9 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+
+    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), enable_ps_v3))
+        LOG_FMT_INFO(&Poco::Logger::get("TiFlashTestEnv"), "PageStorage V3 enabled.");
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 

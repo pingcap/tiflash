@@ -212,11 +212,17 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         if (entry.size == 0)
         {
             continue;
-            // throw Exception(fmt::format("Invaild entry. entry size 0. [id={}] [offset={}]",
-            //                             entry.file_id,
-            //                             entry.offset));
         }
-        removePosFromStats(entry.file_id, entry.offset, entry.size);
+
+        try
+        {
+            removePosFromStats(entry.file_id, entry.offset, entry.size);
+        }
+        catch (DB::Exception & e)
+        {
+            e.addMessage(fmt::format("while removing entry [entry={}]", toDebugString(entry)));
+            e.rethrow();
+        }
     }
 }
 
