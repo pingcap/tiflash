@@ -45,7 +45,7 @@ public:
     MergeSortingBlocksBlockInputStream(
         Blocks & blocks_,
         SortDescription & description_,
-        const LoggerPtr & log_,
+        const String & req_id,
         size_t max_merged_block_size_,
         size_t limit_ = 0);
 
@@ -98,7 +98,7 @@ public:
         size_t limit_,
         size_t max_bytes_before_external_sort_,
         const std::string & tmp_path_,
-        const LoggerPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 

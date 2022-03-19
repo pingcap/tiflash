@@ -30,9 +30,6 @@ class ExpressionAnalyzer;
 class ASTSelectQuery;
 struct SubqueryForSet;
 
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
 class InterpreterSelectQuery : public IInterpreter

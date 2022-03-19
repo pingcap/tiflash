@@ -31,7 +31,7 @@ public:
         const BlockInputStreamPtr & src,
         size_t min_block_size_rows,
         size_t min_block_size_bytes,
-        const LoggerPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 

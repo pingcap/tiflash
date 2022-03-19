@@ -44,7 +44,7 @@ public:
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
-        const LoggerPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 

@@ -38,7 +38,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & join_probe_actions_,
-        const LoggerPtr & log_);
+        const String & req_id);
 
     String getName() const override { return name; }
     Block getTotals() override;

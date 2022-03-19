@@ -97,13 +97,13 @@ public:
         BlockInputStreams inputs,
         BlockInputStreamPtr additional_input_at_end,
         size_t max_threads,
-        const LoggerPtr & log_,
+        const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, req_id))
     {
         children = inputs;
         if (additional_input_at_end)

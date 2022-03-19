@@ -36,7 +36,7 @@ public:
         const BlockInputStreamPtr & input,
         size_t limit_,
         size_t offset_,
-        const LoggerPtr & log_,
+        const String & req_id,
         bool always_read_till_end_ = false);
 
     String getName() const override { return NAME; }

@@ -199,7 +199,7 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                         context.getSettingsRef().enable_async_grpc_client),
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
-                    log);
+                    log->identifier());
                 mpp_exchange_receiver_map[executor_id] = exchange_receiver;
                 new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
             }

@@ -160,9 +160,9 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const LoggerPtr & log_)
+Aggregator::Aggregator(const Params & params_, const String & req_id)
     : params(params_)
-    , log(Logger::get("Aggregator", log_ ? log_->identifier() : ""))
+    , log(Logger::get("Aggregator", req_id))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)

@@ -33,9 +33,9 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LoggerPtr & log_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
         : queue(clients)
-        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, req_id))
         , in(in_)
     {
         children.push_back(in);

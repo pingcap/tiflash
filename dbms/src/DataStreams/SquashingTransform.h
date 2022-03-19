@@ -37,7 +37,7 @@ class SquashingTransform
 {
 public:
     /// Conditions on rows and bytes are OR-ed. If one of them is zero, then corresponding condition is ignored.
-    SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const LoggerPtr & log_ = nullptr);
+    SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const String & req_id);
 
     /// When not ready, you need to pass more blocks to add function.
     struct Result

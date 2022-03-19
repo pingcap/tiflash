@@ -21,8 +21,8 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
-    const LoggerPtr & log_)
-    : log(Logger::get(name, log_ ? log_->identifier() : ""))
+    const String & req_id)
+    : log(Logger::get(name, req_id))
     , join_probe_actions(join_probe_actions_)
 {
     children.push_back(input);

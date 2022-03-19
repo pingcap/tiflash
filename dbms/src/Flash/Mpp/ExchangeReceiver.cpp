@@ -71,13 +71,13 @@ public:
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const LoggerPtr & log_)
+        const String & req_id)
         : rpc_context(context)
         , request(&req)
         , notify_queue(queue)
         , msg_channel(msg_channel_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(Logger::get("ExchangeReceiver", log_->identifier(), req_info))
+        , log(Logger::get("ExchangeReceiver", req_id, req_info))
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -291,7 +291,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
     size_t source_num_,
     size_t max_streams_,
-    const std::shared_ptr<Logger> & log_)
+    const String & req_id)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -300,7 +300,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(Logger::get("ExchangeReceiver", log_ ? log_->identifier() : ""))
+    , exc_log(Logger::get("ExchangeReceiver", req_id))
     , collected(false)
 {
     rpc_context->fillSchema(schema);
@@ -366,7 +366,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<AsyncRequestHandler<RPCContext>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
+        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier());
 
     while (alive_async_connections > 0)
     {

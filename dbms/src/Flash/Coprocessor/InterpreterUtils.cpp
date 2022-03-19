@@ -32,7 +32,7 @@ void restoreConcurrency(
     if (concurrency > 1 && pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
     {
         BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier());
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 }
@@ -49,9 +49,9 @@ BlockInputStreamPtr combinedNonJoinedDataStream(
     else if (pipeline.streams_with_non_joined_data.size() > 1)
     {
         if (ignore_block)
-            ret = std::make_shared<UnionWithoutBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
+            ret = std::make_shared<UnionWithoutBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
         else
-            ret = std::make_shared<UnionWithBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
+            ret = std::make_shared<UnionWithBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
     }
     pipeline.streams_with_non_joined_data.clear();
     return ret;
@@ -69,9 +69,9 @@ void executeUnion(
     if (!pipeline.streams.empty())
     {
         if (ignore_block)
-            pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, non_joined_data_stream, max_streams, log);
+            pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
         else
-            pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log);
+            pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
         pipeline.streams.resize(1);
     }
     else if (non_joined_data_stream != nullptr)

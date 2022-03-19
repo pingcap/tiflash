@@ -82,8 +82,8 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
-        bool is_async_ = false,
-        const LoggerPtr & log_ = nullptr);
+        bool is_async_,
+        const String & req_id);
 
     ~MPPTunnelBase();
 

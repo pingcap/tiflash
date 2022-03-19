@@ -92,7 +92,7 @@ public:
         std::shared_ptr<RPCContext> rpc_context_,
         size_t source_num_,
         size_t max_streams_,
-        const LoggerPtr & log_);
+        const String & req_id);
 
     ~ExchangeReceiverBase();
 

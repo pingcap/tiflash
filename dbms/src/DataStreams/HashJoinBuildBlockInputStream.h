@@ -30,9 +30,9 @@ public:
         const BlockInputStreamPtr & input,
         JoinPtr join_,
         size_t stream_index_,
-        const LoggerPtr & log_)
+        const String & req_id)
         : stream_index(stream_index_)
-        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, req_id))
     {
         children.push_back(input);
         join = join_;

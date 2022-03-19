@@ -33,11 +33,11 @@ public:
     PartialSortingBlockInputStream(
         const BlockInputStreamPtr & input_,
         SortDescription & description_,
-        const LoggerPtr & log_,
+        const String & req_id,
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+        , log(Logger::get(NAME, req_id))
     {
         children.push_back(input_);
     }

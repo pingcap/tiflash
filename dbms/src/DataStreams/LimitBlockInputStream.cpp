@@ -23,12 +23,12 @@ LimitBlockInputStream::LimitBlockInputStream(
     const BlockInputStreamPtr & input,
     size_t limit_,
     size_t offset_,
-    const LoggerPtr & log_,
+    const String & req_id,
     bool always_read_till_end_)
     : limit(limit_)
     , offset(offset_)
     , always_read_till_end(always_read_till_end_)
-    , log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+    , log(Logger::get(NAME, req_id))
 {
     children.push_back(input);
 }

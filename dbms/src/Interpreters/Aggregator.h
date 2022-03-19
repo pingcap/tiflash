@@ -789,7 +789,7 @@ public:
     };
 
 
-    explicit Aggregator(const Params & params_, const LoggerPtr & log_ = nullptr);
+    Aggregator(const Params & params_, const String & req_id);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);

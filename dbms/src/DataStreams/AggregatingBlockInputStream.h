@@ -43,10 +43,10 @@ public:
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
-        const LoggerPtr & log_)
-        : log(Logger::get(NAME, log_ ? log_->identifier() : ""))
+        const String & req_id)
+        : log(Logger::get(NAME, req_id))
         , params(params_)
-        , aggregator(params, log)
+        , aggregator(params, req_id)
         , file_provider{file_provider_}
         , final(final_)
     {
