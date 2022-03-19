@@ -1056,7 +1056,12 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool ov
     else
     {
         pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
-                pipeline.streams, params, final, max_streams, settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads), /*req_id=*/ "");
+            pipeline.streams,
+            params,
+            final,
+            max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+            /*req_id=*/"");
 
         pipeline.streams.resize(1);
     }
