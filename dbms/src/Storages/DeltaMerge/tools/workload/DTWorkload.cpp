@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Config/TOMLConfiguration.h>
+#include <Common/Exception.h>
 #include <Common/LogWithPrefix.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -66,15 +67,19 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     ts_gen = std::make_unique<TimestampGenerator>();
 
     Stopwatch sw;
-    store = std::make_unique<DeltaMergeStore>(*context, true, table_info->db_name, table_info->table_name, table_info->table_id, //
-                                              *table_info->columns,
-                                              table_info->handle,
-                                              table_info->is_common_handle,
-                                              table_info->rowkey_column_indexes.size(),
-                                              DeltaMergeStore::Settings());
+    store = std::make_unique<DeltaMergeStore>(
+        *context,
+        true,
+        table_info->db_name,
+        table_info->table_name,
+        table_info->table_id,
+        *table_info->columns,
+        table_info->handle,
+        table_info->is_common_handle,
+        table_info->rowkey_column_indexes.size(),
+        DeltaMergeStore::Settings());
     stat.init_store_sec = sw.elapsedSeconds();
     LOG_FMT_INFO(log, "Init store {} seconds", stat.init_store_sec);
-
 
     if (opts_.verification)
     {
@@ -131,22 +136,12 @@ void DTWorkload::write(ThreadWriteStat & write_stat)
         write_stat.write_count = write_count;
         write_stat.max_do_write_us = max_do_write_us;
 
-        LOG_INFO(log, write_stat.toString());
+        LOG_FMT_INFO(log, "{}", write_stat.toString());
         writing_threads.fetch_sub(1, std::memory_order_relaxed);
-    }
-    catch (const DB::Exception & e)
-    {
-        LOG_ERROR(log, e.message());
-        std::abort();
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, e.what());
-        std::abort();
     }
     catch (...)
     {
-        LOG_FMT_INFO(log, "Unknow exception.");
+        tryLogCurrentException("exception thrown in DTWorkload::write");
         std::abort();
     }
 }
@@ -244,31 +239,55 @@ void DTWorkload::verifyHandle(uint64_t r)
         throw std::logic_error(s);
     }
     stat.verify_count = handle_count;
-    LOG_INFO(log, fmt::format("verifyHandle: round {} columns {} streams {} read_count {} read_sec {} handle_count {}", r, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), stat.verify_sec, handle_count));
+    LOG_FMT_INFO(
+        log,
+        "verifyHandle: round {} columns {} streams {} read_count {} read_sec {} handle_count {}",
+        r,
+        columns.size(),
+        stream_count,
+        read_count.load(std::memory_order_relaxed),
+        stat.verify_sec,
+        handle_count);
 }
 
 void DTWorkload::scanAll(uint64_t i)
 {
-    while (writing_threads.load(std::memory_order_relaxed) > 0)
+    try
     {
-        const auto & columns = store->getTableColumns();
-        int stream_count = opts->read_stream_count;
+        while (writing_threads.load(std::memory_order_relaxed) > 0)
+        {
+            const auto & columns = store->getTableColumns();
+            int stream_count = opts->read_stream_count;
 
-        std::atomic<uint64_t> read_count = 0;
-        auto count_row = [&read_count](BlockInputStreamPtr in, [[maybe_unused]] uint64_t read_ts) {
-            while (Block block = in->read())
-            {
-                read_count.fetch_add(block.rows(), std::memory_order_relaxed);
-            }
-        };
-        Stopwatch sw;
-        read(columns, stream_count, count_row);
-        double read_sec = sw.elapsedSeconds();
+            std::atomic<uint64_t> read_count = 0;
+            auto count_row = [&read_count](BlockInputStreamPtr in, [[maybe_unused]] uint64_t read_ts) {
+                while (Block block = in->read())
+                {
+                    read_count.fetch_add(block.rows(), std::memory_order_relaxed);
+                }
+            };
+            Stopwatch sw;
+            read(columns, stream_count, count_row);
+            double read_sec = sw.elapsedSeconds();
 
-        stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
-        stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
+            stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-        LOG_FMT_INFO(log, "scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}", i, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), read_sec, handle_table->count());
+            LOG_FMT_INFO(
+                log,
+                "scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}",
+                i,
+                columns.size(),
+                stream_count,
+                read_count.load(std::memory_order_relaxed),
+                read_sec,
+                handle_table->count());
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException("exception thrown in scanAll");
+        throw;
     }
 }
 

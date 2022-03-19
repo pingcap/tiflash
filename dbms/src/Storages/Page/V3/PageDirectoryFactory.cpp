@@ -14,6 +14,7 @@
 
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WALStore.h>
 
