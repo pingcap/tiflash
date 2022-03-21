@@ -267,7 +267,7 @@ public:
 
     void abandon(DMContext & context)
     {
-        LOG_DEBUG(log, "Abandon segment [" << segment_id << "]");
+        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
         delta->abandon(context);
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
