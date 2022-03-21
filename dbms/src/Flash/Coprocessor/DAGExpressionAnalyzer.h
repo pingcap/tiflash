@@ -277,7 +277,9 @@ private:
         bool need_append_timezone_cast,
         const BoolVec & need_append_type_cast_vec);
 
-    // return {need_append_type_cast, BoolVec of which one should append type cast}
+    // return {need_append_type_cast, need_append_type_cast_vec}
+    // need_append_type_cast_vec: BoolVec of which one should append type cast.
+    // And need_append_type_cast_vec.size() == output_offsets.size().
     std::pair<bool, BoolVec> isCastRequiredForRootFinalProjection(
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets) const;

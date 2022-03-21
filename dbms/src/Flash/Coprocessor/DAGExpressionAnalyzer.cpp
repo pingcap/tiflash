@@ -855,6 +855,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
     String tz_col;
     String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
+    // <origin_column_name, offset>
     std::unordered_map<String, size_t> had_casted_map;
 
     const auto & current_columns = getCurrentInputColumns();
@@ -871,17 +872,18 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         if ((need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
         {
-            auto it = had_casted_map.find(current_columns[offset].name);
+            const String & origin_column_name = current_columns[offset].name;
+            auto it = had_casted_map.find(origin_column_name);
             if (it == had_casted_map.end())
             {
-                /// first add timestamp cast
-                String updated_name = current_columns[offset].name;
+                String updated_name = origin_column_name;
                 auto updated_type = current_columns[offset].type;
+                /// first add timestamp cast
                 if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
                 {
                     if (tz_col.empty())
                         tz_col = getActions(tz_expr, actions);
-                    updated_name = appendTimeZoneCast(tz_col, current_columns[offset].name, tz_cast_func_name, actions);
+                    updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
                 }
                 /// then add type cast
                 if (need_append_type_cast_vec[index])
@@ -889,7 +891,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
                     updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
                     updated_name = appendCast(updated_type, actions, updated_name);
                 }
-                had_casted_map[current_columns[offset].name] = index;
+                had_casted_map[origin_column_name] = offset;
 
                 after_cast_columns[offset].name = updated_name;
                 after_cast_columns[offset].type = updated_type;
@@ -945,6 +947,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
 
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
+    assert(need_append_type_cast_vec.size() == output_offsets.size());
 
     auto & step = initAndGetLastStep(chain);
 
