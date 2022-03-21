@@ -108,7 +108,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
 
     std::tm buf_tm;
     std::tm * local_tm = localtime_r(&tt, &buf_tm);
-    if (!local_tm)
+    if (unlikely(!local_tm))
         return "1970/01/01 00:00:00.000 +00:00";
     int year = local_tm->tm_year + 1900;
     int month = local_tm->tm_mon + 1;
@@ -129,7 +129,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
     auto offset_tp = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>(offset_seconds);
     auto offset_tt = std::chrono::system_clock::to_time_t(offset_tp);
     std::tm * offset_tm = gmtime_r(&offset_tt, &buf_tm);
-    if (!offset_tm)
+    if (unlikely(!offset_tm))
         return fmt_buf.toString() + "+00:00";
     if (zone_offset < 0)
         fmt_buf.append("-");
