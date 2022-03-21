@@ -44,6 +44,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
+    // TODO: clean up blobstore.
     // TODO: Speedup restoring
     PageDirectoryFactory factory;
     page_directory = factory

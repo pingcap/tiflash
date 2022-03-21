@@ -176,6 +176,8 @@ public:
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
+    std::optional<PageEntryV3> getLastEntry() const;
+
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
      * store them into `blob_versioned_entries`.
