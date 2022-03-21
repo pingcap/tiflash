@@ -17,7 +17,8 @@
 
 #include <boost/program_options.hpp>
 
-using namespace DB::PS::V3;
+namespace DB::PS::V3
+{
 struct ControlOptions
 {
     enum DisplayType
@@ -94,236 +95,171 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     return opt;
 }
 
-
-void initGlobalLogger()
+class PageStorageControl
 {
-    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Poco::AutoPtr<Poco::PatternFormatter> formatter(new DB::UnifiedLogPatternFormatter);
-    Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Poco::Logger::root().setChannel(formatting_channel);
-    Poco::Logger::root().setLevel("trace");
-}
-
-
-String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
-{
-    auto statInfo = [](const BlobStore::BlobStats::BlobStatPtr & stat) {
-        String stat_str = fmt::format(R"raw(    stat id: {}
-      total size: {}
-      valid size: {}
-      valid rate: {}
-      max cap: {}
-        )raw", //
-                                      stat->id, //
-                                      stat->sm_total_size, //
-                                      stat->sm_valid_size, //
-                                      stat->sm_valid_rate, //
-                                      stat->sm_max_caps);
-
-        stat_str += stat->smap->toDebugString();
-        stat_str += "\n";
-        return stat_str;
-    };
-
-    String stats_str = "  Blobs specific info: \n\n";
-    for (const auto & stat : blob_store.blob_stats.getStats())
+public:
+    PageStorageControl(const ControlOptions & options_)
+        : options(options_)
     {
+    }
+
+    String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    {
+        auto statInfo = [](const BlobStore::BlobStats::BlobStatPtr & stat) {
+            String stat_str = fmt::format(R"raw(    stat id: {}
+            total size: {}
+            valid size: {}
+            valid rate: {}
+            max cap: {}
+                )raw", //
+                                          stat->id, //
+                                          stat->sm_total_size, //
+                                          stat->sm_valid_size, //
+                                          stat->sm_valid_rate, //
+                                          stat->sm_max_caps);
+
+            stat_str += stat->smap->toDebugString();
+            stat_str += "\n";
+            return stat_str;
+        };
+
+        String stats_str = "  Blobs specific info: \n\n";
+        for (const auto & stat : blob_store.blob_stats.getStats())
+        {
+            if (blob_id != UINT32_MAX)
+            {
+                if (stat->id == blob_id)
+                {
+                    stats_str += statInfo(stat);
+                    return stats_str;
+                }
+                continue;
+            }
+            stats_str += statInfo(stat);
+        }
+
         if (blob_id != UINT32_MAX)
         {
-            if (stat->id == blob_id)
-            {
-                stats_str += statInfo(stat);
-                return stats_str;
-            }
-            continue;
+            stats_str += fmt::format("    no found blob {}", blob_id);
         }
-        stats_str += statInfo(stat);
+        return stats_str;
     }
 
-    if (blob_id != UINT32_MAX)
+    String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        stats_str += fmt::format("    no found blob {}", blob_id);
-    }
-    return stats_str;
-}
+        auto pageInfo = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
+            String page_str = fmt::format("    page id {}\n", page_internal_id_);
+            page_str += fmt::format("      {}\n", versioned_entries->toDebugString());
 
-String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
-{
-    auto pageInfo = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
-        String page_str = fmt::format("    page id {}\n", page_internal_id_);
-        page_str += fmt::format("      {}\n", versioned_entries->toDebugString());
-
-        size_t count = 0;
-        for (const auto & [version, entry_or_del] : versioned_entries->entries)
-        {
-            const auto & entry = entry_or_del.entry;
-            page_str += fmt::format(R"raw(      entry {}
-          sequence: {}
-          epoch: {}
-          is del: {}
-          blob id: {}
-          offset: {}
-          size: {}
-          crc: {})raw", //
-                                    count++, //
-                                    version.sequence, //
-                                    version.epoch, //
-                                    entry_or_del.isDelete(), //
-                                    entry.file_id, //
-                                    entry.offset, //
-                                    entry.size, //
-                                    entry.checksum, //
-                                    entry.field_offsets.size() //
-            );
-            if (entry.field_offsets.size() != 0)
+            size_t count = 0;
+            for (const auto & [version, entry_or_del] : versioned_entries->entries)
             {
-                page_str += fmt::format("          field offset:\n");
-                for (const auto & [offset, crc] : entry.field_offsets)
-                {
-                    page_str += fmt::format("            offset: {} crc: 0x{:X}\n", offset, crc);
-                }
-                page_str += fmt::format("\n");
-            }
-        }
-        return page_str;
-    };
-
-    String directory_str = "  Directory specific info: \n\n";
-    for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
-    {
-        if (page_id != UINT64_MAX)
-        {
-            if (internal_id.low == page_id && internal_id.high == ns_id)
-            {
-                directory_str += pageInfo(internal_id, versioned_entries);
-                return directory_str;
-            }
-            continue;
-        }
-        directory_str += pageInfo(internal_id, versioned_entries);
-    }
-
-    if (page_id != UINT64_MAX)
-    {
-        directory_str += fmt::format("    no found page {}", page_id);
-    }
-    return directory_str;
-}
-
-String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
-{
-    UInt64 longest_version_chaim = 0;
-    UInt64 shortest_version_chaim = UINT64_MAX;
-
-    String dir_summary_info = "  Directory summary info: \n";
-
-    for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
-    {
-        (void)internal_id;
-        longest_version_chaim = std::max(longest_version_chaim, versioned_entries->size());
-        shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
-    }
-
-    dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
-                                    mvcc_table_directory.size(),
-                                    longest_version_chaim,
-                                    shortest_version_chaim);
-
-    String stats_str = "  Blobs summary info: \n";
-    for (const auto & stat : blob_store.blob_stats.getStats())
-    {
-        stats_str += fmt::format(R"raw(    stat id: {}
-      total size: {}
-      valid size: {}
-      valid rate: {}
-      max cap: {}
-        )raw", //
-                                 stat->id,
-                                 stat->sm_total_size,
-                                 stat->sm_valid_size,
-                                 stat->sm_valid_rate,
-                                 stat->sm_max_caps);
-    }
-
-    return dir_summary_info + stats_str;
-}
-
-String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
-{
-    const auto & page_internal_id = buildV3Id(ns_id, page_id);
-    const auto & it = mvcc_table_directory.find(page_internal_id);
-    if (it == mvcc_table_directory.end())
-    {
-        return fmt::format("Can't find {}", page_internal_id);
-    }
-
-    String error_msg = "";
-    size_t error_count = 0;
-    for (const auto & [version, entry_or_del] : it->second->entries)
-    {
-        if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
-        {
-            (void)blob_store;
-            try
-            {
-                PageIDAndEntryV3 to_read_entry;
-                const PageEntryV3 & entry = entry_or_del.entry;
-                PageIDAndEntriesV3 to_read;
-                to_read_entry.first = page_internal_id;
-                to_read_entry.second = entry;
-
-                to_read.emplace_back(to_read_entry);
-                blob_store.read(to_read);
-
+                const auto & entry = entry_or_del.entry;
+                page_str += fmt::format(R"raw(      entry {}
+                sequence: {}
+                epoch: {}
+                is del: {}
+                blob id: {}
+                offset: {}
+                size: {}
+                crc: {})raw", //
+                                        count++, //
+                                        version.sequence, //
+                                        version.epoch, //
+                                        entry_or_del.isDelete(), //
+                                        entry.file_id, //
+                                        entry.offset, //
+                                        entry.size, //
+                                        entry.checksum, //
+                                        entry.field_offsets.size() //
+                );
                 if (entry.field_offsets.size() != 0)
                 {
-                    DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
-                    std::iota(std::begin(indices), std::end(indices), 0);
-
-                    BlobStore::FieldReadInfos infos;
-                    BlobStore::FieldReadInfo info(page_internal_id, entry, indices);
-                    infos.emplace_back(info);
-                    blob_store.read(infos);
+                    page_str += fmt::format("          field offset:\n");
+                    for (const auto & [offset, crc] : entry.field_offsets)
+                    {
+                        page_str += fmt::format("            offset: {} crc: 0x{:X}\n", offset, crc);
+                    }
+                    page_str += fmt::format("\n");
                 }
             }
-            catch (DB::Exception & e)
+            return page_str;
+        };
+
+        String directory_str = "  Directory specific info: \n\n";
+        for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
+        {
+            if (page_id != UINT64_MAX)
             {
-                error_count++;
-                error_msg += e.displayText();
-                error_msg += "\n";
+                if (internal_id.low == page_id && internal_id.high == ns_id)
+                {
+                    directory_str += pageInfo(internal_id, versioned_entries);
+                    return directory_str;
+                }
+                continue;
             }
-        }
-    }
-
-    if (error_count == 0)
-    {
-        return fmt::format("Checked {} without any error.", page_internal_id);
-    }
-
-    error_msg += fmt::format("Check {} meet {} errors!", page_internal_id, error_count);
-    return error_msg;
-}
-
-String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
-{
-    size_t total_pages = mvcc_table_directory.size();
-    size_t cut_index = 0;
-    size_t index = 0;
-    std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", (int)enable_fo_check) << std::endl;
-
-    std::list<std::pair<UInt128, PageVersionType>> error_versioned_pages;
-    for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
-    {
-        if (index == total_pages / 10 * cut_index)
-        {
-            std::cout << fmt::format("processing : {}%", cut_index * 10) << std::endl;
-            cut_index++;
+            directory_str += pageInfo(internal_id, versioned_entries);
         }
 
-        // TODO : need replace by getLastEntry();
-        for (const auto & [version, entry_or_del] : versioned_entries->entries)
+        if (page_id != UINT64_MAX)
         {
-            if (entry_or_del.isEntry() && versioned_entries->type == EditRecordType::VAR_ENTRY)
+            directory_str += fmt::format("    no found page {}", page_id);
+        }
+        return directory_str;
+    }
+
+    String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+    {
+        UInt64 longest_version_chaim = 0;
+        UInt64 shortest_version_chaim = UINT64_MAX;
+
+        String dir_summary_info = "  Directory summary info: \n";
+
+        for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
+        {
+            (void)internal_id;
+            longest_version_chaim = std::max(longest_version_chaim, versioned_entries->size());
+            shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
+        }
+
+        dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
+                                        mvcc_table_directory.size(),
+                                        longest_version_chaim,
+                                        shortest_version_chaim);
+
+        String stats_str = "  Blobs summary info: \n";
+        for (const auto & stat : blob_store.blob_stats.getStats())
+        {
+            stats_str += fmt::format(R"raw(    stat id: {}
+            total size: {}
+            valid size: {}
+            valid rate: {}
+            max cap: {}
+                )raw", //
+                                     stat->id,
+                                     stat->sm_total_size,
+                                     stat->sm_valid_size,
+                                     stat->sm_valid_rate,
+                                     stat->sm_max_caps);
+        }
+
+        return dir_summary_info + stats_str;
+    }
+
+    String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    {
+        const auto & page_internal_id = buildV3Id(ns_id, page_id);
+        const auto & it = mvcc_table_directory.find(page_internal_id);
+        if (it == mvcc_table_directory.end())
+        {
+            return fmt::format("Can't find {}", page_internal_id);
+        }
+
+        String error_msg = "";
+        size_t error_count = 0;
+        for (const auto & [version, entry_or_del] : it->second->entries)
+        {
+            if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
             {
                 (void)blob_store;
                 try
@@ -331,97 +267,173 @@ String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobS
                     PageIDAndEntryV3 to_read_entry;
                     const PageEntryV3 & entry = entry_or_del.entry;
                     PageIDAndEntriesV3 to_read;
-                    to_read_entry.first = internal_id;
+                    to_read_entry.first = page_internal_id;
                     to_read_entry.second = entry;
 
                     to_read.emplace_back(to_read_entry);
                     blob_store.read(to_read);
 
-                    if (enable_fo_check && entry.field_offsets.size() != 0)
+                    if (entry.field_offsets.size() != 0)
                     {
                         DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                         std::iota(std::begin(indices), std::end(indices), 0);
 
                         BlobStore::FieldReadInfos infos;
-                        BlobStore::FieldReadInfo info(internal_id, entry, indices);
+                        BlobStore::FieldReadInfo info(page_internal_id, entry, indices);
                         infos.emplace_back(info);
                         blob_store.read(infos);
                     }
                 }
                 catch (DB::Exception & e)
                 {
-                    error_versioned_pages.emplace_back(std::make_pair(internal_id, version));
+                    error_count++;
+                    error_msg += e.displayText();
+                    error_msg += "\n";
                 }
             }
         }
-        index++;
+
+        if (error_count == 0)
+        {
+            return fmt::format("Checked {} without any error.", page_internal_id);
+        }
+
+        error_msg += fmt::format("Check {} meet {} errors!", page_internal_id, error_count);
+        return error_msg;
     }
 
-    if (error_versioned_pages.size() == 0)
+    String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
     {
-        return "All of data checked. All passed.";
+        size_t total_pages = mvcc_table_directory.size();
+        size_t cut_index = 0;
+        size_t index = 0;
+        std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", (int)enable_fo_check) << std::endl;
+
+        std::list<std::pair<UInt128, PageVersionType>> error_versioned_pages;
+        for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
+        {
+            if (index == total_pages / 10 * cut_index)
+            {
+                std::cout << fmt::format("processing : {}%", cut_index * 10) << std::endl;
+                cut_index++;
+            }
+
+            // TODO : need replace by getLastEntry();
+            for (const auto & [version, entry_or_del] : versioned_entries->entries)
+            {
+                if (entry_or_del.isEntry() && versioned_entries->type == EditRecordType::VAR_ENTRY)
+                {
+                    (void)blob_store;
+                    try
+                    {
+                        PageIDAndEntryV3 to_read_entry;
+                        const PageEntryV3 & entry = entry_or_del.entry;
+                        PageIDAndEntriesV3 to_read;
+                        to_read_entry.first = internal_id;
+                        to_read_entry.second = entry;
+
+                        to_read.emplace_back(to_read_entry);
+                        blob_store.read(to_read);
+
+                        if (enable_fo_check && entry.field_offsets.size() != 0)
+                        {
+                            DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
+                            std::iota(std::begin(indices), std::end(indices), 0);
+
+                            BlobStore::FieldReadInfos infos;
+                            BlobStore::FieldReadInfo info(internal_id, entry, indices);
+                            infos.emplace_back(info);
+                            blob_store.read(infos);
+                        }
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        error_versioned_pages.emplace_back(std::make_pair(internal_id, version));
+                    }
+                }
+            }
+            index++;
+        }
+
+        if (error_versioned_pages.size() == 0)
+        {
+            return "All of data checked. All passed.";
+        }
+
+        String error_msg = "Found error in these pages: ";
+        for (const auto & [internal_id, versioned] : error_versioned_pages)
+        {
+            error_msg += fmt::format("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
+        }
+        error_msg += "Please use `--query_table_id` + `--check_page_id` to get the more error info.";
+
+        return error_msg;
     }
 
-    String error_msg = "Found error in these pages: ";
-    for (const auto & [internal_id, versioned] : error_versioned_pages)
+    void run()
     {
-        error_msg += fmt::format("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
+        DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+
+        auto key_manager = std::make_shared<DB::MockKeyManager>(false);
+        auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
+
+        BlobStore::Config blob_config;
+
+        // TODO: Need use multi-path after BlobStore supported.
+        BlobStore blob_store(file_provider, options.paths[0], blob_config);
+
+        PageDirectoryFactory factory;
+        PageDirectoryPtr page_directory = factory.setBlobStore(blob_store)
+                                              .create(file_provider, delegator);
+
+        PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
+
+        switch (options.display_mode)
+        {
+        case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+        {
+            std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
+        {
+            std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
+        {
+            std::cout << getBlobsInfo(blob_store, options.query_blob_id) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
+        {
+            if (options.check_page_id != UINT64_MAX)
+            {
+                std::cout << checkSinglePage(mvcc_table_directory, blob_store, options.query_ns_id, options.check_page_id) << std::endl;
+            }
+            else
+            {
+                std::cout << checkAllDatasCrc(mvcc_table_directory, blob_store, options.enable_fo_check) << std::endl;
+            }
+            break;
+        }
+        default:
+            std::cout << "Invalid display mode." << std::endl;
+            break;
+        }
     }
-    error_msg += "Please use `--query_table_id` + `--check_page_id` to get the more error info.";
 
-    return error_msg;
-}
+private:
+    ControlOptions options;
+};
 
+
+} // namespace DB::PS::V3
+
+using namespace DB::PS::V3;
 int main(int argc, char ** argv)
 {
     const auto & options = ControlOptions::parse(argc, argv);
-    DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
-
-    auto key_manager = std::make_shared<DB::MockKeyManager>(false);
-    auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
-
-    BlobStore::Config blob_config;
-    BlobStore blob_store(file_provider, options.paths[0], blob_config);
-
-    PageDirectoryFactory factory;
-    PageDirectoryPtr page_directory = factory.setBlobStore(blob_store)
-                                          .create(file_provider, delegator);
-
-    PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
-
-    switch (options.display_mode)
-    {
-    case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
-    {
-        std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
-        break;
-    }
-    case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
-    {
-        std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
-        break;
-    }
-    case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
-    {
-        std::cout << getBlobsInfo(blob_store, options.query_blob_id) << std::endl;
-        break;
-    }
-    case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
-    {
-        if (options.check_page_id != UINT64_MAX)
-        {
-            std::cout << checkSinglePage(mvcc_table_directory, blob_store, options.query_ns_id, options.check_page_id) << std::endl;
-        }
-        else
-        {
-            std::cout << checkAllDatasCrc(mvcc_table_directory, blob_store, options.enable_fo_check) << std::endl;
-        }
-        break;
-    }
-    default:
-        std::cout << "Invalid display mode." << std::endl;
-        break;
-    }
-
+    PageStorageControl(options).run();
     return 0;
 }

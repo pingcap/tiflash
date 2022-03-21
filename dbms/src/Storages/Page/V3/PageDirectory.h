@@ -251,9 +251,9 @@ public:
             being_ref_count,
             entries.size());
     }
-#ifndef DBMS_PUBLIC_GTEST
+    friend class PageStorageControl;
+
 private:
-#endif
     mutable std::mutex m;
 
     EditRecordType type;
@@ -361,10 +361,9 @@ public:
     PageDirectory & operator=(PageDirectory && rhs) = delete;
 
     friend class PageDirectoryFactory;
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
+    friend class PageStorageControl;
 
+private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
     // "No iterators or references are invalidated"
     // https://en.cppreference.com/w/cpp/container/map/insert
@@ -382,10 +381,7 @@ private:
         return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
-
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
     MVCCMapType mvcc_table_directory;
