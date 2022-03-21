@@ -18,9 +18,8 @@
 #include <Common/StackTrace.h>
 #include <common/demangle.h>
 #include <execinfo.h>
-#include <Symbolization/Symbolization.h>
 #include <fmt/core.h>
-#include <Common/FmtUtils.h>
+
 #include <sstream>
 
 
@@ -31,63 +30,17 @@ StackTrace::StackTrace()
 
 std::string StackTrace::toString() const
 {
-     DB::FmtBuffer output;
-
-    auto prefix_size = std::size(TIFLASH_SOURCE_PREFIX);
+    DB::FmtBuffer output;
 
     for (size_t f = 0; f < frames_size; ++f)
     {
         output.append("\n");
-        auto sym_info = _tiflash_symbolize(frames[f]);
-        output.fmtAppend("{:>16}", frames[f]);
-
-        if (sym_info.symbol_name)
-        {
+        auto demangle_func = [](const char * name) {
             int status = 0;
-            auto demangled = demangle(sym_info.symbol_name, status);
-            if (status == 0)
-            {
-                output.append("\t");
-                output.append(demangled);
-            }
-            else
-            {
-                output.append("\t");
-                output.append(sym_info.symbol_name);
-            }
-        }
-        else
-        {
-            output.append("\t<unknown symbol>");
-        }
-
-        if (sym_info.object_name)
-        {
-            std::string_view view(sym_info.object_name);
-            auto pos = view.rfind('/');
-            if (pos != std::string_view::npos)
-            {
-                output.fmtAppend(" [{}+{}]", view.substr(pos + 1), sym_info.svma);
-            }
-            else
-            {
-                output.fmtAppend(" [{}+{}]", view, sym_info.svma);
-            }
-        }
-
-        if (sym_info.source_filename)
-        {
-            output.append("\n");
-            std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
-            if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
-            {
-                output.fmtAppend("{:>16}\t{}:{}", "", view.substr(prefix_size), sym_info.lineno);
-            }
-            else
-            {
-                output.fmtAppend("{:>16}\t{}:{}", "", view, sym_info.lineno);
-            }
-        }
+            auto result = demangle(name, status);
+            return std::pair<std::string, int>{result, status};
+        };
+        addr2line(demangle_func, output, frames[f]);
     }
 
     return output.toString();
