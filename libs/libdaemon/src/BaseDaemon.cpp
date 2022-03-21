@@ -562,7 +562,8 @@ private:
             output.append("\n");
             auto demangle_func = [](const char * name) {
                 int status = 0;
-                // __cxa_demangle will leak memory; but we are failing anyway.
+                // __cxa_demangle will leak memory; but we are failing anyway
+                // freeing memory may increase possibilities to trigger other errors
                 auto *result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
                 return std::pair<std::string, int>{result, status};
             };
