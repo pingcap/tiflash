@@ -76,6 +76,10 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
         /// for handle column always generate index
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
 
+        if (cd.type->isNullable() && (cd.type->getNestedDataType()->isInteger() || (cd.type->getNestedDataType()->isDateOrDateTime())))
+        {
+            do_index = true;
+        }
         if (options.flags.isSingleFile())
         {
             if (do_index)

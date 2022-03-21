@@ -29,6 +29,7 @@ public:
     DataTypeNullable(const DataTypePtr & nested_data_type_);
     std::string getName() const override { return "Nullable(" + nested_data_type->getName() + ")"; }
     const char * getFamilyName() const override { return "Nullable"; }
+    DataTypePtr getNestedDataType() const override { return nested_data_type; }
 
     TypeIndex getTypeId() const override { return TypeIndex::Nullable; }
 
