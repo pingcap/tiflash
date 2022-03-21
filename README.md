@@ -32,9 +32,7 @@ The following packages are needed for all platforms:
 
 - CMake 3.13.2+
 
-- Rust:
-
-  Recommended to use [rustup](https://rustup.rs):
+- Rust: Recommended to use [rustup](https://rustup.rs) to install:
 
   ```shell
   curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
