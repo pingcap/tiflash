@@ -13,16 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/RedactHelpers.h>
-#include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Poco/Path.h>
@@ -185,6 +176,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     if (files_snap.persisted_log_files.empty())
         return false;
 
+    LOG_FMT_INFO(logger, "Saving directory snapshot");
     {
         // Use {largest_log_num + 1, 1} to save the `edit`
         const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;

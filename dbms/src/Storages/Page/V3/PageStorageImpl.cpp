@@ -101,13 +101,14 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
 
     try
     {
-        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
         PageEntry entry_ret;
         entry_ret.file_id = entry.file_id;
         entry_ret.offset = entry.offset;
+        entry_ret.tag = entry.tag;
         entry_ret.size = entry.size;
         entry_ret.field_offsets = entry.field_offsets;
         entry_ret.checksum = entry.checksum;
@@ -211,10 +212,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
         std::scoped_lock lock{callbacks_mutex};
         if (!callbacks_container.empty())
         {
-            for (const auto & callbacks : callbacks_container)
+            for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = page_directory->getAliveExternalIds(callbacks.ns_id);
+                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
                 callbacks.remover(pending_external_pages, alive_external_ids);
             }
         }
@@ -225,6 +226,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     // And get the expired entries.
     [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
     const auto & del_entries = page_directory->gcInMemEntries();
+    LOG_FMT_DEBUG(log, "Remove entries from memory [num_entries={}]", del_entries.size());
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -279,13 +281,30 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
     assert(callbacks.ns_id != MAX_NAMESPACE_ID);
-    callbacks_container.push_back(callbacks);
+    assert(callbacks_container.count(callbacks.ns_id) == 0);
+    callbacks_container.emplace(callbacks.ns_id, callbacks);
 }
 
-void PageStorageImpl::clearExternalPagesCallbacks()
+void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
     std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.clear();
+    callbacks_container.erase(ns_id);
+}
+
+const String PageStorageImpl::manifests_file_name = "manifests";
+
+bool PageStorageImpl::isManifestsFileExists(const String & path)
+{
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    return file.exists();
+}
+
+void PageStorageImpl::createManifestsFileIfNeed(const String & path)
+{
+    Poco::File dir(path);
+    dir.createDirectories();
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    file.createFile();
 }
 
 } // namespace PS::V3
