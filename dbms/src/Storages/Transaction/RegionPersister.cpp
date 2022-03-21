@@ -60,9 +60,8 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_WARNING(&Poco::Logger::get("RegionPersister"),
-                    "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
-                                              << region_size);
+        LOG_FMT_WARNING(&Poco::Logger::get("RegionPersister"), "Persisting big region: {} with data info: {}, serialized size {}", 
+                        region.toString(), region.dataInfo(), region_size);
     }
 }
 
@@ -109,7 +108,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     if (region.isPendingRemove())
     {
-        LOG_DEBUG(log, "no need to persist " << region.toString(false) << " because of pending remove");
+        LOG_FMT_DEBUG(log, "no need to persist {} because of pending remove", region.toString(false));
         return;
     }
 
@@ -169,7 +168,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
 
-            LOG_INFO(log, "RegionPersister running in normal mode");
+            LOG_FMT_INFO(log, "RegionPersister running in normal mode");
             page_storage = std::make_unique<PS::V2::PageStorage>( //
                 "RegionPersister",
                 delegator,
@@ -179,7 +178,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         else
         {
-            LOG_INFO(log, "RegionPersister running in compatible mode");
+            LOG_FMT_INFO(log, "RegionPersister running in compatible mode");
             auto c = getV1PSConfig(config);
             stable_page_storage = std::make_unique<PS::V1::PageStorage>( //
                 "RegionPersister",

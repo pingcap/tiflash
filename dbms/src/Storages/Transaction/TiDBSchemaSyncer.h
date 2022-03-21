@@ -102,9 +102,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_INFO(log,
-                 "start to sync schemas. current version is: " + std::to_string(cur_version)
-                     + " and try to sync schema version to: " + std::to_string(version));
+        LOG_FMT_INFO(log, "start to sync schemas. current version is: {} and try to sync schema version to: {}",
+                     std::to_string(cur_version), std::to_string(version));
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -118,7 +117,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         cur_version = version;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(log, "end sync schema, version has been updated to " + std::to_string(cur_version));
+        LOG_FMT_INFO(log, "end sync schema, version has been updated to {}", std::to_string(cur_version));
         return true;
     }
 
@@ -149,7 +148,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return false;
         }
 
-        LOG_DEBUG(log, "try load schema diffs.");
+        LOG_FMT_DEBUG(log, "try load schema diffs.");
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
 
@@ -174,25 +173,25 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             }
-            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return false;
         }
         catch (Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return false;
         }
         catch (Poco::Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n");
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n", e.displayText());
             return false;
         }
         catch (std::exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : " << e.what() << " \n");
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n", e.what());
             return false;
         }
         return true;

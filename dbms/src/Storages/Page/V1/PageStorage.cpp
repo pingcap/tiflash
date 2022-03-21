@@ -592,7 +592,7 @@ bool PageStorage::gc()
     }
 
     if (!should_merge)
-        LOG_FMT_TRACE(log, storage_name << "{} GC exit without merging. merge file size: {}, candidate size: {}", 
+        LOG_FMT_TRACE(log, "{} GC exit without merging. merge file size: {}, candidate size: {}", 
                       storage_name, merge_files.size(), candidate_total_size);
     return should_merge;
 }
@@ -699,7 +699,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
     const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     {
         const auto smallest_id_level = page_files_to_compact.begin()->fileIdLevel();
-        LOG_FMT_INFO(log, "{} Compact legacy PageFile_{}_{} to PageFile_{}_{} into checkpoint PageFile_{}_{}"
+        LOG_FMT_INFO(log, "{} Compact legacy PageFile_{}_{} to PageFile_{}_{} into checkpoint PageFile_{}_{}", 
                      storage_name, smallest_id_level.first, smallest_id_level.second, 
                      largest_id_level.first, largest_id_level.second, 
                      largest_id_level.first, largest_id_level.second);

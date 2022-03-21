@@ -83,7 +83,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -116,7 +116,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -150,7 +150,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -184,7 +184,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -227,7 +227,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -260,7 +260,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -294,7 +294,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -328,7 +328,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)

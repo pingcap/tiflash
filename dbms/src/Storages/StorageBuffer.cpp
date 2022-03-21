@@ -263,7 +263,7 @@ public:
         {
             if (!storage.no_destination)
             {
-                LOG_TRACE(storage.log, "Writing block with " << rows << " rows, " << bytes << " bytes directly.");
+                LOG_FMT_TRACE(storage.log, "Writing block with {} rows, {} bytes directly.", rows, bytes);
                 storage.writeBlockToDestination(block, destination);
             }
             return;
@@ -362,8 +362,8 @@ void StorageBuffer::startup()
 {
     if (context.getSettingsRef().readonly)
     {
-        LOG_WARNING(log, "Storage " << getName() << " is run with readonly settings, it will not be able to insert data."
-                                    << " Set apropriate system_profile to fix this.");
+        LOG_FMT_WARNING(log, "Storage {} is run with readonly settings, it will not be able to insert data. Set apropriate system_profile to fix this.",
+                        getName());
     }
 
     flush_thread = std::thread(&StorageBuffer::flushThread, this);
@@ -501,7 +501,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
 
     ProfileEvents::increment(ProfileEvents::StorageBufferFlush);
 
-    LOG_TRACE(log, "Flushing buffer with " << rows << " rows, " << bytes << " bytes, age " << time_passed << " seconds.");
+    LOG_FMT_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
 
     if (no_destination)
         return;
@@ -543,7 +543,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (!table)
     {
-        LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " doesn't exist. Block of data is discarded.");
+        LOG_FMT_ERROR(log, "Destination table {}.{} doesn't exist. Block of data is discarded.", destination_database, destination_table);
         return;
     }
 
@@ -565,7 +565,8 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
         {
             if (!block.getByName(dst_col.name).type->equals(*dst_col.type))
             {
-                LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " have different type of column " << dst_col.name << " (" << block.getByName(dst_col.name).type->getName() << " != " << dst_col.type->getName() << "). Block of data is discarded.");
+                LOG_FMT_ERROR(log, "Destination table {}.{} have different type of column {} ({} != {}). Block of data is discarded.",
+                              destination_database, destination_table, dst_col.name, block.getByName(dst_col.name).type->getName(), dst_col.type->getName());
                 return;
             }
 
@@ -575,12 +576,14 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (columns_intersection.empty())
     {
-        LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " have no common columns with block in buffer. Block of data is discarded.");
+        LOG_FMT_ERROR(log, "Destination table {}.{} have no common columns with block in buffer. Block of data is discarded.", 
+                      destination_database, destination_table);
         return;
     }
 
     if (columns_intersection.size() != block.columns())
-        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table " << destination_database << "." << destination_table << ". Some columns are discarded.");
+        LOG_FMT_WARNING(log, "Not all columns from block in buffer exist in destination table {}.{}. Some columns are discarded.", 
+                        destination_database, destination_table);
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;
