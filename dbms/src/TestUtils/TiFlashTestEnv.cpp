@@ -47,6 +47,15 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     {
         testdata_path = {getTemporaryPath()};
     }
+    else
+    {
+        Strings absolute_testdata_path;
+        for (const auto & path : testdata_path)
+        {
+            absolute_testdata_path.push_back(Poco::Path(path).absolute().toString());
+        }
+        testdata_path.swap(absolute_testdata_path);
+    }
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
     auto paths = getPathPool(testdata_path);
