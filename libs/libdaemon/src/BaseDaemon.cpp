@@ -591,7 +591,6 @@ private:
             }
 
             std::fill(address.begin(), address.end(), ' ');
-            std::fill(address.begin(), address.end(), ' ');
 
             if (sym_info.object_name)
             {

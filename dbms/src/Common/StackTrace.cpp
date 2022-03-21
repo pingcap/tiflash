@@ -18,8 +18,8 @@
 #include <Common/StackTrace.h>
 #include <common/demangle.h>
 #include <execinfo.h>
-#include <string.h>
-
+#include <Symbolization/Symbolization.h>
+#include <fmt/core.h>
 #include <sstream>
 
 
@@ -30,51 +30,65 @@ StackTrace::StackTrace()
 
 std::string StackTrace::toString() const
 {
-    char ** symbols = backtrace_symbols(frames, frames_size);
-    std::stringstream res;
+    std::stringstream output;
 
-    if (!symbols)
-        return "Cannot get symbols for stack trace.\n";
+    auto prefix_size = std::size(TIFLASH_SOURCE_PREFIX);
 
-    try
+    for (size_t f = 0; f < frames_size; ++f)
     {
-        for (size_t i = 0, size = frames_size; i < size; ++i)
+        output << std::endl;
+        auto sym_info = _tiflash_symbolize(frames[f]);
+        auto address = fmt::format("{}", frames[f]);
+        output << address;
+
+        if (sym_info.symbol_name)
         {
-            /// We do "demangling" of names. The name is in parenthesis, before the '+' character.
-
-            char * name_start = nullptr;
-            char * name_end = nullptr;
-            std::string demangled_name;
             int status = 0;
-
-            if (nullptr != (name_start = strchr(symbols[i], '('))
-                && nullptr != (name_end = strchr(name_start, '+')))
+            auto demangled = demangle(sym_info.symbol_name, status);
+            if (status == 0)
             {
-                ++name_start;
-                *name_end = '\0';
-                demangled_name = demangle(name_start, status);
-                *name_end = '+';
-            }
-
-            res << i << ". ";
-
-            if (0 == status && name_start && name_end)
-            {
-                res.write(symbols[i], name_start - symbols[i]);
-                res << demangled_name << name_end;
+                output << "\t" << demangled;
             }
             else
-                res << symbols[i];
+            {
+                output << "\t" << sym_info.symbol_name;
+            }
+        }
+        else
+        {
+            output << "\t<unknown symbol>";
+        }
 
-            res << std::endl;
+        std::fill(address.begin(), address.end(), ' ');
+
+        if (sym_info.object_name)
+        {
+            std::string_view view(sym_info.object_name);
+            auto pos = view.rfind('/');
+            if (pos != std::string_view::npos)
+            {
+                output << " [" << view.substr(pos + 1) << "+" << sym_info.svma << "]";
+            }
+            else
+            {
+                output << " [" << view << "+" << sym_info.svma << "]";
+            }
+        }
+
+        if (sym_info.source_filename)
+        {
+            output << std::endl;
+            std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
+            if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
+            {
+                output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno;
+            }
+            else
+            {
+                output << address << "\t" << view << ":" << sym_info.lineno;
+            }
         }
     }
-    catch (...)
-    {
-        free(symbols);
-        throw;
-    }
 
-    free(symbols);
-    return res.str();
+    return output.str();
 }
