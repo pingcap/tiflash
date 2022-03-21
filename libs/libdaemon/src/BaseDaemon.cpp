@@ -96,11 +96,6 @@
 extern "C" int __llvm_profile_write_file(void);
 #endif
 
-#include <Symbolization/Symbolization.h>
-#ifndef TIFLASH_SOURCE_PREFIX
-#define TIFLASH_SOURCE_PREFIX ""
-#endif
-
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
 using Poco::FileChannel;
@@ -560,68 +555,21 @@ private:
         }
 #endif
 
-        std::stringstream output;
-        auto prefix_size = std::size(TIFLASH_SOURCE_PREFIX);
-        for (int f = 0; f < frames_size; ++f)
+        DB::FmtBuffer output;
+
+        for (size_t f = 0; f < frames_size; ++f)
         {
-            output << std::endl;
-            auto sym_info = _tiflash_symbolize(frames[f]);
-            auto address = fmt::format("{}", frames[f]);
-            output << address;
-
-            if (sym_info.symbol_name)
-            {
-                size_t length = 0;
+            output.append("\n");
+            auto demangle_func = [](const char * name) {
                 int status = 0;
-                auto * demangled = abi::__cxa_demangle(sym_info.symbol_name, nullptr, &length, &status);
-                if (status == 0)
-                {
-                    std::string_view view(demangled, length - 1);
-                    output << "\t" << view;
-                }
-                else
-                {
-                    output << "\t" << sym_info.symbol_name;
-                }
-            }
-            else
-            {
-                output << "\t"
-                       << "<unknown symbol>";
-            }
-
-            std::fill(address.begin(), address.end(), ' ');
-            std::fill(address.begin(), address.end(), ' ');
-
-            if (sym_info.object_name)
-            {
-                std::string_view view(sym_info.object_name);
-                auto pos = view.rfind('/');
-                if (pos != std::string_view::npos)
-                {
-                    output << " [" << view.substr(pos + 1) << "+" << sym_info.svma << "]";
-                }
-                else
-                {
-                    output << " [" << view << "+" << sym_info.svma << "]";
-                }
-            }
-
-            if (sym_info.source_filename)
-            {
-                output << std::endl;
-                std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
-                if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
-                {
-                    output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno;
-                }
-                else
-                {
-                    output << address << "\t" << view << ":" << sym_info.lineno;
-                }
-            }
+                // __cxa_demangle will leak memory; but we are failing anyway
+                // freeing memory may increase possibilities to trigger other errors
+                auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+                return std::pair<const char *, int>{result, status};
+            };
+            StackTrace::addr2line(demangle_func, output, frames[f]);
         }
-        LOG_ERROR(log, output.rdbuf());
+        LOG_ERROR(log, output.toString());
     }
 };
 
