@@ -37,7 +37,7 @@ try
     }
     auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
-    LOG_INFO(StressEnv::logger, description() << " exit with peak memory usage: " << formatReadableSizeWithBinarySuffix(peak));
+    LOG_FMT_INFO("{} exit with peak memory usage: {}", StressEnv::logger, description(), formatReadableSizeWithBinarySuffix(peak));
 }
 catch (...)
 {
@@ -57,7 +57,7 @@ size_t PSRunnable::getPagesUsed() const
 size_t PSWriter::approx_page_mb = 2;
 void PSWriter::setApproxPageSize(size_t size_mb)
 {
-    LOG_INFO(StressEnv::logger, fmt::format("Page approx size is set to {} MB", size_mb));
+    LOG_FMT_INFO(StressEnv::logger, "Page approx size is set to {} MB", size_mb);
     approx_page_mb = size_mb;
 }
 
@@ -115,7 +115,7 @@ void PSWriter::fillAllPages(const PSPtr & ps)
         wb.putPage(page_id, 0, buff, buff->buffer().size());
         ps->write(std::move(wb));
         if (page_id % 100 == 0)
-            LOG_INFO(StressEnv::logger, fmt::format("writer wrote page {}", page_id));
+            LOG_FMT_INFO(StressEnv::logger, "writer wrote page {}", page_id);
     }
 }
 
