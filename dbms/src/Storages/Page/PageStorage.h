@@ -151,7 +151,8 @@ public:
         String name,
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        bool use_v3 = false);
 
     PageStorage(
         String name,
@@ -199,8 +200,9 @@ public:
     // We may skip the GC to reduce useless reading by default.
     virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
 
-    // Register external pages GC callbacks
+    // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
+    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:

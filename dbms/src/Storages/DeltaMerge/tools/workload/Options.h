@@ -53,6 +53,8 @@ struct WorkloadOptions
 
     bool log_write_request;
 
+    bool enable_ps_v3;
+
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;
