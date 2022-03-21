@@ -690,15 +690,14 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
     auto * entry = node_to_entry(node);
     if (entry->start + entry->count != end)
     {
-        UInt64 total_size = end;
-        UInt64 valid_size = 0;
+        UInt64 total_size = end - start;
+        UInt64 valid_size = total_size;
         for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
         {
             entry = node_to_entry(node);
-            valid_size += entry->count;
+            valid_size -= entry->count;
         }
 
-        valid_size = total_size - valid_size;
         return std::make_pair(total_size, valid_size);
     }
     else

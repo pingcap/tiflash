@@ -67,14 +67,13 @@ protected:
 
         if (last_free_block->first + last_free_block->second != end)
         {
-            UInt64 total_size = end;
-            UInt64 valid_size = 0;
+            UInt64 total_size = end - start;
+            UInt64 valid_size = total_size;
             for (const auto & free_block : free_map)
             {
-                valid_size += free_block.second;
+                valid_size -= free_block.second;
             }
 
-            valid_size = total_size - valid_size;
             return std::make_pair(total_size, valid_size);
         }
         else
