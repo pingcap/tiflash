@@ -1,7 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/LogWithPrefix.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 
@@ -28,9 +43,9 @@ public:
 
     PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::PageStorage::SnapshotPtr getSnapshot() override;
+    DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
+    SnapshotsStatistics getSnapshotsStat() const override;
 
     void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
@@ -50,9 +65,15 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
-    void clearExternalPagesCallbacks();
+    void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;
+
+    static bool isManifestsFileExists(const String & path);
+
+    static void createManifestsFileIfNeed(const String & path);
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return read(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }
@@ -77,8 +98,10 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
+    const static String manifests_file_name;
+
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::vector<ExternalPageCallbacks>;
+    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 

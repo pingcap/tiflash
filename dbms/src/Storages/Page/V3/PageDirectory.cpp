@@ -1,7 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/assert_cast.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -615,9 +630,9 @@ PageDirectory::PageDirectory(WALStorePtr && wal_)
 {
 }
 
-PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
+PageDirectorySnapshotPtr PageDirectory::createSnapshot(const String & tracing_id) const
 {
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
@@ -627,12 +642,10 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
     return snap;
 }
 
-std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
+SnapshotsStatistics PageDirectory::getSnapshotsStat() const
 {
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotsStatistics stat;
     DB::Int64 num_snapshots_removed = 0;
-    size_t num_valid_snapshots = 0;
     {
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
@@ -652,12 +665,13 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
                 });
 
                 const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
-                if (snapshot_lifetime > longest_living_seconds)
+                if (snapshot_lifetime > stat.longest_living_seconds)
                 {
-                    longest_living_seconds = snapshot_lifetime;
-                    longest_living_from_thread_id = snapshot_ptr->getTid();
+                    stat.longest_living_seconds = snapshot_lifetime;
+                    stat.longest_living_from_thread_id = snapshot_ptr->create_thread;
+                    stat.longest_living_from_tracing_id = snapshot_ptr->tracing_id;
                 }
-                num_valid_snapshots++;
+                stat.num_snapshots++;
                 ++iter;
             }
         }
@@ -665,10 +679,10 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 
     CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
     // Return some statistics of the oldest living snapshot.
-    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+    return stat;
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
 
@@ -683,7 +697,14 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                if (throw_on_not_exist)
+                {
+                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                }
+                else
+                {
+                    return PageIDAndEntryV3{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
+                }
             }
         }
         auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
@@ -821,7 +842,10 @@ PageId PageDirectory::getMaxId(NamespaceId ns_id) const
         // iter is not at the beginning and mvcc_table_directory is not empty,
         // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
         iter--;
-        return iter->first.low;
+        if (iter->first.high == ns_id)
+            return iter->first.low;
+        else
+            return 0;
     }
 }
 
@@ -1175,7 +1199,7 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
 {
     if (!snap)
     {
-        snap = createSnapshot();
+        snap = createSnapshot(/*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;

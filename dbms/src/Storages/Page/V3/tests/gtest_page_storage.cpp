@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -11,6 +25,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -374,6 +389,11 @@ TEST_F(PageStorageTest, IngestFile)
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
 }
 
 // TBD : enable after wal apply and restore
@@ -834,7 +854,7 @@ try
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(0), 0);
     };
-    page_storage->clearExternalPagesCallbacks();
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("gc with snapshot released");
@@ -884,7 +904,6 @@ try
     page_storage = reopenWithConfig(config);
 }
 CATCH
-
 
 } // namespace PS::V3::tests
 } // namespace DB

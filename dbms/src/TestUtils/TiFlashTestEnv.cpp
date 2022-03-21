@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -13,7 +27,7 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -33,6 +47,15 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
     {
         testdata_path = {getTemporaryPath()};
     }
+    else
+    {
+        Strings absolute_testdata_path;
+        for (const auto & path : testdata_path)
+        {
+            absolute_testdata_path.push_back(Poco::Path(path).absolute().toString());
+        }
+        testdata_path.swap(absolute_testdata_path);
+    }
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
     auto paths = getPathPool(testdata_path);
@@ -49,6 +72,9 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+
+    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), enable_ps_v3))
+        LOG_FMT_INFO(&Poco::Logger::get("TiFlashTestEnv"), "PageStorage V3 enabled.");
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 

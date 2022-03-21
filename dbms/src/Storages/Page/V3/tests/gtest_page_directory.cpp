@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Encryption/FileProvider.h>
@@ -1934,6 +1948,42 @@ try
     check_s2();
     check_s3();
     check_s4();
+}
+CATCH
+
+TEST_F(PageDirectoryTest, GetMaxId)
+try
+{
+    NamespaceId small = 20;
+    NamespaceId medium = 50;
+    NamespaceId large = 100;
+    ASSERT_EQ(dir->getMaxId(small), 0);
+    ASSERT_EQ(dir->getMaxId(medium), 0);
+    ASSERT_EQ(dir->getMaxId(large), 0);
+
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(small, 1), entry1);
+        edit.put(buildV3Id(large, 2), entry2);
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(small), 1);
+        ASSERT_EQ(dir->getMaxId(medium), 0);
+        ASSERT_EQ(dir->getMaxId(large), 2);
+    }
+
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(medium, 300), entry1);
+        edit.put(buildV3Id(medium, 320), entry2);
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(small), 1);
+        ASSERT_EQ(dir->getMaxId(medium), 320);
+        ASSERT_EQ(dir->getMaxId(large), 2);
+    }
 }
 CATCH
 

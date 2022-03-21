@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -137,7 +151,8 @@ public:
         String name,
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        bool use_v3 = false);
 
     PageStorage(
         String name,
@@ -159,13 +174,10 @@ public:
 
     virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
-    virtual SnapshotPtr getSnapshot() = 0;
+    virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
-    // Return < num of snapshots,
-    //          living time(seconds) of the oldest snapshot,
-    //          created thread id of the oldest snapshot      >
-    virtual std::tuple<size_t, double, unsigned> getSnapshotsStat() const = 0;
+    virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
     virtual void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) = 0;
 
@@ -188,8 +200,9 @@ public:
     // We may skip the GC to reduce useless reading by default.
     virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
 
-    // Register external pages GC callbacks
+    // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
+    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -208,9 +221,7 @@ public:
     explicit PageReader(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage(storage_)
-        , snap()
         , read_limiter(read_limiter_)
-
     {}
     /// Snapshot read.
     PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)

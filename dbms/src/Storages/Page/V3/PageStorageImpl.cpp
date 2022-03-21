@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -52,18 +66,18 @@ PageId PageStorageImpl::getNormalPageId(NamespaceId ns_id, PageId page_id, Snaps
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot).low;
 }
 
-DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot()
+DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing_id)
 {
-    return page_directory->createSnapshot();
+    return page_directory->createSnapshot(tracing_id);
 }
 
-std::tuple<size_t, double, unsigned> PageStorageImpl::getSnapshotsStat() const
+SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
 {
     return page_directory->getSnapshotsStat();
 }
@@ -82,18 +96,19 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     try
     {
-        const auto & [id, entry] = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
+        const auto & [id, entry] = page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
         (void)id;
         // TODO : after `PageEntry` in page.h been moved to v2.
         // Then we don't copy from V3 to V2 format
         PageEntry entry_ret;
         entry_ret.file_id = entry.file_id;
         entry_ret.offset = entry.offset;
+        entry_ret.tag = entry.tag;
         entry_ret.size = entry.size;
         entry_ret.field_offsets = entry.field_offsets;
         entry_ret.checksum = entry.checksum;
@@ -111,7 +126,7 @@ DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimi
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     auto page_entry = page_directory->get(buildV3Id(ns_id, page_id), snapshot);
@@ -122,7 +137,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & pag
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     PageIdV3Internals page_id_v3s;
@@ -136,7 +151,7 @@ void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_i
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     PageIdV3Internals page_id_v3s;
@@ -150,7 +165,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadField
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     BlobStore::FieldReadInfos read_infos;
@@ -169,7 +184,7 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
@@ -197,10 +212,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
         std::scoped_lock lock{callbacks_mutex};
         if (!callbacks_container.empty())
         {
-            for (const auto & callbacks : callbacks_container)
+            for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = page_directory->getAliveExternalIds(callbacks.ns_id);
+                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
                 callbacks.remover(pending_external_pages, alive_external_ids);
             }
         }
@@ -211,6 +226,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     // And get the expired entries.
     [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
     const auto & del_entries = page_directory->gcInMemEntries();
+    LOG_FMT_DEBUG(log, "Remove entries from memory [num_entries={}]", del_entries.size());
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -265,13 +281,30 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
     assert(callbacks.ns_id != MAX_NAMESPACE_ID);
-    callbacks_container.push_back(callbacks);
+    assert(callbacks_container.count(callbacks.ns_id) == 0);
+    callbacks_container.emplace(callbacks.ns_id, callbacks);
 }
 
-void PageStorageImpl::clearExternalPagesCallbacks()
+void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
     std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.clear();
+    callbacks_container.erase(ns_id);
+}
+
+const String PageStorageImpl::manifests_file_name = "manifests";
+
+bool PageStorageImpl::isManifestsFileExists(const String & path)
+{
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    return file.exists();
+}
+
+void PageStorageImpl::createManifestsFileIfNeed(const String & path)
+{
+    Poco::File dir(path);
+    dir.createDirectories();
+    Poco::File file(fmt::format("{}/{}", path, manifests_file_name));
+    file.createFile();
 }
 
 } // namespace PS::V3
