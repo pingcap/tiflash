@@ -192,7 +192,7 @@ target_link_libraries (clickhouse_common_io
     libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-target_compile_definitions(clickhouse_common_io PRIVATE -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
+target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config
