@@ -14,6 +14,7 @@
 
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WALStore.h>
 
@@ -44,34 +45,9 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
         {
             (void)page_id;
 
-            // We can't use getEntry(max_seq) to get the entry.
-            // Otherwise, It is likely to cause data loss.
-            // for example:
-            //
-            //   page id 4927
-            //   {type:5, create_ver: <0,0>, is_deleted: false, delete_ver: <0,0>, ori_page_id: 0.0, being_ref_count: 1, num_entries: 2}
-            //     entry 0
-            //       sequence: 1802
-            //       epoch: 0
-            //       is del: false
-            //       blob id: 5
-            //       offset: 77661628
-            //       size: 2381165
-            //       crc: 0x1D1BEF504F12D3A0
-            //       field offset size: 0
-            //     entry 1
-            //       sequence: 2121
-            //       epoch: 0
-            //       is del: true
-            //       blob id: 0
-            //       offset: 0
-            //       size: 0
-            //       crc: 0x0
-            //       field offset size: 0
-            //   page id 5819
-            //   {type:6, create_ver: <2090,0>, is_deleted: false, delete_ver: <0,0>, ori_page_id: 0.4927, being_ref_count: 1, num_entries: 0}
-            //
-            // After getEntry, page id `4927` won't be restore by BlobStore.
+            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
+            // or we will mistakenly reuse the space to write other blobs down into that space.
+            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
             if (auto entry = entries->getLastEntry(); entry)
             {
                 blob_stats->restoreByEntry(*entry);

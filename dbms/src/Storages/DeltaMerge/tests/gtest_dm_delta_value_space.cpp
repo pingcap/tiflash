@@ -85,9 +85,7 @@ protected:
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", table_id, *storage_path_pool, *db_context, db_context->getSettingsRef());
-        page_id_generator = std::make_unique<PageIdGenerator>();
         storage_pool->restore();
-        page_id_generator->restore(*storage_pool);
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
@@ -102,7 +100,6 @@ protected:
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
-                                                 *page_id_generator,
                                                  0,
                                                  /*min_version_*/ 0,
                                                  settings.not_compress_columns,
@@ -119,7 +116,6 @@ protected:
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
@@ -153,7 +149,7 @@ Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
     auto delegator = context.path_pool.getStableDiskDelegator();
-    auto file_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile
@@ -344,7 +340,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
+        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         ASSERT_EQ(compaction_task->getCompactionSourceLevel(), 0);
         // There should be two compaction sub_tasks.
@@ -392,7 +388,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true);
+                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;

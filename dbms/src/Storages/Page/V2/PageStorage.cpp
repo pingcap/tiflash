@@ -358,14 +358,14 @@ void PageStorage::restore()
 PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
-    return versioned_page_entries.getSnapshot()->version()->maxId();
+    return versioned_page_entries.getSnapshot("")->version()->maxId();
 }
 
 PageId PageStorage::getNormalPageId(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     auto [is_ref_id, normal_page_id] = toConcreteSnapshot(snapshot)->version()->isRefId(page_id);
@@ -376,7 +376,7 @@ DB::PageEntry PageStorage::getEntry(NamespaceId /*ns_id*/, PageId page_id, Snaps
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     try
@@ -576,18 +576,18 @@ void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limi
     }
 }
 
-DB::PageStorage::SnapshotPtr PageStorage::getSnapshot()
+DB::PageStorage::SnapshotPtr PageStorage::getSnapshot(const String & tracing_id)
 {
-    return versioned_page_entries.getSnapshot();
+    return versioned_page_entries.getSnapshot(tracing_id);
 }
 
 PageStorage::VersionedPageEntries::SnapshotPtr
 PageStorage::getConcreteSnapshot()
 {
-    return versioned_page_entries.getSnapshot();
+    return versioned_page_entries.getSnapshot(/*tracing_id*/ "");
 }
 
-std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
+SnapshotsStatistics PageStorage::getSnapshotsStat() const
 {
     return versioned_page_entries.getSnapshotsStat();
 }
@@ -596,7 +596,7 @@ DB::Page PageStorage::read(NamespaceId /*ns_id*/, PageId page_id, const ReadLimi
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
@@ -612,7 +612,7 @@ PageMap PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageId> & pag
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
@@ -655,7 +655,7 @@ void PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageId> & page_i
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
@@ -694,8 +694,9 @@ void PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageId> & page_i
 PageMap PageStorage::read(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
-        snapshot = this->getSnapshot();
-
+    {
+        snapshot = this->getSnapshot("");
+    }
 
     std::map<PageFileIdAndLevel, std::pair<ReaderPtr, PageFile::Reader::FieldReadInfos>> file_read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
@@ -737,7 +738,7 @@ void PageStorage::traverse(const std::function<void(const DB::Page & page)> & ac
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot();
+        snapshot = this->getSnapshot("");
     }
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
