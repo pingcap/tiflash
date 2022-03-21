@@ -28,6 +28,8 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -43,6 +45,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
@@ -753,6 +756,24 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, taskLogger()); });
 }
 
+void DAGQueryBlockInterpreter::executeWindow(
+    DAGPipeline & pipeline,
+    WindowDescription & window_description)
+{
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, taskLogger()); });
+    Block header = pipeline.firstStream()->getHeader();
+
+    if (pipeline.streams.size() == 1)
+    {
+        BlockInputStreams inputs;
+        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description);
+    }
+    else
+    {
+        throw TiFlashException("window block must have 1 input stream", Errors::Coprocessor::Internal);
+    }
+}
+
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expression_actions_ptr,
@@ -848,6 +869,35 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, taskLogger()); });
     }
+}
+
+void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription order_descr)
+{
+    const Settings & settings = context.getSettingsRef();
+    pipeline.transform([&](auto & stream) {
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), 0);
+
+        /// Limits on sorting
+        IProfilingBlockInputStream::LocalLimits limits;
+        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
+        sorting_stream->setLimits(limits);
+
+        stream = sorting_stream;
+    });
+
+    /// If there are several streams, we merge them into one
+    executeUnion(pipeline, max_streams, taskLogger());
+
+    /// Merge the sorted blocks.
+    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+        pipeline.firstStream(),
+        order_descr,
+        settings.max_block_size,
+        0,
+        settings.max_bytes_before_external_sort,
+        context.getTemporaryPath(),
+        taskLogger());
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
@@ -1004,6 +1054,33 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
+void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window window)
+{
+    std::vector<NameAndTypePair> input_columns;
+    pipeline.streams = input_streams_vec[0];
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+    WindowDescription window_description = dag_analyzer.appendWindow(window);
+    executeWindow(pipeline, window_description);
+    executeExpression(pipeline, window_description.after_window);
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
+}
+
+void DAGQueryBlockInterpreter::handleWindowSort(DAGPipeline & pipeline, const tipb::Sort & window_sort)
+{
+    std::vector<NameAndTypePair> input_columns;
+    pipeline.streams = input_streams_vec[0];
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+    auto order_columns = dag_analyzer.appendWindowOrderBy(window_sort);
+    executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()));
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(input_columns), context);
+}
+
 // To execute a query block, you have to:
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
@@ -1041,6 +1118,16 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         TiDBTableScan table_scan(query_block.source, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
+    {
+        handleWindow(pipeline, query_block.source->window());
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeSort)
+    {
+        handleWindowSort(pipeline, query_block.source->sort());
+        recordProfileStreams(pipeline, query_block.source_name);
     }
     else
     {
@@ -1106,7 +1193,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    restorePipelineConcurrency(pipeline);
+    if (query_block.source->tp() != tipb::ExecType::TypeWindow && query_block.source->tp() != tipb::ExecType::TypeSort)
+        restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
     if (query_block.exchange_sender)

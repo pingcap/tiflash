@@ -46,13 +46,24 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
     for (const auto & expr : agg.agg_func())
     {
         if (!exprHasValidFieldType(expr))
-            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+            throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
     for (const auto & expr : agg.group_by())
     {
         if (!exprHasValidFieldType(expr))
             throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
+    }
+    return false;
+}
+
+bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Window & window)
+{
+    for (const auto & expr : window.func_desc())
+    {
+        if (!exprHasValidFieldType(expr))
+            throw TiFlashException("window expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
     return false;
@@ -144,6 +155,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         return collectForAgg(output_field_types, executor.aggregation());
+    case tipb::ExecType::TypeWindow:
+        return collectForWindow(output_field_types, executor.window());
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:

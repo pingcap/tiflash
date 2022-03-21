@@ -1041,4 +1041,10 @@ inline void writeQuoted(const Tuple &, WriteBuffer &)
 {
     throw Exception("Cannot write Tuple quoted.", ErrorCodes::NOT_IMPLEMENTED);
 }
+
+inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
+{
+    return t == Field::Types::Int64
+        || t == Field::Types::UInt64;
+}
 } // namespace DB

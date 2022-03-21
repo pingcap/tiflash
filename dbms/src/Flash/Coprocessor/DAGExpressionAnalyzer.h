@@ -26,6 +26,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
@@ -62,6 +63,8 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
+    NamesAndTypes appendWindowOrderBy(const tipb::Sort & window_sort);
+
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
         const tipb::TopN & topN);
@@ -72,6 +75,12 @@ public:
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
+
+    WindowDescription appendWindow(const tipb::Window & window);
+
+    SortDescription getWindowSortDescription(
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems,
+        ExpressionActionsChain::Step & step);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -130,7 +139,16 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
+    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
+
+    NamesAndTypes appendWindowSelect(
+        ExpressionActionsChain & chain,
+        const tipb::Window & window,
+        const NamesAndTypes window_columns);
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
