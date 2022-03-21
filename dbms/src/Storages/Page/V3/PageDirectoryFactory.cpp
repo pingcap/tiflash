@@ -30,8 +30,8 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
 
-    // After we restore from disk.
-    // We need cleanup all invalid entries in memory.
+    // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
+    // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
 
     if (blob_stats)
