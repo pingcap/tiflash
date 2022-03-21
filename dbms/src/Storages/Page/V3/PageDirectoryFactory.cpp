@@ -67,10 +67,35 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_pro
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadEdit(dir, edit);
-    if (blob_stats)
-        blob_stats->restore();
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+
+    // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
+    // try to run GC again on some entries that are already marked as invalid in BlobStore.
+    dir->gcInMemEntries();
+
+    if (blob_stats)
+    {
+        // After all entries restored to `mvcc_table_directory`, only apply
+        // the latest entry to `blob_stats`, or we may meet error since
+        // some entries may be removed in memory but not get compacted
+        // in the log file.
+        for (const auto & [page_id, entries] : dir->mvcc_table_directory)
+        {
+            (void)page_id;
+
+            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
+            // or we will mistakenly reuse the space to write other blobs down into that space.
+            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
+            if (auto entry = entries->getLastEntry(); entry)
+            {
+                blob_stats->restoreByEntry(*entry);
+            }
+        }
+
+        blob_stats->restore();
+    }
+
     return dir;
 }
 
