@@ -47,17 +47,16 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     else
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
-        auto hash_salt = dm_context->hash_salt;
         for (const auto & file : files_)
         {
-            auto pack_filter = DMFilePackFilter::loadFrom(file,
-                                                          index_cache,
-                                                          hash_salt,
-                                                          {range},
-                                                          EMPTY_FILTER,
-                                                          {},
-                                                          dm_context->db_context.getFileProvider(),
-                                                          dm_context->getReadLimiter());
+            auto pack_filter = DMFilePackFilter::loadFrom(
+                file,
+                index_cache,
+                {range},
+                EMPTY_FILTER,
+                {},
+                dm_context->db_context.getFileProvider(),
+                dm_context->getReadLimiter());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -202,18 +201,18 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             //
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
-            BlockInputStreamPtr data_stream = std::make_shared<DMFileBlockInputStream>(context.db_context,
-                                                                                       std::numeric_limits<UInt64>::max(),
-                                                                                       false,
-                                                                                       context.hash_salt,
-                                                                                       file,
-                                                                                       read_columns,
-                                                                                       RowKeyRanges{rowkey_range},
-                                                                                       nullptr,
-                                                                                       nullptr,
-                                                                                       IdSetPtr{},
-                                                                                       UINT64_MAX, // because we just read one pack at a time
-                                                                                       true);
+            BlockInputStreamPtr data_stream = std::make_shared<DMFileBlockInputStream>(
+                context.db_context,
+                std::numeric_limits<UInt64>::max(),
+                false,
+                file,
+                read_columns,
+                RowKeyRanges{rowkey_range},
+                nullptr,
+                nullptr,
+                IdSetPtr{},
+                UINT64_MAX, // because we just read one pack at a time
+                true);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -238,14 +237,14 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             }
             mvcc_stream->readSuffix();
         }
-        auto pack_filter = DMFilePackFilter::loadFrom(file,
-                                                      context.db_context.getGlobalContext().getMinMaxIndexCache(),
-                                                      context.hash_salt,
-                                                      {rowkey_range},
-                                                      EMPTY_FILTER,
-                                                      {},
-                                                      context.db_context.getFileProvider(),
-                                                      context.getReadLimiter());
+        auto pack_filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            {rowkey_range},
+            EMPTY_FILTER,
+            {},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter());
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
@@ -338,7 +337,6 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.db_context,
             max_data_version,
             enable_clean_read,
-            context.hash_salt,
             stable->files[i],
             read_columns,
             rowkey_ranges,
@@ -366,14 +364,14 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     // don't refill the cache if the index does not exist.
     for (auto & f : stable->files)
     {
-        auto filter = DMFilePackFilter::loadFrom(f, //
-                                                 nullptr,
-                                                 context.hash_salt,
-                                                 {range},
-                                                 RSOperatorPtr{},
-                                                 IdSetPtr{},
-                                                 context.db_context.getFileProvider(),
-                                                 context.getReadLimiter());
+        auto filter = DMFilePackFilter::loadFrom(
+            f,
+            nullptr,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter());
         const auto & pack_stats = f->getPackStats();
         const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)

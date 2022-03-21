@@ -41,14 +41,13 @@ class DMFilePackFilter
 public:
     static DMFilePackFilter loadFrom(const DMFilePtr & dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
-                                     UInt64 hash_salt,
                                      const RowKeyRanges & rowkey_ranges,
                                      const RSOperatorPtr & filter,
                                      const IdSetPtr & read_packs,
                                      const FileProviderPtr & file_provider,
                                      const ReadLimiterPtr & read_limiter)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
         pack_filter.init();
         return pack_filter;
     }
@@ -100,7 +99,6 @@ public:
 private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
-                     UInt64 hash_salt_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
@@ -108,7 +106,6 @@ private:
                      const ReadLimiterPtr & read_limiter_)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
-        , hash_salt(hash_salt_)
         , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
@@ -275,7 +272,6 @@ private:
 private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
-    UInt64 hash_salt;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;

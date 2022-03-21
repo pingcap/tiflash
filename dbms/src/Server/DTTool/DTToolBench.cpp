@@ -390,7 +390,6 @@ int benchEntry(const std::vector<std::string> & opts)
                     *db_context,
                     std::numeric_limits<UInt64>::max(),
                     false,
-                    dm_context->hash_salt,
                     dmfile,
                     *defines,
                     {DB::DM::RowKeyRange::newAll(false, 1)},

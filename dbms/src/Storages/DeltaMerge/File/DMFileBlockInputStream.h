@@ -29,7 +29,6 @@ public:
     DMFileBlockInputStream(const Context & context,
                            UInt64 max_read_version,
                            bool enable_clean_read,
-                           UInt64 hash_salt,
                            const DMFilePtr & dmfile,
                            const ColumnDefines & read_columns,
                            const RowKeyRanges & rowkey_ranges,
@@ -48,7 +47,6 @@ public:
                  filter,
                  read_packs,
                  // caches
-                 hash_salt,
                  context.getGlobalContext().getMarkCache(),
                  context.getGlobalContext().getMinMaxIndexCache(),
                  context.getSettingsRef().dt_enable_stable_column_cache,
@@ -91,7 +89,6 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
     return std::make_shared<DMFileBlockInputStream>(context,
                                                     DB::DM::MAX_UINT64 /*< max_read_version */,
                                                     false /*< enable_clean_read */,
-                                                    0 /*< hash_salt */,
                                                     file,
                                                     file->getColumnDefines(),
                                                     DB::DM::RowKeyRanges{},

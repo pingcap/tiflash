@@ -725,7 +725,6 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     DMFileBlockInputStream stream(dm_context.db_context,
                                   MAX_UINT64,
                                   false,
-                                  dm_context.hash_salt,
                                   read_file,
                                   {getExtraHandleColumnDefine(is_common_handle)},
                                   {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},

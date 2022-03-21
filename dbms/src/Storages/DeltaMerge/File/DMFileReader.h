@@ -81,7 +81,6 @@ public:
         const RSOperatorPtr & filter_,
         const IdSetPtr & read_packs_, // filter by pack index
         // caches
-        UInt64 hash_salt_,
         const MarkCachePtr & mark_cache_,
         const MinMaxIndexCachePtr & index_cache_,
         bool enable_column_cache_,
@@ -130,7 +129,6 @@ private:
     std::vector<size_t> skip_packs_by_column;
 
     /// Caches
-    const UInt64 hash_salt;
     MarkCachePtr mark_cache;
     const bool enable_column_cache;
     ColumnCachePtr column_cache;
