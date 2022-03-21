@@ -543,11 +543,12 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr int max_frames = 50;
+        int frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
         UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
@@ -555,7 +556,7 @@ private:
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
         }
 #endif
 
@@ -594,7 +595,16 @@ private:
 
             if (sym_info.object_name)
             {
-                output << " [" << ::basename(sym_info.object_name) << "+" << sym_info.svma << "]";
+                std::string_view view(sym_info.object_name);
+                auto pos = view.rfind('/');
+                if (pos != std::string_view::npos)
+                {
+                    output << " [" << view.substr(pos + 1) << "+" << sym_info.svma << "]";
+                }
+                else
+                {
+                    output << " [" << view << "+" << sym_info.svma << "]";
+                }
             }
 
             if (sym_info.source_filename)
@@ -603,11 +613,11 @@ private:
                 std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
                 if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
                 {
-                    output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno << "";
+                    output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno;
                 }
                 else
                 {
-                    output << address << "\t" << view << ":" << sym_info.lineno << "";
+                    output << address << "\t" << view << ":" << sym_info.lineno;
                 }
             }
         }
