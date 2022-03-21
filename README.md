@@ -29,13 +29,20 @@ git clone --recursive https://github.com/pingcap/tiflash.git
 ### 2. Prepare Prerequisites
 
 The following packages are needed for all platforms:
+
 - CMake 3.13.2+
-- Rust
+
+- Rust:
+
+  Recommended to use [rustup](https://rustup.rs):
+
   ```shell
   curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
   source $HOME/.cargo/env
   ```
+
 - Python 3.0+
+
 - Ninja or GNU Make
 
 The following are platform-specific prerequisites. Click to expand details:
@@ -92,9 +99,6 @@ TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain
   # install LLVM packages
   apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
 
-  # install rust
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
   # install other dependencies
   apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
   ```
@@ -107,9 +111,6 @@ TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain
   ```shell
   # install compilers and dependencies
   sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
-
-  # install rust
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
 
   </details>
