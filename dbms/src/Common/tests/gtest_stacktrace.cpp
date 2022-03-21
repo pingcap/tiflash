@@ -41,7 +41,9 @@ GTEST_NO_INLINE_ void function_1(bool output = false, size_t level = 0)
     if (level == 0)
     {
         function_0(output);
-    } else {
+    }
+    else
+    {
         function_1(output, level - 1);
     }
 }
@@ -67,7 +69,8 @@ TEST(StacTrace, MultiThreads)
             }
         });
     }
-    for(auto & i : threads) {
+    for (auto & i : threads)
+    {
         i.join();
     }
 }
