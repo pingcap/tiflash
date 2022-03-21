@@ -146,15 +146,15 @@ private:
         }
         else if (family_name == "Enum8")
         {
-            auto dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }
         else if (family_name == "Enum16")
         {
-            auto dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }

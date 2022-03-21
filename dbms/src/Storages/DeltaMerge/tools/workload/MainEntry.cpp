@@ -73,7 +73,7 @@ uint64_t average(const std::vector<uint64_t> & v)
     auto begin = v.begin() + ignore_element_count; // Ignore small elements.
     auto end = v.end() - ignore_element_count; // Ignore large elements.
     auto count = end - begin;
-    return std::accumulate(begin, end, 0) / count;
+    return std::accumulate(begin, end, 0ul) / count;
 }
 
 void outputResult(Poco::Logger * log, const std::vector<Statistics> & stats, WorkloadOptions & opts)
