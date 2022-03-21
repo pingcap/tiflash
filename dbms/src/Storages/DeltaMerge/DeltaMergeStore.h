@@ -296,13 +296,12 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
-                    TableID table_id_,
+                    TableID physical_table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS,
-                    const TableID physical_table_id = 0);
+                    const Settings & settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -455,8 +454,7 @@ private:
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
-    PageIdGenerator page_id_generator;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;
@@ -477,7 +475,6 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     BackgroundProcessingPool & blockable_background_pool;
