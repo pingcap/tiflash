@@ -8,8 +8,6 @@
 
 namespace DB
 {
-
 mpp::MPPDataPacket getPacketWithError(String reason);
 
 } // namespace DB
-
