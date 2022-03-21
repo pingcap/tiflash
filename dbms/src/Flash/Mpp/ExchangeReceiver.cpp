@@ -291,7 +291,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
     size_t source_num_,
     size_t max_streams_,
-    const String & req_id)
+    const String & req_id,
+    const String & executor_id)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -300,7 +301,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(Logger::get("ExchangeReceiver", req_id))
+    , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
     , collected(false)
 {
     rpc_context->fillSchema(schema);

@@ -66,27 +66,26 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
+#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message)                                                                                \
+    try                                                                                                                                    \
+    {                                                                                                                                      \
+        LOG_FMT_ERROR((logger), "{}{}{}", (start_of_message), ((start_of_message).empty() ? "" : ": "), getCurrentExceptionMessage(true)); \
+    }                                                                                                                                      \
+    catch (...)                                                                                                                            \
+    {                                                                                                                                      \
+    }
+
 void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message)
 {
-    try
-    {
-        LOG_FMT_ERROR(logger, "{}{}{}", start_of_message, (start_of_message.empty() ? "" : ": "), getCurrentExceptionMessage(true));
-    }
-    catch (...)
-    {
-    }
+    TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
 {
-    try
-    {
-        LOG_FMT_ERROR(logger, "{}{}{}", start_of_message, (start_of_message.empty() ? "" : ": "), getCurrentExceptionMessage(true));
-    }
-    catch (...)
-    {
-    }
+    TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
 }
+
+#undef TRY_LOG_CURRENT_EXCEPTION
 
 std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace)
 {

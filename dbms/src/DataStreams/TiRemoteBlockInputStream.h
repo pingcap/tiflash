@@ -168,12 +168,12 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(Logger::get(name, req_id))
+        , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
     {
         // generate sample block

@@ -948,7 +948,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier());
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name);
         pipeline.streams.push_back(input);
         task_start = task_end;
     }
@@ -963,7 +963,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier());
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         pipeline.streams.push_back(stream);

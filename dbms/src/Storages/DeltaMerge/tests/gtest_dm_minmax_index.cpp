@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Interpreters/convertFieldToType.h>

@@ -15,7 +15,7 @@
 #include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
