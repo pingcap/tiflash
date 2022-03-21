@@ -688,18 +688,34 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
     }
 
     auto * entry = node_to_entry(node);
-    UInt64 total_size = entry->start - start;
-    UInt64 last_node_size = entry->count;
-    UInt64 valid_size = 0;
-
-    for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+    if (entry->start + entry->count != end)
     {
-        entry = node_to_entry(node);
-        valid_size += entry->count;
-    }
-    valid_size = total_size - (valid_size - last_node_size);
+        UInt64 total_size = end;
+        UInt64 valid_size = 0;
+        for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+        {
+            entry = node_to_entry(node);
+            valid_size += entry->count;
+        }
 
-    return std::make_pair(total_size, valid_size);
+        valid_size = total_size - valid_size;
+        return std::make_pair(total_size, valid_size);
+    }
+    else
+    {
+        UInt64 total_size = entry->start - start;
+        UInt64 last_node_size = entry->count;
+        UInt64 valid_size = 0;
+
+        for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+        {
+            entry = node_to_entry(node);
+            valid_size += entry->count;
+        }
+        valid_size = total_size - (valid_size - last_node_size);
+
+        return std::make_pair(total_size, valid_size);
+    }
 }
 
 UInt64 RBTreeSpaceMap::getRightMargin()

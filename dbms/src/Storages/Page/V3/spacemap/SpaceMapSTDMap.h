@@ -64,17 +64,33 @@ protected:
         }
 
         const auto & last_free_block = free_map.rbegin();
-        UInt64 total_size = last_free_block->first - start;
-        UInt64 last_free_block_size = last_free_block->second;
 
-        UInt64 valid_size = 0;
-        for (const auto & free_block : free_map)
+        if (last_free_block->first + last_free_block->second != end)
         {
-            valid_size += free_block.second;
-        }
-        valid_size = total_size - (valid_size - last_free_block_size);
+            UInt64 total_size = end;
+            UInt64 valid_size = 0;
+            for (const auto & free_block : free_map)
+            {
+                valid_size += free_block.second;
+            }
 
-        return std::make_pair(total_size, valid_size);
+            valid_size = total_size - valid_size;
+            return std::make_pair(total_size, valid_size);
+        }
+        else
+        {
+            UInt64 total_size = last_free_block->first - start;
+            UInt64 last_free_block_size = last_free_block->second;
+
+            UInt64 valid_size = 0;
+            for (const auto & free_block : free_map)
+            {
+                valid_size += free_block.second;
+            }
+            valid_size = total_size - (valid_size - last_free_block_size);
+
+            return std::make_pair(total_size, valid_size);
+        }
     }
 
     UInt64 getRightMargin() override

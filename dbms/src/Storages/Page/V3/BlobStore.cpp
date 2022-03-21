@@ -215,11 +215,11 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         // So if we can't use id find blob, just ignore it.
         if (stat)
         {
+            LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
             {
                 auto lock = stat->lock();
                 stat->recalculateCapacity();
             }
-            LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
         }
     }
 }
@@ -761,13 +761,12 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 void BlobStore::BlobStats::restore()
 {
     BlobFileId max_restored_file_id = 0;
-    std::set<BlobFileId> existing_file_ids;
     for (const auto & stat : stats_map)
     {
         stat->recalculateSpaceMap();
         max_restored_file_id = std::max(stat->id, max_restored_file_id);
-        existing_file_ids.insert(stat->id);
     }
+
     // restore `roll_id`
     roll_id = max_restored_file_id + 1;
 }
