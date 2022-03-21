@@ -292,6 +292,7 @@ level = "debug"
         std::stringstream stream{};
         stream << fin.rdbuf();
         auto data = stream.str();
+        std::cout << data << std::endl;
         removeFile(stdout_name);
         removeFile(stderr_name);
         auto sigbus = data.find("Bus error");

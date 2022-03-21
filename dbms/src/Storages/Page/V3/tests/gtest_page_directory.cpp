@@ -1951,6 +1951,42 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, GetMaxId)
+try
+{
+    NamespaceId small = 20;
+    NamespaceId medium = 50;
+    NamespaceId large = 100;
+    ASSERT_EQ(dir->getMaxId(small), 0);
+    ASSERT_EQ(dir->getMaxId(medium), 0);
+    ASSERT_EQ(dir->getMaxId(large), 0);
+
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(small, 1), entry1);
+        edit.put(buildV3Id(large, 2), entry2);
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(small), 1);
+        ASSERT_EQ(dir->getMaxId(medium), 0);
+        ASSERT_EQ(dir->getMaxId(large), 2);
+    }
+
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(medium, 300), entry1);
+        edit.put(buildV3Id(medium, 320), entry2);
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(small), 1);
+        ASSERT_EQ(dir->getMaxId(medium), 320);
+        ASSERT_EQ(dir->getMaxId(large), 2);
+    }
+}
+CATCH
+
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
 #undef INSERT_ENTRY_ACQ_SNAP

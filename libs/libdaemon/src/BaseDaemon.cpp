@@ -96,6 +96,11 @@
 extern "C" int __llvm_profile_write_file(void);
 #endif
 
+#include <Symbolization/Symbolization.h>
+#ifndef TIFLASH_SOURCE_PREFIX
+#define TIFLASH_SOURCE_PREFIX ""
+#endif
+
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
 using Poco::FileChannel;
@@ -538,66 +543,85 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr int max_frames = 50;
+        int frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
-
-        if (frames_size)
-        {
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
         /// So at least print the function where the signal happened.
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
+        }
 #endif
 
-            char ** symbols = backtrace_symbols(frames, frames_size);
+        std::stringstream output;
+        auto prefix_size = std::size(TIFLASH_SOURCE_PREFIX);
+        for (int f = 0; f < frames_size; ++f)
+        {
+            output << std::endl;
+            auto sym_info = _tiflash_symbolize(frames[f]);
+            auto address = fmt::format("{}", frames[f]);
+            output << address;
 
-            if (!symbols)
+            if (sym_info.symbol_name)
             {
-                if (caller_address)
-                    LOG_ERROR(log, "Caller address: " << caller_address);
+                size_t length = 0;
+                int status = 0;
+                auto * demangled = abi::__cxa_demangle(sym_info.symbol_name, nullptr, &length, &status);
+                if (status == 0)
+                {
+                    std::string_view view(demangled, length - 1);
+                    output << "\t" << view;
+                }
+                else
+                {
+                    output << "\t" << sym_info.symbol_name;
+                }
             }
             else
             {
-                for (int i = 0; i < frames_size; ++i)
+                output << "\t"
+                       << "<unknown symbol>";
+            }
+
+            std::fill(address.begin(), address.end(), ' ');
+            std::fill(address.begin(), address.end(), ' ');
+
+            if (sym_info.object_name)
+            {
+                std::string_view view(sym_info.object_name);
+                auto pos = view.rfind('/');
+                if (pos != std::string_view::npos)
                 {
-                    /// Perform demangling of names. Name is in parentheses, before '+' character.
+                    output << " [" << view.substr(pos + 1) << "+" << sym_info.svma << "]";
+                }
+                else
+                {
+                    output << " [" << view << "+" << sym_info.svma << "]";
+                }
+            }
 
-                    char * name_start = nullptr;
-                    char * name_end = nullptr;
-                    char * demangled_name = nullptr;
-                    int status = 0;
-
-                    if (nullptr != (name_start = strchr(symbols[i], '('))
-                        && nullptr != (name_end = strchr(name_start, '+')))
-                    {
-                        ++name_start;
-                        *name_end = '\0';
-                        demangled_name = abi::__cxa_demangle(name_start, 0, 0, &status);
-                        *name_end = '+';
-                    }
-
-                    std::stringstream res;
-
-                    res << i << ". ";
-
-                    if (nullptr != demangled_name && 0 == status)
-                    {
-                        res.write(symbols[i], name_start - symbols[i]);
-                        res << demangled_name << name_end;
-                    }
-                    else
-                        res << symbols[i];
-
-                    LOG_ERROR(log, res.rdbuf());
+            if (sym_info.source_filename)
+            {
+                output << std::endl;
+                std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
+                if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
+                {
+                    output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno;
+                }
+                else
+                {
+                    output << address << "\t" << view << ":" << sym_info.lineno;
                 }
             }
         }
+        LOG_ERROR(log, output.rdbuf());
     }
 };
 

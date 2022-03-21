@@ -99,10 +99,16 @@ public:
             off += data_sz;
         }
         if (unlikely(!data_sizes.empty() && off != size))
-            throw Exception("Try to put Page" + DB::toString(page_id) + " with " + DB::toString(data_sizes.size())
-                                + " fields, but page size and filelds total size not match, page_size: " + DB::toString(size)
-                                + ", all fields size: " + DB::toString(off),
+        {
+            throw Exception(fmt::format(
+                                "Try to put Page with fields, but page size and fields total size not match "
+                                "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
+                                page_id,
+                                data_sizes.size(),
+                                size,
+                                off),
                             ErrorCodes::LOGICAL_ERROR);
+        }
 
         Write w{WriteType::PUT, page_id, tag, read_buffer, size, 0, std::move(offsets), 0, 0, {}};
         total_data_size += size;
@@ -130,8 +136,8 @@ public:
         total_data_size += size;
     }
 
-    // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
-    // only used for checkpoint. That page will be overwriten by WriteBatch with larger sequence,
+    // Upserting a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
+    // only used for checkpoint. That page will be overwritten by WriteBatch with larger sequence,
     // so we don't need to write page's data.
     void upsertPage(PageId page_id,
                     UInt64 tag,

@@ -41,6 +41,7 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
     writeIntBinary(entry.offset, buf);
     writeIntBinary(entry.size, buf);
     writeIntBinary(entry.checksum, buf);
+    writeIntBinary(entry.tag, buf);
     // fieldsOffset TODO: compression on `fieldsOffset`
     writeIntBinary(entry.field_offsets.size(), buf);
     for (const auto & [off, checksum] : entry.field_offsets)
@@ -56,6 +57,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
     readIntBinary(entry.offset, buf);
     readIntBinary(entry.size, buf);
     readIntBinary(entry.checksum, buf);
+    readIntBinary(entry.tag, buf);
     // fieldsOffset
     PageFieldOffsetChecksums field_offsets;
     UInt64 size_field_offsets = 0;

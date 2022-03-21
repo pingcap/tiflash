@@ -70,18 +70,17 @@ void PSGc::start()
 
 void PSScanner::onTime(Poco::Timer & /*timer*/)
 {
-    size_t num_snapshots = 0;
-    double oldest_snapshot_seconds = 0.0;
-    unsigned oldest_snapshot_thread = 0;
     try
     {
-        LOG_INFO(StressEnv::logger, "Scanner start");
-        std::tie(num_snapshots, oldest_snapshot_seconds, oldest_snapshot_thread) = ps->getSnapshotsStat();
-        LOG_INFO(StressEnv::logger,
-                 fmt::format("Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}",
-                             num_snapshots,
-                             oldest_snapshot_seconds,
-                             oldest_snapshot_thread));
+        LOG_FMT_INFO(StressEnv::logger, "Scanner start");
+        auto stat = ps->getSnapshotsStat();
+        LOG_FMT_INFO(
+            StressEnv::logger,
+            "Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}, tracing_id: {}",
+            stat.num_snapshots,
+            stat.longest_living_seconds,
+            stat.longest_living_from_thread_id,
+            stat.longest_living_from_tracing_id);
     }
     catch (...)
     {
