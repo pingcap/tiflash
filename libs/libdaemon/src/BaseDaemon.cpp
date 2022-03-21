@@ -565,7 +565,7 @@ private:
                 // __cxa_demangle will leak memory; but we are failing anyway
                 // freeing memory may increase possibilities to trigger other errors
                 auto *result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
-                return std::pair<std::string, int>{result, status};
+                return std::pair<const char *, int>{result, status};
             };
             StackTrace::addr2line(demangle_func, output, frames[f]);
         }
