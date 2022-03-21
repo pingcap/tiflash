@@ -27,6 +27,9 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
+    // Reset the `sequence` to the maximum of persisted.
+    dir->sequence = max_applied_ver.sequence;
+
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
@@ -90,7 +93,8 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_pro
     loadEdit(dir, edit);
     if (blob_stats)
         blob_stats->restore();
-
+    // Reset the `sequence` to the maximum of persisted.
+    dir->sequence = max_applied_ver.sequence;
     return dir;
 }
 
@@ -100,6 +104,8 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
 
     for (const auto & r : edit.getRecords())
     {
+        if (max_applied_ver < r.version)
+            max_applied_ver = r.version;
         max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
