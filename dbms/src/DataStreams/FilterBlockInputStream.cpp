@@ -34,9 +34,9 @@ FilterBlockInputStream::FilterBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & expression_,
     const String & filter_column_name,
-    const LogWithPrefixPtr & log_)
+    const String & req_id)
     : expression(expression_)
-    , log(getMPPTaskLog(log_, NAME))
+    , log(Logger::get(NAME, req_id))
 {
     children.push_back(input);
 

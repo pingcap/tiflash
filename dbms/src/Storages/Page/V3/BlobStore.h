@@ -129,7 +129,7 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(LogWithPrefixPtr log_, BlobStore::Config config);
+        BlobStats(LoggerPtr log_, BlobStore::Config config);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
@@ -175,7 +175,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
-        LogWithPrefixPtr log;
+        LoggerPtr log;
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
@@ -249,7 +249,7 @@ private:
     String path{};
     Config config;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     BlobStats blob_stats;
 

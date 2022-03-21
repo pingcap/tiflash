@@ -55,7 +55,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
-    , log(getMPPTaskLog("MPPTask", id))
+    , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
     , schedule_state(ScheduleState::WAITING)
 {}
@@ -224,7 +224,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -379,7 +379,7 @@ void MPPTask::writeErrToAllTunnels(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log->getLog(), "Failed to write error " + e + " to tunnel: " + it.second->id());
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }

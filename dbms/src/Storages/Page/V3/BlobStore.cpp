@@ -14,7 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -55,7 +55,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     : file_provider(file_provider_)
     , path(path_)
     , config(config_)
-    , log(getLogWithPrefix(nullptr, "BlobStore"))
+    , log(Logger::get("BlobStore"))
     , blob_stats(log, config_)
     , cached_files(config.cached_fd_size)
 {
@@ -748,7 +748,7 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(LogWithPrefixPtr log_, BlobStore::Config config_)
+BlobStore::BlobStats::BlobStats(LoggerPtr log_, BlobStore::Config config_)
     : log(std::move(log_))
     , config(config_)
 {

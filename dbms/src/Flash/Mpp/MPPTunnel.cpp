@@ -36,7 +36,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     int input_steams_num_,
     bool is_local_,
     bool is_async_,
-    const LogWithPrefixPtr & log_)
+    const String & req_id)
     : connected(false)
     , finished(false)
     , is_local(is_local_)
@@ -46,7 +46,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , input_streams_num(input_steams_num_)
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , thread_manager(newThreadManager())
-    , log(getMPPTaskLog(log_, tunnel_id))
+    , log(Logger::get("MPPTunnel", req_id, tunnel_id))
 {
     assert(!(is_local && is_async));
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();

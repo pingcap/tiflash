@@ -459,7 +459,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGProperties properties = getDAGProperties("");
         std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
-        static Poco::Logger * log = &Poco::Logger::get("MockDAG");
+        static auto log = Logger::get("MockDAG");
         LOG_INFO(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
         tipb::SelectResponse dag_response;
         TablesRegionsInfo tables_regions_info(true);
@@ -468,7 +468,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGContext dag_context(dag_request);
         dag_context.tables_regions_info = std::move(tables_regions_info);
-        dag_context.log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("MockDAG"), "");
+        dag_context.log = log;
         context.setDAGContext(&dag_context);
         DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
         driver.execute();
@@ -2530,7 +2530,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
-    static Poco::Logger * log = &Poco::Logger::get("MockDAG");
+    static auto log = Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
     TablesRegionsInfo tables_regions_info(true);
@@ -2540,7 +2540,7 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     DAGContext dag_context(dag_request);
     dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+    dag_context.log = log;
     context.setDAGContext(&dag_context);
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);

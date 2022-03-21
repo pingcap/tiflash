@@ -17,8 +17,8 @@
 
 namespace DB
 {
-LogWithPrefixPtr getMPPTaskTracingLog(const MPPTaskId & mpp_task_id)
+LoggerPtr getMPPTaskTracingLog(const MPPTaskId & mpp_task_id)
 {
-    return getMPPTaskLog(tracing_log_source, mpp_task_id);
+    return Logger::get(tracing_log_source, mpp_task_id.toString());
 }
 } // namespace DB

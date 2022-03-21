@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/Collator.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
@@ -108,7 +108,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , subquery_depth(subquery_depth_)
     , only_analyze(only_analyze)
     , input(input)
-    , log(getLogWithPrefix(nullptr, "InterpreterSelectQuery"))
+    , log(Logger::get("InterpreterSelectQuery"))
 {
     init(required_result_column_names_);
 }
@@ -121,7 +121,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(OnlyAnalyzeTag, const ASTPtr & qu
     , to_stage(QueryProcessingStage::Complete)
     , subquery_depth(0)
     , only_analyze(true)
-    , log(getLogWithPrefix(nullptr, "InterpreterSelectQuery"))
+    , log(Logger::get("InterpreterSelectQuery"))
 {
     init({});
 }
@@ -1055,7 +1055,13 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool ov
     }
     else
     {
-        pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(pipeline.streams, params, final, max_streams, settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
+        pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
+            pipeline.streams,
+            params,
+            final,
+            max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+            /*req_id=*/"");
 
         pipeline.streams.resize(1);
     }

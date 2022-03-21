@@ -18,7 +18,7 @@
 
 namespace DB
 {
-RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LogWithPrefixPtr & log)
+RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LoggerPtr & log)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
         FmtBuffer buffer;

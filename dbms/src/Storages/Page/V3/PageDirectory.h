@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
@@ -400,7 +400,7 @@ private:
 
     WALStorePtr wal;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB::PS::V3

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -66,9 +66,15 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
-void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message)
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message)
 {
-    tryLogCurrentException(logger->getLog(), start_of_message);
+    try
+    {
+        LOG_FMT_ERROR(logger, "{}{}{}", start_of_message, (start_of_message.empty() ? "" : ": "), getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)

@@ -45,7 +45,7 @@ public:
     MergeSortingBlocksBlockInputStream(
         Blocks & blocks_,
         SortDescription & description_,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         size_t max_merged_block_size_,
         size_t limit_ = 0);
 
@@ -82,7 +82,7 @@ private:
     template <typename TSortCursor>
     Block mergeImpl(std::priority_queue<TSortCursor> & queue);
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 class MergeSortingBlockInputStream : public IProfilingBlockInputStream
@@ -98,7 +98,7 @@ public:
         size_t limit_,
         size_t max_bytes_before_external_sort_,
         const std::string & tmp_path_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 
@@ -119,7 +119,7 @@ private:
     size_t max_bytes_before_external_sort;
     const std::string tmp_path;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     Blocks blocks;
     size_t sum_bytes_in_blocks = 0;
