@@ -37,7 +37,6 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class PageDirectoryFactory
 {
 public:
-    PageVersionType max_applied_ver;
     PageIdV3Internal max_applied_page_id;
 
     PageDirectoryFactory & setBlobStore(BlobStore & blob_store)

@@ -27,9 +27,6 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
-    // Reset the `sequence` to the maximum of persisted.
-    dir->sequence = max_applied_ver.sequence;
-
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
@@ -44,7 +41,7 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
         {
             (void)page_id;
 
-            // We must allow entry forward search.
+            // We can't use getEntry(max_seq) to get the entry.
             // Otherwise, It is likely to cause data loss.
             // for example:
             //
@@ -72,7 +69,7 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
             //   {type:6, create_ver: <2090,0>, is_deleted: false, delete_ver: <0,0>, ori_page_id: 0.4927, being_ref_count: 1, num_entries: 0}
             //
             // After getEntry, page id `4927` won't be restore by BlobStore.
-            if (auto entry = entries->getEntry(max_applied_ver.sequence, true); entry)
+            if (auto entry = entries->getLastEntry(); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
@@ -93,8 +90,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_pro
     loadEdit(dir, edit);
     if (blob_stats)
         blob_stats->restore();
-    // Reset the `sequence` to the maximum of persisted.
-    dir->sequence = max_applied_ver.sequence;
+
     return dir;
 }
 
@@ -104,8 +100,6 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
 
     for (const auto & r : edit.getRecords())
     {
-        if (max_applied_ver < r.version)
-            max_applied_ver = r.version;
         max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
