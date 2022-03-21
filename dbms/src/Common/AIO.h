@@ -19,7 +19,7 @@
 #include <mutex>
 
 
-/** Small wrappers for asynchronous U/O.
+/** Small wrappers for asynchronous I/0.
   */
 
 
