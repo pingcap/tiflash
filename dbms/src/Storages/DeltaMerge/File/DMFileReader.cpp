@@ -114,11 +114,12 @@ DMFileReader::Stream::Stream(
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
+    const auto & use_packs = reader.pack_filter.getUsePacks();
     if (reader.single_file_mode)
     {
         for (size_t i = 0; i < packs; i++)
         {
-            if (!reader.use_packs[i])
+            if (!use_packs[i])
             {
                 continue;
             }
@@ -130,7 +131,7 @@ DMFileReader::Stream::Stream(
     {
         for (size_t i = 0; i < packs;)
         {
-            if (!reader.use_packs[i])
+            if (!use_packs[i])
             {
                 ++i;
                 continue;
@@ -138,7 +139,7 @@ DMFileReader::Stream::Stream(
             size_t cur_offset_in_file = getOffsetInFile(i);
             size_t end = i + 1;
             // First find the end of current available range.
-            while (end < packs && reader.use_packs[end])
+            while (end < packs && use_packs[end])
                 ++end;
 
             // Second If the end of range is inside the block, we will need to read it too.
@@ -224,8 +225,6 @@ DMFileReader::DMFileReader(
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
     , pack_filter(pack_filter_)
-    , handle_res(pack_filter.getHandleRes())
-    , use_packs(pack_filter.getUsePacks())
     , is_common_handle(is_common_handle_)
     , skip_packs_by_column(read_columns.size(), 0)
     , mark_cache(mark_cache_)
@@ -264,12 +263,13 @@ DMFileReader::DMFileReader(
 bool DMFileReader::shouldSeek(size_t pack_id)
 {
     // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !use_packs[pack_id - 1];
+    return pack_id != 0 && !pack_filter.getUsePacks()[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
+    const auto & use_packs = pack_filter.getUsePacks();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
@@ -294,6 +294,7 @@ Block DMFileReader::read()
     size_t skip_rows;
     getSkippedRows(skip_rows);
 
+    const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
         return {};
 
@@ -303,10 +304,11 @@ Block DMFileReader::read()
     // 0 means no limit
     size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
-    auto & pack_stats = dmfile->getPackStats();
+    const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
 
+    const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {

@@ -121,8 +121,6 @@ private:
 
     /// Filters
     DMFilePackFilter pack_filter;
-    const std::vector<RSResult> & handle_res; // alias of handle_res in pack_filter
-    const std::vector<UInt8> & use_packs; // alias of use_packs in pack_filter
 
     const bool is_common_handle;
 
