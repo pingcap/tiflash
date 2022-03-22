@@ -174,8 +174,7 @@ RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_range
     if (log)
         LOG_FMT_TRACE(
             log,
-            "{} [original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]",
-            __FUNCTION__,
+            "[original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]",
             ori_size,
             expected_ranges_count,
             after_merge_count,
