@@ -147,8 +147,18 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldStream)
         for (size_t i = 0; i < num_repeat; ++i)
         {
             LOG_FMT_INFO(log, " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}" //
-                         ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
-                         elapsed_sec, beg.first, beg.second, end.first, end.second, min.first, min.second, num_files, num_legacy, num_compact, num_removed);
+                              ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                         elapsed_sec,
+                         beg.first,
+                         beg.second,
+                         end.first,
+                         end.second,
+                         min.first,
+                         min.second,
+                         num_files,
+                         num_legacy,
+                         num_compact,
+                         num_removed);
         }
     }
 }
@@ -163,8 +173,18 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldFmt)
         for (size_t i = 0; i < num_repeat; ++i)
         {
             LOG_FMT_INFO(log, " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}" //
-                         ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
-                         elapsed_sec, beg.first, beg.second, end.first, end.second, min.first, min.second, num_files, num_legacy, num_compact, num_removed);
+                              ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                         elapsed_sec,
+                         beg.first,
+                         beg.second,
+                         end.first,
+                         end.second,
+                         min.first,
+                         min.second,
+                         num_files,
+                         num_legacy,
+                         num_compact,
+                         num_removed);
         }
     }
 }
