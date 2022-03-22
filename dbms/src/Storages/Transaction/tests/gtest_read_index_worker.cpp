@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/setThreadName.h>
 #include <Debug/MockRaftStoreProxy.h>
@@ -194,6 +208,7 @@ size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager
         worker->data_map.invoke([&](std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) {
             for (auto & x : d)
             {
+                auto _ = x.second->genLockGuard();
                 cnt_use_history_tasks += x.second->cnt_use_history_tasks;
             }
         });
@@ -206,14 +221,15 @@ void ReadIndexTest::testBasic()
     {
         // codec
         kvrpcpb::ReadIndexResponse resp;
-        std::string str = resp.SerializeAsString();
         {
-            resp.mutable_locked();
+            resp.mutable_locked()->set_key("123");
             resp.mutable_region_error();
             resp.set_read_index(12345);
         }
+        std::string str = resp.SerializeAsString();
+
         kvrpcpb::ReadIndexResponse resp2;
-        SetReadIndexResp(&resp2, BaseBuffView{str.data(), str.size()});
+        SetPBMsByBytes(MsgPBType::ReadIndexResponse, &resp2, BaseBuffView{str.data(), str.size()});
         std::string str2 = resp2.SerializeAsString();
 
         ASSERT_EQ(str2, str);
@@ -342,6 +358,12 @@ void ReadIndexTest::testNormal()
             {
                 r.second->updateCommitIndex(669);
             }
+        }
+        {
+            reqs = {make_read_index_reqs(0, 0)};
+            auto resps = manager->batchReadIndex(reqs);
+            ASSERT_EQ(resps[0].first.read_index(), 669); // tso 0 will not use history record
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
         {
             // smaller ts, use history success record.

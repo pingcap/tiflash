@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/BlockIO.h>
@@ -35,15 +49,15 @@ class CoprocessorHandler
 public:
     CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_);
 
-    ~CoprocessorHandler() = default;
+    virtual ~CoprocessorHandler() = default;
 
-    grpc::Status execute();
+    virtual grpc::Status execute();
 
     static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> GenCopKeyRange(
         const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
 
 protected:
-    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
+    virtual grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
 
 protected:
     enum

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -82,14 +96,6 @@ RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
     auto manage_lock = genRegionReadLock();
     return manage_lock.index.findByRangeOverlap(range);
-}
-
-void KVStore::handleRegionsByRangeOverlap(
-    const RegionRange & range,
-    std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const
-{
-    auto task_lock = genTaskLock();
-    callback(getRegionsByRangeOverlap(range), task_lock);
 }
 
 RegionTaskLock RegionTaskCtrl::genRegionTaskLock(RegionID region_id) const
@@ -283,7 +289,11 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 {
-    auto task_lock = genTaskLock();
+    handleDestroy(region_id, tmt, genTaskLock());
+}
+
+void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
+{
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
@@ -629,6 +639,7 @@ void WaitCheckRegionReady(
             if (!need_retry)
             {
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
+                assert(resp.read_index() != 0);
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
             }

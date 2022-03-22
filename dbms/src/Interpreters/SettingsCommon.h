@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -9,6 +23,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/String.h>
 #include <Poco/Timespan.h>
 
 
@@ -833,11 +848,12 @@ public:
 
     static CompressionMethod getCompressionMethod(const String & s)
     {
-        if (s == "lz4")
+        String lower_str = Poco::toLower(s);
+        if (lower_str == "lz4")
             return CompressionMethod::LZ4;
-        if (s == "lz4hc")
+        if (lower_str == "lz4hc")
             return CompressionMethod::LZ4HC;
-        if (s == "zstd")
+        if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
 
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);

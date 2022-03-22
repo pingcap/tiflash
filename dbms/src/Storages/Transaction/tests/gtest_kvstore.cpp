@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Storages/Transaction/KVStore.h>
@@ -770,7 +784,13 @@ void RegionKVStoreTest::testKVStore()
             path,
         });
     KVStore & kvs = *ctx.getTMTContext().getKVStore();
-    kvs.restore(nullptr);
+    MockRaftStoreProxy proxy_instance;
+    TiFlashRaftProxyHelper proxy_helper;
+    {
+        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_instance.init(100);
+    }
+    kvs.restore(&proxy_helper);
     {
         // Run without read-index workers
 
@@ -822,10 +842,7 @@ void RegionKVStoreTest::testKVStore()
         kvs.handleDestroy(3, ctx.getTMTContext());
     }
     {
-        RegionMap mmp;
-        kvs.handleRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 15), TiKVKey("")), [&](RegionMap m, const KVStoreTaskLock &) {
-            mmp = m;
-        });
+        RegionMap mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 15), TiKVKey("")));
         ASSERT_EQ(mmp.size(), 1);
         ASSERT_EQ(mmp.at(2)->id(), 2);
     }
@@ -982,6 +999,58 @@ void RegionKVStoreTest::testKVStore()
         SCOPE_EXIT({
             kvs.snapshot_apply_method = ori_snapshot_apply_method;
         });
+        {
+            {
+                auto region = makeRegion(22, RecordKVFormat::genKey(1, 55), RecordKVFormat::genKey(1, 65));
+                kvs.checkAndApplySnapshot<RegionPtrWithBlock>(region, ctx.getTMTContext());
+            }
+            try
+            {
+                auto region = makeRegion(20, RecordKVFormat::genKey(1, 55), RecordKVFormat::genKey(1, 65));
+                kvs.checkAndApplySnapshot<RegionPtrWithBlock>(region, ctx.getTMTContext()); // overlap, but not tombstone
+                ASSERT_TRUE(false);
+            }
+            catch (Exception & e)
+            {
+                ASSERT_EQ(e.message(), "range of region 20 is overlapped with 22, state: region { id: 22 }");
+            }
+
+            {
+                const auto * ori_ptr = proxy_helper.proxy_ptr.inner;
+                proxy_helper.proxy_ptr.inner = nullptr;
+                SCOPE_EXIT({
+                    proxy_helper.proxy_ptr.inner = ori_ptr;
+                });
+
+                try
+                {
+                    auto region = makeRegion(20, RecordKVFormat::genKey(1, 55), RecordKVFormat::genKey(1, 65));
+                    kvs.checkAndApplySnapshot<RegionPtrWithBlock>(region, ctx.getTMTContext());
+                    ASSERT_TRUE(false);
+                }
+                catch (Exception & e)
+                {
+                    ASSERT_EQ(e.message(), "getRegionLocalState meet internal error: RaftStoreProxyPtr is none");
+                }
+            }
+
+            {
+                proxy_instance.getRegion(22)->setSate(({
+                    raft_serverpb::RegionLocalState s;
+                    s.set_state(::raft_serverpb::PeerState::Tombstone);
+                    s;
+                }));
+                auto region = makeRegion(20, RecordKVFormat::genKey(1, 55), RecordKVFormat::genKey(1, 65));
+                kvs.checkAndApplySnapshot<RegionPtrWithBlock>(region, ctx.getTMTContext()); // overlap, tombstone, remove previous one
+                ASSERT_EQ(nullptr, kvs.getRegion(22));
+                ASSERT_NE(nullptr, kvs.getRegion(20));
+
+                auto state = proxy_helper.getRegionLocalState(8192);
+                ASSERT_EQ(state.state(), raft_serverpb::PeerState::Tombstone);
+            }
+
+            kvs.handleDestroy(20, ctx.getTMTContext());
+        }
         auto region_id = 19;
         auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
         auto region_id_str = std::to_string(19);

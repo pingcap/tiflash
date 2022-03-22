@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
@@ -266,7 +280,11 @@ RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
 {
-    std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
+    if (kvstore->getProxyHelper())
+    {
+        ori_proxy_helper = kvstore->getProxyHelper();
+        std::memcpy(&mock_proxy_helper, ori_proxy_helper, sizeof(mock_proxy_helper));
+    }
     mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
         .fn_get_sst_reader = fn_get_sst_reader,
         .fn_remained = fn_remained,
@@ -280,8 +298,8 @@ RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
 }
 RegionMockTest::~RegionMockTest()
 {
-    kvstore->proxy_helper = nullptr;
-    region->proxy_helper = nullptr;
+    kvstore->proxy_helper = ori_proxy_helper;
+    region->proxy_helper = ori_proxy_helper;
 }
 
 void GenMockSSTData(const TiDB::TableInfo & table_info,

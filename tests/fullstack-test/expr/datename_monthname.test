@@ -1,0 +1,68 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> create table if not exists test.t1(col_string char(32))
+mysql> create table if not exists test.t2(col_string char(32))
+
+mysql> insert into test.t1 values('0000-00-00'), ('0000-01-00'), ('2022-00-01'), ('0000-12-01'), ('20220221'), ('20220222'), ('20220223'), ('20220224'), ('20220225'), ('20220226'), ('20220227')
+mysql> insert into test.t2 values('0000-00-00'), ('0000-00-01'), ('0000-01-00'), ('2022-01-01'), ('20220221'), ('20220321'), ('20220421'), ('20220521'), ('20220621'), ('20220721'), ('20220821'), ('20220921'), ('20221021'), ('20221121'), ('20221221')
+
+mysql> alter table test.t1 set tiflash replica 1
+mysql> alter table test.t2 set tiflash replica 1
+
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> set tidb_enforce_mpp=1; select col_string, dayname(col_string) as dayname, dayname('2022-02-21') as daynameconst, dayname('0000-01-00') as nullconst, dayname('') as empty from test.t1;
++------------+-----------+--------------+-----------+-------+
+| col_string | dayname   | daynameconst | nullconst | empty |
++------------+-----------+--------------+-----------+-------+
+| 0000-00-00 | NULL      | Monday       | NULL      | NULL  |
+| 0000-01-00 | NULL      | Monday       | NULL      | NULL  |
+| 2022-00-01 | NULL      | Monday       | NULL      | NULL  |
+| 0000-12-01 | Friday    | Monday       | NULL      | NULL  |
+| 20220221   | Monday    | Monday       | NULL      | NULL  |
+| 20220222   | Tuesday   | Monday       | NULL      | NULL  |
+| 20220223   | Wednesday | Monday       | NULL      | NULL  |
+| 20220224   | Thursday  | Monday       | NULL      | NULL  |
+| 20220225   | Friday    | Monday       | NULL      | NULL  |
+| 20220226   | Saturday  | Monday       | NULL      | NULL  |
+| 20220227   | Sunday    | Monday       | NULL      | NULL  |
++------------+-----------+--------------+-----------+-------+
+
+mysql> set tidb_enforce_mpp=1; select col_string, monthname(col_string) as monthname, monthname('20220221') as monthconst, monthname('0000-00-01') as nullconst, monthname('') as empty from test.t2;
++------------+-----------+------------+-----------+-------+
+| col_string | monthname | monthconst | nullconst | empty |
++------------+-----------+------------+-----------+-------+
+| 0000-00-00 | NULL      | February   | NULL      | NULL  |
+| 0000-00-01 | NULL      | February   | NULL      | NULL  |
+| 0000-01-00 | January   | February   | NULL      | NULL  |
+| 2022-01-01 | January   | February   | NULL      | NULL  |
+| 20220221   | February  | February   | NULL      | NULL  |
+| 20220321   | March     | February   | NULL      | NULL  |
+| 20220421   | April     | February   | NULL      | NULL  |
+| 20220521   | May       | February   | NULL      | NULL  |
+| 20220621   | June      | February   | NULL      | NULL  |
+| 20220721   | July      | February   | NULL      | NULL  |
+| 20220821   | August    | February   | NULL      | NULL  |
+| 20220921   | September | February   | NULL      | NULL  |
+| 20221021   | October   | February   | NULL      | NULL  |
+| 20221121   | November  | February   | NULL      | NULL  |
+| 20221221   | December  | February   | NULL      | NULL  |
++------------+-----------+------------+-----------+-------+
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2

@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # 'clickhouse' binary is a multi purpose tool,
 # that contain multiple execution modes (client, server, etc.)
 # each of them is built and linked as a separate library, defined below.
@@ -110,6 +124,68 @@ if (CLICKHOUSE_SPLIT_BINARY)
     add_custom_target (tiflash ALL DEPENDS clickhouse-bundle)
 else ()
     add_executable (tiflash main.cpp)
+
+    if (USE_INTERNAL_TIFLASH_PROXY)
+        set(PROXY_LIBRARY_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/target/release")
+    else()
+        set(PROXY_LIBRARY_DIR "${PREBUILT_LIBS_ROOT}")
+    endif()
+
+    if (ARCH_LINUX)
+        if (ARCH_AARCH64)
+            set(TIFLASH_ARCH_NAME "aarch64")
+        elseif(ARCH_AMD64)
+            set(TIFLASH_ARCH_NAME "x86_64")
+        endif()
+
+        if (CMAKE_PREFIX_PATH)
+            set(TIFLASH_DEPENDENCY_DIR_HINT
+                    "${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/${TIFLASH_ARCH_NAME}-unknown-linux-gnu/;")
+            set(TIFLASH_DEPENDENCY_DIRECTORIES
+                    "${CMAKE_PREFIX_PATH}/lib"
+                    "${CMAKE_PREFIX_PATH}/lib/${TIFLASH_ARCH_NAME}-unknown-linux-gnu/")
+        else()
+            set(TIFLASH_DEPENDENCY_DIR_HINT "")
+            set(TIFLASH_DEPENDENCY_DIRECTORIES "")
+        endif()
+
+        # set build rpaths, so that executables are be directly called in build tree (easy to debug)
+        set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PROXY_LIBRARY_DIR};${TIFLASH_DEPENDENCY_DIR_HINT}")
+        set_target_properties(tiflash PROPERTIES INSTALL_RPATH "$ORIGIN/")
+        install (TARGETS tiflash
+                COMPONENT tiflash-release
+                DESTINATION "."
+                RUNTIME_DEPENDENCY_SET tiflash-release-dependency)
+        install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
+                COMPONENT tiflash-release
+                DESTINATION "."
+                PRE_EXCLUDE_REGEXES
+                    "libdl.*"
+                    "libc-.*"
+                    "libc\\..*"
+                    "libgcc_s.*"
+                    "librt.*"
+                    "libm.*"
+                    "ld-linux-x86-64.*"
+                    "ld-linux-aarch64.*"
+                    "libpthread.*"# exclude libc dependencies
+                DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
+
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
+    elseif(APPLE)
+        # set build rpaths, so that executables are be directly called in build tree (easy to debug)
+        set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PROXY_LIBRARY_DIR}")
+        set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
+        install (TARGETS tiflash
+                COMPONENT tiflash-release
+                DESTINATION "."
+                RUNTIME_DEPENDENCY_SET tiflash-release-dependency)
+        install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
+                COMPONENT tiflash-release
+                DESTINATION "."
+                PRE_INCLUDE_REGEXES ".*proxy.*")
+    endif ()
+
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
@@ -192,16 +268,8 @@ else ()
     add_custom_target (clickhouse-clang ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-clang DEPENDS tiflash)
     add_custom_target (clickhouse-lld ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-lld DEPENDS tiflash)
     list(APPEND CLICKHOUSE_BUNDLE clickhouse-clang clickhouse-lld)
-
-    if (TIFLASH_ENABLE_RUNTIME_RPATH)
-        set_target_properties(tiflash PROPERTIES
-            BUILD_RPATH_USE_ORIGIN TRUE
-            BUILD_WITH_INSTALL_RPATH TRUE
-            INSTALL_RPATH "$ORIGIN/"
-        )
-    endif()
     install (TARGETS tiflash RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
-    
+
     install (FILES
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-clang
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-lld

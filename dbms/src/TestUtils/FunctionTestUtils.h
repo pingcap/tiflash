@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/MyDuration.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -9,6 +24,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -58,6 +74,14 @@ struct TypeTraits<MyDateTime>
     static constexpr bool is_nullable = false;
     static constexpr bool is_decimal = false;
     using FieldType = DataTypeMyDateTime::FieldType;
+};
+
+template <>
+struct TypeTraits<MyDuration>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDuration::FieldType;
 };
 
 template <typename T>
@@ -171,6 +195,12 @@ template <>
 struct InferredDataType<MyDateTime>
 {
     using Type = DataTypeMyDateTime;
+};
+
+template <>
+struct InferredDataType<MyDuration>
+{
+    using Type = DataTypeMyDuration;
 };
 
 template <typename T>
@@ -351,8 +381,8 @@ ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const std::optional
 template <typename T>
 typename TypeTraits<T>::FieldType parseDecimal(
     const InferredLiteralType<T> & literal_,
-    PrecType max_prec = std::numeric_limits<PrecType>::max(),
-    ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
+    PrecType max_prec,
+    ScaleType expected_scale)
 {
     using Traits = TypeTraits<T>;
     using DecimalType = typename Traits::DecimalType;
@@ -381,17 +411,36 @@ typename TypeTraits<T>::FieldType parseDecimal(
 
     auto [parsed_value, prec, scale] = parsed.value();
 
+    (void)prec;
     max_prec = std::min(max_prec, maxDecimalPrecision<DecimalType>());
-    if (prec > max_prec)
-        throw TiFlashTestException(
-            fmt::format("Precision is too large for {}({}): prec = {}", TypeName<DecimalType>::get(), max_prec, prec));
-    if (expected_scale != std::numeric_limits<ScaleType>::max() && scale != expected_scale)
-        throw TiFlashTestException(fmt::format("Scale does not match: expected = {}, actual = {}", expected_scale, scale));
-    if (scale > max_prec)
-        throw TiFlashTestException(fmt::format("Scale is larger than max_prec: max_prec = {}, scale = {}", max_prec, scale));
-
+    if (scale != expected_scale)
+    {
+        Int256 scale_factor = 1;
+        size_t scale_diff = expected_scale > scale ? expected_scale - scale : scale - expected_scale;
+        for (size_t i = 0; i < scale_diff; i++)
+            scale_factor *= 10;
+        if (expected_scale > scale)
+        {
+            parsed_value *= scale_factor;
+        }
+        else
+        {
+            bool need_round = (parsed_value >= 0 ? parsed_value : -parsed_value) % scale_factor >= scale_factor / 2;
+            parsed_value /= scale_factor;
+            if (need_round)
+            {
+                if (parsed_value > 0)
+                    parsed_value++;
+                else
+                    parsed_value--;
+            }
+        }
+    }
+    auto max_value = DecimalMaxValue::get(max_prec);
+    if (parsed_value > max_value || parsed_value < -max_value)
+        throw TiFlashTestException(fmt::format("Input {} overflow for decimal({},{})", literal, max_prec, expected_scale));
     auto value = static_cast<NativeType>(parsed_value);
-    return DecimalField<DecimalType>(value, scale);
+    return DecimalField<DecimalType>(value, expected_scale);
 }
 
 // e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
@@ -500,6 +549,12 @@ ColumnWithTypeAndName executeFunction(
     ColumnsWithTypeAndName vec({first_column, columns...});
     return executeFunction(context, func_name, vec);
 }
+
+DataTypePtr getReturnTypeForFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")

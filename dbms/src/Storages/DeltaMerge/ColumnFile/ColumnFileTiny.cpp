@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -106,7 +120,7 @@ void ColumnFileTiny::fillColumns(const PageReader & page_reader, const ColumnDef
 ColumnFileReaderPtr
 ColumnFileTiny::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnTinyFileReader>(*this, storage_snap, col_defs);
+    return std::make_shared<ColumnFileTinyReader>(*this, storage_snap, col_defs);
 }
 
 void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) const
@@ -118,7 +132,7 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-std::tuple<ColumnFilePtr, BlockPtr> ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
@@ -150,30 +164,30 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     }
     else
     {
-        auto & schema_ = *schema;
+        const auto & schema_ref = *schema;
 
         PageStorage::PageReadFields fields;
         fields.first = data_page_id;
-        for (size_t i = 0; i < schema_.columns(); ++i)
+        for (size_t i = 0; i < schema_ref.columns(); ++i)
             fields.second.push_back(i);
 
         auto page_map = page_reader.read({fields});
         auto page = page_map[data_page_id];
 
-        auto columns = schema_.cloneEmptyColumns();
+        auto columns = schema_ref.cloneEmptyColumns();
 
         if (unlikely(columns.size() != page.fieldSize()))
             throw Exception("Column size and field size not the same");
 
-        for (size_t index = 0; index < schema_.columns(); ++index)
+        for (size_t index = 0; index < schema_ref.columns(); ++index)
         {
             auto data_buf = page.getFieldData(index);
-            auto & type = schema_.getByPosition(index).type;
+            const auto & type = schema_ref.getByPosition(index).type;
             auto & column = columns[index];
             deserializeColumn(*column, type, data_buf, rows);
         }
 
-        return schema_.cloneWithColumns(std::move(columns));
+        return schema_ref.cloneWithColumns(std::move(columns));
     }
 }
 
@@ -191,10 +205,10 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;
-    for (auto & col : block)
+    for (const auto & col : block)
     {
         auto last_buf_size = write_buf.count();
-        serializeColumn(write_buf, *col.column, col.type, offset, limit, true);
+        serializeColumn(write_buf, *col.column, col.type, offset, limit, context.db_context.getSettingsRef().dt_compression_method, context.db_context.getSettingsRef().dt_compression_level);
         col_data_sizes.push_back(write_buf.count() - last_buf_size);
     }
 
@@ -206,19 +220,19 @@ PageId ColumnFileTiny::writeColumnFileData(DMContext & context, const Block & bl
 }
 
 
-ColumnPtr ColumnTinyFileReader::getPKColumn()
+ColumnPtr ColumnFileTinyReader::getPKColumn()
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 1, cols_data_cache);
     return cols_data_cache[0];
 }
 
-ColumnPtr ColumnTinyFileReader::getVersionColumn()
+ColumnPtr ColumnFileTinyReader::getVersionColumn()
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 2, cols_data_cache);
     return cols_data_cache[1];
 }
 
-size_t ColumnTinyFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     tiny_file.fillColumns(storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
 
@@ -226,7 +240,7 @@ size_t ColumnTinyFileReader::readRows(MutableColumns & output_cols, size_t rows_
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
 }
 
-Block ColumnTinyFileReader::readNextBlock()
+Block ColumnFileTinyReader::readNextBlock()
 {
     if (read_done)
         return {};
@@ -239,10 +253,10 @@ Block ColumnTinyFileReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
-ColumnFileReaderPtr ColumnTinyFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.
-    return std::make_shared<ColumnTinyFileReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
+    return std::make_shared<ColumnFileTinyReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
 }
 
 } // namespace DM

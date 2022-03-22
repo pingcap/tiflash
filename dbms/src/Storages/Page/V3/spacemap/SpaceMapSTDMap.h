@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Common/Exception.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -64,17 +78,32 @@ protected:
         }
 
         const auto & last_free_block = free_map.rbegin();
-        UInt64 total_size = last_free_block->first - start;
-        UInt64 last_free_block_size = last_free_block->second;
 
-        UInt64 valid_size = 0;
-        for (const auto & free_block : free_map)
+        if (last_free_block->first + last_free_block->second != end)
         {
-            valid_size += free_block.second;
-        }
-        valid_size = total_size - (valid_size - last_free_block_size);
+            UInt64 total_size = end - start;
+            UInt64 valid_size = total_size;
+            for (const auto & free_block : free_map)
+            {
+                valid_size -= free_block.second;
+            }
 
-        return std::make_pair(total_size, valid_size);
+            return std::make_pair(total_size, valid_size);
+        }
+        else
+        {
+            UInt64 total_size = last_free_block->first - start;
+            UInt64 last_free_block_size = last_free_block->second;
+
+            UInt64 valid_size = 0;
+            for (const auto & free_block : free_map)
+            {
+                valid_size += free_block.second;
+            }
+            valid_size = total_size - (valid_size - last_free_block_size);
+
+            return std::make_pair(total_size, valid_size);
+        }
     }
 
     UInt64 getRightMargin() override
@@ -241,6 +270,25 @@ protected:
         hint_biggest_cap = scan_biggest_cap;
 
         return std::make_pair(offset, hint_biggest_cap);
+    }
+
+    UInt64 updateAccurateMaxCapacity() override
+    {
+        UInt64 max_offset = 0;
+        UInt64 max_cap = 0;
+
+        for (const auto & [start, size] : free_map)
+        {
+            if (size > max_cap)
+            {
+                max_cap = size;
+                max_offset = start;
+            }
+        }
+        hint_biggest_offset = max_offset;
+        hint_biggest_cap = max_cap;
+
+        return max_cap;
     }
 
     bool markFreeImpl(UInt64 offset, size_t length) override

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/TiFlashBuildInfo.h>
@@ -7,6 +21,8 @@
 #include <prometheus/gauge.h>
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
+
+#include <ext/scope_guard.h>
 
 // to make GCC 11 happy
 #include <cassert>
@@ -38,7 +54,8 @@ namespace DB
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
-        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                             \
+        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}),                             \
+        F(type_partition_ts, {"type", "partition_table_scan"}))                                                                           \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 30}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 30}),         \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 30}),                                                        \
@@ -151,7 +168,39 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_object_count, "Number of objects", Gauge,                                                                                   \
+        F(type_count_of_establish_calldata, {"type", "count_of_establish_calldata"}),                                                     \
+        F(type_count_of_mpptunnel, {"type", "count_of_mpptunnel"}))                                                                       \
+    M(tiflash_thread_count, "Number of threads", Gauge,                                                                                   \
+        F(type_max_threads_of_thdpool, {"type", "thread_pool_total_max"}),                                                                \
+        F(type_active_threads_of_thdpool, {"type", "thread_pool_active"}),                                                                \
+        F(type_max_active_threads_of_thdpool, {"type", "thread_pool_active_max"}),                                                        \
+        F(type_total_threads_of_thdpool, {"type", "thread_pool_total"}),                                                                  \
+        F(type_max_threads_of_raw, {"type", "total_max"}),                                                                                \
+        F(type_total_threads_of_raw, {"type", "total"}),                                                                                  \
+        F(type_threads_of_client_cq_pool, {"type", "rpc_client_cq_pool"}),                                                                \
+        F(type_threads_of_receiver_read_loop, {"type", "rpc_receiver_read_loop"}),                                                        \
+        F(type_threads_of_receiver_reactor, {"type", "rpc_receiver_reactor"}),                                                            \
+        F(type_max_threads_of_establish_mpp, {"type", "rpc_establish_mpp_max"}),                                                          \
+        F(type_active_threads_of_establish_mpp, {"type", "rpc_establish_mpp"}),                                                           \
+        F(type_max_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp_max"}),                                                            \
+        F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                             \
+        F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                             \
+        F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))                                                               \
+    M(tiflash_task_scheduler, "Min-tso task scheduler", Gauge,                                                                            \
+        F(type_min_tso, {"type", "min_tso"}),                                                                                             \
+        F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                                 \
+        F(type_active_queries_count, {"type", "active_queries_count"}),                                                                   \
+        F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                     \
+        F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                       \
+        F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                               \
+        F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                         \
+        F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
+        F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                         \
+    M(tiflash_task_scheduler_waiting_duration_seconds, "Bucketed histogram of task waiting for scheduling duration", Histogram,           \
+        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.0005, 2, 20}))
+
 // clang-format on
 
 struct ExpBuckets
@@ -318,4 +367,10 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
     (__VA_ARGS__)
 
+#define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \
+    GET_METRIC(family, metric).Increment();                                                                                   \
+    GET_METRIC(family, metric_max).Set(std::max(GET_METRIC(family, metric_max).Value(), GET_METRIC(family, metric).Value())); \
+    SCOPE_EXIT({                                                                                                              \
+        GET_METRIC(family, metric).Decrement();                                                                               \
+    })
 } // namespace DB

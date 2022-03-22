@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Debug/MockRaftStoreProxy.h>
+#include <Storages/Transaction/ProxyFFICommon.h>
 
 namespace DB
 {
@@ -46,8 +61,8 @@ uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr r
     auto res = read_index_task.data->poll(async_waker ? async_waker->data : nullptr);
     if (res)
     {
-        auto * s = reinterpret_cast<kvrpcpb::ReadIndexResponse *>(resp);
-        *s = *res;
+        auto buff = res->SerializePartialAsString();
+        SetPBMsByBytes(MsgPBType::ReadIndexResponse, resp, BaseBuffView{buff.data(), buff.size()});
         return 1;
     }
     else
@@ -75,9 +90,29 @@ void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
     }
 }
 
-void fn_handle_batch_read_index(RaftStoreProxyPtr, CppStrVecView, RawVoidPtr, uint64_t)
+void fn_handle_batch_read_index(RaftStoreProxyPtr, CppStrVecView, RawVoidPtr, uint64_t, void (*)(RawVoidPtr, BaseBuffView, uint64_t))
 {
     throw Exception("`fn_handle_batch_read_index` is deprecated");
+}
+
+KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id, RawVoidPtr data, RawCppStringPtr * error_msg)
+{
+    if (!ptr.inner)
+    {
+        *error_msg = RawCppString::New("RaftStoreProxyPtr is none");
+        return KVGetStatus::Error;
+    }
+    auto & x = as_ref(ptr);
+    auto region = x.getRegion(region_id);
+    if (region)
+    {
+        auto state = region->getState();
+        auto buff = state.SerializePartialAsString();
+        SetPBMsByBytes(MsgPBType::RegionLocalState, data, BaseBuffView{buff.data(), buff.size()});
+        return KVGetStatus::Ok;
+    }
+    else
+        return KVGetStatus::NotFound;
 }
 
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
@@ -88,6 +123,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_poll_read_index_task = fn_poll_read_index_task;
     res.fn_make_async_waker = fn_make_async_waker;
     res.fn_handle_batch_read_index = fn_handle_batch_read_index;
+    res.fn_get_region_local_state = fn_get_region_local_state;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;
@@ -120,9 +156,17 @@ void MockProxyRegion::updateCommitIndex(uint64_t index)
     this->apply.set_commit_index(index);
 }
 
-MockProxyRegion::MockProxyRegion()
+void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
+{
+    auto _ = genLockGuard();
+    this->state = s;
+}
+
+MockProxyRegion::MockProxyRegion(uint64_t id_)
+    : id(id_)
 {
     apply.set_commit_index(5);
+    state.mutable_region()->set_id(id);
 }
 
 std::optional<kvrpcpb::ReadIndexResponse> RawMockReadIndexTask::poll(std::shared_ptr<MockAsyncNotifier> waker)
@@ -204,7 +248,7 @@ void MockRaftStoreProxy::init(size_t region_num)
     auto _ = genLockGuard();
     for (size_t i = 0; i < region_num; ++i)
     {
-        regions.emplace(i, std::make_shared<MockProxyRegion>());
+        regions.emplace(i, std::make_shared<MockProxyRegion>(i));
     }
 }
 

@@ -1,18 +1,30 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
 
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
-option(TIFLASH_ENABLE_RUNTIME_RPATH "Add $ORIGIN/ to tiflash installation rpath" OFF)
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
-if(TIFLASH_ENABLE_LLVM_DEVELOPMENT)
-    # enable RPATHs to sysroot to make it easier for LLVM development
-    set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
-    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-    set(ENV{LD_LIBRARY_PATH} "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/;${CMAKE_PREFIX_PATH}/lib;${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/;${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+if(CMAKE_PREFIX_PATH)
+    # append paths for cmake to check libs
+    set(ENV{LD_LIBRARY_PATH}
+            "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
@@ -141,6 +153,22 @@ endif ()
 set (COMPILER_FLAGS                      "${COMPILER_FLAGS} ${CXX11_ABI_FLAGS}")
 
 string(REGEX MATCH "-?[0-9]+(.[0-9]+)?$" COMPILER_POSTFIX ${CMAKE_CXX_COMPILER})
+
+find_program (LLVM_OBJCOPY_PATH NAMES "llvm-objcopy${COMPILER_POSTFIX}" "llvm-objcopy")
+find_program (LLVM_AR_PATH NAMES "llvm-ar${COMPILER_POSTFIX}" "llvm-ar")
+find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib${COMPILER_POSTFIX}" "llvm-ranlib")
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_OBJCOPY_PATH)
+    set(CMAKE_OBJCOPY ${LLVM_OBJCOPY_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_AR_PATH)
+    set(CMAKE_AR ${LLVM_AR_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_RANLIB_PATH)
+    set(CMAKE_RANLIB ${LLVM_RANLIB_PATH})
+endif()
 
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
@@ -410,3 +438,10 @@ add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
 
+# Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
+# finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
+# to be invoked sequentially by adding linear dependency relations between them.
+# Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
+# with a large number of threads.
+include (cmake/sequential.cmake)
+build_sequentially (symbolization tiflash_proxy)

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -37,11 +51,12 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -140,8 +155,6 @@ struct ContextShared
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
-    /// Rules for selecting the compression settings, depending on the size of the part.
-    mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -150,6 +163,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
+    DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -191,7 +205,7 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
     {
         /// TODO: make it singleton (?)
@@ -308,7 +322,7 @@ const ProcessList & Context::getProcessList() const
 }
 
 
-const Databases Context::getDatabases() const
+Databases Context::getDatabases() const
 {
     auto lock = getLock();
     return shared->databases;
@@ -323,7 +337,7 @@ Databases Context::getDatabases()
 
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
-    auto & user_name = client_info.current_user;
+    const auto & user_name = client_info.current_user;
 
     if (user_name.empty())
         throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
@@ -438,7 +452,7 @@ static String resolveDatabase(const String & database_name, const String & curre
 }
 
 
-const DatabasePtr Context::getDatabase(const String & database_name) const
+DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -454,7 +468,7 @@ DatabasePtr Context::getDatabase(const String & database_name)
     return shared->databases[db];
 }
 
-const DatabasePtr Context::tryGetDatabase(const String & database_name) const
+DatabasePtr Context::tryGetDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -818,7 +832,7 @@ Tables Context::getExternalTables() const
     auto lock = getLock();
 
     Tables res;
-    for (auto & table : external_tables)
+    for (const auto & table : external_tables)
         res[table.first] = table.second.first;
 
     if (session_context && session_context != this)
@@ -850,7 +864,7 @@ StoragePtr Context::getTable(const String & database_name, const String & table_
     Exception exc;
     auto res = getTableImpl(database_name, table_name, &exc);
     if (!res)
-        throw exc;
+        throw Exception(exc);
     return res;
 }
 
@@ -1516,7 +1530,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
     return shared->schema_sync_service;
 }
 
-void Context::initializeTiFlashMetrics()
+void Context::initializeTiFlashMetrics() const
 {
     auto lock = getLock();
     (void)TiFlashMetrics::instance();
@@ -1558,6 +1572,73 @@ IORateLimiter & Context::getIORateLimiter() const
 ReadLimiterPtr Context::getReadLimiter() const
 {
     return getIORateLimiter().getReadLimiter();
+}
+
+static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
+{
+    // Check whether v3 is already enabled
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
+        {
+            return true;
+        }
+    }
+
+    // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
+    if (!enable_ps_v3)
+        return false;
+
+    // Check whether there are any files in kvstore path, if exists, then this is not a new node.
+    // If it's a new node, then we enable v3. Otherwise, we use v2.
+    for (const auto & path : path_pool.listKVStorePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
+{
+    auto lock = getLock();
+    if (isUsingPageStorageV3(path_pool, enable_ps_v3))
+    {
+        try
+        {
+            // create manifests file before initialize GlobalStoragePool
+            for (const auto & path : path_pool.listGlobalPagePaths())
+                PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
+
+            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
+            shared->global_storage_pool->restore();
+            return true;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->global_storage_pool = nullptr;
+        return false;
+    }
+}
+
+DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
+{
+    auto lock = getLock();
+    return shared->global_storage_pool;
 }
 
 UInt16 Context::getTCPPort() const
@@ -1615,25 +1696,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-CompressionSettings Context::chooseCompressionSettings(size_t part_size, double part_size_ratio) const
-{
-    auto lock = getLock();
-
-    if (!shared->compression_settings_selector)
-    {
-        constexpr auto config_name = "compression";
-        auto & config = getConfigRef();
-
-        if (config.has(config_name))
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>(config, "compression");
-        else
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>();
-    }
-
-    return shared->compression_settings_selector->choose(part_size, part_size_ratio);
 }
 
 

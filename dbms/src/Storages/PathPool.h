@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -58,9 +72,16 @@ public:
     // User should keep the pointer to track the PageFileID -> path index mapping.
     PSDiskDelegatorPtr getPSDiskDelegatorRaft();
 
+    PSDiskDelegatorPtr getPSDiskDelegatorGlobalMulti(const String & prefix) const;
+    PSDiskDelegatorPtr getPSDiskDelegatorGlobalSingle(const String & prefix) const;
+
 public:
     /// Methods for the root PathPool ///
     Strings listPaths() const;
+
+    const Strings & listKVStorePaths() const { return kvstore_paths; }
+
+    const Strings & listGlobalPagePaths() const { return global_page_paths; }
 
 public:
     struct PageFileIdLvlHasher
@@ -78,6 +99,7 @@ private:
     Strings main_data_paths;
     Strings latest_data_paths;
     Strings kvstore_paths;
+    Strings global_page_paths;
 
     bool enable_raft_compatible_mode;
 
@@ -258,6 +280,81 @@ private:
     // PageFileID -> path index
     PathPool::PageFilePathMap page_path_map;
     const UInt32 default_path_index = 0;
+};
+
+class PSDiskDelegatorGlobalMulti : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorGlobalMulti(const PathPool & pool_, String prefix)
+        : pool(pool_)
+        , path_prefix(std::move(prefix))
+    {}
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
+
+private:
+    const PathPool & pool;
+    const String path_prefix;
+    // PageFileID -> path index
+    PathPool::PageFilePathMap page_path_map;
+    const UInt32 default_path_index = 0;
+};
+
+class PSDiskDelegatorGlobalSingle : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorGlobalSingle(const PathPool & pool_, String prefix)
+        : pool(pool_)
+        , path_prefix(std::move(prefix))
+    {}
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
+
+private:
+    const PathPool & pool;
+    const String path_prefix;
 };
 
 /// A class to manage paths for the specified storage.

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
@@ -16,7 +30,7 @@ using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 /// And it may have cache data if the column file is small enough(The details are in the flush process).
 class ColumnFileTiny : public ColumnFilePersisted
 {
-    friend class ColumnTinyFileReader;
+    friend class ColumnFileTinyReader;
 
 private:
     BlockPtr schema;
@@ -98,7 +112,7 @@ public:
 
     static PageId writeColumnFileData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static std::tuple<ColumnFilePtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
+    static std::tuple<ColumnFilePersistedPtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
 
     String toString() const override
     {
@@ -106,13 +120,12 @@ public:
             + ",bytes:" + DB::toString(bytes) //
             + ",data_page_id:" + DB::toString(data_page_id) //
             + ",schema:" + (schema ? schema->dumpStructure() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none")
-            + ",saved: " + DB::toString(saved) + "}";
+            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
     }
 };
 
-class ColumnTinyFileReader : public ColumnFileReader
+class ColumnFileTinyReader : public ColumnFileReader
 {
 private:
     const ColumnFileTiny & tiny_file;
@@ -123,7 +136,7 @@ private:
     bool read_done = false;
 
 public:
-    ColumnTinyFileReader(const ColumnFileTiny & tiny_file_,
+    ColumnFileTinyReader(const ColumnFileTiny & tiny_file_,
                          const StorageSnapshotPtr & storage_snap_,
                          const ColumnDefinesPtr & col_defs_,
                          const Columns & cols_data_cache_)
@@ -134,7 +147,7 @@ public:
     {
     }
 
-    ColumnTinyFileReader(const ColumnFileTiny & tiny_file_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileTinyReader(const ColumnFileTiny & tiny_file_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
         : tiny_file(tiny_file_)
         , storage_snap(storage_snap_)
         , col_defs(col_defs_)

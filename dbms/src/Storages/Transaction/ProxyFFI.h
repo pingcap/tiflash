@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
@@ -15,6 +29,10 @@ namespace kvrpcpb
 class ReadIndexResponse;
 class ReadIndexRequest;
 } // namespace kvrpcpb
+namespace raft_serverpb
+{
+class RegionLocalState;
+}
 
 namespace DB
 {
@@ -95,6 +113,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     RawRustPtr makeAsyncWaker(void (*wake_fn)(RawVoidPtr), RawCppPtr data) const;
     TimerTask makeTimerTask(uint64_t time_ms) const;
     bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
+    raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
 };
 
 extern "C" {
@@ -123,12 +142,10 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppP
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
-void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
-void SetReadIndexResp(RawVoidPtr, BaseBuffView);
-void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
+void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(
@@ -152,11 +169,9 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
-        .fn_set_read_index_resp = SetReadIndexResp,
-        .fn_set_server_info_resp = SetServerInfoResp,
         .fn_get_config = GetConfig,
         .fn_set_store = SetStore,
+        .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
     };
 }
 } // namespace DB

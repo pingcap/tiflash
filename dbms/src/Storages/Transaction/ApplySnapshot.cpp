@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
@@ -78,15 +92,29 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 
     {
         const auto & new_range = new_region->getRange();
-        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
-            for (const auto & region : region_map)
+        auto task_lock = genTaskLock();
+        auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
+        for (const auto & overlapped_region : region_map)
+        {
+            if (overlapped_region.first != region_id)
             {
-                if (region.first != region_id)
+                auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
+                if (state.state() != raft_serverpb::PeerState::Tombstone)
                 {
-                    LOG_FMT_WARNING(log, "range of region {} is overlapped with region {}, please check whether its `PeerState` is `Tombstone` in raftstore proxy", region_id, region.first);
+                    throw Exception(fmt::format(
+                                        "range of region {} is overlapped with {}, state: {}",
+                                        region_id,
+                                        overlapped_region.first,
+                                        state.ShortDebugString()),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+                else
+                {
+                    LOG_FMT_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    handleDestroy(overlapped_region.first, tmt, task_lock);
                 }
             }
-        });
+        }
     }
 
     {
