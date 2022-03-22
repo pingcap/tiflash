@@ -253,7 +253,7 @@ PoolWithFailoverBase<TNestedPool>::getMany(
             }
             else
             {
-                LOG_FMT_WARNING(log, "Connection failed at try №{}, reason: {}", shuffled_pool.error_count + 1, fail_message);
+                LOG_FMT_WARNING(log, "Connection failed at try No.{}, reason: {}", shuffled_pool.error_count + 1, fail_message);
                 ProfileEvents::increment(ProfileEvents::DistributedConnectionFailTry);
 
                 ++shuffled_pool.error_count;

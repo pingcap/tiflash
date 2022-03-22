@@ -51,12 +51,12 @@ GTEST_NO_INLINE_ void function_2(bool output = false, size_t level = 0)
 {
     function_1(output, level);
 }
-TEST(StacTrace, SingleThread)
+TEST(StackTrace, SingleThread)
 {
     function_2(true);
     function_2(true, 16);
 }
-TEST(StacTrace, MultiThreads)
+TEST(StackTrace, MultiThreads)
 {
     size_t num = std::thread::hardware_concurrency();
     std::vector<std::thread> threads{};
