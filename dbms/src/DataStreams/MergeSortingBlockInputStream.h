@@ -18,7 +18,6 @@
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Poco/TemporaryFile.h>

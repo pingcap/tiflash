@@ -18,9 +18,7 @@
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
-
 
 namespace DB
 {

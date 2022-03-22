@@ -18,7 +18,6 @@
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/Set.h>
 #include <Storages/IStorage.h>
@@ -262,7 +261,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (head_rows != 0)
         {
             // avoid generate log message when log level > DEBUG.
-            auto gen_debug_log_msg = [&subquery] {
+            auto gen_debug_log_msg = [&] {
                 FmtBuffer msg;
                 msg.append("Created. ");
 

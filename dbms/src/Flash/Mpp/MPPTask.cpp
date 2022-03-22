@@ -27,7 +27,6 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>

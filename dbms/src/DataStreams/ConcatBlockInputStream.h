@@ -15,8 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {

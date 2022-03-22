@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>

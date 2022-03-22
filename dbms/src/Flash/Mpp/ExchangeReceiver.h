@@ -22,7 +22,6 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>

@@ -17,10 +17,8 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <Interpreters/Aggregator.h>
-
 
 namespace DB
 {

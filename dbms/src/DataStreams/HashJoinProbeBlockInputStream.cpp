@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB

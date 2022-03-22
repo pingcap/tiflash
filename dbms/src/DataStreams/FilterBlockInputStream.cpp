@@ -18,7 +18,6 @@
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB

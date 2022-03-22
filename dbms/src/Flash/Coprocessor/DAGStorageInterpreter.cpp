@@ -18,7 +18,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>

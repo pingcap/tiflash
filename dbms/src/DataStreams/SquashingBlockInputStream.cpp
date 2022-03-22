@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {

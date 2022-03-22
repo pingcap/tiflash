@@ -18,7 +18,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
 
 namespace DB

@@ -19,7 +19,6 @@
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
 
