@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ChecksumBuffer.h>
@@ -322,14 +336,12 @@ int benchEntry(const std::vector<std::string> & opts)
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
-        auto page_id_generator = std::make_unique<DB::DM::PageIdGenerator>();
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", /*table_id*/ 1, *path_pool, *db_context, db_context->getSettingsRef());
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
-            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             dm_settings.not_compress_columns,
