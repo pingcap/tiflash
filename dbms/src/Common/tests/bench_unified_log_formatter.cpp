@@ -104,7 +104,7 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, ShortOldStream)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(log, " GC exit within " << elapsed_sec << " sec.");
+            LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
 }
@@ -118,7 +118,7 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, ShortOldFmt)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(log, fmt::format(" GC exit within {} sec.", elapsed_sec));
+            LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
 }
@@ -146,15 +146,9 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldStream)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(
-                log,
-                " GC exit within " << std::setprecision(2) << elapsed_sec << " sec. PageFiles from " //
-                                   << beg.first << "_" << beg.second << " to "
-                                   << end.first << "_" << end.second //
-                                   << ", min writing " << min.first << "_" << min.second
-                                   << ", num files: " << num_files << ", num legacy:" << num_legacy
-                                   << ", compact legacy archive files: " << num_compact
-                                   << ", remove data files: " << num_removed);
+            LOG_FMT_INFO(log, " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}" //
+                         ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                         elapsed_sec, beg.first, beg.second, end.first, end.second, min.first, min.second, num_files, num_legacy, num_compact, num_removed);
         }
     }
 }
@@ -168,22 +162,9 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldFmt)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(
-                log,
-                fmt::format(
-                    " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}"
-                    ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
-                    elapsed_sec,
-                    beg.first,
-                    beg.second,
-                    end.first,
-                    end.second,
-                    min.first,
-                    min.second,
-                    num_files,
-                    num_legacy,
-                    num_compact,
-                    num_removed));
+            LOG_FMT_INFO(log, " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}" //
+                         ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                         elapsed_sec, beg.first, beg.second, end.first, end.second, min.first, min.second, num_files, num_legacy, num_compact, num_removed);
         }
     }
 }

@@ -322,13 +322,13 @@ private:
             {
                 // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: {}", e.what());
                 throw;
             }
             catch (...)
             {
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
                 throw;
             }
         }
@@ -363,7 +363,7 @@ private:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
                 abort();
             }
 
@@ -383,7 +383,7 @@ private:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
         }
     }
