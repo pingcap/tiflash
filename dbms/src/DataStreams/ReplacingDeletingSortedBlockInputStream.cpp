@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <common/logger_useful.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <Storages/MutableSupport.h>

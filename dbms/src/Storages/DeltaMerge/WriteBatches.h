@@ -14,10 +14,9 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/WriteBatch.h>
-
-#include "Storages/DeltaMerge/DeltaMergeDefines.h"
 
 namespace DB
 {

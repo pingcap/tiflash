@@ -502,7 +502,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
 #else
             constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000; // NOLINT(readability-identifier-naming)
 #endif
-            if (page_id_and_entries.size() <= max_batch_per_movement)
+            if (page_id_and_entries.size() <= MAX_BATCH_PER_MOVEMENT)
             {
                 bytes_written += migrate_entries(page_id_and_entries);
             }
@@ -514,10 +514,10 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                 size_t entries_migrated = 0;
 #endif
                 PageIdAndEntries entries_batch;
-                entries_batch.reserve(max_batch_per_movement);
+                entries_batch.reserve(MAX_BATCH_PER_MOVEMENT);
                 for (size_t start_idx = 0; start_idx < page_id_and_entries.size(); /**/)
                 {
-                    size_t end_idx = std::min(start_idx + max_batch_per_movement, page_id_and_entries.size());
+                    size_t end_idx = std::min(start_idx + MAX_BATCH_PER_MOVEMENT, page_id_and_entries.size());
                     entries_batch.clear();
                     entries_batch.assign(page_id_and_entries.begin() + start_idx, page_id_and_entries.begin() + end_idx);
 #ifndef NDEBUG
