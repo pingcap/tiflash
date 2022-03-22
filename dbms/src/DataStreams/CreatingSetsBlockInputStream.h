@@ -22,6 +22,7 @@
 
 namespace DB
 {
+class DAGContext;
 /** Returns the data from the stream of blocks without changes, but
   * in the `readPrefix` function or before reading the first block
   * initializes all the passed sets.
@@ -32,15 +33,13 @@ public:
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
         const SubqueriesForSets & subqueries_for_sets_,
-        const SizeLimits & network_transfer_limits,
-        const LogWithPrefixPtr & log_);
+        const SizeLimits & network_transfer_limits);
 
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits,
-        const MPPTaskId & mpp_task_id_,
-        const LogWithPrefixPtr & log_);
+        DAGContext * dag_context_);
 
     ~CreatingSetsBlockInputStream()
     {
@@ -101,12 +100,13 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
-    MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
 
     std::vector<std::thread> workers;
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
+    DAGContext * dag_context;
+    MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     const LogWithPrefixPtr log;
 
     void createAll();

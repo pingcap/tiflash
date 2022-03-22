@@ -83,8 +83,7 @@ BlockIO InterpreterDAG::execute()
             pipeline.firstStream(),
             std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dagContext().getMPPTaskId(),
-            dagContext().log);
+            &dagContext());
     }
 
     BlockIO res;

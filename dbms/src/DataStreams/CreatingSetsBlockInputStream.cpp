@@ -16,8 +16,8 @@
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-#include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/Set.h>
@@ -38,29 +38,39 @@ namespace ErrorCodes
 extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
+namespace
+{
+DAGContext * assertDAGContextPtr(DAGContext * dag_context)
+{
+    if (!dag_context)
+        throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+    return dag_context;
+}
+} // namespace
+
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
-    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits,
-    const MPPTaskId & mpp_task_id_,
-    const LogWithPrefixPtr & log_)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
-    , network_transfer_limits(network_transfer_limits)
-    , mpp_task_id(mpp_task_id_)
-    , log(getMPPTaskLog(log_, name, mpp_task_id))
+    const SubqueriesForSets & subqueries_for_sets,
+    const SizeLimits & network_transfer_limits)
+    : network_transfer_limits(network_transfer_limits)
+    , dag_context(nullptr)
+    , log(nullptr)
 {
+    subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
-    const SubqueriesForSets & subqueries_for_sets,
+    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
     const SizeLimits & network_transfer_limits,
-    const LogWithPrefixPtr & log_)
-    : network_transfer_limits(network_transfer_limits)
-    , log(getMPPTaskLog(log_, name, mpp_task_id))
+    DAGContext * dag_context_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
+    , network_transfer_limits(network_transfer_limits)
+    , dag_context(assertDAGContextPtr(dag_context_))
+    , mpp_task_id(dag_context->getMPPTaskId())
+    , log(getMPPTaskLog(dag_context->log, name, mpp_task_id))
 {
-    subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
 }
 
@@ -143,6 +153,13 @@ void CreatingSetsBlockInputStream::createAll()
         }
 
         thread_manager->wait();
+        // log tracing json after building hash table
+        if (dag_context && dag_context->isMPPTask())
+        {
+            auto mpp_task_statistics = dag_context->getMPPTaskStatistics();
+            mpp_task_statistics.collectRuntimeStatistics();
+            mpp_task_statistics.logTracingJson();
+        }
 
         if (!exception_from_workers.empty())
         {

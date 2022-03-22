@@ -24,6 +24,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 /** Aggregates several sources in parallel.
   * Makes aggregation of blocks from different sources independently in different threads, then combines the results.
   * If final == false, aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -44,7 +46,8 @@ public:
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
-        const LogWithPrefixPtr & log_);
+        const LogWithPrefixPtr & log_,
+        DAGContext * dag_context_);
 
     String getName() const override { return NAME; }
 
@@ -67,6 +70,7 @@ protected:
 
 private:
     const LogWithPrefixPtr log;
+    DAGContext * dag_context;
 
     Aggregator::Params params;
     Aggregator aggregator;

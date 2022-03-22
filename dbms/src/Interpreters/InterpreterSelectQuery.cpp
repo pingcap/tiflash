@@ -986,6 +986,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
+            nullptr,
             nullptr);
 
         pipeline.stream_with_non_joined_data = nullptr;
@@ -1007,6 +1008,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             params,
             file_provider,
             final,
+            nullptr,
             nullptr);
 
         pipeline.stream_with_non_joined_data = nullptr;
@@ -1261,7 +1263,7 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
 }
 
 
-void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) // NOLINT
+void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) const
 {
     if (!query.limit_by_value || !query.limit_by_expression_list)
         return;
@@ -1356,8 +1358,7 @@ void InterpreterSelectQuery::executeSubqueriesInSetsAndJoins(Pipeline & pipeline
     pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
         pipeline.firstStream(),
         subqueries_for_sets,
-        SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-        nullptr);
+        SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
 }
 
 

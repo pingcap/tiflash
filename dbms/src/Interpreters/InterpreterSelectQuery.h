@@ -181,14 +181,14 @@ private:
     void executeMergeAggregated(Pipeline & pipeline, bool overflow_row, bool final);
     void executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression, bool overflow_row);
     void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression);
-    void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression);
+    static void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeOrder(Pipeline & pipeline);
     void executeMergeSorted(Pipeline & pipeline);
     void executePreLimit(Pipeline & pipeline);
     void executeUnion(Pipeline & pipeline);
-    void executeLimitBy(Pipeline & pipeline);
+    void executeLimitBy(Pipeline & pipeline) const;
     void executeLimit(Pipeline & pipeline);
-    void executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression);
+    static void executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeDistinct(Pipeline & pipeline, bool before_order, Names columns);
     void executeExtremes(Pipeline & pipeline);
     void executeSubqueriesInSetsAndJoins(Pipeline & pipeline, std::unordered_map<String, SubqueryForSet> & subqueries_for_sets);

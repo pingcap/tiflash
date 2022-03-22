@@ -16,7 +16,7 @@
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace ProfileEvents
 {
@@ -34,8 +34,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     bool final_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const LogWithPrefixPtr & log_)
+    const LogWithPrefixPtr & log_,
+    DAGContext * dag_context_)
     : log(getMPPTaskLog(log_, NAME))
+    , dag_context(dag_context_)
     , params(params_)
     , aggregator(params, log)
     , file_provider(file_provider_)
@@ -119,6 +121,14 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 temporary_data_merge_threads,
                 temporary_data_merge_threads,
                 log);
+        }
+
+        // log tracing json after building hash table
+        if (dag_context && dag_context->isMPPTask())
+        {
+            auto mpp_task_statistics = dag_context->getMPPTaskStatistics();
+            mpp_task_statistics.collectRuntimeStatistics();
+            mpp_task_statistics.logTracingJson();
         }
 
         executed = true;
