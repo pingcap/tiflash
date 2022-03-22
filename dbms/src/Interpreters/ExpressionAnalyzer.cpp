@@ -2542,7 +2542,7 @@ bool ExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, bool only
     getRootActions(select_query->order_expression_list, only_types, false, step.actions);
 
     ASTs asts = select_query->order_expression_list->children;
-    for (const auto & i :asts)
+    for (const auto & i : asts)
     {
         ASTOrderByElement * ast = typeid_cast<ASTOrderByElement *>(i.get());
         if (!ast || ast->children.empty())
