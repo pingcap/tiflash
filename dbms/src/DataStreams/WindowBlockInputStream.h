@@ -33,9 +33,7 @@ struct WindowFunctionWorkspace
     // instead.
     WindowFunctionPtr window_function = nullptr;
 
-    // Argument columns. Be careful, this is a per-block cache.
     std::vector<const IColumn *> argument_columns;
-    uint64_t cached_block_number = std::numeric_limits<uint64_t>::max();
 
     String column_name;
 
@@ -97,7 +95,7 @@ public:
     void writeOutCurrentRow();
 
     Block getOutputBlock();
-    bool outputBlockEmpty() const;
+    void releaseAlreadyOutputWindowBlock();
 
     void initialWorkspaces();
     void initialPartitionByIndices();
@@ -195,7 +193,6 @@ protected:
 
 public:
     bool input_is_finished = false;
-    UInt64 output_index = 0;
 
     Block output_header;
 
@@ -215,9 +212,10 @@ public:
     // they arrive, and discard the blocks we don't need anymore. The blocks
     // have an always-incrementing index. The index of the first block is in
     // `first_block_number`.
-    std::vector<WindowBlock> window_blocks;
-    std::vector<Block> output_blocks;
+    std::deque<WindowBlock> window_blocks;
     uint64_t first_block_number = 0;
+    // The next block we are going to pass to the consumer.
+    uint64_t next_output_block_number = 0;
     // The first row for which we still haven't calculated the window functions.
     // Used to determine which resulting blocks we can pass to the consumer.
     RowNumber first_not_ready_row;

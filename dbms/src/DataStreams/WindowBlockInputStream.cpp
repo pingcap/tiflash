@@ -88,36 +88,23 @@ void WindowBlockInputStream::initialWorkspaces()
     }
 }
 
-bool WindowBlockInputStream::outputBlockEmpty() const
-{
-    return output_index >= output_blocks.size();
-}
-
-Block WindowBlockInputStream::getOutputBlock()
-{
-    if (outputBlockEmpty())
-        return {};
-
-    int output_column_index = 0;
-    for (auto & workspace : workspaces)
-    {
-        output_blocks[output_index].getByPosition(workspace.result).column = std::move(window_blocks[output_index].output_columns[output_column_index++]);
-    }
-    return output_blocks[output_index++];
-}
-
 Block WindowBlockInputStream::readImpl()
 {
     const auto & stream = children.back();
     while (!input_is_finished)
     {
+        if (Block output_block = getOutputBlock())
+        {
+            return output_block;
+        }
+
         Block block = stream->read();
         if (!block)
             input_is_finished = true;
-        // if input_is_finished is true, we will do noting to the null block, and we need handle the last partition_start to partition_end data
         appendBlock(block);
     }
 
+    // return last partition block, if already return then return null
     return getOutputBlock();
 }
 
@@ -542,43 +529,71 @@ void WindowBlockInputStream::writeOutCurrentRow()
     }
 }
 
-static void assertSameColumns(const Columns & left_all,
-                              const Columns & right_all)
+Block WindowBlockInputStream::getOutputBlock()
 {
-    assert(left_all.size() == right_all.size());
+    assert(first_not_ready_row.block >= first_block_number);
+    // The first_not_ready_row might be past-the-end if we have already
+    // calculated the window functions for all input rows. That's why the
+    // equality is also valid here.
+    assert(first_not_ready_row.block <= first_block_number + window_blocks.size());
+    assert(next_output_block_number >= first_block_number);
 
-    for (size_t i = 0; i < left_all.size(); ++i)
+    if (next_output_block_number < first_not_ready_row.block)
     {
-        const auto * left_column = left_all[i].get();
-        const auto * right_column = right_all[i].get();
-
-        assert(left_column);
-        assert(right_column);
-
-        assert(typeid(*left_column).hash_code()
-               == typeid(*right_column).hash_code());
-
-        if ((*left_column).isColumnConst())
+        const auto i = next_output_block_number - first_block_number;
+        auto & block = window_blocks[i];
+        auto columns = block.input_columns;
+        for (auto & res : block.output_columns)
         {
-            Field left_value = assert_cast<const ColumnConst &>(*left_column).getField();
-            Field right_value = assert_cast<const ColumnConst &>(*right_column).getField();
-
-            assert(left_value == right_value);
+            columns.push_back(ColumnPtr(std::move(res)));
         }
+        ++next_output_block_number;
+
+        auto output_block = output_header.cloneWithColumns(std::move(columns));
+        releaseAlreadyOutputWindowBlock();
+        return output_block;
+    }
+    return {};
+}
+
+void WindowBlockInputStream::releaseAlreadyOutputWindowBlock()
+{
+    // We don't really have to keep the entire partition, and it can be big, so
+    // we want to drop the starting blocks to save memory. We can drop the old
+    // blocks if we already returned them as output, and the frame and the
+    // current row are already past them. We also need to keep the previous
+    // frame start because we use it as the partition standard. It is always less
+    // than the current frame start, so we don't have to check the latter. Note
+    // that the frame start can be further than current row for some frame specs
+    // (e.g. EXCLUDE CURRENT ROW), so we have to check both.
+    assert(prev_frame_start <= frame_start);
+    const auto first_used_block = std::min(next_output_block_number,
+                                           std::min(prev_frame_start.block, current_row.block));
+
+    if (first_block_number < first_used_block)
+    {
+        //        std::cout<<fmt::format("will drop blocks from {} to {}\n", first_block_number, first_used_block)<<std::endl;
+
+        window_blocks.erase(window_blocks.begin(),
+                            window_blocks.begin() + (first_used_block - first_block_number));
+        first_block_number = first_used_block;
+
+        assert(next_output_block_number >= first_block_number);
+        assert(frame_start.block >= first_block_number);
+        assert(prev_frame_start.block >= first_block_number);
+        assert(current_row.block >= first_block_number);
+        assert(peer_group_start.block >= first_block_number);
     }
 }
 
-void WindowBlockInputStream::appendBlock(Block & current_block_)
+void WindowBlockInputStream::appendBlock(Block & current_block)
 {
     if (!input_is_finished)
     {
-        if (current_block_.rows() == 0)
+        if (current_block.rows() == 0)
         {
             return;
         }
-
-        output_blocks.push_back(current_block_);
-        auto & current_block = output_blocks.back();
 
         window_blocks.push_back({});
         auto & window_block = window_blocks.back();
@@ -591,19 +606,16 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
             ws.result = current_block.columns();
             if (ws.is_agg_workspace)
             {
-                window_block.output_columns.push_back(ws.aggregate_function->getReturnType()->createColumn());
-                current_block.insert({ws.aggregate_function->getReturnType(), ws.column_name});
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                                "agg functions in window are not implemented");
             }
             else
             {
                 window_block.output_columns.push_back(ws.window_function->getReturnType()->createColumn());
-                current_block.insert({ws.window_function->getReturnType(), ws.column_name});
             }
         }
 
         window_block.input_columns = current_block.getColumns();
-
-        assertSameColumns(output_header.getColumns(), window_block.input_columns);
     }
 
     for (;;)
@@ -665,7 +677,7 @@ void WindowBlockInputStream::appendBlock(Block & current_block_)
             assert(frame_ended);
             assert(frame_start <= frame_end);
 
-            // Write out the aggregation results.
+            // Write out the results.
             writeOutCurrentRow();
 
             if (isCancelled())
