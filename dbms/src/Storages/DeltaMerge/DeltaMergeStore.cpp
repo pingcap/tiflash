@@ -480,7 +480,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "{} table: {}.{}, rows: {}", __FUNCTION__, db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "table: {}.{}, rows: {}", db_name, table_name, block.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -633,7 +633,7 @@ void DeltaMergeStore::ingestFiles(
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
         const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
-        LOG_FMT_WARNING(log, "{} {}", __FUNCTION__, msg);
+        LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
 
@@ -662,8 +662,7 @@ void DeltaMergeStore::ingestFiles(
 
     LOG_FMT_INFO(
         log,
-        "{} table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
-        __FUNCTION__,
+        "table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
         db_name,
         table_name,
         rows,
@@ -802,8 +801,7 @@ void DeltaMergeStore::ingestFiles(
         fmt_buf.append("]");
         LOG_FMT_INFO(
             log,
-            "{} table: {}.{}, clear_data: {}, {}",
-            __FUNCTION__,
+            "table: {}.{}, clear_data: {}, {}",
             db_name,
             table_name,
             clear_data_in_range,
@@ -821,7 +819,7 @@ void DeltaMergeStore::ingestFiles(
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "{} table: {}.{} delete range {}", __FUNCTION__, db_name, table_name, delete_range.toDebugString());
+    LOG_FMT_INFO(log, "table: {}.{} delete range {}", db_name, table_name, delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 

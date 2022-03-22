@@ -216,7 +216,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (old_region != nullptr)
         {
-            LOG_FMT_DEBUG(log, "{}: previous {}, new {}", __FUNCTION__, old_region->getDebugString(), new_region->getDebugString());
+            LOG_FMT_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
             {
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
@@ -541,7 +541,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         default:
             break;
         }
-        LOG_FMT_INFO(log, "{}: {} ingest sst by method {}", __FUNCTION__, region->toString(true), applyMethodToString(snapshot_apply_method));
+        LOG_FMT_INFO(log, "{} ingest sst by method {}", region->toString(true), applyMethodToString(snapshot_apply_method));
     });
 
     const auto func_try_flush = [&]() {

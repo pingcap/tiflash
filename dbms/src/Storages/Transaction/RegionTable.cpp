@@ -41,7 +41,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
     {
         // Load persisted info.
         it = tables.emplace(table_id, table_id).first;
-        LOG_FMT_INFO(log, "{}: get new table {}", __FUNCTION__, table_id);
+        LOG_FMT_INFO(log, "get new table {}", table_id);
     }
     return it->second;
 }
@@ -106,7 +106,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     {
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
         {
-            LOG_FMT_INFO(log, "{}: region {}, cache size {}, seconds since last {}", __FUNCTION__, region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+            LOG_FMT_INFO(log, "region {}, cache size {}, seconds since last {}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
             return true;
         }
     }
@@ -119,11 +119,11 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 
     if (tmt.isBgFlushDisabled())
     {
-        LOG_FMT_TRACE(log, "{}: table {}, {} original {} bytes", __FUNCTION__, region->getMappedTableID(), region->toString(false), region->dataSize());
+        LOG_FMT_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
     }
     else
     {
-        LOG_FMT_INFO(log, "{}: table {}, {} original {} bytes", __FUNCTION__, region->getMappedTableID(), region->toString(false), region->dataSize());
+        LOG_FMT_INFO(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
     }
 
     /// Write region data into corresponding storage.
@@ -146,11 +146,11 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 
         if (tmt.isBgFlushDisabled())
         {
-            LOG_FMT_TRACE(log, "{}: table {}, {} after flush {} bytes", __FUNCTION__, region->getMappedTableID(), region->toString(false), cache_size);
+            LOG_FMT_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
         }
         else
         {
-            LOG_FMT_INFO(log, "{}: table {}, {} after flush {} bytes", __FUNCTION__, region->getMappedTableID(), region->toString(false), cache_size);
+            LOG_FMT_INFO(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
         }
     }
 
@@ -204,7 +204,7 @@ void RegionTable::removeTable(TableID table_id)
     // Remove from table map.
     tables.erase(it);
 
-    LOG_FMT_INFO(log, "{}: remove table {} in RegionTable success", __FUNCTION__, table_id);
+    LOG_FMT_INFO(log, "remove table {} in RegionTable success", table_id);
 }
 
 void RegionTable::updateRegion(const Region & region)
@@ -267,7 +267,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         auto it = regions.find(region_id);
         if (it == regions.end())
         {
-            LOG_FMT_WARNING(log, "{}: region {} does not exist.", __FUNCTION__, region_id);
+            LOG_FMT_WARNING(log, "region {} does not exist.", region_id);
             return;
         }
 
@@ -282,7 +282,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         {
             tables.erase(table_id);
         }
-        LOG_FMT_INFO(log, "{}: remove [region {}] in RegionTable done", __FUNCTION__, region_id);
+        LOG_FMT_INFO(log, "remove [region {}] in RegionTable done", region_id);
     }
 
     // Sometime we don't need to remove data. e.g. remove region after region merge.
@@ -295,7 +295,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
         removeObsoleteDataInStorage(context, table_id, handle_range);
-        LOG_FMT_INFO(log, "{}: remove region [{}] in storage done", __FUNCTION__, region_id);
+        LOG_FMT_INFO(log, "remove region [{}] in storage done", region_id);
     }
 }
 
@@ -304,7 +304,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
     {
-        LOG_FMT_WARNING(log, "{}: region {} not found", __FUNCTION__, region_id);
+        LOG_FMT_WARNING(log, "region {} not found", region_id);
         return {};
     }
 
@@ -465,7 +465,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
-            LOG_FMT_INFO(log, "{}: table {}, internal region {} has larger range", __FUNCTION__, table_id, region_id);
+            LOG_FMT_INFO(log, "table {}, internal region {} has larger range", table_id, region_id);
         }
         else
         {
@@ -481,7 +481,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     {
         auto & table = getOrCreateTable(table_id);
         insertRegion(table, region_range_keys, region_id);
-        LOG_FMT_INFO(log, "{}: table {} insert internal region {}", __FUNCTION__, table_id, region_id);
+        LOG_FMT_INFO(log, "table {} insert internal region {}", table_id, region_id);
     }
 }
 

@@ -329,7 +329,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
                                                                         size_t expected_block_size,
                                                                         bool enable_clean_read)
 {
-    LOG_FMT_DEBUG(log, "{} max_data_version: {}, enable_clean_read: {}", String(__FUNCTION__), max_data_version, enable_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
