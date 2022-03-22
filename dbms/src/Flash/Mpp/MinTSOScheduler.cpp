@@ -90,7 +90,7 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
     GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
     GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
 
-    if (is_cancelled)
+    if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
     {
         auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
         if (query_task_set) /// release all waiting tasks
@@ -111,6 +111,7 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
     }
 }
 
+/// NOTE: should not throw exceptions due to being called when destruction.
 void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager)
 {
     if (isDisabled())
@@ -120,9 +121,8 @@ void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTa
 
     if (static_cast<Int64>(estimated_thread_usage) < needed_threads)
     {
-        auto msg = fmt::format("estimated_thread_usage should not be smaller than 0, actually is {}.", static_cast<Int64>(estimated_thread_usage) - needed_threads);
-        LOG_FMT_FATAL(log, "{}", msg);
-        throw Exception(msg);
+        LOG_FMT_FATAL(log, "estimated_thread_usage should not be smaller than 0, actually is {}.", static_cast<Int64>(estimated_thread_usage) - needed_threads);
+        std::terminate();
     }
     estimated_thread_usage -= needed_threads;
     GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
@@ -192,8 +192,8 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
             if (isWaiting)
             {
-                /// cancel this task, then TiDB will finally notify this tiflash node canceling all tasks of this tso and update metrics.
-                task->cancel(msg);
+                /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this tso and update metrics.
+                task->scheduleThisTask(MPPTask::ScheduleState::FAILED);
                 waiting_set.erase(tso); /// avoid the left waiting tasks of this query reaching here many times.
             }
             else
