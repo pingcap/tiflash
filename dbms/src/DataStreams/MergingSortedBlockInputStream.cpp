@@ -296,8 +296,7 @@ void MergingSortedBlockInputStream::readSuffixImpl()
 
     const BlockStreamProfileInfo & profile_info = getProfileInfo();
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
-    LOG_DEBUG(log, std::fixed << std::setprecision(2) << "Merge sorted " << profile_info.blocks << " blocks, " << profile_info.rows << " rows"
-                              << " in " << seconds << " sec., " << profile_info.rows / seconds << " rows/sec., " << profile_info.bytes / 1000000.0 / seconds << " MB/sec.");
+    LOG_FMT_DEBUG(log, "Merge sorted {} blocks, {} rows, {} bytes, {:.2f} rows/sec, {:.2f} MB/sec", profile_info.blocks, profile_info.rows, profile_info.bytes, profile_info.rows / seconds, profile_info.bytes / 1000000.0 / seconds);
 }
 
 } // namespace DB

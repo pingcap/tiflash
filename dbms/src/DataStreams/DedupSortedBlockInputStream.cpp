@@ -126,7 +126,7 @@ void DedupSortedBlockInputStream::asyncDedupByQueue()
     BoundQueue bounds;
     DedupCursors cursors(source_blocks.size());
     readFromSource(cursors, bounds);
-    LOG_DEBUG(log, "P Init Bounds " << bounds.str() << " Cursors " << cursors.size());
+    LOG_FMT_DEBUG(log, "P Init Bounds {} Cursors {}", bounds.str(), cursors.size());
 
     CursorQueue queue;
     DedupCursor max;
@@ -249,7 +249,7 @@ void DedupSortedBlockInputStream::asyncDedupByQueue()
         }
     }
 
-    LOG_DEBUG(log, "P All Done. Bounds " << bounds.str() << " Queue " << queue.str() << "Streams finished " << finished_streams << "/" << cursors.size());
+    LOG_FMT_DEBUG(log, "P All Done. Bounds {} Queue {} Streams finished {}/{}", bounds.str(), queue.str(), finished_streams, cursors.size());
 }
 
 
