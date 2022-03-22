@@ -44,7 +44,7 @@ DMFileReader::Stream::Stream(
     const String & file_name_base,
     size_t aio_threshold,
     size_t max_read_buffer_size,
-    Poco::Logger * log,
+    const DB::LoggerPtr & log,
     const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode)
     , avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
@@ -217,7 +217,8 @@ DMFileReader::DMFileReader(
     const FileProviderPtr & file_provider_,
     const ReadLimiterPtr & read_limiter,
     size_t rows_threshold_per_read_,
-    bool read_one_pack_every_time_)
+    bool read_one_pack_every_time_,
+    const DB::LoggerPtr & tracing_logger)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
@@ -234,7 +235,7 @@ DMFileReader::DMFileReader(
     , file_provider(file_provider_)
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
-    , log(&Poco::Logger::get("DMFileReader"))
+    , log(tracing_logger ? tracing_logger : DB::Logger::get("DMFileReader"))
 {
     for (const auto & cd : read_columns)
     {

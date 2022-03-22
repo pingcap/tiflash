@@ -41,7 +41,8 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         EMPTY_FILTER,
         {},
         context.db_context.getFileProvider(),
-        context.getReadLimiter());
+        context.getReadLimiter(),
+        /*tracing_logger*/ nullptr);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }

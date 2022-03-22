@@ -22,6 +22,8 @@
 namespace DB
 {
 class Context;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 namespace DM
 {
 class DMFileBlockInputStream : public SkippableBlockInputStream
@@ -64,7 +66,7 @@ public:
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns_,
         const RowKeyRanges & rowkey_ranges);
-    
+
     // **** filters **** //
 
     // Only set this param to true when
@@ -109,6 +111,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setTracingLogger(const DB::LoggerPtr & logger)
+    {
+        tracing_logger = logger;
+        return *this;
+    }
+
 private:
     // These methods are called by the ctor
 
@@ -146,6 +154,8 @@ private:
     size_t max_read_buffer_size;
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
+
+    DB::LoggerPtr tracing_logger;
 };
 
 /**

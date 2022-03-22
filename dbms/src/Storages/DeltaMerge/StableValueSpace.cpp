@@ -58,7 +58,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 EMPTY_FILTER,
                 {},
                 dm_context->db_context.getFileProvider(),
-                dm_context->getReadLimiter());
+                dm_context->getReadLimiter(),
+                /*tracing_logger*/ nullptr);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -239,7 +240,8 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             EMPTY_FILTER,
             {},
             context.db_context.getFileProvider(),
-            context.getReadLimiter());
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
@@ -341,7 +343,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
 
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const
 {
-    // Avoid unnessary reading IO
+    // Avoid unnecessary reading IO
     if (valid_rows == 0 || range.none())
         return {0, 0};
 
@@ -362,7 +364,8 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             RSOperatorPtr{},
             IdSetPtr{},
             context.db_context.getFileProvider(),
-            context.getReadLimiter());
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
         const auto & pack_stats = f->getPackStats();
         const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)

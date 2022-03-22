@@ -44,7 +44,7 @@ public:
                const String & file_name_base,
                size_t aio_threshold,
                size_t max_read_buffer_size,
-               Poco::Logger * log,
+               const DB::LoggerPtr & log,
                const ReadLimiterPtr & read_limiter);
 
         const bool single_file_mode;
@@ -88,8 +88,9 @@ public:
         size_t max_read_buffer_size,
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter,
-        size_t rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
-        bool read_one_pack_every_time_ = false);
+        size_t rows_threshold_per_read_,
+        bool read_one_pack_every_time_,
+        const DB::LoggerPtr & tracing_logger);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -143,7 +144,7 @@ private:
 
     const bool single_file_mode;
 
-    Poco::Logger * log;
+    DB::LoggerPtr log;
 };
 
 } // namespace DM
