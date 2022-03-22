@@ -261,20 +261,24 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
         if (head_rows != 0)
         {
-            FmtBuffer msg;
-            msg.append("Created. ");
+            // avoid generate log message when log level > DEBUG.
+            auto gen_debug_log_msg = [&subquery] {
+                FmtBuffer msg;
+                msg.append("Created. ");
 
-            if (subquery.set)
-                msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
-            if (subquery.join)
-                msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
-            if (subquery.table)
-                msg.fmtAppend("Table with {} rows. ", head_rows);
+                if (subquery.set)
+                    msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
+                if (subquery.join)
+                    msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
+                if (subquery.table)
+                    msg.fmtAppend("Table with {} rows. ", head_rows);
 
-            msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
-            msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
+                msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
+                msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
+                return msg.toString();
+            };
 
-            LOG_FMT_DEBUG(log, "{}", msg.toString());
+            LOG_FMT_DEBUG(log, "{}", gen_debug_log_msg());
         }
         else
         {
