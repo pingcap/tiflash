@@ -37,7 +37,7 @@ try
     }
     auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
-    LOG_FMT_INFO(StressEnv::logger, "{} exit with peak memory usage: {}",  description(), formatReadableSizeWithBinarySuffix(peak));
+    LOG_FMT_INFO(StressEnv::logger, "{} exit with peak memory usage: {}", description(), formatReadableSizeWithBinarySuffix(peak));
 }
 catch (...)
 {
