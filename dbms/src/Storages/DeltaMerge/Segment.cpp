@@ -552,7 +552,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
-    return std::make_shared<ConcatBlockInputStream>(streams, nullptr);
+    return std::make_shared<ConcatBlockInputStream>(streams, "");
 }
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
@@ -1197,7 +1197,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
     auto left_stream = get_stream(left, left_snap);
     auto right_stream = get_stream(right, right_snap);
 
-    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, nullptr);
+    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, "");
     // for the purpose to calculate StableProperty of the new segment
     merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         merged_stream,
@@ -1612,7 +1612,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
         delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_ranges, 0);
 
         // Try to merge into big block. 128 MB should be enough.
-        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20), nullptr);
+        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20), "");
 
         while (true)
         {
