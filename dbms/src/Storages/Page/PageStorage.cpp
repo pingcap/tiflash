@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 
 namespace DB
 {
@@ -7,9 +22,13 @@ PageStoragePtr PageStorage::create(
     String name,
     PSDiskDelegatorPtr delegator,
     const PageStorage::Config & config,
-    const FileProviderPtr & file_provider)
+    const FileProviderPtr & file_provider,
+    bool use_v3)
 {
-    return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider);
+    if (use_v3)
+        return std::make_shared<PS::V3::PageStorageImpl>(name, delegator, config, file_provider);
+    else
+        return std::make_shared<PS::V2::PageStorage>(name, delegator, config, file_provider);
 }
 
 } // namespace DB

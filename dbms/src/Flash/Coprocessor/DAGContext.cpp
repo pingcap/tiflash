@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -175,16 +189,19 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
             {
                 assert(executor.has_executor_id());
                 const auto & executor_id = executor.executor_id();
+                // In order to distinguish different exchange receivers.
+                auto executor_id_prefix_log = getMPPTaskLog(log, executor_id);
                 auto exchange_receiver = std::make_shared<ExchangeReceiver>(
                     std::make_shared<GRPCReceiverContext>(
                         executor.exchange_receiver(),
                         getMPPTaskMeta(),
                         context.getTMTContext().getKVCluster(),
                         context.getTMTContext().getMPPTaskManager(),
-                        context.getSettingsRef().enable_local_tunnel),
+                        context.getSettingsRef().enable_local_tunnel,
+                        context.getSettingsRef().enable_async_grpc_client),
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
-                    log);
+                    executor_id_prefix_log);
                 mpp_exchange_receiver_map[executor_id] = exchange_receiver;
                 new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
             }
@@ -207,6 +224,16 @@ const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext
 int DAGContext::getNewThreadCountOfExchangeReceiver() const
 {
     return new_thread_count_of_exchange_receiver;
+}
+
+bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+{
+    return tables_regions_info.containsRegionsInfoForTable(table_id);
+}
+
+const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+{
+    return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
 } // namespace DB

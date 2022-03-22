@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <Common/Exception.h>
@@ -818,7 +832,7 @@ try
     // Int64 has a precision of 20, which is larger than Decimal64.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal128>>(
-            std::make_tuple(20, 3),
+            std::make_tuple(19, 3),
             {DecimalField128(300, 3), {}, {}}),
         executeFunction(
             func_name,
@@ -980,8 +994,8 @@ try
     MODULO_TESTCASE(Int64, Int64, Int64, 0, 0, 0, 0);
     MODULO_TESTCASE(Int64, UInt64, Int64, 0, 0, 0, 0);
     MODULO_TESTCASE(Int64, Float64, Float64, 0, 0, 0, 0);
-    MODULO_TESTCASE(Int64, Decimal32, Decimal128, 20, 0, 3, 3);
-    MODULO_TESTCASE(Int64, Decimal64, Decimal128, 20, 0, 6, 6);
+    MODULO_TESTCASE(Int64, Decimal32, Decimal128, 19, 0, 3, 3);
+    MODULO_TESTCASE(Int64, Decimal64, Decimal128, 19, 0, 6, 6);
     MODULO_TESTCASE(Int64, Decimal128, Decimal128, 38, 0, 10, 10);
     MODULO_TESTCASE(Int64, Decimal256, Decimal256, 65, 0, 20, 20);
 
@@ -1001,7 +1015,7 @@ try
     MODULO_TESTCASE(Float64, Decimal128, Float64, 0, 0, 10, 0);
     MODULO_TESTCASE(Float64, Decimal256, Float64, 0, 0, 20, 0);
 
-    MODULO_TESTCASE(Decimal32, Int64, Decimal128, 20, 3, 0, 3);
+    MODULO_TESTCASE(Decimal32, Int64, Decimal128, 19, 3, 0, 3);
     MODULO_TESTCASE(Decimal32, UInt64, Decimal128, 20, 3, 0, 3);
     MODULO_TESTCASE(Decimal32, Float64, Float64, 0, 3, 0, 0);
     MODULO_TESTCASE(Decimal32, Decimal32, Decimal32, 9, 3, 3, 3);
@@ -1009,7 +1023,7 @@ try
     MODULO_TESTCASE(Decimal32, Decimal128, Decimal128, 38, 3, 10, 10);
     MODULO_TESTCASE(Decimal32, Decimal256, Decimal256, 65, 3, 20, 20);
 
-    MODULO_TESTCASE(Decimal64, Int64, Decimal128, 20, 6, 0, 6);
+    MODULO_TESTCASE(Decimal64, Int64, Decimal128, 19, 6, 0, 6);
     MODULO_TESTCASE(Decimal64, UInt64, Decimal128, 20, 6, 0, 6);
     MODULO_TESTCASE(Decimal64, Float64, Float64, 0, 6, 0, 0);
     MODULO_TESTCASE(Decimal64, Decimal32, Decimal64, 18, 6, 3, 6);

@@ -1,7 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/assert_cast.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -63,8 +78,12 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
 
     if (type == EditRecordType::VAR_ENTRY)
     {
-        auto last_iter = entries.rbegin();
-        if (last_iter->second.isDelete())
+        auto last_iter = MapUtils::findLess(entries, PageVersionType(ver.sequence + 1, 0));
+        if (last_iter == entries.end())
+        {
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        }
+        else if (last_iter->second.isDelete())
         {
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         }
@@ -98,7 +117,7 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
 // Create a new external version with version=`ver`.
 // If create success, then return a shared_ptr as a holder for page_id. The holder
 // will be release when this external version is totally removed.
-std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
+std::shared_ptr<PageIdV3Internal> VersionedPageEntries::createNewExternal(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -109,7 +128,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
         delete_ver = PageVersionType(0);
         being_ref_count = 1;
         // return the new created holder to caller to set the page_id
-        external_holder = std::make_shared<PageId>(0);
+        external_holder = std::make_shared<PageIdV3Internal>(0, 0);
         return external_holder;
     }
 
@@ -125,7 +144,7 @@ std::shared_ptr<PageId> VersionedPageEntries::createNewExternal(const PageVersio
                 delete_ver = PageVersionType(0);
                 being_ref_count = 1;
                 // return the new created holder to caller to set the page_id
-                external_holder = std::make_shared<PageId>(0);
+                external_holder = std::make_shared<PageIdV3Internal>(0, 0);
                 return external_holder;
             }
             else
@@ -185,7 +204,7 @@ void VersionedPageEntries::createDelete(const PageVersionType & ver)
 
 // Create a new reference version with version=`ver` and `ori_page_id_`.
 // If create success, then return true, otherwise return false.
-bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_page_id_)
+bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageIdV3Internal ori_page_id_)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -237,7 +256,7 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageId ori_
         toDebugString()));
 }
 
-std::shared_ptr<PageId> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
+std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
     if (rec.type == EditRecordType::VAR_REF)
@@ -254,7 +273,7 @@ std::shared_ptr<PageId> VersionedPageEntries::fromRestored(const PageEntriesEdit
         is_deleted = false;
         create_ver = rec.version;
         being_ref_count = rec.being_ref_count;
-        external_holder = std::make_shared<PageId>(rec.page_id);
+        external_holder = std::make_shared<PageIdV3Internal>(rec.page_id);
         return external_holder;
     }
     else if (rec.type == EditRecordType::VAR_ENTRY)
@@ -269,7 +288,7 @@ std::shared_ptr<PageId> VersionedPageEntries::fromRestored(const PageEntriesEdit
     }
 }
 
-std::tuple<VersionedPageEntries::ResolveResult, PageId, PageVersionType>
+std::tuple<VersionedPageEntries::ResolveResult, PageIdV3Internal, PageVersionType>
 VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry)
 {
     auto page_lock = acquireLock();
@@ -286,7 +305,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             {
                 if (iter == entries.begin())
                 {
-                    return {RESOLVE_FAIL, 0, PageVersionType(0)};
+                    return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
                 }
                 --iter;
                 // fallover the check the prev item
@@ -296,19 +315,17 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             {
                 if (entry != nullptr)
                     *entry = iter->second.entry;
-                return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+                return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
             } // fallover to FAIL
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        // If we applied write batches like this: [ver=1]{putExternal 10}, [ver=2]{ref 11->10, del 10}
-        // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
-        // when resolving 11 to 10, we need to set `check_prev` to true
-        bool ok = !is_deleted || (is_deleted && (check_prev ? (seq <= delete_ver.sequence) : (seq < delete_ver.sequence)));
+        // We may add reference to an external id even if it is logically deleted.
+        bool ok = check_prev ? true : (!is_deleted || (is_deleted && seq < delete_ver.sequence));
         if (create_ver.sequence <= seq && ok)
         {
-            return {RESOLVE_TO_NORMAL, 0, PageVersionType(0)};
+            return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
         }
     }
     else if (type == EditRecordType::VAR_REF)
@@ -318,7 +335,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
     }
-    return {RESOLVE_FAIL, 0, PageVersionType(0)};
+    return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
 }
 
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
@@ -333,6 +350,22 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
             // NORMAL
             if (iter->second.isEntry())
                 return iter->second.entry;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<PageEntryV3> VersionedPageEntries::getLastEntry() const
+{
+    auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_ENTRY)
+    {
+        for (auto it_r = entries.rbegin(); it_r != entries.rend(); it_r++)
+        {
+            if (it_r->second.isEntry())
+            {
+                return it_r->second.entry;
+            }
         }
     }
     return std::nullopt;
@@ -354,8 +387,9 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        if (create_ver <= ver && (!is_deleted || (is_deleted && ver < delete_ver)))
+        if (create_ver <= ver)
         {
+            // We may add reference to an external id even if it is logically deleted.
             return ++being_ref_count;
         }
     }
@@ -364,7 +398,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
 
 PageSize VersionedPageEntries::getEntriesByBlobIds(
     const std::unordered_set<BlobFileId> & blob_ids,
-    PageId page_id,
+    PageIdV3Internal page_id,
     std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries)
 {
     // blob_file_0, [<page_id_0, ver0, entry0>,
@@ -397,8 +431,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
 
 bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
-    PageId page_id,
-    std::map<PageId, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
     PageEntriesV3 & entries_removed,
     const PageLock & /*page_lock*/)
 {
@@ -416,15 +449,6 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             // need to decrease the ref count by <id=iter->second.origin_page_id, ver=iter->first, num=1>
             if (auto [deref_counter, new_created] = normal_entries_to_deref->emplace(std::make_pair(ori_page_id, std::make_pair(/*ver=*/create_ver, /*count=*/1))); !new_created)
             {
-                if (deref_counter->second.first.sequence != create_ver.sequence)
-                {
-                    throw Exception(fmt::format(
-                        "There exist two different version of ref, should not happen [page_id={}] [ori_page_id={}] [ver={}] [another_ver={}]",
-                        page_id,
-                        ori_page_id,
-                        create_ver,
-                        deref_counter->second.first));
-                }
                 // the id is already exist in deref map, increase the num to decrease ref count
                 deref_counter->second.second += 1;
             }
@@ -494,7 +518,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, const PageVersionType & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed)
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersionType & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -508,7 +532,8 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, cons
     }
     else if (type == EditRecordType::VAR_ENTRY)
     {
-        // decrease the ref-counter
+        // Decrease the ref-counter. The entry may be moved to a newer entry with same sequence but higher epoch,
+        // so we need to find the one less than <seq+1, 0> and decrease the ref-counter of it.
         auto iter = MapUtils::findMutLess(entries, PageVersionType(deref_ver.sequence + 1, 0));
         if (iter == entries.end())
         {
@@ -530,13 +555,13 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageId page_id, cons
 
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-        return cleanOutdatedEntries(lowest_seq, page_id, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
+        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
     }
 
     throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
 }
 
-void VersionedPageEntries::collapseTo(const UInt64 seq, const PageId page_id, PageEntriesEdit & edit)
+void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal page_id, PageEntriesEdit & edit)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_REF)
@@ -621,9 +646,9 @@ PageDirectory::PageDirectory(WALStorePtr && wal_)
 {
 }
 
-PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
+PageDirectorySnapshotPtr PageDirectory::createSnapshot(const String & tracing_id) const
 {
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
@@ -633,12 +658,10 @@ PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
     return snap;
 }
 
-std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
+SnapshotsStatistics PageDirectory::getSnapshotsStat() const
 {
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotsStatistics stat;
     DB::Int64 num_snapshots_removed = 0;
-    size_t num_valid_snapshots = 0;
     {
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
@@ -658,12 +681,13 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
                 });
 
                 const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
-                if (snapshot_lifetime > longest_living_seconds)
+                if (snapshot_lifetime > stat.longest_living_seconds)
                 {
-                    longest_living_seconds = snapshot_lifetime;
-                    longest_living_from_thread_id = snapshot_ptr->getTid();
+                    stat.longest_living_seconds = snapshot_lifetime;
+                    stat.longest_living_from_thread_id = snapshot_ptr->create_thread;
+                    stat.longest_living_from_tracing_id = snapshot_ptr->tracing_id;
                 }
-                num_valid_snapshots++;
+                stat.num_snapshots++;
                 ++iter;
             }
         }
@@ -671,14 +695,14 @@ std::tuple<size_t, double, unsigned> PageDirectory::getSnapshotsStat() const
 
     CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
     // Return some statistics of the oldest living snapshot.
-    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+    return stat;
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
 
-    PageId id_to_resolve = page_id;
+    PageIdV3Internal id_to_resolve = page_id;
     PageVersionType ver_to_resolve(snap->sequence, 0);
     bool ok = true;
     while (ok)
@@ -689,7 +713,14 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                if (throw_on_not_exist)
+                {
+                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                }
+                else
+                {
+                    return PageIDAndEntryV3{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
+                }
             }
         }
         auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
@@ -711,15 +742,16 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
             break; // continue the resolving
         }
     }
+
     throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const
 {
     PageEntryV3 entry_got;
     const PageVersionType init_ver_to_resolve(snap->sequence, 0);
-    auto get_one = [&entry_got, init_ver_to_resolve, this](PageId page_id, PageVersionType ver_to_resolve, size_t idx) {
-        PageId id_to_resolve = page_id;
+    auto get_one = [&entry_got, init_ver_to_resolve, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
+        PageIdV3Internal id_to_resolve = page_id;
         bool ok = true;
         while (ok)
         {
@@ -766,9 +798,9 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirect
     return id_entries;
 }
 
-PageId PageDirectory::getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
 {
-    PageId id_to_resolve = page_id;
+    PageIdV3Internal id_to_resolve = page_id;
     PageVersionType ver_to_resolve(snap->sequence, 0);
     bool ok = true;
     while (ok)
@@ -809,22 +841,33 @@ PageId PageDirectory::getNormalPageId(PageId page_id, const PageDirectorySnapsho
         ver_to_resolve));
 }
 
-PageId PageDirectory::getMaxId() const
+PageId PageDirectory::getMaxId(NamespaceId ns_id) const
 {
-    PageId max_page_id = 0;
     std::shared_lock read_lock(table_rw_mutex);
+    PageIdV3Internal upper_bound = buildV3Id(ns_id, UINT64_MAX);
 
-    for (const auto & [page_id, versioned] : mvcc_table_directory)
+    auto iter = mvcc_table_directory.upper_bound(upper_bound);
+    if (iter == mvcc_table_directory.begin())
     {
-        (void)versioned;
-        max_page_id = std::max(max_page_id, page_id);
+        // The smallest page id is greater than the target page id or mvcc_table_directory is empty,
+        // and it means no page id is less than or equal to the target page id, return 0.
+        return 0;
     }
-    return max_page_id;
+    else
+    {
+        // iter is not at the beginning and mvcc_table_directory is not empty,
+        // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
+        iter--;
+        if (iter->first.high == ns_id)
+            return iter->first.low;
+        else
+            return 0;
+    }
 }
 
-std::set<PageId> PageDirectory::getAllPageIds()
+std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
-    std::set<PageId> page_ids;
+    std::set<PageIdV3Internal> page_ids;
     std::shared_lock read_lock(table_rw_mutex);
 
     for (auto & [page_id, versioned] : mvcc_table_directory)
@@ -843,18 +886,21 @@ void PageDirectory::applyRefEditRecord(
 {
     // applying ref 3->2, existing ref 2->1, normal entry 1, then we should collapse
     // the ref to be 3->1, increase the refcounting of normale entry 1
-    auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory](PageId id_to_resolve, PageVersionType ver_to_resolve)
-        -> std::tuple<bool, PageId, PageVersionType> {
+    auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory](PageIdV3Internal id_to_resolve, PageVersionType ver_to_resolve)
+        -> std::tuple<bool, PageIdV3Internal, PageVersionType> {
         while (true)
         {
             auto resolve_ver_iter = mvcc_table_directory.find(id_to_resolve);
             if (resolve_ver_iter == mvcc_table_directory.end())
-                return {false, 0, PageVersionType(0)};
+                return {false, buildV3Id(0, 0), PageVersionType(0)};
 
             const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
             // If we already hold the lock from `id_to_resolve`, then we should not request it again.
             // This can happen when `id_to_resolve` have other operating in current writebatch
-            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(ver_to_resolve.sequence, false, nullptr);
+            auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(
+                ver_to_resolve.sequence,
+                /*check_prev=*/true,
+                nullptr);
             switch (need_collapse)
             {
             case VersionedPageEntries::RESOLVE_FAIL:
@@ -939,7 +985,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                     // put the new created holder into `external_ids`
                     *holder = r.page_id;
                     std::lock_guard guard(external_ids_mutex);
-                    external_ids.emplace_back(std::weak_ptr<PageId>(holder));
+                    external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
                 }
                 break;
             }
@@ -957,7 +1003,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             case EditRecordType::VAR_ENTRY:
             case EditRecordType::VAR_EXTERNAL:
             case EditRecordType::VAR_REF:
-                throw Exception(fmt::format("should not handle {} edit", r.type));
+                throw Exception(fmt::format("should not handle edit with invalid type [type={}]", r.type));
             }
         }
         catch (DB::Exception & e)
@@ -991,7 +1037,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
             iter = mvcc_table_directory.find(record.page_id);
             if (unlikely(iter == mvcc_table_directory.end()))
             {
-                throw Exception(fmt::format("Can't found [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("Can't find [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
             }
         } // release the read lock on `table_rw_mutex`
 
@@ -1001,7 +1047,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 }
 
-std::set<PageId> PageDirectory::getAliveExternalIds() const
+std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
 {
     std::set<PageId> valid_external_ids;
     {
@@ -1012,7 +1058,8 @@ std::set<PageId> PageDirectory::getAliveExternalIds() const
                 iter = external_ids.erase(iter);
             else
             {
-                valid_external_ids.emplace(*holder);
+                if (holder->high == ns_id)
+                    valid_external_ids.emplace(holder->low);
                 ++iter;
             }
         }
@@ -1043,7 +1090,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     {
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do scan on the version list without lock on `mvcc_table_directory`.
-        PageId page_id = iter->first;
+        auto page_id = iter->first;
         const auto & version_entries = iter->second;
         total_page_size += version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
 
@@ -1108,7 +1155,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
 
     // The page_id that we need to decrease ref count
     // { id_0: <version, num to decrease>, id_1: <...>, ... }
-    std::map<PageId, std::pair<PageVersionType, Int64>> normal_entries_to_deref;
+    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> normal_entries_to_deref;
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
@@ -1116,7 +1163,6 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         // do gc on the version list without lock on `mvcc_table_directory`.
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
-            /*page_id=*/iter->first,
             &normal_entries_to_deref,
             all_del_entries,
             iter->second->acquireLock());
@@ -1151,8 +1197,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         const bool all_deleted = iter->second->derefAndClean(
             lowest_seq,
             page_id,
-            deref_counter.first,
-            deref_counter.second,
+            /*deref_ver=*/deref_counter.first,
+            /*deref_count=*/deref_counter.second,
             all_del_entries);
 
         if (all_deleted)
@@ -1169,7 +1215,7 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
 {
     if (!snap)
     {
-        snap = createSnapshot();
+        snap = createSnapshot(/*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;

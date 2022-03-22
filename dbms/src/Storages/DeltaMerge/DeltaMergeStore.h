@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -18,6 +32,9 @@
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 namespace DM
 {
 class Segment;
@@ -104,6 +121,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_stable_num_snapshots = 0;
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    String storage_stable_oldest_snapshot_tracing_id;
     UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
     UInt64 storage_stable_max_page_id = 0;
@@ -111,6 +129,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    String storage_delta_oldest_snapshot_tracing_id;
     UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
     UInt64 storage_delta_max_page_id = 0;
@@ -118,6 +137,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    String storage_meta_oldest_snapshot_tracing_id;
     UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id = 0;
@@ -276,6 +296,7 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    TableID physical_table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -325,7 +346,8 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
-                              const SegmentIdSet & read_segments = {});
+                              const SegmentIdSet & read_segments = {},
+                              size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows with MVCC filtering
     /// `sorted_ranges` should be already sorted and merged
@@ -337,7 +359,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet & read_segments = {});
+                           const SegmentIdSet & read_segments = {},
+                           size_t extra_table_id_index = InvalidColumnID);
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)
@@ -351,7 +374,7 @@ public:
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fregment packs into bigger one.
+    /// Compact fragment column files into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -431,11 +454,11 @@ private:
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
-    PageIdGenerator page_id_generator;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;
+    TableID physical_table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;
@@ -452,7 +475,6 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     BackgroundProcessingPool & blockable_background_pool;
