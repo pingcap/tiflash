@@ -2601,7 +2601,7 @@ Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, c
 {
     auto src = outputDAGResponse(context, schema, dag_response);
     // Try to merge into big block. 128 MB should be enough.
-    SquashingBlockInputStream squashed_delete_stream(src, 0, 128 * (1UL << 20), "");
+    SquashingBlockInputStream squashed_delete_stream(src, 0, 128 * (1UL << 20), /*req_id=*/"");
     Blocks result_data;
     while (true)
     {

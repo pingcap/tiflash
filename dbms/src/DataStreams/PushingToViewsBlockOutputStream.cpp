@@ -91,7 +91,7 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
                 in,
                 context.getSettingsRef().min_insert_block_size_rows,
                 context.getSettingsRef().min_insert_block_size_bytes,
-                nullptr);
+                /*req_id=*/"");
 
             in->readPrefix();
 
