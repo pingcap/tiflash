@@ -1170,7 +1170,6 @@ try
 
     dag_context->setFlags(ori_flags);
     dag_context->clearWarnings();
-
 }
 CATCH
 
