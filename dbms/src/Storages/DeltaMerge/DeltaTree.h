@@ -1372,7 +1372,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_FMT_TRACE(log, "height {} -> {}", DB::toString(height + 1), DB::toString(height));
+        LOG_FMT_TRACE(log, "height {} -> {}", (height + 1), height);
 
         return {};
     }
@@ -1395,7 +1395,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 
             ++height;
 
-            LOG_FMT_TRACE(log, "height {} -> {}", DB::toString(height - 1), DB::toString(height));
+            LOG_FMT_TRACE(log, "height {} -> {}", (height - 1), height);
         }
 
         auto pos = parent->searchChild(asNode(node));

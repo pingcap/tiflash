@@ -200,7 +200,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
         auto page_file
             = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
-        LOG_FMT_DEBUG(log, "{} No PageFile can be reused for write, create new PageFile_{}_0 for write", storage_name, DB::toString(max_file_id + 1));
+        LOG_FMT_DEBUG(log, "{} No PageFile can be reused for write, create new PageFile_{}_0 for write", storage_name, (max_file_id + 1));
         write_file = page_file;
         write_file_writer = write_file.createWriter(config.sync_on_write, true);
     }
@@ -775,7 +775,7 @@ void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparato
         if (file.exists())
             file.moveTo(dest);
     }
-    LOG_FMT_INFO(log, "{} archive {} files to {}", storage_name, DB::toString(page_files.size()), archive_path.toString());
+    LOG_FMT_INFO(log, "{} archive {} files to {}", storage_name, page_files.size(), archive_path.toString());
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,

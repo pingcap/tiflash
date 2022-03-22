@@ -170,7 +170,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
                 || config.gc_max_valid_rate >= 1.0 // all page file will be picked
             );
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-        LOG_FMT_TRACE(log, "{} {} [valid rate={}] [file size={}]", storage_name, page_file.toString(), DB::toString(valid_rate, 2), file_size);
+        LOG_FMT_TRACE(log, "{} {} [valid rate={:.2f}] [file size={}]", storage_name, page_file.toString(), valid_rate, file_size);
 #endif
         if (!is_candidate)
         {
@@ -203,7 +203,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         {
             num_candidates_with_high_rate++;
             candidate_total_size_with_lower_rate += 0;
-            LOG_FMT_INFO(log, "{} collect {} with high valid rate as candidates [valid rate={}] [file size={}]", storage_name, page_file.toString(), DB::toString(valid_rate, 2), file_size);
+            LOG_FMT_INFO(log, "{} collect {} with high valid rate as candidates [valid rate={:.2f}] [file size={}]", storage_name, page_file.toString(), valid_rate, file_size);
         }
 
         bool stop = false;
