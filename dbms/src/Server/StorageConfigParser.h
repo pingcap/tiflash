@@ -103,6 +103,7 @@ public:
 
     UInt64 format_version = 0;
     bool lazily_init_store = true;
+    bool enable_ps_v3 = false;
 
 public:
     TiFlashStorageConfig() = default;

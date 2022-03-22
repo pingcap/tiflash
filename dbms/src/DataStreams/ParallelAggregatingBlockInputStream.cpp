@@ -45,7 +45,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler)
+    , processor(inputs, additional_input_at_end, max_threads, handler, log)
 {
     children = inputs;
     if (additional_input_at_end)
@@ -195,6 +195,9 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
 void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
+    Int32 old_value = -1;
+    parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
+
     /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
         /// kill the processor so ExchangeReceiver will be closed
@@ -220,7 +223,8 @@ void ParallelAggregatingBlockInputStream::execute()
     processor.process();
     processor.wait();
 
-    rethrowFirstException(exceptions);
+    if (first_exception_index != -1)
+        std::rethrow_exception(exceptions[first_exception_index]);
 
     if (isCancelledOrThrowIfKilled())
         return;

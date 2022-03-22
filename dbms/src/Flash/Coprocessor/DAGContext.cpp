@@ -189,16 +189,19 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
             {
                 assert(executor.has_executor_id());
                 const auto & executor_id = executor.executor_id();
+                // In order to distinguish different exchange receivers.
+                auto executor_id_prefix_log = getMPPTaskLog(log, executor_id);
                 auto exchange_receiver = std::make_shared<ExchangeReceiver>(
                     std::make_shared<GRPCReceiverContext>(
                         executor.exchange_receiver(),
                         getMPPTaskMeta(),
                         context.getTMTContext().getKVCluster(),
                         context.getTMTContext().getMPPTaskManager(),
-                        context.getSettingsRef().enable_local_tunnel),
+                        context.getSettingsRef().enable_local_tunnel,
+                        context.getSettingsRef().enable_async_grpc_client),
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
-                    log);
+                    executor_id_prefix_log);
                 mpp_exchange_receiver_map[executor_id] = exchange_receiver;
                 new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
             }

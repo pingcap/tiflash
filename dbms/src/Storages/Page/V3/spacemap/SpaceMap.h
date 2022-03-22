@@ -96,6 +96,10 @@ public:
      */
     virtual UInt64 getRightMargin() = 0;
 
+    /**
+     * Get the accurate max capacity of the space map.
+     */
+    virtual UInt64 updateAccurateMaxCapacity() = 0;
 
     /**
      * Return the size of file and the size contains valid data.

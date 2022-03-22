@@ -57,7 +57,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
     , mpp_task_statistics(id, meta.address())
-    , scheduled(false)
+    , schedule_state(ScheduleState::WAITING)
 {}
 
 MPPTask::~MPPTask()
@@ -67,6 +67,13 @@ MPPTask::~MPPTask()
     if (current_memory_tracker != memory_tracker)
         current_memory_tracker = memory_tracker;
     closeAllTunnels("");
+    if (schedule_state == ScheduleState::SCHEDULED)
+    {
+        /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
+        /// TODO: finish all threads before here, except the current one.
+        manager->releaseThreadsFromScheduler(needed_threads);
+        schedule_state = ScheduleState::COMPLETED;
+    }
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
@@ -372,7 +379,7 @@ void MPPTask::writeErrToAllTunnels(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log->getLog(), "Failed to write error " + e + " to tunnel: " + it.second->id());
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }
@@ -398,7 +405,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
-            scheduleThisTask();
+            scheduleThisTask(ScheduleState::FAILED);
             context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
@@ -419,21 +426,24 @@ void MPPTask::scheduleOrWait()
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
+        double time_cost;
         {
             std::unique_lock lock(schedule_mu);
-            schedule_cv.wait(lock, [&] { return scheduled; });
+            schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
+            time_cost = stopwatch.elapsedSeconds();
+            GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
         }
-        LOG_FMT_INFO(log, "task waits for {} ms to schedule and starts to run in parallel.", stopwatch.elapsedMilliseconds());
+        LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
     }
 }
 
-void MPPTask::scheduleThisTask()
+void MPPTask::scheduleThisTask(ScheduleState state)
 {
     std::unique_lock lock(schedule_mu);
-    if (!scheduled)
+    if (schedule_state == ScheduleState::WAITING)
     {
-        LOG_FMT_INFO(log, "task gets schedule");
-        scheduled = true;
+        LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
+        schedule_state = state;
         schedule_cv.notify_one();
     }
 }
@@ -455,6 +465,12 @@ int MPPTask::getNeededThreads()
         throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
     }
     return needed_threads;
+}
+
+bool MPPTask::isScheduled()
+{
+    std::unique_lock lock(schedule_mu);
+    return schedule_state == ScheduleState::SCHEDULED;
 }
 
 } // namespace DB

@@ -142,7 +142,7 @@ public:
     /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
-    ColumnFileSetSnapshotPtr createSnapshot(const DMContext & context);
+    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
 };
 
 } // namespace DM

@@ -71,7 +71,7 @@ public:
     static Strings findTestDataPath(const String & name)
     {
         const static std::vector<String> SEARCH_PATH = {"../tests/testdata/", "/tests/testdata/"};
-        for (auto & prefix : SEARCH_PATH)
+        for (const auto & prefix : SEARCH_PATH)
         {
             String path = prefix + name;
             if (auto f = Poco::File(path); f.exists() && f.isDirectory())
@@ -88,14 +88,13 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext(Strings testdata_path = {});
+    static void initializeGlobalContext(Strings testdata_path = {}, bool enable_ps_v3 = false);
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 
-private:
-    static std::unique_ptr<Context> global_context;
+    TiFlashTestEnv() = delete;
 
 private:
-    TiFlashTestEnv() = delete;
+    static std::unique_ptr<Context> global_context;
 };
 } // namespace DB::tests

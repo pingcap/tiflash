@@ -38,11 +38,13 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->is_update = for_update;
     snap->_delta = this->shared_from_this();
 
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(context);
+    // TODO: Add tracing_id from mpp task or background tasks
+    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), /*tracing_id*/ "", true);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
     snap->shared_delta_index = delta_index;
 
     if (!for_update)
-        snap->mem_table_snap = mem_table_set->createSnapshot();
+        snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap);
 
     return snap;
 }
@@ -123,8 +125,7 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
 
 BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
 {
-    /// Note that we merge the consecutive DeltaPackBlock together, which are seperated in groups by DeltaPackDelete and DeltePackFile.
-
+    /// Note that we merge the consecutive ColumnFileInMemory or ColumnFileTiny together, which are seperated in groups by ColumnFileDeleteRange and ColumnFileBig.
     BlockOrDeletes res;
     auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
     auto mem_table_deletes_offset = delta_snap->getMemTableSetDeletesOffset();
