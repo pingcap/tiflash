@@ -60,15 +60,15 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             }
             catch (const Exception & e)
             {
-                LOG_FMT_ERROR(log, "{}: {} failed by {} \n stack : {}", __PRETTY_FUNCTION__, stage, e.displayText(), e.getStackTrace().toString());
+                LOG_FMT_ERROR(log, "{} failed by {} \n stack : {}",stage, e.displayText(), e.getStackTrace().toString());
             }
             catch (const Poco::Exception & e)
             {
-                LOG_FMT_ERROR(log, "{}: {} failed by {}", __PRETTY_FUNCTION__, stage, e.displayText());
+                LOG_FMT_ERROR(log, "{} failed by {}", stage, e.displayText());
             }
             catch (const std::exception & e)
             {
-                LOG_FMT_ERROR(log, "{}: {} failed by {}", __PRETTY_FUNCTION__, stage, e.what());
+                LOG_FMT_ERROR(log, "{} failed by {}", stage, e.what());
             }
             return false;
         },
