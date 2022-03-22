@@ -19,7 +19,7 @@ namespace DB
 {
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP:<query:N/A,task:N/A>" : fmt::format("MPP:<query:{},task:{}>", start_ts, task_id);
+    return isUnknown() ? "MPP<query:N/A,task:N/A>" : fmt::format("MPP<query:{},task:{}>", start_ts, task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
