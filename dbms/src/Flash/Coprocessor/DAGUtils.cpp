@@ -995,7 +995,7 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
         && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
-             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0  || expr.field_type().flen() == -1));
+             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0 || expr.field_type().flen() == -1));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
