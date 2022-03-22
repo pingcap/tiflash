@@ -75,7 +75,8 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
     return scheduleImp(id.start_ts, query_task_set, task, false);
 }
 
-/// the cancelled query maybe hang, so trigger scheduling as needed.
+/// after finishing the query, there would be no threads released soon, so the updated min-tso query with waiting tasks should be scheduled.
+/// the cancelled query maybe hang, so trigger scheduling as needed when deleting cancelled query.
 void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manager, const bool is_cancelled)
 {
     if (isDisabled())
@@ -83,11 +84,11 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
         return;
     }
 
+    LOG_FMT_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
     active_set.erase(tso);
     waiting_set.erase(tso);
     GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
     GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
-    LOG_FMT_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
 
     if (is_cancelled)
     {
@@ -104,7 +105,7 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
     }
 
     /// NOTE: if updated min_tso query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
-    if (updateMinTSO(tso, true, is_cancelled ? "when cancelling it" : "as deleting it"))
+    if (updateMinTSO(tso, true, is_cancelled ? "when cancelling it" : "as finishing it"))
     {
         scheduleWaitingQueries(task_manager);
     }
