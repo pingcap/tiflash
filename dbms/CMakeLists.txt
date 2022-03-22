@@ -189,10 +189,10 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-target_include_directories (clickhouse_common_io BEFORE PUBLIC ${kvproto_SOURCE_DIR} ${tipb_SOURCE_DIR} ${Protobuf_INCLUDE_DIR} ${gRPC_INCLUDE_DIRS})
-
+target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config

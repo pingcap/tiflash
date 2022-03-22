@@ -99,13 +99,13 @@ public:
 
     PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::PageStorage::SnapshotPtr getSnapshot() override;
+    DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
     using ConcreteSnapshotRawPtr = VersionedPageEntries::Snapshot *;
     using ConcreteSnapshotPtr = VersionedPageEntries::SnapshotPtr;
     ConcreteSnapshotPtr getConcreteSnapshot();
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
+    SnapshotsStatistics getSnapshotsStat() const override;
 
     void write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
@@ -193,6 +193,7 @@ public:
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) { return getEntry(TEST_NAMESPACE_ID, page_id, snapshot); };

@@ -83,6 +83,8 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
+        //
+        ("enable_ps_v3", value<bool>()->default_value(false), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -145,6 +147,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
 
+    enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
     return {true, toString()};
 }
 

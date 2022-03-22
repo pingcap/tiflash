@@ -31,6 +31,11 @@ client = argv[-1]
 timeout = 600
 sleep_time = 1.0
 
+for table in tables:
+    if ',' in table:
+        print('Find "," in {}, please use " " as separator.'.format(table))
+        exit(1)
+
 table_full_names = ', '.join('{}.{}'.format(database, table) for table in tables)
 print('=> wait for {} available in TiFlash'.format(table_full_names))
 

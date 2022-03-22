@@ -14,6 +14,7 @@
 
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -299,7 +300,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
+    , exc_log(log_)
     , collected(false)
 {
     rpc_context->fillSchema(schema);
@@ -350,6 +351,12 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
     using AsyncHandler = AsyncRequestHandler<RPCContext>;
+
+    GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Decrement();
+    });
+
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
@@ -406,6 +413,11 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
+    GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();
+    });
+
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
