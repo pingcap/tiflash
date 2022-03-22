@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/LogWithPrefix.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
@@ -123,17 +137,17 @@ TEST_F(BlobStoreStatsTest, testStat)
 
     BlobStats stats(logger, config);
 
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     // still 0
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
     stats.createStat(0, stats.lock());
-    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
 
@@ -210,7 +224,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Won't choose full one
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, stats.lock());
     ASSERT_EQ(blob_file_id, 2);
     ASSERT_FALSE(stat);
 
@@ -228,7 +242,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
 
     // Then choose stat , it should return the stat id 3
     // Stat which id is 2 is full.
-    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, stats.lock());
     ASSERT_EQ(blob_file_id, 3);
     ASSERT_FALSE(stat);
 }
@@ -257,6 +271,7 @@ TEST_F(BlobStoreTest, Restore)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    config.file_limit_size = 2560;
     auto blob_store = BlobStore(file_provider, path, config);
 
     BlobFileId file_id1 = 10;
@@ -287,9 +302,24 @@ try
         blob_store.blob_stats.restore();
     }
 
-    auto blob_need_gc = blob_store.getGCStats();
-    ASSERT_EQ(blob_need_gc.size(), 1);
-    EXPECT_EQ(blob_need_gc[0], 12);
+    // check spacemap updated
+    {
+        for (const auto & stat : blob_store.blob_stats.getStats())
+        {
+            if (stat->id == file_id1)
+            {
+                ASSERT_EQ(stat->sm_total_size, 2560);
+                ASSERT_EQ(stat->sm_valid_size, 640);
+                ASSERT_EQ(stat->sm_max_caps, 1024);
+            }
+            else if (stat->id == file_id2)
+            {
+                ASSERT_EQ(stat->sm_total_size, 2560);
+                ASSERT_EQ(stat->sm_valid_size, 512);
+                ASSERT_EQ(stat->sm_max_caps, 2048);
+            }
+        }
+    }
 }
 CATCH
 

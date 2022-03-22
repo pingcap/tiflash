@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
@@ -35,11 +49,15 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , log(getMPPTaskLog(log_, tunnel_id))
 {
     assert(!(is_local && is_async));
+    GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 
 template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Decrement();
+    });
     try
     {
         {
@@ -294,6 +312,9 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_loc
     send_queue.finish();
 
     auto rest_work = [this, &err_msg] {
+        // it's safe to call it multiple times
+        if (finished && consumer_state.errHasSet())
+            return;
         finished = true;
         // must call setError in the critical area to keep consistent with `finished` from outside.
         consumer_state.setError(err_msg);

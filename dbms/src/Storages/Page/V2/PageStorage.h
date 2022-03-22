@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
@@ -85,13 +99,13 @@ public:
 
     PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::PageStorage::SnapshotPtr getSnapshot() override;
+    DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
     using ConcreteSnapshotRawPtr = VersionedPageEntries::Snapshot *;
     using ConcreteSnapshotPtr = VersionedPageEntries::SnapshotPtr;
     ConcreteSnapshotPtr getConcreteSnapshot();
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
+    SnapshotsStatistics getSnapshotsStat() const override;
 
     void write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
@@ -179,6 +193,7 @@ public:
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
     void write(DB::WriteBatch && wb) { return write(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntry(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) { return getEntry(TEST_NAMESPACE_ID, page_id, snapshot); };

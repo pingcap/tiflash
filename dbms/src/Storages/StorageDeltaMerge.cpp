@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -469,7 +483,8 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
                     break;
                 }
             }
-            else
+            // it's ok if some columns in block is not in storage header, because these columns should be dropped after generating the block
+            else if (header->has(col.name))
             {
                 auto & header_col = header->getByName(col.name);
                 if (col.column_id != header_col.column_id)
@@ -1187,8 +1202,7 @@ void StorageDeltaMerge::rename(
         std::move(handle_column_define),
         is_common_handle,
         rowkey_column_size,
-        settings,
-        tidb_table_info.id);
+        settings);
 }
 
 String StorageDeltaMerge::getTableName() const
@@ -1505,8 +1519,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings(),
-            tidb_table_info.id);
+            DeltaMergeStore::Settings());
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -91,7 +105,6 @@ public:
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *path_pool, *db_context, db_context->getSettingsRef());
-        page_id_generator = std::make_unique<PageIdGenerator>();
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -110,7 +123,6 @@ public:
             *db_context,
             *path_pool,
             *storage_pool,
-            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             settings.not_compress_columns,
@@ -138,7 +150,6 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DeltaMergeStore::Settings settings;
 
@@ -1120,7 +1131,6 @@ public:
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", table_id, *path_pool, *db_context, DB::Settings());
-        page_id_generator = std::make_unique<PageIdGenerator>();
         dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -1141,7 +1151,6 @@ public:
             *db_context,
             *path_pool,
             *storage_pool,
-            *page_id_generator,
             /*hash_salt*/ 0,
             0,
             settings.not_compress_columns,
@@ -1161,7 +1170,6 @@ private:
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    std::unique_ptr<PageIdGenerator> page_id_generator;
     ColumnDefinesPtr table_columns_;
     DeltaMergeStore::Settings settings;
 

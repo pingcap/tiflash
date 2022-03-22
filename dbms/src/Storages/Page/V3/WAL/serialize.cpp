@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -27,6 +41,7 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
     writeIntBinary(entry.offset, buf);
     writeIntBinary(entry.size, buf);
     writeIntBinary(entry.checksum, buf);
+    writeIntBinary(entry.tag, buf);
     // fieldsOffset TODO: compression on `fieldsOffset`
     writeIntBinary(entry.field_offsets.size(), buf);
     for (const auto & [off, checksum] : entry.field_offsets)
@@ -42,6 +57,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
     readIntBinary(entry.offset, buf);
     readIntBinary(entry.size, buf);
     readIntBinary(entry.checksum, buf);
+    readIntBinary(entry.tag, buf);
     // fieldsOffset
     PageFieldOffsetChecksums field_offsets;
     UInt64 size_field_offsets = 0;

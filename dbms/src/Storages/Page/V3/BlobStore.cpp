@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/LogWithPrefix.h>
@@ -192,17 +206,44 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
 void BlobStore::remove(const PageEntriesV3 & del_entries)
 {
+    std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
     {
+        blob_updated.insert(entry.file_id);
         // External page size is 0
         if (entry.size == 0)
         {
             continue;
-            // throw Exception(fmt::format("Invaild entry. entry size 0. [id={}] [offset={}]",
-            //                             entry.file_id,
-            //                             entry.offset));
         }
-        removePosFromStats(entry.file_id, entry.offset, entry.size);
+
+        try
+        {
+            removePosFromStats(entry.file_id, entry.offset, entry.size);
+        }
+        catch (DB::Exception & e)
+        {
+            e.addMessage(fmt::format("while removing entry [entry={}]", toDebugString(entry)));
+            e.rethrow();
+        }
+    }
+
+    // After we remove postion of blob, we need recalculate the blob.
+    for (const auto & blob_id : blob_updated)
+    {
+        const auto & stat = blob_stats.blobIdToStat(blob_id,
+                                                    /*restore_if_not_exist*/ false,
+                                                    /*ignore_not_exist*/ true);
+
+        // Some of blob may been removed.
+        // So if we can't use id find blob, just ignore it.
+        if (stat)
+        {
+            LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
+            {
+                auto lock = stat->lock();
+                stat->recalculateCapacity();
+            }
+        }
     }
 }
 
@@ -213,7 +254,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     auto lock_stat = [size, this, &stat]() -> std::lock_guard<std::mutex> {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
-        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size, lock_stats);
+        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, lock_stats);
 
         // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
@@ -743,13 +784,12 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 void BlobStore::BlobStats::restore()
 {
     BlobFileId max_restored_file_id = 0;
-    std::set<BlobFileId> existing_file_ids;
     for (const auto & stat : stats_map)
     {
         stat->recalculateSpaceMap();
         max_restored_file_id = std::max(stat->id, max_restored_file_id);
-        existing_file_ids.insert(stat->id);
     }
+
     // restore `roll_id`
     roll_id = max_restored_file_id + 1;
 }
@@ -832,7 +872,7 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_gu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &)
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
     double smallest_valid_rate = 2;
@@ -847,10 +887,9 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     {
         if (!stat->isReadOnly()
             && stat->sm_max_caps >= buf_size
-            && stat->sm_total_size + buf_size < file_limit_size
             && stat->sm_valid_rate < smallest_valid_rate)
         {
-            smallest_valid_rate = stat->sm_valid_size;
+            smallest_valid_rate = stat->sm_valid_rate;
             stat_ptr = stat;
         }
     }
@@ -863,7 +902,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
-BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist)
+BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist, bool ignore_not_exist)
 {
     auto guard = lock();
     for (auto & stat : stats_map)
@@ -880,9 +919,14 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
         return createStatNotCheckingRoll(file_id, guard);
     }
 
-    throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
-                                file_id),
-                    ErrorCodes::LOGICAL_ERROR);
+    if (!ignore_not_exist)
+    {
+        throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
+                                    file_id),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return nullptr;
 }
 
 /*********************
@@ -960,6 +1004,12 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     sm_total_size = total_size;
     sm_valid_size = valid_size;
     sm_valid_rate = valid_size * 1.0 / total_size;
+    recalculateCapacity();
+}
+
+void BlobStore::BlobStats::BlobStat::recalculateCapacity()
+{
+    sm_max_caps = smap->updateAccurateMaxCapacity();
 }
 
 } // namespace PS::V3
