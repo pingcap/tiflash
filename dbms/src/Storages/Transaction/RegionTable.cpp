@@ -161,8 +161,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
         {
             LOG_FMT_TRACE(
                 log,
-                "{}: table {}, {} after flush {} bytes",
-                __FUNCTION__,
+                "table {}, {} after flush {} bytes",
                 region->getMappedTableID(),
                 region->toString(false),
                 cache_size);
@@ -171,8 +170,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
         {
             LOG_FMT_INFO(
                 log,
-                "{}: table {}, {} after flush {} bytes",
-                __FUNCTION__,
+                "table {}, {} after flush {} bytes",
                 region->getMappedTableID(),
                 region->toString(false),
                 cache_size);
