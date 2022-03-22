@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -29,13 +43,13 @@ static constexpr UInt8 MaxRecordType = RecyclableLastType;
 static constexpr UInt32 BLOCK_SIZE = 32 * 1024;
 static_assert(BLOCK_SIZE < std::numeric_limits<UInt16>::max());
 
-using ChecksumClass = Digest::CRC32; // TODO: CRC64
+using ChecksumClass = Digest::CRC64;
 
 using ChecksumType = ChecksumClass::HashType;
 
-static constexpr UInt32 CHECKSUM_FIELD_SIZE = sizeof(ChecksumType);
+static constexpr UInt32 CHECKSUM_FIELD_SIZE = ChecksumClass::hash_size;
 
-// If the size of payload is larger than `BLOCK_SIZE`, it will be splited into
+// If the size of payload is larger than `BLOCK_SIZE`, it will be splitted into
 // fragments. So `PAYLOAD_FIELD_SIZE` must be fit in UInt16.
 static constexpr UInt32 PAYLOAD_FIELD_SIZE = sizeof(UInt16);
 

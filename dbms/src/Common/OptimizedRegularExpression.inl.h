@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/OptimizedRegularExpression.h>
 #include <Poco/Exception.h>
 
@@ -262,10 +276,21 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
 template <bool thread_safe>
 OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(const std::string & regexp_, int options)
 {
-    analyze(regexp_, required_substring, is_trivial, required_substring_is_prefix);
+    if (options & RE_NO_OPTIMIZE)
+    {
+        /// query from TiDB, currently, since analyze does not handle all the cases, skip the optimization
+        /// to avoid im-compatible issues
+        is_trivial = false;
+        required_substring.clear();
+        required_substring_is_prefix = false;
+    }
+    else
+    {
+        analyze(regexp_, required_substring, is_trivial, required_substring_is_prefix);
+    }
 
-    /// Just three following options are supported
-    if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL)))
+    /// Just four following options are supported
+    if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL | RE_NO_OPTIMIZE)))
         throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
 
     is_case_insensitive = options & RE_CASELESS;

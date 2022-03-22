@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/MemoryTrackerSetter.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
 
@@ -22,6 +37,7 @@ public:
     {
         auto memory_tracker = current_memory_tracker;
         auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::move(f)](auto &&... args) {
+            UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);
             MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
             if (!thread_name.empty())
                 setThreadName(thread_name.c_str());

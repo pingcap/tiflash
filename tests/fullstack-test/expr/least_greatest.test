@@ -1,0 +1,303 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1
+mysql> create table test.t1 (id int, id1 TINYINT, id2 SMALLINT, id3 MEDIUMINT, id4 BIGINT, id5 FLOAT, id6 DOUBLE, id7 TINYINT UNSIGNED, id8 SMALLINT UNSIGNED, id9 BIGINT UNSIGNED, id10 decimal(10, 1));
+mysql> alter table test.t1 set tiflash replica 1
+mysql> insert into test.t1 values (1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100.0), (90, 80, 70, 60, 50, 40, 30, 20, 10, 0, -1.1), (1278, 127, 1297, 878, 127319, 17281.3278, 227183.1231823618, 121, 17319, 123128, 9800.1)
+mysql> drop table if exists test.t2
+mysql> create table test.t2 (id1 BIGINT UNSIGNED, id2 BIGINT UNSIGNED, id3 BIGINT)
+mysql> alter table test.t2 set tiflash replica 1
+mysql> insert into test.t2 values (18446744073709551615, 18446744073709551615, 9223372036854775807)
+mysql> drop table if exists test.t3
+mysql> create table test.t3 (id1 int, id2 int)
+mysql> alter table test.t3 set tiflash replica 1
+mysql> insert into test.t3 values (NULL, NULL), (NULL, NULL), (NULL, NULL)
+
+func> wait_table test t1 t2 t3
+
+# parse error
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least() from test.t1
+ERROR 1582 (42000) at line 1: Incorrect parameter count in the call to native function 'least'
+
+# least tests
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8) from test.t1 order by 1
++------+---------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8) |
++------+---------------------------------------------------+
+|    1 |                                                 1 |
+|   90 |                                                10 |
+| 1278 |                                               121 |
++------+---------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8) from test.t1 order by 1
++------+---------------------------------------------------------+
+| id   | least(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8) |
++------+---------------------------------------------------------+
+|    1 |                                                    NULL |
+|   90 |                                                    NULL |
+| 1278 |                                                    NULL |
++------+---------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8) from test.t1 order by 1
++------+---------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8) |
++------+---------------------------------------------------------+
+|    1 |                                                    NULL |
+|   90 |                                                    NULL |
+| 1278 |                                                    NULL |
++------+---------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id, id1, id2, id3, id4, id5, id6, id7, id8, NULL) from test.t1 order by 1
++------+---------------------------------------------------------+
+| id   | least(id, id1, id2, id3, id4, id5, id6, id7, id8, NULL) |
++------+---------------------------------------------------------+
+|    1 |                                                    NULL |
+|   90 |                                                    NULL |
+| 1278 |                                                    NULL |
++------+---------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id1, id2, id8) from test.t1 order by 1
++------+----------------------+
+| id   | least(id1, id2, id8) |
++------+----------------------+
+|    1 |                   10 |
+|   90 |                   10 |
+| 1278 |                  127 |
++------+----------------------+
+
+# least(unsigned, unsigned)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id8, id8) from test.t1 order by 1
++------+-----------------+
+| id   | least(id8, id8) |
++------+-----------------+
+|    1 |              80 |
+|   90 |              10 |
+| 1278 |           17319 |
++------+-----------------+
+
+# least(bigint signed, bigint unsigned) need Decimal impl, not support for now.
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id4, id9) from test.t1 order by 1
+# +------+-----------------+
+# | id   | least(id4, id9) |
+# +------+-----------------+
+# |    1 |              40 |
+# |   90 |               0 |
+# | 1278 |          123128 |
+# +------+-----------------+
+
+# least(double, float)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, least(id5, id6) from test.t1 order by 1
++------+-----------------+
+| id   | least(id5, id6) |
++------+-----------------+
+|    1 |              50 |
+|   90 |              30 |
+| 1278 |    17281.328125 |
++------+-----------------+
+
+# least(double, const)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(id6, -1717139878917397319) from test.t1 order by 1
++----------------------------------+
+| least(id6, -1717139878917397319) |
++----------------------------------+
+|           -1.7171398789173972e18 |
+|           -1.7171398789173972e18 |
+|           -1.7171398789173972e18 |
++----------------------------------+
+
+# least(UInt64, UInt64)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(id1, id2) from test.t2 order by 1
++----------------------+
+| least(id1, id2)      |
++----------------------+
+| 18446744073709551615 |
++----------------------+
+
+# # least(UInt64, Int64) need Decimal impl, not support for now.
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(id1, id3) from test.t2 order by 1
+# +---------------------+
+# | least(id1, id3)     |
+# +---------------------+
+# | 9223372036854775807 |
+# +---------------------+
+
+# least only null
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(id1, id2) from test.t3 order by 1
++-----------------+
+| least(id1, id2) |
++-----------------+
+|            NULL |
+|            NULL |
+|            NULL |
++-----------------+
+
+# greatest tests
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8) from test.t1 order by 1
++------+------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8) |
++------+------------------------------------------------------+
+|    1 |                                                   80 |
+|   90 |                                                   90 |
+| 1278 |                                    227183.1231823618 |
++------+------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8) from test.t1 order by 1
++------+------------------------------------------------------------+
+| id   | greatest(NULL, id, id1, id2, id3, id4, id5, id6, id7, id8) |
++------+------------------------------------------------------------+
+|    1 |                                                       NULL |
+|   90 |                                                       NULL |
+| 1278 |                                                       NULL |
++------+------------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8) from test.t1 order by 1
++------+------------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, NULL, id5, id6, id7, id8) |
++------+------------------------------------------------------------+
+|    1 |                                                       NULL |
+|   90 |                                                       NULL |
+| 1278 |                                                       NULL |
++------+------------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, NULL) from test.t1 order by 1
++------+------------------------------------------------------------+
+| id   | greatest(id, id1, id2, id3, id4, id5, id6, id7, id8, NULL) |
++------+------------------------------------------------------------+
+|    1 |                                                       NULL |
+|   90 |                                                       NULL |
+| 1278 |                                                       NULL |
++------+------------------------------------------------------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id1, id2, id8) from test.t1 order by 1
++------+-------------------------+
+| id   | greatest(id1, id2, id8) |
++------+-------------------------+
+|    1 |                      80 |
+|   90 |                      80 |
+| 1278 |                   17319 |
++------+-------------------------+
+
+# greatest(unsigned, unsigned)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id8, id8) from test.t1 order by 1
++------+--------------------+
+| id   | greatest(id8, id8) |
++------+--------------------+
+|    1 |                 80 |
+|   90 |                 10 |
+| 1278 |              17319 |
++------+--------------------+
+
+# greatest(signed, unsigned) need Decimal impl, not support for now.
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id4, id9) from test.t1 order by 1
+# +------+--------------------+
+# | id   | greatest(id4, id9) |
+# +------+--------------------+
+# |    1 |                 90 |
+# |   90 |                 50 |
+# | 1278 |             127319 |
+# +------+--------------------+
+
+# greatest(double, float)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select id, greatest(id5, id6) from test.t1 order by 1
++------+--------------------+
+| id   | greatest(id5, id6) |
++------+--------------------+
+|    1 |                 60 |
+|   90 |                 40 |
+| 1278 |  227183.1231823618 |
++------+--------------------+
+
+# greatest(double, const)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id6, 1717139878917397319) from test.t1 order by 1
++------------------------------------+
+| greatest(id6, 1717139878917397319) |
++------------------------------------+
+|              1.7171398789173972e18 |
+|              1.7171398789173972e18 |
+|              1.7171398789173972e18 |
++------------------------------------+
+
+# greatest(UInt64, UInt64)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id1, id2) from test.t2 order by 1
++----------------------+
+| greatest(id1, id2)   |
++----------------------+
+| 18446744073709551615 |
++----------------------+
+
+# greatest(UInt64, Int64) need Decimal impl, not support for now.
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id1, id3) from test.t2 order by 1
+# +----------------------+
+# | greatest(id1, id3)   |
+# +----------------------+
+# | 18446744073709551615 |
+# +----------------------+
+
+# greatest(Int64, Int64)
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id3, id3) from test.t2 order by 1
++---------------------+
+| greatest(id3, id3)  |
++---------------------+
+| 9223372036854775807 |
++---------------------+
+
+# greatest(Decimal, Decimal) not support for now.
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id, id1, id10, id10) from test.t1 order by 1;
+# +-------------------------------+
+# | greatest(id, id1, id10, id10) |
+# +-------------------------------+
+# |                          90.0 |
+# |                         100.0 |
+# |                        9800.1 |
+# +-------------------------------+
+#
+# # least(Decimal, Decimal)
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(id, id1, id10, id10) from test.t1 order by 1;
+# +----------------------------+
+# | least(id, id1, id10, id10) |
+# +----------------------------+
+# |                       -1.1 |
+# |                        1.0 |
+# |                      127.0 |
+# +----------------------------+
+
+# greatest only null
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(id1, id2) from test.t3 order by 1
++--------------------+
+| greatest(id1, id2) |
++--------------------+
+|               NULL |
+|               NULL |
+|               NULL |
++--------------------+
+
+# greatest(decimal, int) not support for now.
+# mysql> drop table if exists test.t1;
+# mysql> create table test.t1(c1 decimal(10, 1), c2 int);
+# mysql> insert into test.t1 values(1, 11);
+# mysql> alter table test.t1 set tiflash replica 1;
+# func> wait_table test t1
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select greatest(c1, c2) from test.t1;
+# +------------------+
+# | greatest(c1, c2) |
+# +------------------+
+# |             11.0 |
+# +------------------+
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select least(c1, c2) from test.t1;
+# +---------------+
+# | least(c1, c2) |
+# +---------------+
+# |           1.0 |
+# +---------------+

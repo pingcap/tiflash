@@ -1,6 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <stack>
 
@@ -85,19 +101,19 @@ size_t PageEntriesVersionSetWithDelta::sizeUnlocked() const
     return sz;
 }
 
-std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::getSnapshotsStat() const
+SnapshotsStatistics PageEntriesVersionSetWithDelta::getSnapshotsStat() const
 {
     // Note: this will scan and remove expired weak_ptrs from `snapshots`
     return removeExpiredSnapshots();
 }
 
 
-PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot()
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id)
 {
     // acquire for unique_lock since we need to add all snapshots to link list
     std::unique_lock<std::shared_mutex> lock(read_write_mutex);
 
-    auto s = std::make_shared<Snapshot>(this, current);
+    auto s = std::make_shared<Snapshot>(this, current, tracing_id);
     // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
     // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
     // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
@@ -206,13 +222,12 @@ void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
     }
 }
 
-std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::removeExpiredSnapshots() const
+SnapshotsStatistics PageEntriesVersionSetWithDelta::removeExpiredSnapshots() const
 {
     // Notice: we should free those valid snapshots without locking, or it may cause
     // incursive deadlock on `vset->read_write_mutex`.
     std::vector<SnapshotPtr> valid_snapshots;
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotsStatistics stats;
     DB::Int64 num_snapshots_removed = 0;
     {
         std::unique_lock lock(read_write_mutex);
@@ -233,10 +248,11 @@ std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::removeExpir
                     std::this_thread::sleep_for(ms);
                 });
                 const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
-                if (snapshot_lifetime > longest_living_seconds)
+                if (snapshot_lifetime > stats.longest_living_seconds)
                 {
-                    longest_living_seconds = snapshot_lifetime;
-                    longest_living_from_thread_id = snapshot_or_invalid->t_id;
+                    stats.longest_living_seconds = snapshot_lifetime;
+                    stats.longest_living_from_thread_id = snapshot_or_invalid->create_thread;
+                    stats.longest_living_from_tracing_id = snapshot_or_invalid->tracing_id;
                 }
                 valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
                 iter++;
@@ -244,12 +260,12 @@ std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::removeExpir
         }
     } // unlock `read_write_mutex`
 
-    const size_t num_valid_snapshots = valid_snapshots.size();
+    stats.num_snapshots = valid_snapshots.size();
     valid_snapshots.clear();
 
     CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
     // Return some statistics of the oldest living snapshot.
-    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+    return stats;
 }
 
 
@@ -284,12 +300,13 @@ PageEntriesVersionSetWithDelta::gcApply( //
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
 PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mutex> && lock, bool need_scan_page_ids)
 {
+    constexpr const double exist_stale_snapshot = 60.0;
+
     /// Collect live files is costly, we save SnapshotPtrs and scan them without lock.
     // Note read_write_mutex must be hold.
     std::vector<SnapshotPtr> valid_snapshots;
     const size_t snapshots_size_before_clean = snapshots.size();
-    double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotsStatistics stats;
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
         auto snapshot_or_invalid = iter->lock();
@@ -306,35 +323,47 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
                 std::this_thread::sleep_for(ms);
             });
             const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
-            if (snapshot_lifetime > longest_living_seconds)
+            if (snapshot_lifetime > stats.longest_living_seconds)
             {
-                longest_living_seconds = snapshot_lifetime;
-                longest_living_from_thread_id = snapshot_or_invalid->t_id;
+                stats.longest_living_seconds = snapshot_lifetime;
+                stats.longest_living_from_thread_id = snapshot_or_invalid->create_thread;
+                stats.longest_living_from_tracing_id = snapshot_or_invalid->tracing_id;
+            }
+            if (snapshot_lifetime > exist_stale_snapshot)
+            {
+                LOG_FMT_WARNING(
+                    log,
+                    "Suspicious stale snapshot detected lifetime {:.3f} seconds, created from thread_id {}, tracing_id {}",
+                    snapshot_lifetime,
+                    snapshot_or_invalid->create_thread,
+                    snapshot_or_invalid->tracing_id);
             }
             valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
             iter++;
         }
     }
     // Create a temporary latest snapshot by using `current`
-    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current));
+    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current, ""));
 
     lock.unlock(); // Notice: unlock and we should free those valid snapshots without locking
 
+    stats.num_snapshots = valid_snapshots.size();
     // Plus 1 for eliminating the counting of temporary snapshot of `current`
     const size_t num_invalid_snapshot_to_clean = snapshots_size_before_clean + 1 - valid_snapshots.size();
     if (num_invalid_snapshot_to_clean > 0)
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
-#define STALE_SNAPSHOT_LOG_PARAMS                                                    \
-    "{} gcApply remove {} invalid snapshots, "                                       \
-    "{} snapshots left, longest lifetime {:.3f} seconds, created from thread_id {}", \
-        name,                                                                        \
-        num_invalid_snapshot_to_clean,                                               \
-        valid_snapshots.size(),                                                      \
-        longest_living_seconds,                                                      \
-        longest_living_from_thread_id
-        constexpr const double exist_stale_snapshot = 60.0;
-        if (longest_living_seconds > exist_stale_snapshot)
+#define STALE_SNAPSHOT_LOG_PARAMS                          \
+    "{} gcApply remove {} invalid snapshots, "             \
+    "{} snapshots left, longest lifetime {:.3f} seconds, " \
+    "created from thread_id {}, tracing_id {}",            \
+        name,                                              \
+        num_invalid_snapshot_to_clean,                     \
+        stats.num_snapshots,                               \
+        stats.longest_living_seconds,                      \
+        stats.longest_living_from_thread_id,               \
+        stats.longest_living_from_tracing_id
+        if (stats.longest_living_seconds > exist_stale_snapshot)
             LOG_FMT_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
             LOG_FMT_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);

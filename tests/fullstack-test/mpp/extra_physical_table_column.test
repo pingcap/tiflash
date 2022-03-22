@@ -1,0 +1,79 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.employees;
+mysql> CREATE TABLE test.employees (  id int(11) NOT NULL,  fname varchar(30) DEFAULT NULL,  lname varchar(30) DEFAULT NULL,  hired date NOT NULL DEFAULT '1970-01-01',  separated date DEFAULT '9999-12-31',  job_code int(11) DEFAULT NULL,  store_id int(11) NOT NULL  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  PARTITION BY RANGE (store_id)  (PARTITION p0 VALUES LESS THAN (6),  PARTITION p1 VALUES LESS THAN (11),  PARTITION p2 VALUES LESS THAN (16),  PARTITION p3 VALUES LESS THAN (21),  PARTITION p4 VALUES LESS THAN (MAXVALUE));
+mysql> alter table test.employees set tiflash replica 1;
+
+func> wait_table test employees
+
+mysql> set tidb_partition_prune_mode=dynamic; begin; insert into test.employees values(100,'aa','aa','2020-01-01',null,10,10); select count(*) from test.employees; insert into test.employees values(100,'aa','aa','2020-01-01',null,10,23); select * from test.employees where store_id > 10; set session tidb_allow_batch_cop=2; select count(*) from test.employees; select * from test.employees where store_id > 10; commit;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
++-----+-------+-------+------------+-----------+----------+----------+
+| id  | fname | lname | hired      | separated | job_code | store_id |
++-----+-------+-------+------------+-----------+----------+----------+
+| 100 | aa    | aa    | 2020-01-01 | NULL      |       10 |       23 |
++-----+-------+-------+------------+-----------+----------+----------+
++----------+
+| count(*) |
++----------+
+|        2 |
++----------+
++-----+-------+-------+------------+-----------+----------+----------+
+| id  | fname | lname | hired      | separated | job_code | store_id |
++-----+-------+-------+------------+-----------+----------+----------+
+| 100 | aa    | aa    | 2020-01-01 | NULL      |       10 |       23 |
++-----+-------+-------+------------+-----------+----------+----------+
+
+=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
+
+mysql> drop table if exists test.employees;
+mysql> CREATE TABLE test.employees (  id int(11) NOT NULL,  fname varchar(30) DEFAULT NULL,  lname varchar(30) DEFAULT NULL,  hired date NOT NULL DEFAULT '1970-01-01',  separated date DEFAULT '9999-12-31',  job_code int(11) DEFAULT NULL,  store_id int(11) NOT NULL  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  PARTITION BY RANGE (store_id)  (PARTITION p0 VALUES LESS THAN (6),  PARTITION p1 VALUES LESS THAN (11),  PARTITION p2 VALUES LESS THAN (16),  PARTITION p3 VALUES LESS THAN (21),  PARTITION p4 VALUES LESS THAN (MAXVALUE));
+mysql> alter table test.employees set tiflash replica 1;
+
+func> wait_table test employees
+
+mysql> set tidb_partition_prune_mode=dynamic; begin; insert into test.employees values(100,'aa','aa','2020-01-01',null,10,10); select count(*) from test.employees; insert into test.employees values(100,'aa','aa','2020-01-01',null,10,23);select * from test.employees where store_id > 10; set session tidb_allow_batch_cop=2; select count(*) from test.employees; select * from test.employees where store_id > 10; commit;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
++-----+-------+-------+------------+-----------+----------+----------+
+| id  | fname | lname | hired      | separated | job_code | store_id |
++-----+-------+-------+------------+-----------+----------+----------+
+| 100 | aa    | aa    | 2020-01-01 | NULL      |       10 |       23 |
++-----+-------+-------+------------+-----------+----------+----------+
++----------+
+| count(*) |
++----------+
+|        2 |
++----------+
++-----+-------+-------+------------+-----------+----------+----------+
+| id  | fname | lname | hired      | separated | job_code | store_id |
++-----+-------+-------+------------+-----------+----------+----------+
+| 100 | aa    | aa    | 2020-01-01 | NULL      |       10 |       23 |
++-----+-------+-------+------------+-----------+----------+----------+
+
+=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+
+# Clean up.
+mysql> drop table if exists test.employees;

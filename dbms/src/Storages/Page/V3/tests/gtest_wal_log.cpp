@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // TODO: Add copyright for PingCAP
 //  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under both the GPLv2 (found in the
@@ -13,6 +27,7 @@
 #include <Core/Defines.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
@@ -20,6 +35,7 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
@@ -32,7 +48,6 @@
 #include <memory>
 #include <pcg_random.hpp>
 #include <random>
-
 
 using DB::tests::TiFlashTestEnv;
 
@@ -70,75 +85,6 @@ static String randomSkewedString(int i, std::mt19937 & rd)
     return repeatedString(DB::toString(i), getSkewedNum(17, rd));
 }
 
-class StringSink : public DB::WriteBufferFromFileBase
-{
-public:
-    String & contents;
-
-    explicit StringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
-        , contents(contents_)
-    {}
-
-    off_t getPositionInFile() override { return count(); }
-    void sync() override { next(); }
-    String getFileName() const override { return ""; }
-    int getFD() const override { return -1; }
-    void close() override {}
-
-protected:
-    off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return getPositionInFile(); }
-    void doTruncate(off_t length [[maybe_unused]]) override {}
-    void nextImpl() override
-    {
-        if (offset() == 0)
-            return;
-        contents.append(working_buffer.begin(), offset());
-    }
-};
-class OverwritingStringSink : public DB::WriteBufferFromFileBase
-{
-public:
-    String & contents;
-
-    explicit OverwritingStringSink(String & contents_)
-        : DB::WriteBufferFromFileBase(Format::BLOCK_SIZE, nullptr, 0)
-        , contents(contents_)
-        , last_sync_pos(0)
-    {}
-
-    off_t getPositionInFile() override { return count(); }
-    void sync() override { next(); }
-    String getFileName() const override { return ""; }
-    int getFD() const override { return -1; }
-    void close() override {}
-
-protected:
-    off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return getPositionInFile(); }
-    void doTruncate(off_t length [[maybe_unused]]) override {}
-    void nextImpl() override
-    {
-        if (offset() == 0)
-            return;
-        if (last_sync_pos < contents.size())
-        {
-            size_t overwrite_size = std::min(contents.size() - last_sync_pos, offset());
-            // overwrite
-            memcpy(contents.data() + last_sync_pos, working_buffer.begin(), overwrite_size);
-            // append the left over from working_buffer (if any)
-            contents.append(working_buffer.begin() + overwrite_size, offset() - overwrite_size);
-        }
-        else
-        {
-            contents.append(working_buffer.begin(), offset());
-        }
-        last_sync_pos += offset();
-    }
-
-private:
-    size_t last_sync_pos;
-};
-
 // Param type is tuple<int, bool>
 // get<0>(tuple): non-zero if recycling log, zero if regular log
 // get<1>(tuple): true if allow retry after read EOF, false otherwise
@@ -161,59 +107,17 @@ private:
         }
     };
 
-    class StringSouce : public DB::ReadBufferFromFileBase
-    {
-    public:
-        String & contents;
-        size_t read_pos;
-        bool fail_after_read_partial;
-        bool returned_partial;
-
-        explicit StringSouce(String & contents_, bool fail_after_read_partial_)
-            : DB::ReadBufferFromFileBase(PS::V3::Format::BLOCK_SIZE, nullptr, 0)
-            , contents(contents_)
-            , read_pos(0)
-            , fail_after_read_partial(fail_after_read_partial_)
-            , returned_partial(false)
-        {}
-
-        off_t getPositionInFile() override { return count(); }
-        String getFileName() const override { return ""; }
-        int getFD() const override { return -1; }
-
-        off_t doSeek(off_t off [[maybe_unused]], int whence [[maybe_unused]]) override { return 0; }
-
-    protected:
-        bool nextImpl() override
-        {
-            if (fail_after_read_partial)
-            {
-                EXPECT_FALSE(returned_partial) << "must not read() after eof/error";
-            }
-
-            // EOF
-            if (read_pos >= contents.size())
-                return false;
-
-            std::string_view left_bytes{contents};
-            left_bytes.remove_prefix(read_pos);
-            // There are more bytes than buffer size, only copy a part of it, otherwise, copy to the end of `contents`
-            const size_t num_bytes_read = std::min(internal_buffer.size(), left_bytes.size());
-            memcpy(internal_buffer.begin(), left_bytes.data(), num_bytes_read);
-            left_bytes.remove_prefix(num_bytes_read);
-            read_pos += num_bytes_read;
-            working_buffer.resize(num_bytes_read);
-            return true;
-        }
-    };
-
-    String reader_contents;
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
     std::unique_ptr<LogReader> reader;
     Poco::Logger * log;
 
 protected:
+    String path;
+    String file_name;
+    FileProviderPtr provider;
+    WriteReadableFilePtr wr_file;
+
     bool recyclable_log;
     bool allow_retry_read;
     const int log_file_num = 123;
@@ -224,19 +128,47 @@ public:
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {
-        auto ctx = TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
-        auto filename = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
+        provider = TiFlashTestEnv::getContext().getFileProvider();
+        path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
-        std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
-        writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        Poco::File file(path);
+        if (!file.exists())
+        {
+            file.createDirectories();
+        }
+
+        file_name = path + "/log_0";
+
+        writer = std::make_unique<LogWriter>(file_name, provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
         resetReader();
+
+
+        wr_file = provider->newWriteReadableFile(
+            file_name,
+            EncryptionPath{file_name, ""},
+            false,
+            /*create_new_encryption_info_*/ false);
     }
 
     std::unique_ptr<LogReader> getNewReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords, size_t log_num = 0)
     {
-        std::unique_ptr<ReadBufferFromFileBase> file_reader = std::make_unique<StringSouce>(reader_contents, /*fail_after_read_partial_*/ !allow_retry_read);
-        return std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_num, wal_recovery_mode, log);
+        auto read_buf = createReadBufferFromFileBaseByFileProvider(
+            provider,
+            file_name,
+            EncryptionPath{file_name, ""},
+            /*estimated_size*/ Format::BLOCK_SIZE,
+            /*aio_threshold*/ 0,
+            /*read_limiter*/ nullptr,
+            /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+        );
+
+        return std::make_unique<LogReader>(std::move(read_buf),
+                                           &report,
+                                           /* verify_checksum */ true,
+                                           /* log_number */ log_num,
+                                           wal_recovery_mode,
+                                           log);
     }
 
     void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
@@ -247,12 +179,14 @@ public:
     void write(const std::string & msg)
     {
         ReadBufferFromString buff(msg);
+
         ASSERT_NO_THROW(writer->addRecord(buff, msg.size()));
     }
 
     size_t writtenBytes() const
     {
-        return reader_contents.size();
+        Poco::File file_in_disk(file_name);
+        return file_in_disk.getSize();
     }
 
     String read()
@@ -266,30 +200,36 @@ public:
 
     void incrementByte(int offset, char delta)
     {
-        reader_contents[offset] += delta;
+        char old_one[1] = "";
+        PageUtil::readFile(wr_file, offset, old_one, 1, nullptr);
+        old_one[0] += delta;
+        PageUtil::writeFile(wr_file, offset, old_one, 1, nullptr);
     }
 
     void setByte(int offset, char new_byte)
     {
-        reader_contents[offset] = new_byte;
+        PageUtil::writeFile(wr_file, offset, &new_byte, 1, nullptr);
     }
 
     void shrinkSize(int bytes)
     {
-        reader_contents.resize(reader_contents.size() - bytes);
+        PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes);
     }
 
-    void fixChecksum(int header_offset, int len, bool recyclable)
+    void fixChecksum(int header_offset, int payload_len, bool recyclable)
     {
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
-        Digest::CRC32 digest;
-        digest.update(
-            &reader_contents[header_offset + Format::CHECKSUM_START_OFFSET],
-            header_size - Format::CHECKSUM_START_OFFSET + len);
+        Format::ChecksumClass digest;
+
+        size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + payload_len;
+        char crc_buff[crc_buff_size];
+        PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff, crc_buff_size, nullptr);
+
+        digest.update(crc_buff, crc_buff_size);
+
         auto checksum = digest.checksum();
-        WriteBuffer buff(&reader_contents[header_offset], sizeof(checksum));
-        writeIntBinary(checksum, buff);
+        PageUtil::writeFile(wr_file, header_offset, reinterpret_cast<char *>(&checksum), sizeof(checksum), nullptr);
     }
 
     /// Some methods to check the error reporter
@@ -311,11 +251,6 @@ public:
             return report.message;
         return "OK";
     }
-
-    String & getReaderContents()
-    {
-        return reader_contents;
-    }
 };
 
 TEST_P(LogFileRWTest, Empty)
@@ -324,11 +259,13 @@ TEST_P(LogFileRWTest, Empty)
 }
 
 TEST_P(LogFileRWTest, ReadWrite)
+try
 {
     write("foo");
     write("bar");
     write("");
     write("xxxx");
+    resetReader();
     ASSERT_EQ("foo", read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("", read());
@@ -336,12 +273,14 @@ TEST_P(LogFileRWTest, ReadWrite)
     ASSERT_EQ("EOF", read());
     ASSERT_EQ("EOF", read()); // Make sure reads at eof work
 }
+CATCH
 
 TEST_P(LogFileRWTest, BlockBoundary)
 {
     const auto big_str = repeatedString("A", PS::V3::Format::BLOCK_SIZE - Format::HEADER_SIZE - 4);
     write(big_str);
     write("small");
+    resetReader();
     ASSERT_EQ(big_str, read());
     ASSERT_EQ("small", read());
     ASSERT_EQ("EOF", read());
@@ -354,6 +293,7 @@ TEST_P(LogFileRWTest, ManyBlocks)
     {
         write(DB::toString(i));
     }
+    resetReader();
     for (size_t i = 0; i < num_blocks_test; i++)
     {
         auto res = read();
@@ -367,6 +307,7 @@ TEST_P(LogFileRWTest, Fragmentation)
     write("small");
     write(repeatedString("medium", 50000));
     write(repeatedString("large", 100000));
+    resetReader();
     ASSERT_EQ("small", read());
     ASSERT_EQ(repeatedString("medium", 50000), read());
     ASSERT_EQ(repeatedString("large", 100000), read());
@@ -382,6 +323,7 @@ TEST_P(LogFileRWTest, MarginalTrailer)
     ASSERT_EQ(static_cast<size_t>(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("");
     write("bar");
+    resetReader();
     ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("", read());
     ASSERT_EQ("bar", read());
@@ -396,6 +338,7 @@ TEST_P(LogFileRWTest, MarginalTrailer2)
     write(repeatedString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("bar");
+    resetReader();
     ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -411,6 +354,7 @@ TEST_P(LogFileRWTest, ShortTrailer)
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
     write("");
     write("bar");
+    resetReader();
     ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("", read());
     ASSERT_EQ("bar", read());
@@ -423,6 +367,7 @@ TEST_P(LogFileRWTest, AlignedEOF)
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
     write(repeatedString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
+    resetReader();
     ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("EOF", read());
 }
@@ -436,6 +381,7 @@ TEST_P(LogFileRWTest, RandomRead)
     {
         write(randomSkewedString(i, write_rd));
     }
+    resetReader();
     std::mt19937 read_rd(rand_seed);
     for (int i = 0; i < n; i++)
     {
@@ -449,6 +395,7 @@ TEST_P(LogFileRWTest, RandomRead)
 TEST_P(LogFileRWTest, ReadError)
 {
     write("foo");
+    resetReader();
     FailPointHelper::enableFailPoint(::DB::FailPoints::exception_when_read_from_log);
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, droppedBytes());
@@ -458,6 +405,7 @@ TEST_P(LogFileRWTest, ReadError)
 TEST_P(LogFileRWTest, BadRecordType)
 {
     write("foo");
+    resetReader();
     // Type is stored in header[`CHECKSUM_START_OFFSET`], break the type
     incrementByte(Format::CHECKSUM_START_OFFSET, 100);
     // Meeting a unknown type, consider its header size as `Format::HEADER_SIZE`
@@ -471,7 +419,8 @@ TEST_P(LogFileRWTest, BadRecordType)
 TEST_P(LogFileRWTest, TruncatedTrailingRecordIsIgnored)
 {
     write("foo");
-    shrinkSize(4); // Drop all payload as well as a header byte
+    shrinkSize(3 + sizeof(Format::MaxRecordType)); // Drop all payload as well as a header byte
+    resetReader();
     ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
     ASSERT_EQ(0, droppedBytes());
@@ -486,9 +435,10 @@ TEST_P(LogFileRWTest, TruncatedTrailingRecordIsNotIgnored)
         // raise an error.
         return;
     }
-    resetReader(WALRecoveryMode::AbsoluteConsistency);
+
     write("foo");
-    shrinkSize(4); // Drop all payload as well as a header byte
+    shrinkSize(3 + sizeof(Format::MaxRecordType)); // Drop all payload as well as a header byte
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
     ASSERT_GT(droppedBytes(), 0);
@@ -508,8 +458,9 @@ TEST_P(LogFileRWTest, BadLength)
     const int payload_size = PS::V3::Format::BLOCK_SIZE - header_size;
     write(repeatedString("bar", payload_size));
     write("foo");
-    // Least significant size byte is stored in header[4].
-    incrementByte(4, 1);
+    resetReader();
+    // Least significant size byte is stored in header[SizePos].
+    incrementByte(Format::CHECKSUM_FIELD_SIZE, 1);
     if (!recyclable_log)
     {
         ASSERT_EQ("foo", read());
@@ -533,6 +484,7 @@ TEST_P(LogFileRWTest, BadLengthAtEndIsIgnored)
     }
     write("foo");
     shrinkSize(1);
+    resetReader();
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(0, droppedBytes());
     ASSERT_EQ("", reportMessage());
@@ -558,11 +510,11 @@ TEST_P(LogFileRWTest, BadLengthAtEndIsNotIgnored)
 TEST_P(LogFileRWTest, ChecksumMismatch)
 {
     write("foooooo");
-    incrementByte(0, 14);
+    incrementByte(0, Format::HEADER_SIZE + 7);
     ASSERT_EQ("EOF", read());
     if (!recyclable_log)
     {
-        ASSERT_EQ(14, droppedBytes());
+        ASSERT_EQ(Format::HEADER_SIZE + 7, droppedBytes());
         ASSERT_EQ("OK", matchError("checksum mismatch"));
     }
     else
@@ -620,7 +572,7 @@ TEST_P(LogFileRWTest, MissingLastIsIgnored)
 {
     write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
-    shrinkSize(14);
+    shrinkSize(2 * (recyclable_log ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE));
     ASSERT_EQ("EOF", read());
     ASSERT_EQ("", reportMessage());
     ASSERT_EQ(0, droppedBytes());
@@ -637,7 +589,7 @@ TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
     resetReader(WALRecoveryMode::AbsoluteConsistency);
     write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
-    shrinkSize(14);
+    shrinkSize(2 * (recyclable_log ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE));
     ASSERT_EQ("EOF", read());
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: error reading trailing data"));
@@ -708,20 +660,25 @@ TEST_P(LogFileRWTest, Recycle)
     {
         return; // test is only valid for recycled logs
     }
+
     write("foo");
     write("bar");
     write("baz");
     write("bif");
     write("blitz");
-    while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
     {
         write("xxxxxxxxxxxxxxxx");
     }
-    const size_t content_size_before_overwrite = getReaderContents().size();
+    const size_t content_size_before_overwrite = writtenBytes();
 
     // Overwrite some record with same log file number
-    std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ log_file_num,
+        /*recycle_log*/ recyclable_log);
+
     String text_to_write = "foooo";
     ReadBufferFromString foo(text_to_write);
     recycle_writer->addRecord(foo, text_to_write.size());
@@ -730,8 +687,8 @@ TEST_P(LogFileRWTest, Recycle)
     recycle_writer->addRecord(bar, text_to_write.size());
 
     // Check that we should only read new records overwrited (with the same log number)
-    ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-    ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
     ASSERT_EQ("foooo", read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -748,16 +705,21 @@ TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
     write("baz");
     write("bif");
     write("blitz");
-    while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
     {
         write("xxxxxxxxxxxxxxxx");
     }
-    const size_t content_size_before_overwrite = getReaderContents().size();
+    const size_t content_size_before_overwrite = writtenBytes();
 
     // Overwrite some record with another log file number
     size_t overwrite_log_num = log_file_num + 1;
-    std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ overwrite_log_num, /*recycle_log*/ recyclable_log);
+
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ overwrite_log_num,
+        /*recycle_log*/ recyclable_log);
+
     String text_to_write = "foooo";
     ReadBufferFromString foo(text_to_write);
     recycle_writer->addRecord(foo, text_to_write.size());
@@ -765,8 +727,8 @@ TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
     ReadBufferFromString bar(text_to_write);
     recycle_writer->addRecord(bar, text_to_write.size());
 
-    ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-    ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
     // read with old log number
     ASSERT_EQ("EOF", read());
 
@@ -790,27 +752,31 @@ TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
     }
     write("foo");
     write("bar");
-    size_t boundary = getReaderContents().size();
+    size_t boundary = writtenBytes();
     write("baz");
     write("bif");
     write("blitz");
     size_t num_writes_stuff = 0;
-    while (getReaderContents().size() < PS::V3::Format::BLOCK_SIZE * 2)
+    while (writtenBytes() < PS::V3::Format::BLOCK_SIZE * 2)
     {
         write("xxxxxxxxxxxxxxxx");
         num_writes_stuff++;
     }
-    const size_t content_size_before_overwrite = getReaderContents().size();
+    const size_t content_size_before_overwrite = writtenBytes();
 
     // Overwrite some record with same log file number
-    std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
-    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+
+    std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(
+        file_name,
+        provider,
+        /*log_num*/ log_file_num,
+        /*recycle_log*/ recyclable_log);
     String text_to_write = repeatedString("A", boundary - PS::V3::Format::RECYCLABLE_HEADER_SIZE);
     ReadBufferFromString foo(text_to_write);
     recycle_writer->addRecord(foo, text_to_write.size());
 
-    ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
-    ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
+    ASSERT_GE(writtenBytes(), PS::V3::Format::BLOCK_SIZE * 2);
+    ASSERT_EQ(writtenBytes(), content_size_before_overwrite);
     // read with old log number
     ASSERT_EQ(text_to_write, read());
     ASSERT_EQ("baz", read());

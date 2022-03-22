@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/types.h>
 
@@ -24,23 +39,23 @@ namespace PS::V3
  *       +-----+-------------+--+----+----------+------+-- ... ----+
  * File  | r0  |        r1   |P | r2 |    r3    |  r4  |           |
  *       +-----+-------------+--+----+----------+------+-- ... ----+
- *       <--- kBlockSize ------>|<-- kBlockSize ------>|
+ *       <---- BlockSize ------>|<--- BlockSize ------>|
  *  rn = variable size records
  *  P = Padding
  *
- * Data is written out in kBlockSize chunks. If next record does not fit
+ * Data is written out in BlockSize chunks. If next record does not fit
  * into the space left, the leftover space will be padded with \0.
  *
  * Legacy record format:
  *
  * +--------------+-----------+-----------+--- ... ---+
- * |CheckSum (4B) | Size (2B) | Type (1B) | Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Payload   |
  * +--------------+-----------+-----------+--- ... ---+
  *
- * CheckSum = 32bit hash computed over the record type and payload using checksum algo
+ * CheckSum = 64bit hash computed over the record type and payload using checksum algo (CRC64)
  * Size = Length of the payload data
  * Type = Type of record
- *        (kZeroType, kFullType, kFirstType, kLastType, kMiddleType )
+ *        (ZeroType, FullType, FirstType, LastType, MiddleType)
  *        The type is used to group a bunch of records together to represent
  *        blocks that are larger than kBlockSize
  * Payload = Byte stream as long as specified by the payload size
@@ -48,18 +63,19 @@ namespace PS::V3
  * Recyclable record format:
  *
  * +--------------+-----------+-----------+----------------+--- ... ---+
- * |CheckSum (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
  * +--------------+-----------+-----------+----------------+--- ... ---+
  *
  * Same as above, with the addition of
  * Log number = 32bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
-class LogWriter final
+class LogWriter final : private Allocator<false>
 {
 public:
     LogWriter(
-        std::unique_ptr<WriteBufferFromFileBase> && dest_,
+        String path_,
+        const FileProviderPtr & file_provider_,
         Format::LogNumberType log_number_,
         bool recycle_log_files_,
         bool manual_flush_ = false);
@@ -69,9 +85,9 @@ public:
 
     ~LogWriter();
 
-    void addRecord(ReadBuffer & payload, size_t payload_size);
+    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void flush();
+    void flush(const WriteLimiterPtr & write_limiter = nullptr);
 
     void close();
 
@@ -85,14 +101,26 @@ public:
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);
 
+    void resetBuffer();
+
 private:
-    std::unique_ptr<WriteBufferFromFileBase> dest;
+    String path;
+    FileProviderPtr file_provider;
+
+    WritableFilePtr log_file;
+
     size_t block_offset; // Current offset in block
     Format::LogNumberType log_number;
     const bool recycle_log_files;
     // If true, it does not flush after each write. Instead it relies on the upper
     // layer to manually does the flush by calling ::flush()
     const bool manual_flush;
+
+    size_t written_bytes = 0;
+
+    char * buffer;
+    size_t buffer_size = Format::BLOCK_SIZE;
+    WriteBuffer write_buffer;
 };
 } // namespace PS::V3
 } // namespace DB

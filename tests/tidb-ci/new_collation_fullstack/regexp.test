@@ -1,0 +1,83 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t
+mysql> create table test.t (data varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, data_not_null varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci not null, pattern varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, pattern_not_null varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci not null); 
+mysql> insert into test.t values ('aaaa', 'AAAA', '^a.*', '^A.*'), ('abcd', 'abcd', null, '^a..d$'), (null, 'bbb', 'bb$', 'bb$'),('中文测试','中文测试','中文','^....$'),('中English混合','中English混合','^中english','^..nglisH..$');
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp '^a', data_not_null regexp '^a' from test.t;
++------------------+---------------------------+
+| data regexp '^a' | data_not_null regexp '^a' |
++------------------+---------------------------+
+|                1 |                         1 |
+|                1 |                         1 |
+|             NULL |                         0 |
+|                0 |                         0 |
+|                0 |                         0 |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp 'A$', data_not_null regexp 'A$' from test.t;
++------------------+---------------------------+
+| data regexp 'A$' | data_not_null regexp 'A$' |
++------------------+---------------------------+
+|                0 |                         1 |
+|                0 |                         0 |
+|             NULL |                         0 |
+|                0 |                         0 |
+|                0 |                         0 |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp '^....$', data_not_null regexp '^....$' from test.t;
++----------------------+-------------------------------+
+| data regexp '^....$' | data_not_null regexp '^....$' |
++----------------------+-------------------------------+
+|                    1 |                             1 |
+|                    1 |                             1 |
+|                 NULL |                             0 |
+|                    1 |                             1 |
+|                    0 |                             0 |
++----------------------+-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp null, data_not_null regexp null from test.t;
++------------------+---------------------------+
+| data regexp null | data_not_null regexp null |
++------------------+---------------------------+
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
+|             NULL |                      NULL |
++------------------+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data regexp pattern, data_not_null regexp pattern, data regexp pattern_not_null, data_not_null regexp pattern_not_null from test.t;
++---------------------+------------------------------+------------------------------+---------------------------------------+
+| data regexp pattern | data_not_null regexp pattern | data regexp pattern_not_null | data_not_null regexp pattern_not_null |
++---------------------+------------------------------+------------------------------+---------------------------------------+
+|                   1 |                            0 |                            0 |                                     1 |
+|                NULL |                         NULL |                            1 |                                     1 |
+|                NULL |                            1 |                         NULL |                                     1 |
+|                   1 |                            1 |                            1 |                                     1 |
+|                   0 |                            0 |                            0 |                                     1 |
++---------------------+------------------------------+------------------------------+---------------------------------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (data binary(10), pattern binary(10)); 
+mysql> insert into test.t values('aa','AA'),('aa','(?i)AA');
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select data, pattern, data regexp pattern from test.t;
++------------------------+------------------------+---------------------+
+| data                   | pattern                | data regexp pattern |
++------------------------+------------------------+---------------------+
+| aa\0\0\0\0\0\0\0\0     | AA\0\0\0\0\0\0\0\0     |                   0 |
+| aa\0\0\0\0\0\0\0\0     | (?i)AA\0\0\0\0         |                   1 |
++------------------------+------------------------+---------------------+

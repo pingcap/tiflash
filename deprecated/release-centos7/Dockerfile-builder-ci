@@ -1,6 +1,0 @@
-FROM hub.pingcap.net/tiflash/tiflash-builder:latest
-
-USER root
-WORKDIR /root/
-
-ENV HOME /root/
