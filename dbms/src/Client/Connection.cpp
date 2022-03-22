@@ -64,8 +64,8 @@ void Connection::connect()
             disconnect();
 
         LOG_FMT_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}. {}, {}",
-                      default_database.empty() ? "(not specified)" : default_database, user,
-                      static_cast<bool>(secure) ? ". Secure" : "", static_cast<bool>(compression) ? "" : ". Uncompressed");
+                      (default_database.empty() ? "(not specified)" : default_database), user,
+                      (static_cast<bool>(secure) ? ". Secure" : ""), (static_cast<bool>(compression) ? "" : ". Uncompressed"));
         if (static_cast<bool>(secure))
         {
 #if Poco_NetSSL_FOUND
@@ -270,7 +270,7 @@ bool Connection::ping()
     }
     catch (const Poco::Exception & e)
     {
-        LOG_FMT_TRACE(log_wrapper.get(), e.displayText());
+        LOG_TRACE(log_wrapper.get(), e.displayText());
         return false;
     }
 
@@ -467,7 +467,7 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
     else
         msg << ", no compression.";
 
-    LOG_FMT_DEBUG(log_wrapper.get(), msg.rdbuf());
+    LOG_DEBUG(log_wrapper.get(), msg.rdbuf());
 }
 
 
