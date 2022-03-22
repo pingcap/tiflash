@@ -2487,13 +2487,9 @@ void ExpressionAnalyzer::appendAggregateFunctionsArguments(ExpressionActionsChai
     initChain(chain, source_columns);
     ExpressionActionsChain::Step & step = chain.steps.back();
 
-    for (size_t i = 0; i < aggregate_descriptions.size(); ++i)
-    {
-        for (size_t j = 0; j < aggregate_descriptions[i].argument_names.size(); ++j)
-        {
-            step.required_output.push_back(aggregate_descriptions[i].argument_names[j]);
-        }
-    }
+    for (const auto & aggregate_description : aggregate_descriptions)
+        for (const auto & name : aggregate_description.argument_names)
+            step.required_output.push_back(name);
 
     getActionsBeforeAggregation(select_query->select_expression_list, step.actions, only_types);
 
@@ -2546,9 +2542,9 @@ bool ExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, bool only
     getRootActions(select_query->order_expression_list, only_types, false, step.actions);
 
     ASTs asts = select_query->order_expression_list->children;
-    for (size_t i = 0; i < asts.size(); ++i)
+    for (const auto & i :asts)
     {
-        ASTOrderByElement * ast = typeid_cast<ASTOrderByElement *>(asts[i].get());
+        ASTOrderByElement * ast = typeid_cast<ASTOrderByElement *>(i.get());
         if (!ast || ast->children.empty())
             throw Exception("Bad order expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
         ASTPtr order_expression = ast->children.at(0);
