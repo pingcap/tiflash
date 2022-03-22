@@ -50,6 +50,12 @@ public:
 
     // just for test
     PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+    // just for test
+    PageDirectoryFactory & setBlobStats(BlobStore::BlobStats & blob_stats_)
+    {
+        blob_stats = &blob_stats_;
+        return *this;
+    }
 
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
