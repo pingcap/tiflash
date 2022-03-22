@@ -63,8 +63,9 @@ void Connection::connect()
         if (connected)
             disconnect();
 
-        LOG_TRACE(log_wrapper.get(), "Connecting. Database: " << (default_database.empty() ? "(not specified)" : default_database) << ". User: " << user << (static_cast<bool>(secure) ? ". Secure" : "") << (static_cast<bool>(compression) ? "" : ". Uncompressed"));
-
+        LOG_FMT_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}. {}, {}",
+                      default_database.empty() ? "(not specified)" : default_database, user,
+                      static_cast<bool>(secure) ? ". Secure" : "", static_cast<bool>(compression) ? "" : ". Uncompressed");
         if (static_cast<bool>(secure))
         {
 #if Poco_NetSSL_FOUND
@@ -90,7 +91,7 @@ void Connection::connect()
         sendHello();
         receiveHello();
 
-        LOG_TRACE(log_wrapper.get(), "Connected to " << server_name << " server version " << server_version_major << "." << server_version_minor << "." << server_revision << ".");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.", server_name, server_version_major, server_version_minor, server_revision);
     }
     catch (Poco::Net::NetException & e)
     {
@@ -232,7 +233,7 @@ void Connection::forceConnected()
     }
     else if (!ping())
     {
-        LOG_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
         connect();
     }
 }
@@ -269,7 +270,7 @@ bool Connection::ping()
     }
     catch (const Poco::Exception & e)
     {
-        LOG_TRACE(log_wrapper.get(), e.displayText());
+        LOG_FMT_TRACE(log_wrapper.get(), e.displayText());
         return false;
     }
 
@@ -466,7 +467,7 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
     else
         msg << ", no compression.";
 
-    LOG_DEBUG(log_wrapper.get(), msg.rdbuf());
+    LOG_FMT_DEBUG(log_wrapper.get(), msg.rdbuf());
 }
 
 
