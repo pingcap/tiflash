@@ -426,13 +426,16 @@ void MPPTask::scheduleOrWait()
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
-        double time_cost;
         {
             std::unique_lock lock(schedule_mu);
             schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
-            time_cost = stopwatch.elapsedSeconds();
-            GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
+            if (schedule_state == ScheduleState::FAILED)
+            {
+                throw Exception("{} is failed to schedule.", id.toString());
+            }
         }
+        auto time_cost = stopwatch.elapsedSeconds();
+        GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
         LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
     }
 }
