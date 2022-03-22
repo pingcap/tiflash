@@ -175,7 +175,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_FMT_TRACE(
             log,
-            "{} {}" < < < < " [valid rate={:.2f}] [file size={}]",
+            "{} {} [valid rate={:.2f}] [file size={}]",
             storage_name,
             page_file.toString(),
             valid_rate,
