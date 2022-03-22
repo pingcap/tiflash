@@ -253,10 +253,6 @@ void StoragePool::drop()
         data_storage->drop();
         log_storage->drop();
     }
-    else
-    {
-        // FIXME: drop data for this table
-    }
 }
 
 PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)

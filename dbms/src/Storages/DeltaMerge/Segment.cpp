@@ -1266,6 +1266,19 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     return merged;
 }
 
+SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
+{
+    auto new_segment = std::make_shared<Segment>(epoch, //
+                                            rowkey_range,
+                                            segment_id,
+                                            0,
+                                            delta,
+                                            stable);
+    new_segment->serialize(wbs.meta);
+    wbs.writeMeta();
+    return new_segment;
+}
+
 void Segment::check(DMContext &, const String &) const {}
 
 bool Segment::flushCache(DMContext & dm_context)
@@ -1318,6 +1331,18 @@ String Segment::info() const
                        stable->getDMFilesString(),
                        stable->getRows(),
                        stable->getBytes());
+}
+
+void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
+{
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+
+    wbs.removed_meta.delPage(segment_id);
+    wbs.removed_meta.delPage(delta->getId());
+    wbs.removed_meta.delPage(stable->getId());
+    wbs.writeAll();
+    stable->drop(file_provider);
 }
 
 Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
