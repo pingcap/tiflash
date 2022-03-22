@@ -84,16 +84,8 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    file_stream = std::make_shared<DMFileBlockInputStream>(
-        context.db_context,
-        /*max_version*/ MAX_UINT64,
-        /*clean_read*/ false,
-        column_file.getFile(),
-        *col_defs,
-        RowKeyRanges{column_file.segment_range},
-        RSOperatorPtr{},
-        ColumnCachePtr{},
-        IdSetPtr{});
+    DMFileBlockInputStreamBuilder builder(context.db_context);
+    file_stream = builder.build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)

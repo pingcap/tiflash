@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 
@@ -194,16 +195,10 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -232,23 +227,17 @@ try
         ASSERT_EQ(propertys.property_size(), 2);
         for (int i = 0; i < propertys.property_size(); i++)
         {
-            auto & property = propertys.property(i);
+            const auto & property = propertys.property(i);
             ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
             ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
         }
     }
     {
         // Test read after restore
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -288,8 +277,8 @@ try
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
     options.only_list_can_gc = true;
-    auto scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
-    ASSERT_TRUE(scanIds.empty());
+    auto scan_ids = DMFile::listAllInPath(file_provider, parent_path, options);
+    ASSERT_TRUE(scan_ids.empty());
 
     {
         // Write some data and finialize the file
@@ -310,24 +299,24 @@ try
     ASSERT_FALSE(dm_file->canGC());
     options.only_list_can_gc = false;
     // Now the file can be scaned
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
-    ASSERT_EQ(scanIds.size(), 1UL);
-    EXPECT_EQ(*scanIds.begin(), id);
+    scan_ids = DMFile::listAllInPath(file_provider, parent_path, options);
+    ASSERT_EQ(scan_ids.size(), 1UL);
+    EXPECT_EQ(*scan_ids.begin(), id);
     options.only_list_can_gc = true;
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
-    EXPECT_TRUE(scanIds.empty());
+    scan_ids = DMFile::listAllInPath(file_provider, parent_path, options);
+    EXPECT_TRUE(scan_ids.empty());
 
     // After enable GC, the file can be scaned with `can_gc=true`
     dm_file->enableGC();
     ASSERT_TRUE(dm_file->canGC());
     options.only_list_can_gc = false;
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
-    ASSERT_EQ(scanIds.size(), 1UL);
-    EXPECT_EQ(*scanIds.begin(), id);
+    scan_ids = DMFile::listAllInPath(file_provider, parent_path, options);
+    ASSERT_EQ(scan_ids.size(), 1UL);
+    EXPECT_EQ(*scan_ids.begin(), id);
     options.only_list_can_gc = true;
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
-    ASSERT_EQ(scanIds.size(), 1UL);
-    EXPECT_EQ(*scanIds.begin(), id);
+    scan_ids = DMFile::listAllInPath(file_provider, parent_path, options);
+    ASSERT_EQ(scan_ids.size(), 1UL);
+    EXPECT_EQ(*scan_ids.begin(), id);
 }
 CATCH
 
@@ -357,16 +346,10 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -429,16 +412,10 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -515,16 +492,10 @@ try
     ranges.emplace_back(HandleRange::newAll()); // full range
     auto test_read_range = [&](const HandleRange & range) {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::fromHandleRange(range)}, // Filtered by read_range
-            EMPTY_FILTER,
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::fromHandleRange(range)}); // Filtered by read_range
 
         Int64 num_rows_read = 0;
         stream->readPrefix();
@@ -624,16 +595,11 @@ try
         // Filtered by rough set filter
         auto filter = toRSFilter(i64_cd, range);
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            filter, // Filtered by rough set filter
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .setRSOperator(filter) // Filtered by rough set filter
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         Int64 num_rows_read = 0;
         stream->readPrefix();
@@ -724,16 +690,11 @@ try
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            filter, // Filtered by rough set filter
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .setRSOperator(filter) // Filtered by rough set filter
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         Int64 num_rows_read = 0;
         stream->readPrefix();
@@ -814,16 +775,11 @@ try
             id_set_ptr = std::make_shared<IdSet>(test_sets[test_index]);
 
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            EMPTY_FILTER,
-            column_cache_,
-            id_set_ptr);
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .setReadPacks(id_set_ptr) // filter by pack index
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         Int64 num_rows_read = 0;
         stream->readPrefix();
@@ -911,16 +867,10 @@ try
 
     {
         // Test Read
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -976,16 +926,10 @@ try
 
     {
         // Test Read
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1043,16 +987,10 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1209,16 +1147,10 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1302,16 +1234,10 @@ try
     for (const auto & range : ranges)
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols,
-            RowKeyRanges{range.range}, // Filtered by read_range
-            EMPTY_FILTER,
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols, RowKeyRanges{range.range}); // Filtered by read_range
 
         Int64 num_rows_read = 0;
         stream->readPrefix();
@@ -1416,16 +1342,10 @@ try
 
     {
         // Test read with new columns after ddl
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols_after_ddl,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1508,16 +1428,10 @@ try
 
     {
         // Test read with new columns after ddl
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols_after_ddl,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1577,16 +1491,10 @@ try
 
     {
         // Test read with new columns after ddl
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols_after_ddl,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -1646,16 +1554,10 @@ try
 
     {
         // Test read with new columns after ddl
-        auto stream = std::make_unique<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dm_file,
-            *cols_after_ddl,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache_)
+                          .build(dm_file, *cols_after_ddl, RowKeyRanges{RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         stream->readPrefix();

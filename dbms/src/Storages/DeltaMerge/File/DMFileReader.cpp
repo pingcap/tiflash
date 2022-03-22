@@ -15,8 +15,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
@@ -199,16 +202,14 @@ DMFileReader::Stream::Stream(
 DMFileReader::DMFileReader(
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
+    bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
     UInt64 max_read_version_,
     // filters
-    const RowKeyRanges & rowkey_ranges_,
-    const RSOperatorPtr & filter_,
-    const IdSetPtr & read_packs_,
+    DMFilePackFilter && pack_filter_,
     // caches
     const MarkCachePtr & mark_cache_,
-    const MinMaxIndexCachePtr & index_cache_,
     bool enable_column_cache_,
     const ColumnCachePtr & column_cache_,
     size_t aio_threshold,
@@ -221,16 +222,10 @@ DMFileReader::DMFileReader(
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(
-          dmfile_,
-          index_cache_,
-          rowkey_ranges_,
-          filter_,
-          read_packs_,
-          file_provider_,
-          read_limiter)
+    , pack_filter(pack_filter_)
     , handle_res(pack_filter.getHandleRes())
     , use_packs(pack_filter.getUsePacks())
+    , is_common_handle(is_common_handle_)
     , skip_packs_by_column(read_columns.size(), 0)
     , mark_cache(mark_cache_)
     , enable_column_cache(enable_column_cache_ && column_cache_)
@@ -241,19 +236,6 @@ DMFileReader::DMFileReader(
     , single_file_mode(dmfile_->isSingleFileMode())
     , log(&Poco::Logger::get("DMFileReader"))
 {
-    if (dmfile->getStatus() != DMFile::Status::READABLE)
-        throw Exception("DMFile [" + DB::toString(dmfile->fileId())
-                        + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
-
-    // if `rowkey_ranges` is empty, we unconditionally read all packs
-    // `rowkey_ranges` and `is_common_handle`  will only be useful in clean read mode.
-    // It is safe to ignore them here.
-    if (unlikely(rowkey_ranges_.empty() && enable_clean_read_))
-        throw Exception("rowkey ranges shouldn't be empty with clean-read enabled", ErrorCodes::LOGICAL_ERROR);
-
-    pack_filter.init();
-    is_common_handle = !rowkey_ranges_.empty() && rowkey_ranges_[0].is_common_handle;
-
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
@@ -387,7 +369,7 @@ Block DMFileReader::read()
                 }
                 else if (cd.id == TAG_COLUMN_ID)
                 {
-                    column = cd.type->createColumnConst(read_rows, Field((UInt64)(pack_stats[start_pack_id].first_tag)));
+                    column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
                 }
 
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});

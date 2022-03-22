@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaPlace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -722,21 +723,20 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     if (unlikely(!read_file))
         throw Exception("Logical error: failed to find split point");
 
-    DMFileBlockInputStream stream(dm_context.db_context,
-                                  MAX_UINT64,
-                                  false,
-                                  read_file,
-                                  {getExtraHandleColumnDefine(is_common_handle)},
-                                  {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
-                                  EMPTY_FILTER,
-                                  stable_snap->getColumnCaches()[file_index],
-                                  read_pack);
+    DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+    auto stream = builder
+                      .setColumnCache(stable_snap->getColumnCaches()[file_index])
+                      .setReadPacks(read_pack)
+                      .build(
+                          read_file,
+                          /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
+                          /*rowkey_ranges*/ {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 
-    stream.readPrefix();
-    auto block = stream.read();
+    stream->readPrefix();
+    auto block = stream->read();
     if (!block)
         throw Exception("Unexpected empty block");
-    stream.readSuffix();
+    stream->readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
     RowKeyValue split_point(rowkey_column.getRowKeyValue(read_row_in_pack));

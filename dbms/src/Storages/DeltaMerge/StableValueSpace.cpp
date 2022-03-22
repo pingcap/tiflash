@@ -14,9 +14,11 @@
 
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -201,18 +203,11 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             //
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
-            BlockInputStreamPtr data_stream = std::make_shared<DMFileBlockInputStream>(
-                context.db_context,
-                std::numeric_limits<UInt64>::max(),
-                false,
-                file,
-                read_columns,
-                RowKeyRanges{rowkey_range},
-                nullptr,
-                nullptr,
-                IdSetPtr{},
-                UINT64_MAX, // because we just read one pack at a time
-                true);
+            DMFileBlockInputStreamBuilder builder(context.db_context);
+            BlockInputStreamPtr data_stream = builder
+                                                  .setRowsThreshold(UINT64_MAX) // because we just read one pack at a time
+                                                  .onlyReadOnePackEveryTime()
+                                                  .build(file, read_columns, RowKeyRanges{rowkey_range});
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -333,17 +328,13 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
-        streams.push_back(std::make_shared<DMFileBlockInputStream>( //
-            context.db_context,
-            max_data_version,
-            enable_clean_read,
-            stable->files[i],
-            read_columns,
-            rowkey_ranges,
-            filter,
-            column_caches[i],
-            IdSetPtr{},
-            expected_block_size));
+        DMFileBlockInputStreamBuilder builder(context.db_context);
+        builder
+            .enableCleanRead(enable_clean_read, max_data_version)
+            .setRSOperator(filter)
+            .setColumnCache(column_caches[i])
+            .setRowsThreshold(expected_block_size);
+        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

@@ -16,6 +16,7 @@
 
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -69,20 +70,18 @@ public:
     DMFileReader(
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
+        bool is_common_handle_,
         // Only set this param to true when
         // 1. There is no delta.
         // 2. You don't need pk, version and delete_tag columns
         // If you have no idea what it means, then simply set it to false.
         bool enable_clean_read_,
         // The the MVCC filter version. Used by clean read check.
-        UInt64 max_data_version_,
+        UInt64 max_read_version_,
         // filters
-        const RowKeyRanges & rowkey_ranges_,
-        const RSOperatorPtr & filter_,
-        const IdSetPtr & read_packs_, // filter by pack index
+        DMFilePackFilter && pack_filter_,
         // caches
         const MarkCachePtr & mark_cache_,
-        const MinMaxIndexCachePtr & index_cache_,
         bool enable_column_cache_,
         const ColumnCachePtr & column_cache_,
         size_t aio_threshold,
@@ -124,7 +123,7 @@ private:
     const std::vector<RSResult> & handle_res; // alias of handle_res in pack_filter
     const std::vector<UInt8> & use_packs; // alias of use_packs in pack_filter
 
-    bool is_common_handle;
+    const bool is_common_handle;
 
     std::vector<size_t> skip_packs_by_column;
 
