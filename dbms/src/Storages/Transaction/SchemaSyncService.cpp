@@ -60,7 +60,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             }
             catch (const Exception & e)
             {
-                LOG_FMT_ERROR(log, "{} failed by {} \n stack : {}",stage, e.displayText(), e.getStackTrace().toString());
+                LOG_FMT_ERROR(log, "{} failed by {} \n stack : {}", stage, e.displayText(), e.getStackTrace().toString());
             }
             catch (const Poco::Exception & e)
             {
