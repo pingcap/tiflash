@@ -2723,7 +2723,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "hard_limit_exceeded_count",
+          "title": "Hard Limit Exceeded Count",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2842,7 +2842,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Waiting Duration",
+          "title": "Task Waiting Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
