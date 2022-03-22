@@ -542,8 +542,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", 
-                            name, DB::toString(rec.page_id), DB::toString(rec.ori_page_id));
+            LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, DB::toString(rec.page_id), DB::toString(rec.ori_page_id));
         }
         else
         {
@@ -579,8 +578,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             }
             catch (DB::Exception & e)
             {
-                LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", 
-                                name, DB::toString(rec.page_id), DB::toString(rec.ori_page_id));
+                LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, DB::toString(rec.page_id), DB::toString(rec.ori_page_id));
             }
             break;
         case WriteBatch::WriteType::UPSERT:

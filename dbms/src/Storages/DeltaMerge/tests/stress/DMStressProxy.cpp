@@ -99,8 +99,7 @@ void DMStressProxy::genMultiThread()
 
     UInt64 gen_rows_per_thread = opts.gen_total_rows / opts.gen_concurrency + 1;
     UInt64 gen_total_rows = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row.
-    LOG_FMT_INFO(log, "Generate concurrency: {} Generate rows per thread: {} Generate total rows: {}", 
-                 opts.gen_concurrency, gen_rows_per_thread, gen_total_rows);
+    LOG_FMT_INFO(log, "Generate concurrency: {} Generate rows per thread: {} Generate total rows: {}", opts.gen_concurrency, gen_rows_per_thread, gen_total_rows);
 
     gen_threads.reserve(opts.gen_concurrency);
     for (UInt32 i = 0; i < opts.gen_concurrency; i++)

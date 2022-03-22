@@ -416,8 +416,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
-                LOG_FMT_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", 
-                             new_region->toString(true), e.displayText());
+                LOG_FMT_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
@@ -522,8 +521,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_WARNING(log, "{}: [region {}] is not found at [term {}, index {}], might be removed already", 
-                    __PRETTY_FUNCTION__, region_id, term, index);
+        LOG_FMT_WARNING(log, "{}: [region {}] is not found at [term {}, index {}], might be removed already", __PRETTY_FUNCTION__, region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
 

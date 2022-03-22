@@ -60,8 +60,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_FMT_WARNING(&Poco::Logger::get("RegionPersister"), "Persisting big region: {} with data info: {}, serialized size {}", 
-                        region.toString(), region.dataInfo(), region_size);
+        LOG_FMT_WARNING(&Poco::Logger::get("RegionPersister"), "Persisting big region: {} with data info: {}, serialized size {}", region.toString(), region.dataInfo(), region_size);
     }
 }
 

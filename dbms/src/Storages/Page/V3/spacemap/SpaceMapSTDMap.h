@@ -124,8 +124,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", 
-                            offset, length, it->first, it->second);
+            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
             return false;
         }
 
@@ -195,8 +194,7 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert. [size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", 
-                          size, hint_biggest_offset, hint_biggest_cap, scan_biggest_offset, scan_biggest_cap);
+            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert. [size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", size, hint_biggest_offset, hint_biggest_cap, scan_biggest_offset, scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
@@ -290,8 +288,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", 
-                                it->first, it->second, it_prev->first, it_prev->second);
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
                 free_map.erase(it);
                 return false;
             }
@@ -302,8 +299,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", 
-                                it->first, it->second, it_next->first, it_next->second);
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
                 free_map.erase(it);
                 return false;
             }

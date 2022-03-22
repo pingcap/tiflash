@@ -106,8 +106,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     {
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
         {
-            LOG_FMT_INFO(log, "{}: region {}, cache size {}, seconds since last {}", 
-                         __FUNCTION__, region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+            LOG_FMT_INFO(log, "{}: region {}, cache size {}, seconds since last {}", __FUNCTION__, region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
             return true;
         }
     }
@@ -268,7 +267,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         auto it = regions.find(region_id);
         if (it == regions.end())
         {
-            LOG_FMT_WARNING(log,"{}: region {} does not exist.", __FUNCTION__, region_id);
+            LOG_FMT_WARNING(log, "{}: region {} does not exist.", __FUNCTION__, region_id);
             return;
         }
 
@@ -354,8 +353,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip flush.
-            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__), "Got error while reading region committed cache: {}. Skip flush region and keep original cache.", 
-                            e.displayText());
+            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__), "Got error while reading region committed cache: {}. Skip flush region and keep original cache.", e.displayText());
         }
         else
             first_exception = std::current_exception();

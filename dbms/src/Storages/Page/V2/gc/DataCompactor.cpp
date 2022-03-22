@@ -81,8 +81,7 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
     }
     else
     {
-        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], [files without valid page={}] Config{{ {} }}", 
-                      storage_name, result.candidate_size, result.bytes_migrate, candidates.files_without_valid_pages.size(), config.toDebugString());
+        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], [files without valid page={}] Config{{ {} }}", storage_name, result.candidate_size, result.bytes_migrate, candidates.files_without_valid_pages.size(), config.toDebugString());
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -204,8 +203,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         {
             num_candidates_with_high_rate++;
             candidate_total_size_with_lower_rate += 0;
-            LOG_FMT_INFO(log, "{} collect {} with high valid rate as candidates [valid rate={}] [file size={}]", 
-                         storage_name, page_file.toString(), DB::toString(valid_rate, 2), file_size);
+            LOG_FMT_INFO(log, "{} collect {} with high valid rate as candidates [valid rate={}] [file size={}]", storage_name, page_file.toString(), DB::toString(valid_rate, 2), file_size);
         }
 
         bool stop = false;
@@ -300,8 +298,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
         file_provider,
         PageFile::Type::Temp,
         page_file_log);
-    LOG_FMT_INFO(log, "{} GC decide to migrate {} files, containing {} pages to PageFile_{}_{}, path {}",
-                 storage_name, candidates.compact_candidates.size(), migrate_page_count, gc_file.getFileId(), gc_file.getLevel(), pf_parent_path);
+    LOG_FMT_INFO(log, "{} GC decide to migrate {} files, containing {} pages to PageFile_{}_{}, path {}", storage_name, candidates.compact_candidates.size(), migrate_page_count, gc_file.getFileId(), gc_file.getLevel(), pf_parent_path);
 
     PageEntriesEdit gc_file_edit;
     size_t bytes_written = 0;
@@ -378,8 +375,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             PageFile::Type::Temp,
             page_file_log);
 
-        LOG_FMT_INFO(log, "{} GC decide to link PageFile_{}_{} to PageFile_{}_{}", 
-                     storage_name, hard_link_file.getFileId(), hard_link_file.getLevel(), page_file.getFileId(), page_file.getLevel());
+        LOG_FMT_INFO(log, "{} GC decide to link PageFile_{}_{} to PageFile_{}_{}", storage_name, hard_link_file.getFileId(), hard_link_file.getLevel(), page_file.getFileId(), page_file.getLevel());
 
         PageEntriesEdit edit;
         if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit))
@@ -413,8 +409,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             (void)file_id;
             num_migrate_pages += num_pages;
         }
-        LOG_FMT_INFO(log, "{} GC have migrated {} Pages with sequence {} to PageFile_{}_{}",
-                     storage_name, num_migrate_pages, compact_seq, migrate_file_id.first, migrate_file_id.second);
+        LOG_FMT_INFO(log, "{} GC have migrated {} Pages with sequence {} to PageFile_{}_{}", storage_name, num_migrate_pages, compact_seq, migrate_file_id.first, migrate_file_id.second);
     }
     return {std::move(gc_file_edit), bytes_written};
 }
@@ -507,8 +502,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                     entries_migrated += entries_batch.size();
 #endif
                     const auto curr_bytes_written = migrate_entries(entries_batch);
-                    LOG_FMT_DEBUG(log, "{} DataCompactor::mergeValidPages run with a samller batch [start_idx={}] [end_idx={}] [curr_bytes_written={}]", 
-                                  storage_name, start_idx, end_idx, curr_bytes_written);
+                    LOG_FMT_DEBUG(log, "{} DataCompactor::mergeValidPages run with a samller batch [start_idx={}] [end_idx={}] [curr_bytes_written={}]", storage_name, start_idx, end_idx, curr_bytes_written);
                     bytes_written += curr_bytes_written;
 
                     start_idx = end_idx;
@@ -560,8 +554,7 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
     }
     migrate_stream << "]";
     remove_stream << "]";
-    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", 
-                  storage_name, migrate_file_id.first, migrate_file_id.second, migrate_stream.str(), remove_stream.str(), config.toDebugString());
+    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", storage_name, migrate_file_id.first, migrate_file_id.second, migrate_stream.str(), remove_stream.str(), config.toDebugString());
 }
 
 

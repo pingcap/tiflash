@@ -200,8 +200,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
         auto page_file
             = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
-        LOG_FMT_DEBUG(log, "{} No PageFile can be reused for write, create new PageFile_{}_0 for write", 
-                      storage_name, DB::toString(max_file_id + 1));
+        LOG_FMT_DEBUG(log, "{} No PageFile can be reused for write, create new PageFile_{}_0 for write", storage_name, DB::toString(max_file_id + 1));
         write_file = page_file;
         write_file_writer = write_file.createWriter(config.sync_on_write, true);
     }
@@ -482,8 +481,7 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_FMT_TRACE(log, "{} Before gc, deletes[{}], puts[{}], refs[{}], upserts[{}]", 
-                  storage_name, deletes, puts, refs, upserts);
+    LOG_FMT_TRACE(log, "{} Before gc, deletes[{}], puts[{}], refs[{}], upserts[{}]", storage_name, deletes, puts, refs, upserts);
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -592,8 +590,7 @@ bool PageStorage::gc()
     }
 
     if (!should_merge)
-        LOG_FMT_TRACE(log, "{} GC exit without merging. merge file size: {}, candidate size: {}", 
-                      storage_name, merge_files.size(), candidate_total_size);
+        LOG_FMT_TRACE(log, "{} GC exit without merging. merge file size: {}, candidate size: {}", storage_name, merge_files.size(), candidate_total_size);
     return should_merge;
 }
 
@@ -699,10 +696,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
     const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     {
         const auto smallest_id_level = page_files_to_compact.begin()->fileIdLevel();
-        LOG_FMT_INFO(log, "{} Compact legacy PageFile_{}_{} to PageFile_{}_{} into checkpoint PageFile_{}_{}", 
-                     storage_name, smallest_id_level.first, smallest_id_level.second, 
-                     largest_id_level.first, largest_id_level.second, 
-                     largest_id_level.first, largest_id_level.second);
+        LOG_FMT_INFO(log, "{} Compact legacy PageFile_{}_{} to PageFile_{}_{} into checkpoint PageFile_{}_{}", storage_name, smallest_id_level.first, smallest_id_level.second, largest_id_level.first, largest_id_level.second, largest_id_level.first, largest_id_level.second);
     }
     auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
@@ -808,8 +802,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
 
     // Create a tmp PageFile for migration
     PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, file_provider, PageFile::Type::Temp, page_file_log);
-    LOG_FMT_INFO(log, "{} GC decide to merge {} files, containing {} regions to PageFile_{}_{}", 
-                 storage_name, merge_files.size(), migrate_page_count, gc_file.getFileId(), gc_file.getLevel());
+    LOG_FMT_INFO(log, "{} GC decide to merge {} files, containing {} regions to PageFile_{}_{}", storage_name, merge_files.size(), migrate_page_count, gc_file.getFileId(), gc_file.getLevel());
 
     // We should check these nums, if any of them is non-zero, we should set `gc_file` to formal.
     size_t num_successful_migrate_pages = 0;
@@ -836,8 +829,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
             {
-                LOG_FMT_TRACE(log, "{} No valid pages from PageFile_{}_{} to PageFile_{}_{}", 
-                              storage_name, file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
+                LOG_FMT_TRACE(log, "{} No valid pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
                 continue;
             }
 
@@ -883,8 +875,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
                 gc_file_writer->write(wb, gc_file_edit);
             }
 
-            LOG_FMT_TRACE(log, "{} Migrate {} pages from PageFile_{}_{} to PageFile_{}_{}", 
-                          storage_name, page_id_and_entries.size(), file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
+            LOG_FMT_TRACE(log, "{} Migrate {} pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, page_id_and_entries.size(), file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
         }
 
 #if 0
@@ -926,8 +917,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
     else
     {
         gc_file.setFormal();
-        LOG_FMT_INFO(log, "{} GC have migrated {} regions and {} RefPages and {} DelPage to PageFile_{}_{}", 
-                     storage_name, num_successful_migrate_pages, num_valid_ref_pages, num_del_page_meta, id.first, id.second);
+        LOG_FMT_INFO(log, "{} GC have migrated {} regions and {} RefPages and {} DelPage to PageFile_{}_{}", storage_name, num_successful_migrate_pages, num_valid_ref_pages, num_del_page_meta, id.first, id.second);
     }
     return gc_file_edit;
 }

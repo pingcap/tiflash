@@ -102,8 +102,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_FMT_INFO(log, "start to sync schemas. current version is: {} and try to sync schema version to: {}",
-                     std::to_string(cur_version), std::to_string(version));
+        LOG_FMT_INFO(log, "start to sync schemas. current version is: {} and try to sync schema version to: {}", std::to_string(cur_version), std::to_string(version));
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
