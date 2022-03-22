@@ -218,7 +218,7 @@ BlockInputStreams StorageMerge::read(
         auto & table_lock = it->second;
 
         /// If there are only virtual columns in query, you must request at least one other column.
-        if (real_column_names.size() == 0)
+        if (real_column_names.empty())
             real_column_names.push_back(ExpressionActions::getSmallestColumn(table->getColumns().getAllPhysical()));
 
         /// Substitute virtual column for its value when querying tables.
@@ -339,7 +339,7 @@ BlockInputStreams StorageMerge::read(
 }
 
 /// Construct a block consisting only of possible values of virtual columns
-Block StorageMerge::getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables) const
+Block StorageMerge::getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables)
 {
     auto column = ColumnString::create();
 

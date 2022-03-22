@@ -61,7 +61,7 @@ Block AggregatingBlockInputStream::readImpl()
             if (!isCancelled())
             {
                 /// Flush data in the RAM to disk also. It's easier than merging on-disk and RAM data.
-                if (data_variants->size())
+                if (!data_variants->empty())
                     aggregator.writeToTemporaryFile(*data_variants, file_provider);
             }
 
