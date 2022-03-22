@@ -97,7 +97,11 @@ public:
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
     ParallelInputsProcessor(
-        const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_, const LoggerPtr & log_)
+        const BlockInputStreams & inputs_,
+        const BlockInputStreamPtr & additional_input_at_end_,
+        size_t max_threads_,
+        Handler & handler_,
+        const LoggerPtr & log_)
         : inputs(inputs_)
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))

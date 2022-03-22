@@ -393,9 +393,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                     context.getSettingsRef().enable_async_grpc_client),
                 tipb_exchange_receiver.encoded_task_meta_size(),
                 10,
-                /*req_id=*/ "",
-                /*executor_id=*/ "");
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/ "", /*executor_id=*/ "");
+                /*req_id=*/"",
+                /*executor_id=*/"");
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"");
         return ret;
     }
     else
