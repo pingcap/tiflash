@@ -93,10 +93,15 @@ public:
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
+    // Generate a project action for non-root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same, and
+    // guarantee that left/right block of join don't have duplicated column names.
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
         const String & column_prefix) const;
 
+    // Generate a project action for root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same.
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
         const std::vector<tipb::FieldType> & schema,
@@ -275,6 +280,27 @@ private:
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
+
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
+
+    NamesWithAliases genRootFinalProjectAliases(
+        const String & column_prefix,
+        const std::vector<Int32> & output_offsets) const;
+
+    // May change the source columns.
+    void appendCastForRootFinalProjection(
+        const ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        bool need_append_timezone_cast,
+        const BoolVec & need_append_type_cast_vec);
+
+    // return {need_append_type_cast, need_append_type_cast_vec}
+    // need_append_type_cast_vec: BoolVec of which one should append type cast.
+    // And need_append_type_cast_vec.size() == output_offsets.size().
+    std::pair<bool, BoolVec> isCastRequiredForRootFinalProjection(
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets) const;
 
     // all columns from table scan
     NamesAndTypes source_columns;
