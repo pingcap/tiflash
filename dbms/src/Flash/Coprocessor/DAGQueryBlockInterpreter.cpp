@@ -538,6 +538,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     {
         match_helper_name = JoinInterpreterHelper::genMatchHelperNameForLeftSemiFamily(input_streams_vec[0][0]->getHeader(), input_streams_vec[1][0]->getHeader());
         assert(!match_helper_name.empty());
+        assert(!input_streams_vec[0][0]->getHeader().has(match_helper_name) && !input_streams_vec[1][0]->getHeader().has(match_helper_name));
         columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
         join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
     }

@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -114,10 +115,11 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes
 
 String genMatchHelperNameForLeftSemiFamily(const Block & left_header, const Block & right_header)
 {
-    String match_helper_name = Join::match_helper_prefix;
-    for (int i = 1; left_header.has(match_helper_name) || right_header.has(match_helper_name); ++i)
+    size_t i = 0;
+    String match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, i);
+    while (left_header.has(match_helper_name) || right_header.has(match_helper_name))
     {
-        match_helper_name = Join::match_helper_prefix + std::to_string(i);
+        match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
     }
     return match_helper_name;
 }
