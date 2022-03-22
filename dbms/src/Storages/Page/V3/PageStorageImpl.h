@@ -65,7 +65,12 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
-    void clearExternalPagesCallbacks();
+    void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;
+
+    static bool isManifestsFileExists(const String & path);
+
+    static void createManifestsFileIfNeed(const String & path);
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
@@ -93,8 +98,10 @@ private:
 
     std::atomic<bool> gc_is_running = false;
 
+    const static String manifests_file_name;
+
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::vector<ExternalPageCallbacks>;
+    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 
