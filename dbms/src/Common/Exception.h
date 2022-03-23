@@ -29,8 +29,8 @@ class Logger;
 
 namespace DB
 {
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 class Exception : public Poco::Exception
 {
@@ -99,7 +99,7 @@ using Exceptions = std::vector<std::exception_ptr>;
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 

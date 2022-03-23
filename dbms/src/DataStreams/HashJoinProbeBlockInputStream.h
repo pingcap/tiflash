@@ -38,7 +38,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & join_probe_actions_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
     String getName() const override { return name; }
     Block getTotals() override;
@@ -48,7 +48,7 @@ protected:
     Block readImpl() override;
 
 private:
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
     ExpressionActionsPtr join_probe_actions;
 };
 

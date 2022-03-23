@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -34,12 +34,12 @@ class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     BlobStoreStatsTest()
-        : logger(getLogWithPrefix(nullptr, "BlobStoreStatsTest"))
+        : logger(Logger::get("BlobStoreStatsTest"))
     {}
 
 protected:
     BlobStore::Config config;
-    LogWithPrefixPtr logger;
+    LoggerPtr logger;
 };
 
 TEST_F(BlobStoreStatsTest, RestoreEmpty)

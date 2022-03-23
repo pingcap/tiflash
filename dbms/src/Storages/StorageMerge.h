@@ -70,7 +70,7 @@ private:
 
     StorageListWithLocks getSelectedTables() const;
 
-    Block getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables) const;
+    static Block getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables);
 
 protected:
     StorageMerge(
