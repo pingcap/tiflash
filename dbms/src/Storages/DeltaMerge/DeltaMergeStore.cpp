@@ -375,33 +375,42 @@ void DeltaMergeStore::drop()
     shutdown();
 
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
-    auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    std::stack<PageId> segment_ids;
-    while (segment_id)
     {
-        segment_ids.push(segment_id);
-        auto segment = id_to_segment[segment_id];
-        segment_id = segment->nextSegmentId();
-    }
-    WriteBatches wbs(*storage_pool);
-    while (!segment_ids.empty())
-    {
-        auto segment_id_to_drop = segment_ids.top();
-        auto segment_to_drop = id_to_segment[segment_id_to_drop];
-        segment_ids.pop();
-        if (!segment_ids.empty())
+        std::unique_lock lock(read_write_mutex);
+        auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+        std::stack<PageId> segment_ids;
+        while (segment_id)
         {
-            // This is not the last segment, so we need to set previous segment's next_segment_id to 0 to indicate that this segment has been dropped
-            auto previous_segment_id = segment_ids.top();
-            auto previous_segment = id_to_segment[previous_segment_id];
-            auto new_previous_segment = previous_segment->dropNextSegment(wbs);
-            segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
-            id_to_segment.emplace(previous_segment_id, new_previous_segment);
+            segment_ids.push(segment_id);
+            auto segment = id_to_segment[segment_id];
+            segment_id = segment->nextSegmentId();
         }
-        // The order to drop the meta and data of this segment doesn't matter,
-        // Because there is no segment pointing to this segment,
-        // so it won't be restored again even the drop process was interrupted by restart
-        segment_to_drop->drop(global_context.getFileProvider(), wbs);
+        auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
+        while (!segment_ids.empty())
+        {
+            auto segment_id_to_drop = segment_ids.top();
+            auto segment_to_drop = id_to_segment[segment_id_to_drop];
+            segment_ids.pop();
+            if (!segment_ids.empty())
+            {
+                // This is not the last segment, so we need to set previous segment's next_segment_id to 0 to indicate that this segment has been dropped
+                auto previous_segment_id = segment_ids.top();
+                auto previous_segment = id_to_segment[previous_segment_id];
+                assert(previous_segment->nextSegmentId() == segment_id_to_drop);
+                auto previous_lock = previous_segment->mustGetUpdateLock();
+                auto new_previous_segment = previous_segment->dropNextSegment(wbs);
+                previous_segment->abandon(*dm_context);
+                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
+                id_to_segment.emplace(previous_segment_id, new_previous_segment);
+            }
+            // The order to drop the meta and data of this segment doesn't matter,
+            // Because there is no segment pointing to this segment,
+            // so it won't be restored again even the drop process was interrupted by restart
+            auto drop_lock = segment_to_drop->mustGetUpdateLock();
+            segment_to_drop->abandon(*dm_context);
+            segment_to_drop->drop(global_context.getFileProvider(), wbs);
+        }
     }
     storage_pool->drop();
 
