@@ -7,10 +7,9 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -103,6 +102,56 @@ public:
     {
     }
 
+    void run()
+    {
+        DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+
+        auto key_manager = std::make_shared<DB::MockKeyManager>(false);
+        auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
+
+        BlobStore::Config blob_config;
+
+        // TODO: Need use multi-path after BlobStore supported.
+        PageStorage::Config config;
+        PageStorageImpl ps_v3("PageStorageControl", delegator, config, file_provider);
+        PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;
+
+        switch (options.display_mode)
+        {
+        case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+        {
+            std::cout << getSummaryInfo(mvcc_table_directory, ps_v3.blob_store) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
+        {
+            std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
+        {
+            std::cout << getBlobsInfo(ps_v3.blob_store, options.query_blob_id) << std::endl;
+            break;
+        }
+        case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
+        {
+            if (options.check_page_id != UINT64_MAX)
+            {
+                std::cout << checkSinglePage(mvcc_table_directory, ps_v3.blob_store, options.query_ns_id, options.check_page_id) << std::endl;
+            }
+            else
+            {
+                std::cout << checkAllDatasCrc(mvcc_table_directory, ps_v3.blob_store, options.enable_fo_check) << std::endl;
+            }
+            break;
+        }
+        default:
+            std::cout << "Invalid display mode." << std::endl;
+            break;
+        }
+    }
+
+private:
     String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
     {
         auto statInfo = [](const BlobStore::BlobStats::BlobStatPtr & stat) {
@@ -368,59 +417,6 @@ public:
         error_msg += "Please use `--query_table_id` + `--check_page_id` to get the more error info.";
 
         return error_msg;
-    }
-
-    void run()
-    {
-        DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
-
-        auto key_manager = std::make_shared<DB::MockKeyManager>(false);
-        auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
-
-        BlobStore::Config blob_config;
-
-        // TODO: Need use multi-path after BlobStore supported.
-        BlobStore blob_store(file_provider, options.paths[0], blob_config);
-
-        PageDirectoryFactory factory;
-        PageDirectoryPtr page_directory = factory.setBlobStore(blob_store)
-                                              .create(file_provider, delegator);
-
-        PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
-
-        switch (options.display_mode)
-        {
-        case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
-        {
-            std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
-            break;
-        }
-        case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
-        {
-            std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
-            break;
-        }
-        case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
-        {
-            std::cout << getBlobsInfo(blob_store, options.query_blob_id) << std::endl;
-            break;
-        }
-        case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
-        {
-            if (options.check_page_id != UINT64_MAX)
-            {
-                std::cout << checkSinglePage(mvcc_table_directory, blob_store, options.query_ns_id, options.check_page_id) << std::endl;
-            }
-            else
-            {
-                std::cout << checkAllDatasCrc(mvcc_table_directory, blob_store, options.enable_fo_check) << std::endl;
-            }
-            break;
-        }
-        default:
-            std::cout << "Invalid display mode." << std::endl;
-            break;
-        }
     }
 
 private:
