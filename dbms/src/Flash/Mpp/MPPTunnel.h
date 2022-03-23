@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
@@ -82,8 +82,8 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
-        bool is_async_ = false,
-        const LogWithPrefixPtr & log_ = nullptr);
+        bool is_async_,
+        const String & req_id);
 
     ~MPPTunnelBase();
 
@@ -111,7 +111,7 @@ public:
 
     bool isLocal() const { return is_local; }
 
-    const LogWithPrefixPtr & getLogger() const { return log; }
+    const LoggerPtr & getLogger() const { return log; }
 
     // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
     void consumerFinish(const String & err_msg, bool need_lock = true);
@@ -190,7 +190,7 @@ private:
 
     ConnectionProfileInfo connection_profile_info;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 class MPPTunnel : public MPPTunnelBase<PacketWriter>

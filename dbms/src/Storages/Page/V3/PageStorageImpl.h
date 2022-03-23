@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -88,7 +88,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     PageDirectoryPtr page_directory;
 
