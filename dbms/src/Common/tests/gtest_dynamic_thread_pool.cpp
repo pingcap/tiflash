@@ -161,6 +161,8 @@ try
     auto f3 = pool.schedule(false, getter);
     // set propagate = false and it didn't propagate
     ASSERT_EQ(f3.get(), nullptr);
+
+    current_memory_tracker = nullptr;
 }
 CATCH
 

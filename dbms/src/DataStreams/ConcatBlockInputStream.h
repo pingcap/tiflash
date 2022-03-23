@@ -15,8 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {
@@ -29,8 +27,8 @@ class ConcatBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "Concat";
 
 public:
-    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, NAME))
+    ConcatBlockInputStream(BlockInputStreams inputs_, const String & req_id)
+        : log(Logger::get(NAME, req_id))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -70,7 +68,7 @@ protected:
 private:
     BlockInputStreams::iterator current_stream;
 
-    LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

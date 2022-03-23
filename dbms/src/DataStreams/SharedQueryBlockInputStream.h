@@ -19,7 +19,6 @@
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
 
@@ -33,9 +32,9 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
         : queue(clients)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
         , in(in_)
     {
         children.push_back(in);
@@ -160,7 +159,7 @@ private:
 
     std::string exception_msg;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
     BlockInputStreamPtr in;
 };
 } // namespace DB

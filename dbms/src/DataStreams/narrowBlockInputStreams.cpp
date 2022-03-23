@@ -43,7 +43,7 @@ BlockInputStreams narrowBlockInputStreams(BlockInputStreams & inputs, size_t wid
 
     BlockInputStreams res(width);
     for (size_t i = 0; i < width; ++i)
-        res[i] = std::make_shared<ConcatBlockInputStream>(partitions[i], nullptr);
+        res[i] = std::make_shared<ConcatBlockInputStream>(partitions[i], /*req_id=*/"");
 
     return res;
 }
