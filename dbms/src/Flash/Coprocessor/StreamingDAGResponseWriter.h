@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>

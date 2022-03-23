@@ -43,6 +43,6 @@ struct RemoteRequest
     DAGSchema schema;
     /// the sorted key ranges
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
-    static RemoteRequest build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LogWithPrefixPtr & log);
+    static RemoteRequest build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LoggerPtr & log);
 };
 } // namespace DB
