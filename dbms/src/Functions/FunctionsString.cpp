@@ -2718,8 +2718,8 @@ private:
 
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-        static const std::string default_rem = " ";
-        auto * remstr_ptr = reinterpret_cast<UInt8 *>(const_cast<char *>(default_rem.c_str()));
+        static constexpr std::string_view default_rem = " ";
+        static const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(default_rem.data());
         vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
@@ -2740,8 +2740,8 @@ private:
             const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
-            std::string data = data_col->getValue<String>();
-            auto * data_ptr = reinterpret_cast<UInt8 *>(const_cast<char *>(data.c_str()));
+            const std::string data = data_col->getValue<String>();
+            const auto * data_ptr = reinterpret_cast<const UInt8 *>(data.c_str());
             constVector(is_ltrim, is_rtrim, data_ptr, data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
@@ -2749,8 +2749,8 @@ private:
             const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-            std::string remstr = remstr_col->getValue<String>();
-            auto * remstr_ptr = reinterpret_cast<UInt8 *>(const_cast<char *>(remstr.c_str()));
+            const std::string remstr = remstr_col->getValue<String>();
+            const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(remstr.c_str());
             vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
@@ -2837,8 +2837,8 @@ private:
         bool is_rtrim,
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        UInt8 * remstr,
-        size_t remstr_size,
+        const UInt8 * remstr,
+        const size_t remstr_size,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -2860,8 +2860,8 @@ private:
     static void constVector(
         bool is_ltrim,
         bool is_rtrim,
-        UInt8 * data,
-        size_t data_size,
+        const UInt8 * data,
+        const size_t data_size,
         const ColumnString::Chars_t & remstr,
         const ColumnString::Offsets & remstr_offsets,
         ColumnString::Chars_t & res_data,
