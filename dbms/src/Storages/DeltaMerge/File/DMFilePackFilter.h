@@ -200,9 +200,9 @@ private:
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
         LOG_FMT_DEBUG(log,
-                      "RSFilter exclude rate: {}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
+                      "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
                       ", read_packs: {}, pack_count: {}",
-                      ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2)),
+                      ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate,
                       after_pk,
                       after_read_packs,
                       after_filter,
