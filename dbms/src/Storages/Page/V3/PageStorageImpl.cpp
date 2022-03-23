@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -204,7 +205,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
+    Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3).Increment();
+        GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v3).Observe(watch.elapsedSeconds());
         bool is_running = true;
         gc_is_running.compare_exchange_strong(is_running, false);
     });
@@ -273,6 +277,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     page_directory->gcApply(std::move(gc_edit), write_limiter);
 
     clean_external_page();
+
     return true;
 }
 
