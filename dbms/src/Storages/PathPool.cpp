@@ -314,7 +314,12 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 //==========================================================================================
 
 template <typename T>
-String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetricsPtr & global_capacity, std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, Poco::Logger * log, const String & log_msg)
+String genericChoosePath(const std::vector<T> & paths, //
+                         const PathCapacityMetricsPtr & global_capacity, //
+                         std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, //
+                         std::function<String(const T & path_info)> path_getter, //
+                         Poco::Logger * log, //
+                         const String & log_msg)
 {
     if (paths.size() == 1)
         return path_generator(paths, 0);
@@ -323,7 +328,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     std::vector<FsStats> stats;
     for (size_t i = 0; i < paths.size(); ++i)
     {
-        stats.emplace_back(std::get<0>(global_capacity->getFsStatsOfPath(paths[i].path)));
+        stats.emplace_back(std::get<0>(global_capacity->getFsStatsOfPath(path_getter(paths[i]))));
         total_available_size += stats.back().avail_size;
     }
 
@@ -379,8 +384,13 @@ String StableDiskDelegator::choosePath() const
         = [](const StoragePathPool::MainPathInfos & paths, size_t idx) -> String {
         return fmt::format("{}/{}", paths[idx].path, StoragePathPool::STABLE_FOLDER_NAME);
     };
+
+    std::function<String(const StoragePathPool::MainPathInfo & info)> path_getter = [](const StoragePathPool::MainPathInfo & info) -> String {
+        return info.path;
+    };
+
     const String log_msg = fmt::format("[type=stable] [database={}] [table={}]", pool.database, pool.table);
-    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
 }
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exist) const
@@ -524,6 +534,10 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
         return fmt::format("{}/{}", paths[idx].path, this->path_prefix);
     };
 
+    std::function<String(const StoragePathPool::LatestPathInfo & info)> path_getter = [](const StoragePathPool::LatestPathInfo & info) -> String {
+        return info.path;
+    };
+
     {
         std::lock_guard<std::mutex> lock{pool.mutex};
         /// If id exists in page_path_map, just return the same path
@@ -532,7 +546,7 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
     }
 
     const String log_msg = fmt::format("[type=ps_multi] [database={}] [table={}]", pool.database, pool.table);
-    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorMulti::addPageFileUsedSize(
@@ -725,6 +739,10 @@ String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
         return paths[idx].path;
     };
 
+    std::function<String(const RaftPathInfo & info)> path_getter = [](const RaftPathInfo & info) -> String {
+        return info.path;
+    };
+
     {
         std::lock_guard lock{mutex};
         /// If id exists in page_path_map, just return the same path
@@ -734,7 +752,7 @@ String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
 
     // Else choose path randomly
     const String log_msg = "[type=ps_raft]";
-    return genericChoosePath(raft_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(raft_path_infos, pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorRaft::addPageFileUsedSize(
@@ -859,6 +877,10 @@ String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & id_lvl)
         return fmt::format("{}/{}", paths[idx], this->path_prefix);
     };
 
+    std::function<String(const String & info)> path_getter = [](const String & path_) -> String {
+        return path_;
+    };
+
     {
         std::lock_guard<std::mutex> lock{mutex};
         /// If id exists in page_path_map, just return the same path
@@ -867,7 +889,7 @@ String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & id_lvl)
     }
 
     const String log_msg = "[type=global_ps_multi]";
-    return genericChoosePath(pool.listGlobalPagePaths(), pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(pool.listGlobalPagePaths(), pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
