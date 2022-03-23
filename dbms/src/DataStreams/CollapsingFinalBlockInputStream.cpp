@@ -31,7 +31,7 @@ CollapsingFinalBlockInputStream::~CollapsingFinalBlockInputStream()
     while (!queue.empty())
     {
         Cursor c = queue.top();
-        queue.pop();    // NOLINT
+        queue.pop(); // NOLINT
         c.block.cancel();
     }
 
@@ -111,7 +111,7 @@ Block CollapsingFinalBlockInputStream::readImpl()
             {
                 if (!current.equal(previous))
                 {
-                    commitCurrent();        // NOLINT
+                    commitCurrent(); // NOLINT
                     previous = current;
                 }
 
