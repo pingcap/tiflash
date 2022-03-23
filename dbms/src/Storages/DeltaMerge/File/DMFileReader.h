@@ -114,6 +114,13 @@ private:
     ColumnDefines read_columns;
     ColumnStreams column_streams;
 
+    const bool is_common_handle;
+
+    // read_one_pack_every_time is used to create info for every pack
+    const bool read_one_pack_every_time;
+
+    const bool single_file_mode;
+
     /// Clean read optimize
     // If there is no delta for some packs in stable, we can try to do clean read.
     const bool enable_clean_read;
@@ -121,8 +128,6 @@ private:
 
     /// Filters
     DMFilePackFilter pack_filter;
-
-    const bool is_common_handle;
 
     std::vector<size_t> skip_packs_by_column;
 
@@ -136,11 +141,6 @@ private:
     size_t next_pack_id = 0;
 
     FileProviderPtr file_provider;
-
-    // read_one_pack_every_time is used to create info for every pack
-    const bool read_one_pack_every_time;
-
-    const bool single_file_mode;
 
     DB::LoggerPtr log;
 };
