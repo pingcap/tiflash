@@ -108,7 +108,7 @@ public:
                 continue;
             }
             auto & col_def = (*table_info.columns)[i];
-            if (col_def.id == table_info.handle.id)
+            if (col_def.id == table_info.handle.id || col_def.id == VERSION_COLUMN_ID || col_def.id == TAG_COLUMN_ID)
             {
                 continue;
             }
@@ -146,15 +146,15 @@ private:
         }
         else if (family_name == "Enum8")
         {
-            auto dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }
         else if (family_name == "Enum16")
         {
-            auto dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }
@@ -238,8 +238,7 @@ private:
 
     std::string randomString()
     {
-        static constexpr int max_size = 1024; // 1KB
-        int size = rand_gen() % max_size + 1;
+        constexpr int size = 128;
         std::string str(size, 0);
         std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
         return str;
