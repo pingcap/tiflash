@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
@@ -43,7 +42,7 @@ class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageDirectoryTest()
-        : log(getLogWithPrefix(nullptr, "PageDirectoryTest"))
+        : log(Logger::get("PageDirectoryTest"))
     {}
 
     void SetUp() override
@@ -61,7 +60,7 @@ public:
 protected:
     PageDirectoryPtr dir;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 TEST_F(PageDirectoryTest, ApplyPutRead)

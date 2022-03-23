@@ -43,16 +43,11 @@ public:
         return std::make_shared<Logger>(source, "");
     }
 
-    static LoggerPtr get(const std::string & source, const std::string & identifier)
-    {
-        return std::make_shared<Logger>(source, identifier);
-    }
-
-    template <typename... Args>
-    static LoggerPtr get(const std::string & source, Args &&... args)
+    template <typename T, typename... Args>
+    static LoggerPtr get(const std::string & source, T && first_identifier, Args &&... rest)
     {
         FmtBuffer buf;
-        return getInternal(source, buf, std::forward<Args>(args)...);
+        return getInternal(source, buf, std::forward<T>(first_identifier), std::forward<Args>(rest)...);
     }
 
     Logger(const std::string & source, const std::string & identifier)
@@ -116,7 +111,7 @@ private:
     static LoggerPtr getInternal(const std::string & source, FmtBuffer & buf, T && identifier)
     {
         buf.fmtAppend("{}", std::forward<T>(identifier));
-        return get(source, buf.toString());
+        return std::make_shared<Logger>(source, buf.toString());
     }
 
     std::string wrapMsg(const std::string & msg) const
