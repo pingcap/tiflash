@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
@@ -105,7 +119,8 @@ int openFile(const std::string & path)
                 return 0;
             }
         }
-        DB::throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        DB::throwFromErrno(fmt::format("Cannot open file {}. ", path),
+                           errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 
     return fd;
@@ -118,21 +133,21 @@ inline void touchFile(const std::string & path)
     if (fd > 0)
         ::close(fd);
     else
-        throw Exception("Touch file failed: " + path);
+        throw Exception(fmt::format("Touch file failed: {}. ", path));
 }
 
 template <typename T>
 void syncFile(T & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno(fmt::format("Cannot fsync file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
 }
 
 template <typename T>
 void ftruncateFile(T & file, off_t length)
 {
     if (-1 == file->ftruncate(length))
-        DB::throwFromErrno("Cannot truncate file: " + file->getFileName(), ErrorCodes::CANNOT_FTRUNCATE);
+        DB::throwFromErrno(fmt::format("Cannot truncate file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
 }
 
 
@@ -145,8 +160,6 @@ void writeFile(
     const WriteLimiterPtr & write_limiter = nullptr,
     [[maybe_unused]] bool enable_failpoint = false)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
-
     if (write_limiter)
         write_limiter->request(to_write);
 
@@ -198,6 +211,7 @@ void writeFile(
             bytes_written += res;
     }
     ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
+    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, bytes_written);
 }
 
 template <typename T>
@@ -235,7 +249,7 @@ void readFile(T & file,
         if (-1 == res && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            DB::throwFromErrno("Cannot read from file " + file->getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+            DB::throwFromErrno(fmt::format("Cannot read from file {}.", file->getFileName()), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
         }
 
         if (res > 0)
@@ -245,7 +259,8 @@ void readFile(T & file,
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
+        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {} , expected bytes: {}", file->getFileName(), bytes_read, expected_bytes),
+                                   Errors::PageStorage::FileSizeNotMatch);
 }
 
 /// Write and advance sizeof(T) bytes.

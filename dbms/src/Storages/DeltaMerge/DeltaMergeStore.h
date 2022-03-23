@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -18,6 +32,9 @@
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 namespace DM
 {
 class Segment;
@@ -104,6 +121,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_stable_num_snapshots = 0;
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    String storage_stable_oldest_snapshot_tracing_id;
     UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
     UInt64 storage_stable_max_page_id = 0;
@@ -111,6 +129,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    String storage_delta_oldest_snapshot_tracing_id;
     UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
     UInt64 storage_delta_max_page_id = 0;
@@ -118,6 +137,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    String storage_meta_oldest_snapshot_tracing_id;
     UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id = 0;
@@ -241,7 +261,7 @@ public:
         SegmentPtr segment;
         SegmentPtr next_segment;
 
-        explicit operator bool() { return (bool)segment; }
+        explicit operator bool() const { return segment != nullptr; }
     };
 
     class MergeDeltaTaskPool
@@ -267,7 +287,7 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, Poco::Logger * log_);
 
         BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
@@ -275,7 +295,8 @@ public:
     DeltaMergeStore(Context & db_context, //
                     bool data_path_contains_database_name,
                     const String & db_name,
-                    const String & tbl_name,
+                    const String & table_name_,
+                    TableID physical_table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -303,7 +324,7 @@ public:
 
     std::tuple<String, PageId> preAllocateIngestFile();
 
-    void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
+    void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
@@ -323,9 +344,10 @@ public:
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
                               const DB::Settings & db_settings,
-                              const ColumnDefines & column_defines,
+                              const ColumnDefines & columns_to_read,
                               size_t num_streams,
-                              const SegmentIdSet & read_segments = {});
+                              const SegmentIdSet & read_segments = {},
+                              size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows with MVCC filtering
     /// `sorted_ranges` should be already sorted and merged
@@ -337,7 +359,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet & read_segments = {});
+                           const SegmentIdSet & read_segments = {},
+                           size_t extra_table_id_index = InvalidColumnID);
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)
@@ -351,7 +374,7 @@ public:
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fregment packs into bigger one.
+    /// Compact fragment column files into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -359,11 +382,11 @@ public:
 
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //
-                     const OptionTableInfoConstRef table_info,
+                     OptionTableInfoConstRef table_info,
                      ColumnID & max_column_id_used,
                      const Context & context);
 
-    const ColumnDefinesPtr getStoreColumns() const
+    ColumnDefinesPtr getStoreColumns() const
     {
         std::shared_lock lock(read_write_mutex);
         return store_columns;
@@ -405,7 +428,7 @@ private:
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
-        const TaskRunThread thread,
+        TaskRunThread thread,
         SegmentSnapshotPtr segment_snap = nullptr);
 
     bool updateGCSafePoint();
@@ -431,10 +454,11 @@ private:
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;
+    TableID physical_table_id;
 
     bool is_common_handle;
     size_t rowkey_column_size;
@@ -451,7 +475,6 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     BackgroundProcessingPool & blockable_background_pool;

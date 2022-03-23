@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
@@ -15,7 +29,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
 {
     if (schema)
     {
-        writeIntBinary((UInt32)schema->columns(), buf);
+        writeIntBinary(static_cast<UInt32>(schema->columns()), buf);
         for (auto & col : *schema)
         {
             writeIntBinary(col.column_id, buf);
@@ -25,7 +39,7 @@ void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
     }
     else
     {
-        writeIntBinary((UInt32)0, buf);
+        writeIntBinary(static_cast<UInt32>(0), buf);
     }
 }
 
@@ -49,11 +63,9 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     return schema;
 }
 
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress)
+void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
 {
-    CompressionMethod method = compress ? CompressionMethod::LZ4 : CompressionMethod::NONE;
-
-    CompressedWriteBuffer compressed(buf, CompressionSettings(method));
+    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
     type->serializeBinaryBulkWithMultipleStreams(column, //
                                                  [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                  offset,
@@ -70,12 +82,12 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuf
     type->deserializeBinaryBulkWithMultipleStreams(column, //
                                                    [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                    rows,
-                                                   (double)(data_buf.size()) / rows,
+                                                   static_cast<double>(data_buf.size()) / rows,
                                                    true,
                                                    {});
 }
 
-void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_files)
+void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.delta, buf); // Add binary version
     switch (STORAGE_FORMAT_CURRENT.delta)
@@ -93,13 +105,13 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFiles & column_fil
     }
 }
 
-ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    ColumnFiles column_files;
+    ColumnFilePersisteds column_files;
     switch (version)
     {
         // V1 and V2 share the same deserializer.
@@ -114,8 +126,6 @@ ColumnFiles deserializeSavedColumnFiles(DMContext & context, const RowKeyRange &
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    for (auto & f : column_files)
-        f->setSaved();
     return column_files;
 }
 } // namespace DM

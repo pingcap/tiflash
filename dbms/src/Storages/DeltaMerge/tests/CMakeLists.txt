@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
 # glob all unit tests of dm into unit_tests_dm
@@ -42,6 +56,9 @@ target_link_libraries(dm_test_minmax_index dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_delta_index_manager EXCLUDE_FROM_ALL gtest_dm_delta_index_manager.cpp)
 target_link_libraries(dm_test_delta_index_manager dbms gtest_main clickhouse_functions)
+
+add_executable(dm_test_delta_value_space EXCLUDE_FROM_ALL gtest_dm_delta_value_space.cpp)
+target_link_libraries(dm_test_delta_value_space dbms gtest_main clickhouse_functions)
 
 add_subdirectory (bank EXCLUDE_FROM_ALL)
 

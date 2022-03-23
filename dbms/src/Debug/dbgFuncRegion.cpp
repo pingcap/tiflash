@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
@@ -186,6 +200,14 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     output(fmt::format("remove region #{}", region_id));
 }
 
+void KVStore::mockRemoveRegion(DB::RegionID region_id, RegionTable & region_table)
+{
+    auto task_lock = genTaskLock();
+    auto region_lock = region_manager.genRegionTaskLock(region_id);
+    // mock remove region should remove data by default
+    removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
+}
+
 
 inline std::string ToPdKey(const char * key, const size_t len)
 {
@@ -222,7 +244,7 @@ inline std::string FromPdKey(const char * key, const size_t len)
 
         for (size_t i = 0; i < 2; ++i)
         {
-            char p = key[k + i];
+            char p = toupper(key[k + i]);
             if (p >= 'A')
                 s[i] = p - 'A' + 10;
             else
@@ -256,9 +278,8 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
 
     auto start = FromPdKey(start_key.data(), start_key.size());
     auto end = FromPdKey(end_key.data(), end_key.size());
-    RegionMap regions;
-    kvstore->handleRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)),
-                                         [&regions](RegionMap regions_, const KVStoreTaskLock &) { regions = std::move(regions_); });
+    auto range = RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end));
+    RegionMap regions = kvstore->getRegionsByRangeOverlap(range);
 
     output(toString(regions.size()));
     if (mode == ID_LIST)
@@ -269,6 +290,21 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
         for (const auto & region : regions)
             fmt_buf.fmtAppend("{} ", region.second->id());
         output(fmt_buf.toString());
+    }
+    else
+    {
+        if (!regions.empty())
+        {
+            for (const auto & region : regions)
+            {
+                auto str = fmt::format(
+                    "{}, local state: {}, proxy internal state: {}",
+                    region.second->toString(),
+                    region.second->getMetaRegion().ShortDebugString(),
+                    kvstore->getProxyHelper()->getRegionLocalState(region.first).ShortDebugString());
+                output(str);
+            }
+        }
     }
 }
 

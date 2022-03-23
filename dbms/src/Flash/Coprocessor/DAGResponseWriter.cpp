@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
@@ -58,7 +72,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
-        for (auto & stream_ptr : map_entry.second)
+        for (const auto & stream_ptr : map_entry.second)
         {
             if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
             {
@@ -80,9 +94,9 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & streamPtr : p.second.input_streams)
+        for (auto & stream_ptr : p.second)
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
                 current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
@@ -97,19 +111,30 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                 current.merge(remote, false);
         }
         /// part 3: for join need to add the build time
-        for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
+        /// In TiFlash, a hash join's build side is finished before probe side starts,
+        /// so the join probe side's running time does not include hash table's build time,
+        /// when construct ExecSummaries, we need add the build cost to probe executor
+        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(p.first);
+        if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
         {
-            UInt64 process_time_for_build = 0;
-            if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
-                != dag_context.getProfileStreamsMapForJoinBuildSide().end())
+            for (const auto & join_executor_id : all_join_id_it->second)
             {
-                for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
+                auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
+                if (it != dag_context.getJoinExecuteInfoMap().end())
                 {
-                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
-                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                    auto build_side_it = dag_context.getProfileStreamsMap().find(it->second.build_side_root_executor_id);
+                    if (build_side_it != dag_context.getProfileStreamsMap().end())
+                    {
+                        UInt64 process_time_for_build = 0;
+                        for (const auto & join_build_stream : build_side_it->second)
+                        {
+                            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()))
+                                process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                        }
+                        current.time_processed_ns += process_time_for_build;
+                    }
                 }
             }
-            current.time_processed_ns += process_time_for_build;
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;

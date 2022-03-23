@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -81,11 +96,12 @@ public:
       * - where you must first make JOIN in parallel, while noting which keys are not found,
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
-    ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_)
+    ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_, const LogWithPrefixPtr & log_)
         : inputs(inputs_)
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
+        , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
@@ -99,7 +115,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -151,6 +167,11 @@ public:
     size_t getNumActiveThreads() const
     {
         return active_threads;
+    }
+
+    unsigned int getMaxThreads() const
+    {
+        return max_threads;
     }
 
 private:
@@ -347,7 +368,7 @@ private:
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads{false};
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
+    const LogWithPrefixPtr log;
 };
 
 

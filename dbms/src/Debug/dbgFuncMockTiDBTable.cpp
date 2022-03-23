@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/Context.h>
@@ -34,7 +48,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    String handle_pk_name = "";
+    String handle_pk_name;
     if (args.size() >= 4)
         handle_pk_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
@@ -273,13 +287,64 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     auto & kvstore = context.getTMTContext().getKVStore();
     auto & region_table = context.getTMTContext().getRegionTable();
     {
-        for (const auto & e : kvstore->regions())
-            regions.emplace_back(e.first);
+        {
+            auto manage_lock = kvstore->genRegionReadLock();
+            for (const auto & e : manage_lock.regions)
+                regions.emplace_back(e.first);
+        }
 
         for (const auto & region_id : regions)
             kvstore->mockRemoveRegion(region_id, region_table);
     }
     output("all regions have been cleaned");
+}
+
+void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 2)
+        throw Exception("Args not matched, should be: db_name, table_name, [table_name], ..., [table_name]", ErrorCodes::BAD_ARGUMENTS);
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    auto db = context.getDatabase(database_name);
+
+    std::vector<std::tuple<String, ColumnsDescription, String>> tables;
+
+    for (ASTs::size_type i = 1; i < args.size(); i++)
+    {
+        String schema_str = "i Int64";
+        String table_name = fmt::format("t{}", i);
+        ASTPtr columns_ast;
+        ParserColumnDeclarationList schema_parser;
+        Tokens tokens(schema_str.data(), schema_str.data() + schema_str.length());
+        TokenIterator pos(tokens);
+        Expected expected;
+        if (!schema_parser.parse(pos, columns_ast, expected))
+            throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
+        ColumnsDescription columns
+            = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+        tables.emplace_back(table_name, columns, "");
+    }
+    auto tso = context.getTMTContext().getPDClient()->getTS();
+    String engine_type("dt");
+    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
+        engine_type = "tmt";
+    MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
+    output("");
+}
+
+void MockTiDBTable::dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() % 3 != 0)
+        throw Exception("Args not matched, should be: database-name, table-name, new-table-name, ..., [database-name, table-name, new-table-name]", ErrorCodes::BAD_ARGUMENTS);
+    std::vector<std::tuple<std::string, std::string, std::string>> table_map;
+    for (ASTs::size_type i = 0; i < args.size() / 3; i++)
+    {
+        const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3 * i]).name;
+        const String & table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 1]).name;
+        const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[3 * i + 2]).name;
+        table_map.emplace_back(database_name, table_name, new_table_name);
+    }
+    MockTiDB::instance().renameTables(table_map);
+    output(fmt::format("renamed tables"));
 }
 
 } // namespace DB

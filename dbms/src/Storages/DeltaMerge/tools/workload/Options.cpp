@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
@@ -69,6 +83,8 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
+        //
+        ("enable_ps_v3", value<bool>()->default_value(false), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -131,6 +147,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
 
+    enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
     return {true, toString()};
 }
 

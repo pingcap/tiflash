@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #ifndef TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
 #define TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE DBMS_DEFAULT_BUFFER_SIZE
@@ -11,11 +25,13 @@
 
 namespace ProfileEvents
 {
-extern const Event ChecksumBufferRead;
-extern const Event ChecksumBufferWrite;
-extern const Event ChecksumBufferReadBytes;
-extern const Event ChecksumBufferWriteBytes;
-extern const Event ChecksumBufferSeek;
+// no need to update sync, since write buffers inherit that directly from `WriteBufferFromFileDescriptor`
+extern const Event WriteBufferFromFileDescriptorWrite;
+extern const Event WriteBufferFromFileDescriptorWriteFailed;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+extern const Event ReadBufferFromFileDescriptorRead;
+extern const Event ReadBufferFromFileDescriptorReadBytes;
+extern const Event ReadBufferFromFileDescriptorReadFailed;
 extern const Event Seek;
 } // namespace ProfileEvents
 
@@ -83,7 +99,7 @@ private:
 
         while (expected != 0)
         {
-            ProfileEvents::increment(ProfileEvents::ChecksumBufferWrite);
+            ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWrite);
 
             ssize_t count;
             {
@@ -91,6 +107,7 @@ private:
             }
             if (unlikely(count == -1))
             {
+                ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteFailed);
                 if (errno == EINTR)
                     continue;
                 else
@@ -104,7 +121,7 @@ private:
             expected -= count;
         }
 
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferWriteBytes, len + sizeof(ChecksumFrame<Backend>));
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteBytes, len + sizeof(ChecksumFrame<Backend>));
         frame_count++;
     }
 
@@ -293,7 +310,7 @@ private:
         size_t expected = size;
         while (expected != 0)
         {
-            ProfileEvents::increment(ProfileEvents::ChecksumBufferRead);
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
             ssize_t count;
             {
                 count = in->read(pos, expected);
@@ -304,6 +321,7 @@ private:
             }
             if (unlikely(count < 0))
             {
+                ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
                 if (errno == EINTR)
                     continue;
                 else
@@ -315,7 +333,7 @@ private:
             expected -= count;
             pos += count;
         }
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferReadBytes, size - expected);
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, size - expected);
         return size - expected;
     }
 
@@ -369,7 +387,6 @@ private:
     off_t doSeek(off_t offset, int whence) override
     {
         ProfileEvents::increment(ProfileEvents::Seek);
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferSeek);
 
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail

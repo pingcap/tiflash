@@ -1,24 +1,38 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
+#include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V2/PageFile.h>
+#include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <ext/scope_guard.h>
 
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
 
-#include <IO/WriteBufferFromFile.h>
-#include <Poco/File.h>
-#include <Storages/Page/PageUtil.h>
-#include <Storages/Page/V2/PageFile.h>
-
-#include <ext/scope_guard.h>
 
 namespace CurrentMetrics
 {
@@ -80,9 +94,13 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
-    for (const auto & write : wb.getWrites())
+    for (auto & write : wb.getWrites())
     {
         meta_write_bytes += sizeof(IsPut);
+        // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
+        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
+            write.type = WriteBatch::WriteType::PUT;
+
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
@@ -101,13 +119,16 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             // For ref page, store RefPageId -> PageId. And don't need to write data file.
             meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
             break;
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not serialize with `PUT_EXTERNAL`");
+            break;
         }
     }
 
     meta_write_bytes += sizeof(Checksum);
 
-    char * meta_buffer = (char *)page_file.alloc(meta_write_bytes);
-    char * data_buffer = (char *)page_file.alloc(data_write_bytes);
+    char * meta_buffer = static_cast<char *>(page_file.alloc(meta_write_bytes));
+    char * data_buffer = static_cast<char *>(page_file.alloc(data_write_bytes));
 
     char * meta_pos = meta_buffer;
     char * data_pos = data_buffer;
@@ -119,9 +140,16 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (auto & write : wb.getWrites())
     {
+        // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
+        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
+            write.type = WriteBatch::WriteType::PUT;
+
         PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not serialize with `PUT_EXTERNAL`");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
@@ -171,20 +199,20 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             // we can swap from WriteBatch instead of copying
             entry.field_offsets.swap(write.offsets);
 
-            PageUtil::put(meta_pos, (PageId)write.page_id);
-            PageUtil::put(meta_pos, (PageFileId)entry.file_id);
-            PageUtil::put(meta_pos, (PageFileLevel)entry.level);
-            PageUtil::put(meta_pos, (PageFlags)flags);
-            PageUtil::put(meta_pos, (PageTag)write.tag);
-            PageUtil::put(meta_pos, (PageOffset)entry.offset);
-            PageUtil::put(meta_pos, (PageSize)write.size);
-            PageUtil::put(meta_pos, (Checksum)page_checksum);
+            PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
+            PageUtil::put(meta_pos, static_cast<PageFileId>(entry.file_id));
+            PageUtil::put(meta_pos, static_cast<PageFileLevel>(entry.level));
+            PageUtil::put(meta_pos, static_cast<UInt32>(flags.flags));
+            PageUtil::put(meta_pos, static_cast<PageTag>(write.tag));
+            PageUtil::put(meta_pos, static_cast<PageOffset>(entry.offset));
+            PageUtil::put(meta_pos, static_cast<PageSize>(write.size));
+            PageUtil::put(meta_pos, static_cast<Checksum>(page_checksum));
 
-            PageUtil::put(meta_pos, (UInt64)entry.field_offsets.size());
-            for (size_t i = 0; i < entry.field_offsets.size(); ++i)
+            PageUtil::put(meta_pos, static_cast<UInt64>(entry.field_offsets.size()));
+            for (const auto & field_offset : entry.field_offsets)
             {
-                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].first);
-                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].second);
+                PageUtil::put(meta_pos, static_cast<UInt64>(field_offset.first));
+                PageUtil::put(meta_pos, static_cast<UInt64>(field_offset.second));
             }
 
             if (write.type == WriteBatch::WriteType::PUT)
@@ -195,7 +223,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             break;
         }
         case WriteBatch::WriteType::DEL:
-            PageUtil::put(meta_pos, (PageId)write.page_id);
+            PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
 
             edit.del(write.page_id);
             break;
@@ -253,7 +281,7 @@ bool PageFile::LinkingMetaAdapter::initialize(const ReadLimiterPtr & read_limite
 
     SCOPE_EXIT({ underlying_file->close(); });
 
-    meta_buffer = (char *)page_file.alloc(meta_size);
+    meta_buffer = static_cast<char *>(page_file.alloc(meta_size));
     PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
 
     return true;
@@ -340,6 +368,9 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not deserialize with PUT_EXTERNAL");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
@@ -485,7 +516,7 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
     if (unlikely(underlying_file->getFd() == -1))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
-    meta_buffer = (char *)page_file.alloc(meta_size);
+    meta_buffer = static_cast<char *>(page_file.alloc(meta_size));
     PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
     status = Status::Opened;
 }
@@ -564,6 +595,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
+        case WriteBatch::WriteType::PUT_EXTERNAL:
+            throw Exception("Should not deserialize with PUT_EXTERNAL");
+            break;
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
         {
@@ -833,7 +867,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     char * pos = data_buf;
@@ -884,7 +918,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     for (const auto & p : to_read)
         buf_size = std::max(buf_size, p.second.size);
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
 
@@ -956,7 +990,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     std::set<Page::FieldOffset> fields_offset_in_page;

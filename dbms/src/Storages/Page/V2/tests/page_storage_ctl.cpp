@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
@@ -8,6 +22,7 @@
 #include <Poco/Timer.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -244,6 +259,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
+                case DB::WriteBatch::WriteType::PUT_EXTERNAL:
                 case DB::WriteBatch::WriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);

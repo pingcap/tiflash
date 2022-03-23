@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
@@ -87,7 +101,7 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
 
 Field ColumnInfo::defaultValueToField() const
 {
-    auto & value = origin_default_value;
+    const auto & value = origin_default_value;
     if (value.isEmpty())
     {
         if (hasNotNullFlag())
@@ -109,7 +123,7 @@ Field ColumnInfo::defaultValueToField() const
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
         //  rather than `default_bit`, which could be altered.
         //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
-        auto & bit_value = default_bit_value;
+        const auto & bit_value = default_bit_value;
         // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
         //  i.e. bit column added with an default value but later modified to another.
         //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
@@ -206,7 +220,7 @@ DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
 Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
-    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
+    const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
         // todo if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
@@ -223,7 +237,7 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 
 UInt64 ColumnInfo::getSetValue(const String & set_str) const
 {
-    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
+    const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
         // todo if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
@@ -251,9 +265,9 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
 }
 
-Int64 ColumnInfo::getTimeValue(const String & time_str) const
+Int64 ColumnInfo::getTimeValue(const String & time_str)
 {
-    const static long fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+    const static int64_t fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
     bool negative = time_str[0] == '-';
     Poco::StringTokenizer second_and_fsp(time_str, ".");
     Poco::StringTokenizer string_tokens(second_and_fsp[0], ":");
@@ -271,7 +285,7 @@ Int64 ColumnInfo::getTimeValue(const String & time_str) const
     return negative ? -ret : ret;
 }
 
-Int64 ColumnInfo::getYearValue(const String & val) const
+Int64 ColumnInfo::getYearValue(const String & val)
 {
     // do not check validation of the val because TiDB will do it
     Int64 year = std::stol(val);
@@ -284,7 +298,7 @@ Int64 ColumnInfo::getYearValue(const String & val) const
     return year;
 }
 
-UInt64 ColumnInfo::getBitValue(const String & val) const
+UInt64 ColumnInfo::getBitValue(const String & val)
 {
     // The `default_bit` is a base64 encoded, big endian byte array.
     Poco::MemoryInputStream istr(val.data(), val.size());
@@ -323,7 +337,7 @@ try
     if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
-        for (auto & elem : elems)
+        for (const auto & elem : elems)
             elem_arr->add(elem.first);
         tp_json->set("Elems", elem_arr);
     }
@@ -459,7 +473,7 @@ try
 
     Poco::JSON::Array::Ptr def_arr = new Poco::JSON::Array();
 
-    for (auto & part_def : definitions)
+    for (const auto & part_def : definitions)
     {
         def_arr->add(part_def.getJSONObject());
     }
@@ -668,7 +682,7 @@ try
     json->set("tbl_name", tbl_name_json);
 
     Poco::JSON::Array::Ptr cols_array = new Poco::JSON::Array();
-    for (auto & col : idx_cols)
+    for (const auto & col : idx_cols)
     {
         auto col_obj = col.getJSONObject();
         cols_array->add(col_obj);
@@ -733,6 +747,10 @@ catch (const Poco::Exception & e)
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
+TableInfo::TableInfo(Poco::JSON::Object::Ptr json)
+{
+    deserialize(json);
+}
 
 TableInfo::TableInfo(const String & table_info_json)
 {
@@ -752,7 +770,7 @@ try
     json->set("name", name_json);
 
     Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
-    for (auto & col_info : columns)
+    for (const auto & col_info : columns)
     {
         auto col_obj = col_info.getJSONObject();
         cols_arr->add(col_obj);
@@ -760,7 +778,7 @@ try
 
     json->set("cols", cols_arr);
     Poco::JSON::Array::Ptr index_arr = new Poco::JSON::Array();
-    for (auto & index_info : index_infos)
+    for (const auto & index_info : index_infos)
     {
         auto index_info_obj = index_info.getJSONObject();
         index_arr->add(index_info_obj);
@@ -805,19 +823,16 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str)
+String JSONToString(Poco::JSON::Object::Ptr json)
+{
+    std::stringstream buf;
+    json->stringify(buf);
+    return buf.str();
+}
+
+void TableInfo::deserialize(Poco::JSON::Object::Ptr obj)
 try
 {
-    if (json_str.empty())
-    {
-        id = DB::InvalidTableID;
-        return;
-    }
-
-    Poco::JSON::Parser parser;
-    Poco::Dynamic::Var result = parser.parse(json_str);
-
-    auto obj = result.extract<Poco::JSON::Object::Ptr>();
     id = obj->getValue<TableID>("id");
     name = obj->getObject("name")->getValue<String>("L");
 
@@ -887,8 +902,30 @@ try
     {
         throw DB::Exception(
             std::string(__PRETTY_FUNCTION__)
-            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + json_str);
+            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + JSONToString(obj));
     }
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + JSONToString(obj),
+        DB::Exception(e));
+}
+
+void TableInfo::deserialize(const String & json_str)
+try
+{
+    if (json_str.empty())
+    {
+        id = DB::InvalidTableID;
+        return;
+    }
+
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(json_str);
+
+    const auto & obj = result.extract<Poco::JSON::Object::Ptr>();
+    deserialize(obj);
 }
 catch (const Poco::Exception & e)
 {
@@ -956,7 +993,7 @@ ColumnID TableInfo::getColumnID(const String & name) const
 
 String TableInfo::getColumnName(const ColumnID id) const
 {
-    for (auto & col : columns)
+    for (const auto & col : columns)
     {
         if (id == col.id)
         {
@@ -989,7 +1026,7 @@ std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleCo
     if (!pk_is_handle)
         return std::nullopt;
 
-    for (auto & col : columns)
+    for (const auto & col : columns)
     {
         if (col.hasPriKeyFlag())
             return std::optional<std::reference_wrapper<const ColumnInfo>>(col);

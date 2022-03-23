@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -22,7 +36,8 @@ class Context;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
+        || root->tp() == tipb::ExecType::TypePartitionTableScan;
 }
 
 const static String SOURCE_NAME("source");
@@ -48,7 +63,6 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     : id(id_generator.nextBlockID())
     , root(&root_)
     , qb_column_prefix("__QB_" + std::to_string(id) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current) && current->has_executor_id())
@@ -133,6 +147,10 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
     }
+    else if (current->tp() == tipb::ExecType::TypePartitionTableScan)
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
+    }
 }
 
 /// construct DAGQueryBlock from a list struct based executors, which is the
@@ -141,7 +159,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     : id(id_)
     , root(nullptr)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = executors.size() - 1; i >= 0; i--)
     {
@@ -198,18 +215,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 Errors::Coprocessor::Unimplemented);
         }
     }
-}
-
-void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
-{
-    std::vector<String> all_qb_join_subquery_alias;
-    for (auto & child : children)
-    {
-        child->collectAllPossibleChildrenJoinSubqueryAlias(result);
-        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(), result[child->id].begin(), result[child->id].end());
-    }
-    all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
-    result[id] = all_qb_join_subquery_alias;
 }
 
 } // namespace DB

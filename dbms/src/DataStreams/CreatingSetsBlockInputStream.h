@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/MemoryTracker.h>
@@ -45,6 +59,33 @@ public:
 
     /// Takes `totals` only from the main source, not from subquery sources.
     Block getTotals() override;
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        if (!children.empty())
+        {
+            cnt += (children.size() - 1);
+        }
+    }
+
+    virtual void collectNewThreadCount(int & cnt) override
+    {
+        if (!collected)
+        {
+            int cnt_s1 = 0;
+            int cnt_s2 = 0;
+            collected = true;
+            collectNewThreadCountOfThisLevel(cnt_s1);
+            for (int i = 0; i < static_cast<int>(children.size()) - 1; ++i)
+            {
+                auto & child = children[i];
+                if (child)
+                    child->collectNewThreadCount(cnt_s1);
+            }
+            children.back()->collectNewThreadCount(cnt_s2);
+            cnt += std::max(cnt_s1, cnt_s2);
+        }
+    }
 
 protected:
     Block readImpl() override;

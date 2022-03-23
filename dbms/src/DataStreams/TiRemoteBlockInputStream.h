@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -159,7 +173,7 @@ public:
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, name))
         , total_rows(0)
     {
         // generate sample block
@@ -209,6 +223,20 @@ public:
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        remote_reader->collectNewThreadCount(cnt);
+    }
+
+    virtual void resetNewThreadCountCompute() override
+    {
+        if (collected)
+        {
+            collected = false;
+            remote_reader->resetNewThreadCountCompute();
+        }
+    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

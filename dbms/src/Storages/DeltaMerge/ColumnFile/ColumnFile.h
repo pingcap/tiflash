@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -75,10 +89,6 @@ public:
 public:
     /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
     UInt64 getId() const { return id; }
-    /// This column file is already saved to disk or not. Only saved packs can be recovered after reboot.
-    /// "saved" can only be true, after the content data and the metadata are all written to disk.
-    bool isSaved() const { return saved; }
-    void setSaved() { saved = true; }
 
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; };
@@ -110,12 +120,6 @@ public:
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
-
-    /// Put the data's page id into the corresponding WriteBatch.
-    /// The actual remove will be done later.
-    virtual void removeData(WriteBatches &) const {};
-
-    virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 
     virtual String toString() const = 0;
 };
@@ -152,6 +156,7 @@ size_t copyColumnsData(
 
 
 /// Debugging string
-String columnFilesToString(const ColumnFiles & column_files);
+template <typename T>
+String columnFilesToString(const T & column_files);
 } // namespace DM
 } // namespace DB

@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
-# Copyright (C) 2021 PingCAP, Inc.
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 # Build CI/CD image
 
@@ -26,11 +39,6 @@ function bake_llvm_base_aarch64() {
     export CXX=clang++
     export LD=ld.lld
 
-    # OpenSSL
-    source $SCRIPTPATH/install_openssl.sh
-    install_openssl "1_1_1l"
-    export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
-
     # Go
     source $SCRIPTPATH/install_go.sh
     install_go "1.17" "arm64"
@@ -40,10 +48,6 @@ function bake_llvm_base_aarch64() {
     source $SCRIPTPATH/install_rust.sh
     install_rust 
     source $HOME/.cargo/env
-
-    # Curl
-    source $SCRIPTPATH/install_curl.sh
-    install_curl "7.80.0"
 
     # ccache
     source $SCRIPTPATH/install_ccache.sh

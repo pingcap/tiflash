@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/ColumnFamily.h>
@@ -37,8 +51,6 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
         lock_cf.insert(std::move(key), std::move(value));
         return;
     }
-    default:
-        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -69,8 +81,6 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
         return;
     }
-    default:
-        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -248,16 +258,4 @@ RegionData & RegionData::operator=(RegionData && rhs)
     return *this;
 }
 
-
-UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it)
-{
-    return RegionWriteCFDataTrait::getWriteType(write_it->second);
-}
-
-const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFData * write)
-{
-    auto offset = reinterpret_cast<size_t>(&(reinterpret_cast<RegionData *>(0)->write_cf));
-    RegionData * data_ptr = reinterpret_cast<RegionData *>(reinterpret_cast<char *>(write) - offset);
-    return data_ptr->defaultCF().getData();
-}
 } // namespace DB

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -53,6 +67,7 @@ public:
         const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// May change the source columns.
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
@@ -62,15 +77,22 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
 
+    ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
+
     void appendJoin(
         ExpressionActionsChain & chain,
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
+    // Generate a project action for non-root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same, and
+    // guarantee that left/right block of join don't have duplicated column names.
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const String & column_prefix);
+        const String & column_prefix) const;
 
+    // Generate a project action for root DAGQueryBlock,
+    // to keep the schema of Block and tidb-schema the same.
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
         const std::vector<tipb::FieldType> & schema,
@@ -80,7 +102,7 @@ public:
 
     String getActions(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         bool output_as_uint8_type = false);
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
@@ -114,8 +136,12 @@ public:
         String & filter_column_name);
 
 private:
-    void appendAggSelect(
-        ExpressionActionsChain & chain,
+    NamesAndTypes buildOrderColumns(
+        const ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
+
+    void appendCastAfterAgg(
+        const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
@@ -123,15 +149,46 @@ private:
         SortDescription & sort_desc,
         NamesAndTypes & names_and_types,
         TiDB::TiDBCollators & collators,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool result_is_nullable);
+
+    void buildCommonAggFunc(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions,
+        const String & agg_func_name,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        bool empty_input_as_null);
+
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    void fillAggArgumentDetail(
+        const ExpressionActionsPtr & actions,
+        const tipb::Expr & arg,
+        Names & arg_names,
+        DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators);
 
     void makeExplicitSet(
         const tipb::Expr & expr,
@@ -141,12 +198,12 @@ private:
 
     String appendCast(
         const DataTypePtr & target_type,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name);
 
     String appendCastIfNeeded(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name);
 
     /**
@@ -160,35 +217,72 @@ private:
      */
     String alignReturnType(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
+
+    bool buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+
+    std::pair<bool, Names> buildJoinKey(
+        const ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        bool left,
+        bool is_right_out_join);
 
     String applyFunction(
         const String & func_name,
         const Names & arg_names,
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const TiDB::TiDBCollatorPtr & collator);
 
     String appendTimeZoneCast(
         const String & tz_col,
         const String & ts_col,
         const String & func_name,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     String appendDurationCast(
         const String & fsp_expr,
         const String & dur_expr,
         const String & func_name,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
 
     String convertToUInt8(
-        ExpressionActionsPtr & actions,
+        const ExpressionActionsPtr & actions,
         const String & column_name);
 
     String buildFunction(
         const tipb::Expr & expr,
-        ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions);
+
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
+
+    NamesWithAliases genRootFinalProjectAliases(
+        const String & column_prefix,
+        const std::vector<Int32> & output_offsets) const;
+
+    // May change the source columns.
+    void appendCastForRootFinalProjection(
+        const ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        bool need_append_timezone_cast,
+        const BoolVec & need_append_type_cast_vec);
+
+    // return {need_append_type_cast, need_append_type_cast_vec}
+    // need_append_type_cast_vec: BoolVec of which one should append type cast.
+    // And need_append_type_cast_vec.size() == output_offsets.size().
+    std::pair<bool, BoolVec> isCastRequiredForRootFinalProjection(
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets) const;
 
     // all columns from table scan
     NamesAndTypes source_columns;

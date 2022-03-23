@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -43,6 +57,18 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
+    switch (dag_context.encode_type)
+    {
+    case tipb::EncodeType::TypeDefault:
+        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
+    case tipb::EncodeType::TypeChunk:
+        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
+    case tipb::EncodeType::TypeCHBlock:
+        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        break;
+    }
 }
 
 template <class StreamWriterPtr>
@@ -77,20 +103,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
-    if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
-    {
-        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
-    }
-    else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
-    {
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
-    }
-    else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
-    {
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
-    }
-
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
@@ -186,31 +198,16 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
-    std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);
-    for (auto i = 0; i < partition_num; ++i)
+
+    if constexpr (send_exec_summary_at_last)
     {
-        if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
-        {
-            chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(dag_context.result_field_types);
-        }
-        else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
-        {
-            chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(dag_context.result_field_types);
-        }
-        else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
-        {
-            chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(dag_context.result_field_types);
-        }
-        if constexpr (send_exec_summary_at_last)
-        {
-            /// Sending the response to only one node, default the first one.
-            if (i == 0)
-                serializeToPacket(packet[i], response);
-        }
+        /// Sending the response to only one node, default the first one.
+        serializeToPacket(packet[0], response);
     }
+
     if (input_blocks.empty())
     {
         if constexpr (send_exec_summary_at_last)
@@ -276,15 +273,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
                 dest_tbl_cols[part_id][col_id] = std::move(scattered_columns[part_id]);
             }
         }
-
         // serialize each partitioned block and write it to its destination
         for (auto part_id = 0; part_id < partition_num; ++part_id)
         {
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_blocks[part_id].rows();
-            chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
-            packet[part_id].add_chunks(chunk_codec_stream[part_id]->getString());
-            chunk_codec_stream[part_id]->clear();
+            chunk_codec_stream->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
+            packet[part_id].add_chunks(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
         }
     }
 

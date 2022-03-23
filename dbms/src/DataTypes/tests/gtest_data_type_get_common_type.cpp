@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
@@ -35,12 +49,60 @@ try
 
     ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDate"))->equals(*typeFromString("MyDate")));
     ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime"))->equals(*typeFromString("MyDateTime")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime(3)"))->equals(*typeFromString("MyDateTime(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime(6)"))->equals(*typeFromString("MyDateTime(6)")));
 
-    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDate"))->equals(*typeFromString("MyDate")));
-    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime"))->equals(*typeFromString("MyDateTime")));
+    /// MyDateTime is MyDateTime(0)
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime MyDate"))->equals(*typeFromString("MyDateTime")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime MyDateTime"))->equals(*typeFromString("MyDateTime")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime MyDateTime(3)"))->equals(*typeFromString("MyDateTime(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime MyDateTime(6)"))->equals(*typeFromString("MyDateTime(6)")));
 
-    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Decimal(20,0)"))->equals(*typeFromString("Decimal(65,4)")));
-    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Int64"))->equals(*typeFromString("Decimal(65,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(3) MyDate"))->equals(*typeFromString("MyDateTime(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(3) MyDateTime"))->equals(*typeFromString("MyDateTime(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(3) MyDateTime(3)"))->equals(*typeFromString("MyDateTime(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(3) MyDateTime(6)"))->equals(*typeFromString("MyDateTime(6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(6) MyDate"))->equals(*typeFromString("MyDateTime(6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(6) MyDateTime"))->equals(*typeFromString("MyDateTime(6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(6) MyDateTime(3)"))->equals(*typeFromString("MyDateTime(6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDateTime(6) MyDateTime(6)"))->equals(*typeFromString("MyDateTime(6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(0) MyDuration(0)"))->equals(*typeFromString("MyDuration(0)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(0) MyDuration(3)"))->equals(*typeFromString("MyDuration(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(0) MyDuration(6)"))->equals(*typeFromString("MyDuration(6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(3) MyDuration(0)"))->equals(*typeFromString("MyDuration(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(3) MyDuration(3)"))->equals(*typeFromString("MyDuration(3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(3) MyDuration(6)"))->equals(*typeFromString("MyDuration(6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(6) MyDuration(0)"))->equals(*typeFromString("MyDuration(6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(6) MyDuration(3)"))->equals(*typeFromString("MyDuration(6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("MyDuration(6) MyDuration(6)"))->equals(*typeFromString("MyDuration(6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(5,3) Decimal(5,3)"))->equals(*typeFromString("Decimal(5,3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(5,3) Decimal(18,2)"))->equals(*typeFromString("Decimal(19,3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(5,3) Decimal(20,4)"))->equals(*typeFromString("Decimal(20,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(5,3) Decimal(40,6)"))->equals(*typeFromString("Decimal(40,6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(18,2) Decimal(5,3)"))->equals(*typeFromString("Decimal(19,3)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(18,2) Decimal(18,2)"))->equals(*typeFromString("Decimal(18,2)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(18,2) Decimal(20,4)"))->equals(*typeFromString("Decimal(20,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(18,2) Decimal(40,6)"))->equals(*typeFromString("Decimal(40,6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(20,4) Decimal(5,3)"))->equals(*typeFromString("Decimal(20,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(20,4) Decimal(18,2)"))->equals(*typeFromString("Decimal(20,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(20,4) Decimal(20,4)"))->equals(*typeFromString("Decimal(20,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(20,4) Decimal(40,6)"))->equals(*typeFromString("Decimal(40,6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(40,6) Decimal(5,3)"))->equals(*typeFromString("Decimal(40,6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(40,6) Decimal(18,2)"))->equals(*typeFromString("Decimal(40,6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(40,6) Decimal(20,4)"))->equals(*typeFromString("Decimal(40,6)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(40,6) Decimal(40,6)"))->equals(*typeFromString("Decimal(40,6)")));
+
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Decimal(20,0)"))->equals(*typeFromString("Decimal(43,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Int64"))->equals(*typeFromString("Decimal(43,4)")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(12,0) Int64"))->equals(*typeFromString("Decimal(19,0)")));
 
     ASSERT_TRUE(getLeastSupertype(typesFromString("String FixedString(32) FixedString(8)"))->equals(*typeFromString("String")));
 

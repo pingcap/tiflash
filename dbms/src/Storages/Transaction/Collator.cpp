@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
@@ -89,7 +103,10 @@ public:
                     if (c == escape || c == '_' || c == '%')
                         offset = old_offset;
                     else
-                        c = escape;
+                    {
+                        assert(escape >= 0);
+                        c = static_cast<decltype(c)>(escape); // NOLINT(bugprone-signed-char-misuse)
+                    }
                 }
             }
             else if (c == '_')
@@ -403,7 +420,7 @@ public:
                 }
                 else
                 {
-                    return signum((int)(s1_first & 0xFFFF) - (int)(s2_first & 0xFFFF));
+                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
                 }
             }
         }
@@ -576,24 +593,37 @@ private:
     friend class Pattern<UnicodeCICollator>;
 };
 
-std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
+TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
 {
     switch (id)
     {
     case ITiDBCollator::BINARY:
-        return std::make_unique<BinCollator<char, false>>(id);
+        static const auto binary_collator = BinCollator<char, false>(BINARY);
+        return &binary_collator;
     case ITiDBCollator::ASCII_BIN:
+        static const auto ascii_collator = BinCollator<char, true>(ASCII_BIN);
+        return &ascii_collator;
     case ITiDBCollator::LATIN1_BIN:
-        return std::make_unique<BinCollator<char, true>>(id);
+        static const auto latin1_collator = BinCollator<char, true>(LATIN1_BIN);
+        return &latin1_collator;
     case ITiDBCollator::UTF8MB4_BIN:
+        static const auto utf8mb4_collator = BinCollator<Rune, true>(UTF8MB4_BIN);
+        return &utf8mb4_collator;
     case ITiDBCollator::UTF8_BIN:
-        return std::make_unique<BinCollator<Rune, true>>(id);
+        static const auto utf8_collator = BinCollator<Rune, true>(UTF8_BIN);
+        return &utf8_collator;
     case ITiDBCollator::UTF8_GENERAL_CI:
+        static const auto utf8_general_ci_collator = GeneralCICollator(UTF8_GENERAL_CI);
+        return &utf8_general_ci_collator;
     case ITiDBCollator::UTF8MB4_GENERAL_CI:
-        return std::make_unique<GeneralCICollator>(id);
+        static const auto utf8mb4_general_ci_collator = GeneralCICollator(UTF8MB4_GENERAL_CI);
+        return &utf8mb4_general_ci_collator;
     case ITiDBCollator::UTF8_UNICODE_CI:
+        static const auto utf8_unicode_ci_collator = UnicodeCICollator(UTF8_UNICODE_CI);
+        return &utf8_unicode_ci_collator;
     case ITiDBCollator::UTF8MB4_UNICODE_CI:
-        return std::make_unique<UnicodeCICollator>(id);
+        static const auto utf8mb4_unicode_ci_collator = UnicodeCICollator(UTF8MB4_UNICODE_CI);
+        return &utf8mb4_unicode_ci_collator;
     default:
         throw DB::Exception(
             std::string(__PRETTY_FUNCTION__) + ": invalid collation ID: " + std::to_string(id),
@@ -601,7 +631,7 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
     }
 }
 
-std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(const std::string & name)
+TiDBCollatorPtr ITiDBCollator::getCollator(const std::string & name)
 {
     const static std::unordered_map<std::string, int32_t> collator_name_map({
         {"binary", ITiDBCollator::BINARY},

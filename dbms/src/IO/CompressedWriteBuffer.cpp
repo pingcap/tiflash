@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Core/Types.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <city.h>
@@ -47,7 +61,7 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::LZ4);
 
         if (compression_settings.method == CompressionMethod::LZ4)
-            compressed_size = header_size + LZ4_compress_default(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size));
+            compressed_size = header_size + LZ4_compress_fast(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
         else
             compressed_size = header_size + LZ4_compress_HC(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
 

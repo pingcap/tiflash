@@ -1,0 +1,161 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 varchar(100), c2 datetime, c3 date);
+mysql> insert into test.t1 values('', '1999-10-10 10:10:10.123', '1999-01-10'), ('200', '1999-02-10 10:10:10.123', '1999-11-10'), ('1999-01-10', '1999-10-10 10:10:10.123', '1999-01-10');
+# leap year
+mysql> insert into test.t1 values('2000-2-10', '2000-2-10 10:10:10', '2000-2-10');
+# non leap year
+mysql> insert into test.t1 values('2001-2-10', '2001-2-10 10:10:10', '2001-2-10');
+# zero day
+mysql> insert into test.t1 values('2000-2-0', '2000-2-10 10:10:10', '2000-2-10');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c1, last_day(c1) from test.t1 order by 1;
++------------+--------------+
+| c1         | last_day(c1) |
++------------+--------------+
+|            | NULL         |
+| 1999-01-10 | 1999-01-31   |
+| 200        | NULL         |
+| 2000-2-0   | NULL         |
+| 2000-2-10  | 2000-02-29   |
+| 2001-2-10  | 2001-02-28   |
++------------+--------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c2, last_day(c2) from test.t1 order by 1;
++---------------------+--------------+
+| c2                  | last_day(c2) |
++---------------------+--------------+
+| 1999-02-10 10:10:10 | 1999-02-28   |
+| 1999-10-10 10:10:10 | 1999-10-31   |
+| 1999-10-10 10:10:10 | 1999-10-31   |
+| 2000-02-10 10:10:10 | 2000-02-29   |
+| 2000-02-10 10:10:10 | 2000-02-29   |
+| 2001-02-10 10:10:10 | 2001-02-28   |
++---------------------+--------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c3, last_day(c3) from test.t1 order by 1;
++------------+--------------+
+| c3         | last_day(c3) |
++------------+--------------+
+| 1999-01-10 | 1999-01-31   |
+| 1999-01-10 | 1999-01-31   |
+| 1999-11-10 | 1999-11-30   |
+| 2000-02-10 | 2000-02-29   |
+| 2000-02-10 | 2000-02-29   |
+| 2001-02-10 | 2001-02-28   |
++------------+--------------+
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 date);
+mysql> insert into test.t1 values('2001-01-01'),('2001-02-01'),('2001-03-01'),('2001-04-01'),('2001-05-01'),('2001-06-01'),('2001-07-01'),('2001-08-01'),('2001-09-01'),('2001-10-01'),('2001-11-01'),('2001-12-01');
+mysql> insert into test.t1 values('2000-01-01'),('2000-02-01'),('2000-03-01'),('2000-04-01'),('2000-05-01'),('2000-06-01'),('2000-07-01'),('2000-08-01'),('2000-09-01'),('2000-10-01'),('2000-11-01'),('2000-12-01');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c1, last_day(c1) from test.t1 order by 1;
++------------+--------------+
+| c1         | last_day(c1) |
++------------+--------------+
+| 2000-01-01 | 2000-01-31   |
+| 2000-02-01 | 2000-02-29   |
+| 2000-03-01 | 2000-03-31   |
+| 2000-04-01 | 2000-04-30   |
+| 2000-05-01 | 2000-05-31   |
+| 2000-06-01 | 2000-06-30   |
+| 2000-07-01 | 2000-07-31   |
+| 2000-08-01 | 2000-08-31   |
+| 2000-09-01 | 2000-09-30   |
+| 2000-10-01 | 2000-10-31   |
+| 2000-11-01 | 2000-11-30   |
+| 2000-12-01 | 2000-12-31   |
+| 2001-01-01 | 2001-01-31   |
+| 2001-02-01 | 2001-02-28   |
+| 2001-03-01 | 2001-03-31   |
+| 2001-04-01 | 2001-04-30   |
+| 2001-05-01 | 2001-05-31   |
+| 2001-06-01 | 2001-06-30   |
+| 2001-07-01 | 2001-07-31   |
+| 2001-08-01 | 2001-08-31   |
+| 2001-09-01 | 2001-09-30   |
+| 2001-10-01 | 2001-10-31   |
+| 2001-11-01 | 2001-11-30   |
+| 2001-12-01 | 2001-12-31   |
++------------+--------------+
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(c1 varchar(100));
+mysql> insert into test.t1 values('2001-01-00'),('2001-02-00'),('2001-03-00'),('2001-04-00'),('2001-05-00'),('2001-06-00'),('2001-07-00'),('2001-08-00'),('2001-09-00'),('2001-10-00'),('2001-11-00'),('2001-12-00');
+mysql> insert into test.t1 values('2000-01-00'),('2000-02-00'),('2000-03-00'),('2000-04-00'),('2000-05-00'),('2000-06-00'),('2000-07-00'),('2000-08-00'),('2000-09-00'),('2000-10-00'),('2000-11-00'),('2000-12-00');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+mysql> set @@sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c1, last_day(c1) from test.t1 order by 1;
++------------+--------------+
+| c1         | last_day(c1) |
++------------+--------------+
+| 2000-01-00 | NULL         |
+| 2000-02-00 | NULL         |
+| 2000-03-00 | NULL         |
+| 2000-04-00 | NULL         |
+| 2000-05-00 | NULL         |
+| 2000-06-00 | NULL         |
+| 2000-07-00 | NULL         |
+| 2000-08-00 | NULL         |
+| 2000-09-00 | NULL         |
+| 2000-10-00 | NULL         |
+| 2000-11-00 | NULL         |
+| 2000-12-00 | NULL         |
+| 2001-01-00 | NULL         |
+| 2001-02-00 | NULL         |
+| 2001-03-00 | NULL         |
+| 2001-04-00 | NULL         |
+| 2001-05-00 | NULL         |
+| 2001-06-00 | NULL         |
+| 2001-07-00 | NULL         |
+| 2001-08-00 | NULL         |
+| 2001-09-00 | NULL         |
+| 2001-10-00 | NULL         |
+| 2001-11-00 | NULL         |
+| 2001-12-00 | NULL         |
++------------+--------------+
+# mysql> set @@sql_mode = '';
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c1, last_day(c1) from test.t1 order by 1;
+# +------------+--------------+
+# | c1         | last_day(c1) |
+# +------------+--------------+
+# | 2000-01-00 | 2000-01-31   |
+# | 2000-02-00 | 2000-02-29   |
+# | 2000-03-00 | 2000-03-31   |
+# | 2000-04-00 | 2000-04-30   |
+# | 2000-05-00 | 2000-05-31   |
+# | 2000-06-00 | 2000-06-30   |
+# | 2000-07-00 | 2000-07-31   |
+# | 2000-08-00 | 2000-08-31   |
+# | 2000-09-00 | 2000-09-30   |
+# | 2000-10-00 | 2000-10-31   |
+# | 2000-11-00 | 2000-11-30   |
+# | 2000-12-00 | 2000-12-31   |
+# | 2001-01-00 | 2001-01-31   |
+# | 2001-02-00 | 2001-02-28   |
+# | 2001-03-00 | 2001-03-31   |
+# | 2001-04-00 | 2001-04-30   |
+# | 2001-05-00 | 2001-05-31   |
+# | 2001-06-00 | 2001-06-30   |
+# | 2001-07-00 | 2001-07-31   |
+# | 2001-08-00 | 2001-08-31   |
+# | 2001-09-00 | 2001-09-30   |
+# | 2001-10-00 | 2001-10-31   |
+# | 2001-11-00 | 2001-11-30   |
+# | 2001-12-00 | 2001-12-31   |
+# +------------+--------------+

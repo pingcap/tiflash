@@ -1,5 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
+#include <fmt/core.h>
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -56,13 +72,6 @@ metapb::Peer RegionMeta::getPeer() const
     return peer;
 }
 
-pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    return pingcap::kv::RegionVerID{regionId(), region_state.getConfVersion(), region_state.getVersion()};
-}
-
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -71,9 +80,6 @@ raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 
 void RegionMeta::doSetRegion(const metapb::Region & region)
 {
-    if (regionId() != region.id())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region id is not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
-
     region_state.setRegion(region);
 }
 
@@ -98,12 +104,6 @@ UInt64 RegionMeta::appliedIndex() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return apply_state.applied_index();
-}
-
-UInt64 RegionMeta::appliedTerm() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    return applied_term;
 }
 
 RegionMeta::RegionMeta(RegionMeta && rhs)
@@ -218,9 +218,6 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    if (regionId() != rhs.regionId())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
-
     peer = std::move(rhs.peer);
     apply_state = std::move(rhs.apply_state);
     applied_term = rhs.applied_term;
@@ -278,27 +275,23 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     case raft_serverpb::PeerState::Normal:
         break;
     default:
-    {
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false)
-                            + " unexpected state of source region: " + raft_serverpb::PeerState_Name(state),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
+        throw Exception(fmt::format("{}: unexpected state {} of source {}", __FUNCTION__, raft_serverpb::PeerState_Name(state), regionId(), toString(false)), ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!(source_region == source_meta.region_state.getRegion()))
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("{}: source region not match exist region meta", __FUNCTION__), ErrorCodes::LOGICAL_ERROR);
 
     return computeRegionMergeResult(source_region, region_state.getRegion());
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
+void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().ShortDebugString()
-                            + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("{}: current region meta: {}, expect: {}", __FUNCTION__, region_state.getRegion().ShortDebugString(), response.split().left().ShortDebugString()),
+            ErrorCodes::LOGICAL_ERROR);
 }
 #pragma GCC diagnostic pop
 
@@ -311,12 +304,13 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     const auto & rollback_request = request.rollback_merge();
 
     if (region_state.getState() != raft_serverpb::PeerState::Merging)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("{}: region state is {}, expect {}", __FUNCTION__, raft_serverpb::PeerState_Name(region_state.getState()), raft_serverpb::PeerState_Name(raft_serverpb::PeerState::Merging)),
+            ErrorCodes::LOGICAL_ERROR);
     if (region_state.getMergeState().commit() != rollback_request.commit())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": merge commit index " + DB::toString(region_state.getMergeState().commit())
-                            + " != " + DB::toString(rollback_request.commit()),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("{}: merge commit index is {}, expect {}", __FUNCTION__, region_state.getMergeState().commit(), rollback_request.commit()),
+            ErrorCodes::LOGICAL_ERROR);
 
     std::lock_guard<std::mutex> lock(mutex);
     const auto version = region_state.getVersion() + 1;
@@ -328,6 +322,14 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
+void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state)
+{
+    if (source_at_left)
+        region_state.setStartKey(source_region_state.getRegion().start_key());
+    else
+        region_state.setEndKey(source_region_state.getRegion().end_key());
+}
+
 void MetaRaftCommandDelegate::execCommitMerge(
     const RegionMergeResult & res,
     UInt64 index,
@@ -337,10 +339,8 @@ void MetaRaftCommandDelegate::execCommitMerge(
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_state.setVersion(res.version);
-    if (res.source_at_left)
-        region_state.setStartKey(source_meta.region_state.getRegion().start_key());
-    else
-        region_state.setEndKey(source_meta.region_state.getRegion().end_key());
+
+    ChangeRegionStateRange(region_state, res.source_at_left, source_meta.region_state);
 
     region_state.setState(raft_serverpb::PeerState::Normal);
     region_state.clearMergeState();
@@ -379,8 +379,7 @@ void MetaRaftCommandDelegate::execPrepareMerge(
 
 bool RegionMeta::doCheckPeerRemoved() const
 {
-    if (region_state.getRegion().peers().empty())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": got empty peers, should not happen", ErrorCodes::LOGICAL_ERROR);
+    assert(!region_state.getRegion().peers().empty());
 
     for (const auto & region_peer : region_state.getRegion().peers())
     {
@@ -411,10 +410,6 @@ MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
     return static_cast<MetaRaftCommandDelegate &>(*this);
 }
 
-const metapb::Peer & MetaRaftCommandDelegate::getPeer() const
-{
-    return peer;
-}
 const raft_serverpb::RaftApplyState & MetaRaftCommandDelegate::applyState() const
 {
     return apply_state;

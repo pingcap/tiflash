@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ClickHouseRevision.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -21,7 +35,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, getName()))
+    : log(getMPPTaskLog(log_, NAME))
     , params(params_)
     , aggregator(params, log)
     , file_provider(file_provider_)
@@ -31,7 +45,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler)
+    , processor(inputs, additional_input_at_end, max_threads, handler, log)
 {
     children = inputs;
     if (additional_input_at_end)
@@ -156,7 +170,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
         if (data.isConvertibleToTwoLevel())
             data.convertToTwoLevel();
 
-        if (data.size())
+        if (!data.empty())
             parent.aggregator.writeToTemporaryFile(data, parent.file_provider);
     }
 }
@@ -172,7 +186,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
             if (data->isConvertibleToTwoLevel())
                 data->convertToTwoLevel();
 
-            if (data->size())
+            if (!data->empty())
                 parent.aggregator.writeToTemporaryFile(*data, parent.file_provider);
         }
     }
@@ -181,9 +195,13 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
 void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
+    Int32 old_value = -1;
+    parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
+
     /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
-        parent.processor.cancel(false);
+        /// kill the processor so ExchangeReceiver will be closed
+        parent.processor.cancel(true);
 }
 
 
@@ -205,7 +223,8 @@ void ParallelAggregatingBlockInputStream::execute()
     processor.process();
     processor.wait();
 
-    rethrowFirstException(exceptions);
+    if (first_exception_index != -1)
+        std::rethrow_exception(exceptions[first_exception_index]);
 
     if (isCancelledOrThrowIfKilled())
         return;

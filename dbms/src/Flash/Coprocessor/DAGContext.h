@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -13,6 +27,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -21,12 +36,6 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
-
-struct ProfileStreamsInfo
-{
-    UInt32 qb_id;
-    BlockInputStreams input_streams;
-};
 
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
@@ -151,9 +160,11 @@ public:
     {}
 
     void attachBlockIO(const BlockIO & io_);
-    std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
-    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
-    std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
+    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+
+    void initExecutorIdToJoinIdMap();
+    std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
+
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
@@ -203,14 +214,16 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
-    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
+    const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
+
+    bool containsRegionsInfoForTable(Int64 table_id) const;
 
     const BlockIO & getBlockIO() const
     {
         return io;
     }
 
+    int getNewThreadCountOfExchangeReceiver() const;
     UInt64 getFlags() const
     {
         return flags;
@@ -232,6 +245,27 @@ public:
         return (flags & f);
     }
 
+    UInt64 getSQLMode() const
+    {
+        return sql_mode;
+    }
+    void setSQLMode(UInt64 f)
+    {
+        sql_mode = f;
+    }
+    void addSQLMode(UInt64 f)
+    {
+        sql_mode |= f;
+    }
+    void delSQLMode(UInt64 f)
+    {
+        sql_mode &= (~f);
+    }
+    bool hasSQLMode(UInt64 f) const
+    {
+        return sql_mode & f;
+    }
+
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
@@ -249,8 +283,7 @@ public:
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
     MPPTunnelSetPtr tunnel_set;
-    RegionInfoMap regions_for_local_read;
-    RegionInfoList regions_for_remote_read;
+    TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
@@ -263,18 +296,12 @@ public:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
-    std::map<String, ProfileStreamsInfo> profile_streams_map;
-    /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to
-    /// the last BlockInputStreams for join build side. In TiFlash, a hash join's build side is
-    /// finished before probe side starts, so the join probe side's running time does not include
-    /// hash table's build time, when construct ExecSummaries, we need add the build cost to probe executor
-    std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
-    /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
-    /// in this query block and all its children query block
-    std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
+    std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
+    std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
-    /// JoinStatistics gets JoinExecuteInfo through it.
+    /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
     /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
@@ -288,6 +315,7 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    int new_thread_count_of_exchange_receiver = 0;
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
