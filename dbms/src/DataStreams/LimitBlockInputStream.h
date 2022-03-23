@@ -15,8 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {
@@ -36,7 +34,7 @@ public:
         const BlockInputStreamPtr & input,
         size_t limit_,
         size_t offset_,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         bool always_read_till_end_ = false);
 
     String getName() const override { return NAME; }
@@ -51,7 +49,7 @@ private:
     size_t offset;
     size_t pos = 0;
     bool always_read_till_end;
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB
