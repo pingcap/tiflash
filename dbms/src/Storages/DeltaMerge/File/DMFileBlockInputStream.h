@@ -139,7 +139,7 @@ private:
 
     // clean read
     bool enable_clean_read = false;
-    UInt64 max_data_version = MAX_UINT64;
+    UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)

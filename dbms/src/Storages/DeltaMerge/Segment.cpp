@@ -127,7 +127,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
         // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
         size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows = 1;
-        size_t gc_hint_version = UINT64_MAX;
+        size_t gc_hint_version = std::numeric_limits<UInt64>::max();
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
@@ -525,7 +525,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         *new_columns_to_read,
         rowkey_ranges,
         EMPTY_FILTER,
-        MAX_UINT64,
+        std::numeric_limits<UInt64>::max(),
         expected_block_size,
         false);
 
