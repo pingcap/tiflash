@@ -460,7 +460,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGProperties properties = getDAGProperties("");
         std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
-
+        static auto log = Logger::get("MockDAG");
         LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
         tipb::SelectResponse dag_response;
         TablesRegionsInfo tables_regions_info(true);
