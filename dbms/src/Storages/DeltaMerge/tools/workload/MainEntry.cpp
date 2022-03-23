@@ -69,7 +69,7 @@ uint64_t average(const std::vector<uint64_t> & v)
     {
         return 0;
     }
-    auto ignore_element_count = v.size() * 0.1;
+    size_t ignore_element_count = v.size() * 0.1;
     auto begin = v.begin() + ignore_element_count; // Ignore small elements.
     auto end = v.end() - ignore_element_count; // Ignore large elements.
     auto count = end - begin;
