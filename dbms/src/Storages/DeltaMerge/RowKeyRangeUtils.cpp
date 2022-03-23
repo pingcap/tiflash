@@ -43,7 +43,7 @@ private:
     OffsetCounts merged_stats;
 
 public:
-    MergeRangeHelper(RowKeyRanges && sorted_ranges_)
+    explicit MergeRangeHelper(RowKeyRanges && sorted_ranges_)
         : sorted_ranges(std::move(sorted_ranges_)) //
     {
         genMergeStats();
