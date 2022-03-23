@@ -50,7 +50,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         for (const auto & database_table : dependencies)
         {
             auto dependent_table = context.getTable(database_table.first, database_table.second);
-            auto & materialized_view = dynamic_cast<const StorageMaterializedView &>(*dependent_table);
+            const auto & materialized_view = dynamic_cast<const StorageMaterializedView &>(*dependent_table);
 
             auto query = materialized_view.getInnerQuery();
             BlockOutputStreamPtr out = std::make_shared<PushingToViewsBlockOutputStream>(
