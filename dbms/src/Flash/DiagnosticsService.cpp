@@ -26,6 +26,7 @@
 #include <memory>
 #include <tuple>
 #include <vector>
+#include "common/logger_useful.h"
 
 
 namespace DB
@@ -47,6 +48,7 @@ try
     }
     else
     {
+        LOG_FMT_ERROR(log, "TiFlashRaftProxyHelper is null, `DiagnosticsService::server_info` is useless");
         return ::grpc::Status(::grpc::StatusCode::INTERNAL, "TiFlashRaftProxyHelper is null");
     }
     return ::grpc::Status::OK;
