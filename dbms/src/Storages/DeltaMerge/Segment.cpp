@@ -730,7 +730,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
                       .build(
                           read_file,
                           /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
-                          /*rowkey_ranges*/ {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+                          /*rowkey_ranges=*/{RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 
     stream->readPrefix();
     auto block = stream->read();

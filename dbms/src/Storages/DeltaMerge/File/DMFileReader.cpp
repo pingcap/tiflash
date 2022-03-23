@@ -224,7 +224,7 @@ DMFileReader::DMFileReader(
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(pack_filter_)
+    , pack_filter(std::move(pack_filter_))
     , is_common_handle(is_common_handle_)
     , skip_packs_by_column(read_columns.size(), 0)
     , mark_cache(mark_cache_)

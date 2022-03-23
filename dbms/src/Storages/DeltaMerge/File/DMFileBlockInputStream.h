@@ -64,7 +64,7 @@ public:
     // Should not use the builder again after `build` is called.
     DMFileBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
-        const ColumnDefines & read_columns_,
+        const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges);
 
     // **** filters **** //
