@@ -328,7 +328,7 @@ private:
             catch (...)
             {
                 cells.erase(res.first);
-                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknown exception");
                 throw;
             }
         }
