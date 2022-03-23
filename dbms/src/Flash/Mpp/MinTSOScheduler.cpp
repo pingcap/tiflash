@@ -75,54 +75,43 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
     return scheduleImp(id.start_ts, query_task_set, task, false);
 }
 
-/// the cancelled query maybe hang, so trigger scheduling as needed.
-void MinTSOScheduler::deleteCancelledQuery(const UInt64 tso, MPPTaskManager & task_manager)
+/// after finishing the query, there would be no threads released soon, so the updated min-tso query with waiting tasks should be scheduled.
+/// the cancelled query maybe hang, so trigger scheduling as needed when deleting cancelled query.
+void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manager, const bool is_cancelled)
 {
     if (isDisabled())
     {
         return;
     }
 
+    LOG_FMT_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
     active_set.erase(tso);
     waiting_set.erase(tso);
     GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
     GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
 
-    auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
-    if (query_task_set) /// release all waiting tasks
+    if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
     {
-        while (!query_task_set->waiting_tasks.empty())
+        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
+        if (query_task_set) /// release all waiting tasks
         {
-            query_task_set->waiting_tasks.front()->scheduleThisTask(MPPTask::ScheduleState::FAILED);
-            query_task_set->waiting_tasks.pop();
-            GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+            while (!query_task_set->waiting_tasks.empty())
+            {
+                query_task_set->waiting_tasks.front()->scheduleThisTask(MPPTask::ScheduleState::FAILED);
+                query_task_set->waiting_tasks.pop();
+                GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+            }
         }
     }
 
-    /// NOTE: if the cancelled query hang, it will block the min_tso, possibly resulting in deadlock. so here force scheduling waiting tasks of the updated min_tso query.
-    if (updateMinTSO(tso, true, "when cancelling it."))
+    /// NOTE: if updated min_tso query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
+    if (updateMinTSO(tso, true, is_cancelled ? "when cancelling it" : "as finishing it"))
     {
         scheduleWaitingQueries(task_manager);
     }
 }
 
-void MinTSOScheduler::deleteFinishedQuery(const UInt64 tso)
-{
-    if (isDisabled())
-    {
-        return;
-    }
-
-    LOG_FMT_DEBUG(log, "query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
-    /// delete from sets
-    active_set.erase(tso);
-    waiting_set.erase(tso);
-    GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
-    GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
-
-    updateMinTSO(tso, true, "as deleting it.");
-}
-
+/// NOTE: should not throw exceptions due to being called when destruction.
 void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager)
 {
     if (isDisabled())
@@ -132,9 +121,8 @@ void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTa
 
     if (static_cast<Int64>(estimated_thread_usage) < needed_threads)
     {
-        auto msg = fmt::format("estimated_thread_usage should not be smaller than 0, actually is {}.", static_cast<Int64>(estimated_thread_usage) - needed_threads);
-        LOG_FMT_ERROR(log, "{}", msg);
-        throw Exception(msg);
+        LOG_FMT_FATAL(log, "estimated_thread_usage should not be smaller than 0, actually is {}.", static_cast<Int64>(estimated_thread_usage) - needed_threads);
+        std::terminate();
     }
     estimated_thread_usage -= needed_threads;
     GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
@@ -202,7 +190,16 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso {}) {}, need {}, but used {} of the thread hard limit {}, {} active and {} waiting queries.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, estimated_thread_usage, thread_hard_limit, active_set.size(), waiting_set.size());
             LOG_FMT_ERROR(log, "{}", msg);
             GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
-            throw Exception(msg);
+            if (isWaiting)
+            {
+                /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this tso and update metrics.
+                task->scheduleThisTask(MPPTask::ScheduleState::EXCEEDED);
+                waiting_set.erase(tso); /// avoid the left waiting tasks of this query reaching here many times.
+            }
+            else
+            {
+                throw Exception(msg);
+            }
         }
         if (!isWaiting)
         {

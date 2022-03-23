@@ -76,7 +76,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             return;
         it->second->to_be_cancelled = true;
         task_set = it->second;
-        scheduler->deleteCancelledQuery(query_id, *this);
+        scheduler->deleteQuery(query_id, *this, true);
         cv.notify_all();
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
@@ -155,7 +155,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteFinishedQuery(task->id.start_ts);
+                scheduler->deleteQuery(task->id.start_ts, *this, false);
                 mpp_query_map.erase(it);
             }
             return;
