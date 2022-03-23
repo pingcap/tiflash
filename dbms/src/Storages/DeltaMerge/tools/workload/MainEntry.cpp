@@ -58,67 +58,60 @@ void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
     }
 }
 
-struct BasicStatistics
-{
-    double init_sec = 0.0;
-    uint64_t write_count = 0;
-    double write_sec = 0.0;
-    uint64_t read_count = 0;
-    double read_sec = 0.0;
-
-    explicit BasicStatistics(const DTWorkload::Statistics & stat)
-    {
-        init_sec = stat.init_store_sec;
-        for (const auto & t : stat.write_stats)
-        {
-            write_count += t.write_count;
-            write_sec += t.total_do_write_sec;
-        }
-        read_count = stat.total_read_count.load(std::memory_order_relaxed);
-        read_sec = stat.total_read_usec.load(std::memory_order_relaxed) / 1000000.0;
-    }
-
-    BasicStatistics() = default;
-};
-
-void print(Poco::Logger * log, uint64_t i, const BasicStatistics & stat, WorkloadOptions & opts)
-{
-    auto s = fmt::format("No {} Workload {} InitSec {} WriteCount {} WriteSec {} ReadCount {} ReadSec {}",
-                         i,
-                         opts.write_key_distribution,
-                         stat.init_sec,
-                         stat.write_count,
-                         stat.write_sec,
-                         stat.read_count,
-                         stat.read_sec);
-    LOG_INFO(log, s);
-}
-
 void outputResultHeader()
 {
     std::cout << "Date,Table Schema,Workload,Init Seconds,Write Speed(rows count),Read Speed(rows count)" << std::endl;
 }
 
-void outputResult(Poco::Logger * log, const std::vector<BasicStatistics> & stats, WorkloadOptions & opts)
+uint64_t average(const std::vector<uint64_t> & v)
 {
-    BasicStatistics total_stat;
-    for (const auto & stat : stats)
+    if (v.empty())
     {
-        total_stat.init_sec = std::max(stat.init_sec, total_stat.init_sec);
-        total_stat.write_count += stat.write_count;
-        total_stat.write_sec += stat.write_sec;
-        total_stat.read_count += stat.read_count;
-        total_stat.read_sec += stat.read_sec;
+        return 0;
     }
+    size_t ignore_element_count = v.size() * 0.1;
+    auto begin = v.begin() + ignore_element_count; // Ignore small elements.
+    auto end = v.end() - ignore_element_count; // Ignore large elements.
+    auto count = end - begin;
+    return std::accumulate(begin, end, 0ul) / count;
+}
+
+void outputResult(Poco::Logger * log, const std::vector<Statistics> & stats, WorkloadOptions & opts)
+{
+    if (stats.empty())
+    {
+        return;
+    }
+
+    uint64_t max_init_ms = 0;
+    std::vector<uint64_t> write_per_seconds, read_per_seconds;
+    for_each(stats.begin(), stats.end(), [&](const Statistics & stat) {
+        max_init_ms = std::max(max_init_ms, stat.initMS());
+        write_per_seconds.push_back(stat.writePerSecond());
+        read_per_seconds.push_back(stat.readPerSecond());
+    });
+
+    std::sort(write_per_seconds.begin(), write_per_seconds.end());
+    std::sort(read_per_seconds.begin(), read_per_seconds.end());
+
+    auto avg_write_per_second = average(write_per_seconds);
+    auto avg_read_per_second = average(read_per_seconds);
+
     // Date, Table Schema, Workload, Init Seconds, Write Speed(rows count), Read Speed(rows count)
-    auto s = fmt::format("{},{},{},{:.2f},{:.2f},{:.2f}", localDate(), opts.table, opts.write_key_distribution, total_stat.init_sec, total_stat.write_count / total_stat.write_sec, total_stat.read_count / total_stat.read_sec);
+    auto s = fmt::format("{},{},{},{:.2f},{},{}",
+                         localDate(),
+                         opts.table,
+                         opts.write_key_distribution,
+                         max_init_ms / 1000.0,
+                         avg_write_per_second,
+                         avg_read_per_second);
     LOG_INFO(log, s);
     std::cout << s << std::endl;
 }
 
 std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 {
-    return opts.verification ? std::make_unique<SharedHandleTable>() : nullptr;
+    return opts.verification ? std::make_unique<SharedHandleTable>(opts.max_key_count) : nullptr;
 }
 
 void run(WorkloadOptions & opts)
@@ -126,7 +119,7 @@ void run(WorkloadOptions & opts)
     auto * log = &Poco::Logger::get("DTWorkload_main");
     LOG_FMT_INFO(log, "{}", opts.toString());
     auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
-    std::vector<BasicStatistics> basic_stats;
+    std::vector<Statistics> stats;
     try
     {
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
@@ -139,8 +132,8 @@ void run(WorkloadOptions & opts)
         {
             DTWorkload workload(opts, handle_table, table_info);
             workload.run(i);
-            basic_stats.emplace_back(workload.getStat());
-            print(log, i, basic_stats.back(), opts);
+            stats.push_back(workload.getStat());
+            LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
         }
         removeData(log, data_dirs);
     }
@@ -149,7 +142,7 @@ void run(WorkloadOptions & opts)
         DB::tryLogCurrentException("exception thrown");
     }
 
-    outputResult(log, basic_stats, opts);
+    outputResult(log, stats, opts);
     finish();
 }
 

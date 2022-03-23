@@ -14,14 +14,18 @@
 
 #pragma once
 
+#include <fmt/ranges.h>
+
 #include <atomic>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace DB
 {
 class Context;
-}
+class Block;
+} // namespace DB
 
 namespace DB::DM
 {
@@ -46,6 +50,74 @@ struct WorkloadOptions;
 class HandleLock;
 class SharedHandleTable;
 
+class ThreadStat
+{
+public:
+    std::string toString() const
+    {
+        return fmt::format("ms {} count {} speed {}", ms, count, speed());
+    }
+
+    // count per second
+    uint64_t speed() const
+    {
+        return ms == 0 ? 0 : count * 1000 / ms;
+    }
+
+private:
+    uint64_t ms = 0;
+    uint64_t count = 0;
+    friend class DTWorkload;
+};
+
+class Statistics
+{
+public:
+    Statistics(int write_thread_count = 0, int read_thread_count = 0)
+        : init_ms(0)
+        , write_stats(write_thread_count)
+        , read_stats(read_thread_count)
+    {}
+
+    uint64_t writePerSecond() const
+    {
+        uint64_t wps = 0;
+        std::for_each(write_stats.begin(), write_stats.end(), [&](const ThreadStat & stat) { wps += stat.speed(); });
+        return wps;
+    }
+
+    uint64_t readPerSecond() const
+    {
+        uint64_t rps = 0;
+        std::for_each(read_stats.begin(), read_stats.end(), [&](const ThreadStat & stat) { rps += stat.speed(); });
+        return rps;
+    }
+
+    uint64_t initMS() const { return init_ms; }
+
+    std::vector<std::string> toStrings() const
+    {
+        std::vector<std::string> v;
+        v.push_back(fmt::format("init_ms {}", initMS()));
+        for (size_t i = 0; i < write_stats.size(); i++)
+        {
+            v.push_back(fmt::format("write_{}: {}", i, write_stats[i].toString()));
+        }
+        for (size_t i = 0; i < read_stats.size(); i++)
+        {
+            v.push_back(fmt::format("read_{}: {}", i, read_stats[i].toString()));
+        }
+        return v;
+    }
+
+private:
+    uint64_t init_ms;
+    std::vector<ThreadStat> write_stats;
+    std::vector<ThreadStat> read_stats;
+
+    friend class DTWorkload;
+};
+
 class DTWorkload
 {
 public:
@@ -56,40 +128,18 @@ public:
 
     void run(uint64_t r);
 
-    struct ThreadWriteStat
-    {
-        double total_write_sec = 0.0;
-        double total_do_write_sec = 0.0;
-        uint64_t write_count = 0;
-        uint64_t max_do_write_us = 0;
-
-        std::string toString() const;
-    };
-
-    struct Statistics
-    {
-        double init_store_sec = 0.0;
-        std::vector<ThreadWriteStat> write_stats;
-        std::atomic<uint64_t> total_read_count = 0;
-        std::atomic<uint64_t> total_read_usec = 0;
-
-        double verify_sec = 0.0;
-        uint64_t verify_count = 0;
-
-        std::vector<std::string> toStrings(uint64_t i) const;
-    };
-
     const Statistics & getStat() const
     {
         return stat;
     }
 
 private:
-    void write(ThreadWriteStat & write_stat);
+    void write(ThreadStat & write_stat);
     void verifyHandle(uint64_t r);
-    void scanAll(uint64_t i);
+    void scanAll(ThreadStat & read_stat);
     template <typename T>
     void read(const ColumnDefines & columns, int stream_count, T func);
+    uint64_t updateBlock(Block & block, uint64_t key);
 
     Poco::Logger * log;
 
