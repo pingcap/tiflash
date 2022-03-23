@@ -1162,8 +1162,27 @@ struct TiDBConvertToDecimal
             /// cast int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
+<<<<<<< HEAD
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+=======
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                /// cast enum/int as decimal
+                const CastInternalType max_value = getMaxValueIfNecessary(prec);
+                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], max_value, scale_mul, context);
+            }
+            else
+            {
+                static_assert(std::is_floating_point_v<FromFieldType>);
+                /// cast real as decimal
+                for (size_t i = 0; i < size; ++i)
+                    // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
+                    vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
+            }
+>>>>>>> 68906edbaa (Fix wrong result of cast(float as decimal) when overflow happens (#4380))
         }
         else
         {
