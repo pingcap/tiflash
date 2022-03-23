@@ -37,6 +37,7 @@ private:
     /// To avoid serialize the same schema between continuous ColumnFileInMemory and ColumnFileTiny instance.
     BlockPtr last_schema;
 
+    // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> column_files_count;
