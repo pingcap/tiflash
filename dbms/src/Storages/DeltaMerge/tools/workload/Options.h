@@ -55,6 +55,8 @@ struct WorkloadOptions
 
     bool enable_ps_v3;
 
+    uint64_t bg_thread_count;
+
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -162,7 +162,7 @@ LearnerReadSnapshot doLearnerRead(
     size_t num_streams,
     bool for_batch_cop,
     Context & context,
-    const LogWithPrefixPtr & log)
+    const LoggerPtr & log)
 {
     assert(log != nullptr);
 
@@ -447,7 +447,7 @@ void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
     TMTContext & tmt,
-    const LogWithPrefixPtr & log)
+    const LoggerPtr & log)
 {
     RegionException::UnavailableRegions fail_region_ids;
     RegionException::RegionReadStatus fail_status = RegionException::RegionReadStatus::OK;

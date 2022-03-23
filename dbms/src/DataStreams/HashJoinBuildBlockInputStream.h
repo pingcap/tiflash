@@ -15,7 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 
@@ -30,9 +29,9 @@ public:
         const BlockInputStreamPtr & input,
         JoinPtr join_,
         size_t stream_index_,
-        const LogWithPrefixPtr & log_)
+        const String & req_id)
         : stream_index(stream_index_)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
     {
         children.push_back(input);
         join = join_;
@@ -46,7 +45,7 @@ protected:
 private:
     JoinPtr join;
     size_t stream_index;
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

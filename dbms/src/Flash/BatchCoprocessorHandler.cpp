@@ -69,7 +69,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGContext dag_context(dag_request);
             dag_context.is_batch_cop = true;
             dag_context.tables_regions_info = std::move(tables_regions_info);
-            dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+            dag_context.log = Logger::get("BatchCoprocessorHandler");
             dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
             cop_context.db_context.setDAGContext(&dag_context);
 
