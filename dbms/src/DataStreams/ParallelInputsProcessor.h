@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -95,11 +96,17 @@ public:
       * - where you must first make JOIN in parallel, while noting which keys are not found,
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
-    ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_)
+    ParallelInputsProcessor(
+        const BlockInputStreams & inputs_,
+        const BlockInputStreamPtr & additional_input_at_end_,
+        size_t max_threads_,
+        Handler & handler_,
+        const LoggerPtr & log_)
         : inputs(inputs_)
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
+        , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
@@ -113,7 +120,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -366,7 +373,7 @@ private:
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads{false};
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
+    const LoggerPtr log;
 };
 
 

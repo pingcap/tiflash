@@ -17,7 +17,6 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -97,13 +96,13 @@ public:
         BlockInputStreams inputs,
         BlockInputStreamPtr additional_input_at_end,
         size_t max_threads,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
+        , log(Logger::get(NAME, req_id))
         , handler(*this)
-        , processor(inputs, additional_input_at_end, max_threads, handler)
+        , processor(inputs, additional_input_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
-        , log(getMPPTaskLog(log_, NAME))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -131,7 +130,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -337,6 +336,8 @@ private:
         Self & parent;
     };
 
+    LoggerPtr log;
+
     Handler handler;
     ParallelInputsProcessor<Handler, mode> processor;
 
@@ -346,8 +347,6 @@ private:
 
     bool started = false;
     bool all_read = false;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

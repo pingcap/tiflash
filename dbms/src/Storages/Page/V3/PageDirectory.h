@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
@@ -175,6 +175,8 @@ public:
     Int64 incrRefCount(const PageVersionType & ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+
+    std::optional<PageEntryV3> getLastEntry() const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
@@ -400,7 +402,7 @@ private:
 
     WALStorePtr wal;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB::PS::V3

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/tools/workload/Handle.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>

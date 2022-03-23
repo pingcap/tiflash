@@ -45,7 +45,7 @@ doLearnerRead(
     size_t num_streams,
     bool for_batch_cop,
     Context & context,
-    const LogWithPrefixPtr & log);
+    const LoggerPtr & log);
 
 // After getting stream from storage, we must make sure regions' version haven't changed after learner read.
 // If some regions' version changed, this function will throw `RegionException`.
@@ -53,6 +53,6 @@ void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
     TMTContext & tmt,
-    const LogWithPrefixPtr & log);
+    const LoggerPtr & log);
 
 } // namespace DB

@@ -34,7 +34,7 @@ PageStorageImpl::PageStorageImpl(
     const Config & config_,
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
-    , log(getLogWithPrefix(nullptr, "PageStorage")->append(name))
+    , log(Logger::get("PageStorage", name))
     , blob_store(file_provider_, delegator->defaultPath(), blob_config)
 {
 }
@@ -44,6 +44,7 @@ PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::restore()
 {
+    // TODO: clean up blobstore.
     // TODO: Speedup restoring
     PageDirectoryFactory factory;
     page_directory = factory
