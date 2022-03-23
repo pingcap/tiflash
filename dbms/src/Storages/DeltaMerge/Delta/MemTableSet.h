@@ -28,7 +28,8 @@ using MemTableSetPtr = std::shared_ptr<MemTableSet>;
 /// MemTableSet contains column file which data just resides in memory and it cannot be restored after restart.
 /// And the column files will be flushed periodically to ColumnFilePersistedSet.
 ///
-/// This class is not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// This class is mostly not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// Only the method that just access atomic variable can be called without extra synchronization
 class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
@@ -37,6 +38,7 @@ private:
     BlockPtr last_schema;
 
     ColumnFiles column_files;
+    std::atomic<size_t> column_files_count;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -53,6 +55,7 @@ public:
         , column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
     {
+        column_files_count = column_files.size();
         for (const auto & file : column_files)
         {
             rows += file->getRows();
@@ -61,21 +64,24 @@ public:
         }
     }
 
+    /// Thread safe part start
     String info() const
     {
         return fmt::format("MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
-                           column_files.size(),
+                           column_files_count.load(),
                            rows.load(),
                            bytes.load(),
                            deletes.load());
     }
 
+    size_t getColumnFileCount() const { return column_files_count.load(); }
+    size_t getRows() const { return rows.load(); }
+    size_t getBytes() const { return bytes.load(); }
+    size_t getDeletes() const { return deletes.load(); }
+    /// Thread safe part end
+
     ColumnFiles cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs);
 
-    size_t getColumnFileCount() const { return column_files.size(); }
-    size_t getRows() const { return rows; }
-    size_t getBytes() const { return bytes; }
-    size_t getDeletes() const { return deletes; }
 
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.
