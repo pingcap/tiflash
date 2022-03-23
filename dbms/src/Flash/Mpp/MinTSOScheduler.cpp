@@ -193,7 +193,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             if (isWaiting)
             {
                 /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this tso and update metrics.
-                task->scheduleThisTask(MPPTask::ScheduleState::FAILED);
+                task->scheduleThisTask(MPPTask::ScheduleState::EXCEEDED);
                 waiting_set.erase(tso); /// avoid the left waiting tasks of this query reaching here many times.
             }
             else

@@ -429,9 +429,9 @@ void MPPTask::scheduleOrWait()
         {
             std::unique_lock lock(schedule_mu);
             schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
-            if (schedule_state == ScheduleState::FAILED)
+            if (schedule_state == ScheduleState::EXCEEDED)
             {
-                throw Exception("{} is failed to schedule.", id.toString());
+                throw Exception("{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler.", id.toString());
             }
         }
         auto time_cost = stopwatch.elapsedSeconds();
