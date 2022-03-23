@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -128,7 +128,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
