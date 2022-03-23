@@ -139,7 +139,7 @@ private:
             destroy();
             ptr = rhs.ptr;
             if (ptr)
-                ++ptr->refcount;
+                ++ptr->refcount; // NOLINT
             return *this;
         }
 
