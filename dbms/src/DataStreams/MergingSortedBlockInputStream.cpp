@@ -109,7 +109,7 @@ void MergingSortedBlockInputStream::initQueue(std::priority_queue<TSortCursor> &
 {
     for (auto & cursor : cursors)
         if (!cursor.empty())
-            queue.push(TSortCursor(cursor));
+            queue.push(TSortCursor(&cursor));
 }
 
 
