@@ -71,6 +71,7 @@ public:
         WAITING,
         SCHEDULED,
         FAILED,
+        EXCEEDED,
         COMPLETED
     };
 
