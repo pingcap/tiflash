@@ -523,7 +523,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
     }
 
     auto seconds = watch.elapsedSeconds();
-    LOG_FMT_INFO(&Poco::Logger::get("RegionPersister_test"), "[sync_on_write={:.4f}], [time={}s]", sync_on_write, seconds, 4);
+    LOG_FMT_INFO(&Poco::Logger::get("RegionPersister_test"), "[sync_on_write={}], [time={:.4f}s]", sync_on_write, seconds, 4);
 }
 
 // This test takes about 10 minutes. Disable by default

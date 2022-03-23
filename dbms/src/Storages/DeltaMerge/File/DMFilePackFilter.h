@@ -202,7 +202,7 @@ private:
         LOG_FMT_DEBUG(log,
                       "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
                       ", read_packs: {}, pack_count: {}",
-                      ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate,
+                      ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
                       after_pk,
                       after_read_packs,
                       after_filter,
