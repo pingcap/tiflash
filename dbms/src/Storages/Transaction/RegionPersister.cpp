@@ -183,12 +183,12 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         {
             // If there is no PageFile with basic version binary format, use version 2 of PageStorage.
             auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(provider, delegator);
-            bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFormat::V1);
+            bool use_v1_format = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFormat::V1);
 
-            fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
-            fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { run_in_compatible_mode = false; });
+            fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { use_v1_format = true; });
+            fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { use_v1_format = false; });
 
-            if (!run_in_compatible_mode)
+            if (!use_v1_format)
             {
                 mergeConfigFromSettings(global_context.getSettingsRef(), config);
                 config.num_write_slots = 4; // extend write slots to 4 at least
