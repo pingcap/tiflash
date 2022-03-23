@@ -31,12 +31,12 @@ CollapsingFinalBlockInputStream::~CollapsingFinalBlockInputStream()
     while (!queue.empty())
     {
         Cursor c = queue.top();
-        queue.pop();
+        queue.pop();    // NOLINT
         c.block.cancel();
     }
 
-    for (size_t i = 0; i < output_blocks.size(); ++i)
-        delete output_blocks[i];
+    for (auto & output_block : output_blocks)
+        delete output_block;
 }
 
 void CollapsingFinalBlockInputStream::reportBadCounts()
@@ -111,7 +111,7 @@ Block CollapsingFinalBlockInputStream::readImpl()
             {
                 if (!current.equal(previous))
                 {
-                    commitCurrent();
+                    commitCurrent();        // NOLINT
                     previous = current;
                 }
 

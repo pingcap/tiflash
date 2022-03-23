@@ -107,9 +107,9 @@ void MergingSortedBlockInputStream::initQueue()
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::initQueue(std::priority_queue<TSortCursor> & queue)
 {
-    for (size_t i = 0; i < cursors.size(); ++i)
-        if (!cursors[i].empty())
-            queue.push(TSortCursor(&cursors[i]));
+    for (auto & cursor : cursors)
+        if (!cursor.empty())
+            queue.push(TSortCursor(cursor));
 }
 
 
@@ -177,12 +177,7 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         }
 
         ++merged_rows;
-        if (merged_rows == max_block_size)
-        {
-            return true;
-        }
-
-        return false;
+        return merged_rows == expected_block_size;
     };
 
     /// Take rows in required order and put them into `merged_columns`, while the rows are no more than `max_block_size`

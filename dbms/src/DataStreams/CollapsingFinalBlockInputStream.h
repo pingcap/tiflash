@@ -125,6 +125,9 @@ private:
 
         MergingBlockPtr & operator=(const MergingBlockPtr & rhs)
         {
+            if (this == std::addressof(rhs)) 
+                return *this;
+
             destroy();
             ptr = rhs.ptr;
             if (ptr)
@@ -179,7 +182,7 @@ private:
         MergingBlockPtr block;
         size_t pos;
 
-        Cursor() {}
+        Cursor() : pos(0) {}
         explicit Cursor(const MergingBlockPtr & block_, size_t pos_ = 0) : block(block_), pos(pos_) {}
 
         bool operator< (const Cursor & rhs) const
