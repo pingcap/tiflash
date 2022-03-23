@@ -855,36 +855,119 @@ Strings PSDiskDelegatorGlobalMulti::listPaths() const
     return paths;
 }
 
-String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
+String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::function<String(const Strings & paths, size_t idx)> path_generator =
+        [this](const Strings & paths, size_t idx) -> String {
+        return fmt::format("{}/{}", paths[idx], this->path_prefix);
+    };
+
+    {
+        std::lock_guard<std::mutex> lock{mutex};
+        /// If id exists in page_path_map, just return the same path
+        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+            return path_generator(pool.listGlobalPagePaths(), iter->second);
+    }
+
+    const String log_msg = "[type=global_ps_multi]";
+    return genericChoosePath(pool.listGlobalPagePaths(), pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
-    const PageFileIdAndLevel & /*id_lvl*/,
-    size_t /*size_to_add*/,
-    const String & /*pf_parent_path*/,
-    bool /*need_insert_location*/)
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_add,
+    const String & pf_parent_path,
+    bool need_insert_location)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // Get a normalized path without `path_prefix` and trailing '/'
+    String upper_path = removeTrailingSlash(Poco::Path(pf_parent_path).parent().toString());
+    UInt32 index = UINT32_MAX;
+
+    const auto & global_paths = pool.listGlobalPagePaths();
+    for (size_t i = 0; i < global_paths.size(); i++)
+    {
+        if (global_paths[i] == upper_path)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (unlikely(index == UINT32_MAX))
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
+
+    {
+        std::lock_guard<std::mutex> lock{mutex};
+        if (need_insert_location)
+            page_path_map[id_lvl] = index;
+    }
+
+    // update global used size
+    pool.global_capacity->addUsedSize(upper_path, size_to_add);
+    return index;
 }
 
 size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
-    const PageFileIdAndLevel & /*id_lvl*/,
-    size_t /*size_to_free*/,
-    const String & /*pf_parent_path*/)
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_free,
+    const String & pf_parent_path)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // Get a normalized path without `path_prefix` and trailing '/'
+    String upper_path = removeTrailingSlash(Poco::Path(pf_parent_path).parent().toString());
+    UInt32 index = UINT32_MAX;
+
+    const auto & global_paths = pool.listGlobalPagePaths();
+    for (size_t i = 0; i < global_paths.size(); i++)
+    {
+        if (global_paths[i] == upper_path)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (unlikely(index == UINT32_MAX))
+    {
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
+    }
+
+    if (page_path_map.find(id_lvl) == page_path_map.end())
+    {
+        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+    }
+
+    // update global used size
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
+    return 0;
 }
 
-String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
+String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::lock_guard<std::mutex> lock{mutex};
+    auto iter = page_path_map.find(id_lvl);
+    if (likely(iter != page_path_map.end()))
+        return fmt::format("{}/{}", pool.listGlobalPagePaths()[iter->second], path_prefix);
+    throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
 }
 
-void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/)
+void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::lock_guard<std::mutex> lock{mutex};
+    if (remove_from_default_path)
+    {
+        pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[default_path_index], file_size);
+    }
+    else
+    {
+        auto iter = page_path_map.find(id_lvl);
+        if (unlikely(iter == page_path_map.end()))
+            return;
+        auto index = iter->second;
+        if (!meta_left)
+            page_path_map.erase(iter);
+
+        pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[index], file_size);
+    }
 }
 
 
@@ -908,34 +991,40 @@ Strings PSDiskDelegatorGlobalSingle::listPaths() const
 
 String PSDiskDelegatorGlobalSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    return fmt::format("{}/{}", pool.listGlobalPagePaths()[0], path_prefix);
 }
 
 size_t PSDiskDelegatorGlobalSingle::addPageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
-    size_t /*size_to_add*/,
-    const String & /*pf_parent_path*/,
+    size_t size_to_add,
+    const String & pf_parent_path,
     bool /*need_insert_location*/)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // In this case, inserting to page_path_map seems useless.
+    // Simply add used size for global capacity is OK.
+    pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
+    return 0;
 }
 
 size_t PSDiskDelegatorGlobalSingle::freePageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
-    size_t /*size_to_free*/,
-    const String & /*pf_parent_path*/)
+    size_t size_to_free,
+    const String & pf_parent_path)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    // In this case, inserting to page_path_map seems useless.
+    // Simply add used size for global capacity is OK.
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
+    return 0;
 }
 
 String PSDiskDelegatorGlobalSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    return fmt::format("{}/{}", pool.listGlobalPagePaths()[0], path_prefix);
 }
 
-void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/)
+void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[0], file_size);
 }
 
 } // namespace DB

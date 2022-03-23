@@ -94,6 +94,8 @@ public:
     using PageFilePathMap = std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher>;
 
     friend class PSDiskDelegatorRaft;
+    friend class PSDiskDelegatorGlobalSingle;
+    friend class PSDiskDelegatorGlobalMulti;
 
 private:
     Strings main_data_paths;
@@ -314,6 +316,8 @@ public:
     void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
 
 private:
+    mutable std::mutex mutex;
+
     const PathPool & pool;
     const String path_prefix;
     // PageFileID -> path index
