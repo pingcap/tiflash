@@ -1164,6 +1164,21 @@ try
     testNotOnlyNull<Float64, Decimal256>(12.215, DecimalField256(static_cast<Int256>(1222), 2), std::make_tuple(65, 2));
     testNotOnlyNull<Float64, Decimal256>(-12.215, DecimalField256(static_cast<Int256>(-1222), 2), std::make_tuple(65, 2));
 
+    // Not compatible with MySQL/TiDB.
+    // MySQL/TiDB: 34028199169636080000000000000000000000.00
+    // TiFlash:    34028199169636079590747176440761942016.00
+    testNotOnlyNull<Float32, Decimal256>(3.40282e+37f, DecimalField256(Decimal256(Int256("3402819916963607959074717644076194201600")), 2), std::make_tuple(50, 2));
+    // MySQL/TiDB: 34028200000000000000000000000000000000.00
+    // TiFlash:    34028200000000004441521809130870213181.44
+    testNotOnlyNull<Float64, Decimal256>(3.40282e+37, DecimalField256(Decimal256(Int256("3402820000000000444152180913087021318144")), 2), std::make_tuple(50, 2));
+
+    // MySQL/TiDB: 123.12345886230469000000
+    // TiFlash:    123.12345886230470197248
+    testNotOnlyNull<Float32, Decimal256>(123.123456789123456789f, DecimalField256(Decimal256(Int256("12312345886230470197248")), 20), std::make_tuple(50, 20));
+    // MySQL/TiDB: 123.12345886230469000000
+    // TiFlash:    123.12345678912344293376
+    testNotOnlyNull<Float64, Decimal256>(123.123456789123456789, DecimalField256(Decimal256(Int256("12312345678912344293376")), 20), std::make_tuple(50, 20));
+
     dag_context->setFlags(ori_flags);
     dag_context->clearWarnings();
 }
