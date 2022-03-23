@@ -38,6 +38,7 @@ private:
     BlockPtr last_schema;
 
     ColumnFiles column_files;
+    // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> column_files_count;
 
     std::atomic<size_t> rows = 0;

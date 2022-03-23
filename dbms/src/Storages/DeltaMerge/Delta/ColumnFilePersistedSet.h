@@ -56,6 +56,7 @@ public:
 private:
     PageId metadata_id;
     ColumnFilePersistedLevels persisted_files_levels;
+    // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count;
     std::atomic<size_t> persisted_files_level_count;
 
