@@ -1155,9 +1155,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     // Note that, we must use || to combine rows and bytes checks in split check, and use && in merge check.
     // Otherwise, segments could be split and merged over and over again.
-    bool should_split = (segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
-        && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows
-            || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
+    // Do background split in the following two cases:
+    //   1. The segment is large enough, and there are some data in the delta layer. (A hot segment which is large enough)
+    //   2. The segment is too large. (A segment which is too large, although it is cold)
+    bool should_bg_split = ((segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
+                            && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows
+                                || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes))
+        || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
@@ -1268,7 +1272,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_split = [&](const SegmentPtr & seg) {
-        if (should_split && !seg->isSplitForbidden())
+        if (should_bg_split && !seg->isSplitForbidden())
         {
             delta_last_try_split_rows = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
