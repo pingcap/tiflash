@@ -60,6 +60,7 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     }
 
     column_files.push_back(column_file);
+    column_files_count = column_files.size();
 
     rows += column_file->getRows();
     bytes += column_file->getBytes();
@@ -269,6 +270,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         column_file_iter++;
     }
     column_files.swap(new_column_files);
+    column_files_count = column_files.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
