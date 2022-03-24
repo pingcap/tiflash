@@ -16,7 +16,6 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <Flash/Mpp/MPPTaskId.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
@@ -346,10 +345,6 @@ public:
 
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
-
-    // todo MPPTaskID should be generalized to something like QueryTaskId because
-    // besides MPP, there are some other query requests like cop and batchCop
-    const MPPTaskId & getMPPTaskID() const;
 
     /// List all queries.
     ProcessList & getProcessList();

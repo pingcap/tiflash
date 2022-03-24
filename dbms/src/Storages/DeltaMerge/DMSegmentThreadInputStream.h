@@ -178,12 +178,8 @@ private:
     SegmentPtr cur_segment;
     TableID physical_table_id;
 
-<<<<<<< HEAD
     LoggerPtr log;
-=======
     size_t total_rows = 0;
-    LogWithPrefixPtr log;
->>>>>>> add some logs to make it easier to observe data skew
 };
 
 } // namespace DM
