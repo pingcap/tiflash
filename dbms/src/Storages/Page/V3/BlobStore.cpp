@@ -57,7 +57,7 @@ using ChecksumClass = Digest::CRC64;
   *********************/
 
 BlobStore::BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
-    : delegator(delegator_)
+    : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
     , log(getLogWithPrefix(nullptr, "BlobStore"))
@@ -846,10 +846,10 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
     return std::lock_guard(lock_stats);
 }
 
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & /*guard*/, bool from_restore)
 {
     // New blob file id won't bigger than roll_id
-    if (blob_file_id > roll_id)
+    if (!from_restore && blob_file_id > roll_id)
     {
         throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [RollMaxId={}]",
                                     blob_file_id,
@@ -857,20 +857,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto stat = createStatNotCheckingRoll(blob_file_id, guard);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
-    return stat;
-}
-
-BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &, bool check_exist)
-{
-    if (check_exist)
+    if (!from_restore)
     {
         for (auto & [path, stats] : stats_map)
         {
@@ -898,8 +885,16 @@ BlobStatPtr BlobStore::BlobStats::createStatNotCheckingRoll(BlobFileId blob_file
     id_lvl.second = 0;
 
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+
+    // Roll to the next new blob id
+    if (!from_restore && blob_file_id == roll_id)
+    {
+        roll_id++;
+    }
+
     return stat;
 }
+
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
@@ -1031,7 +1026,7 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
     {
         // Restore a stat without checking the roll_id
         // No need check existed again.
-        return createStatNotCheckingRoll(file_id, guard, false);
+        return createStat(file_id, guard, true);
     }
 
     if (!ignore_not_exist)

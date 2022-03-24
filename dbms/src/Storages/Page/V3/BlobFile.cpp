@@ -30,10 +30,9 @@ BlobFile::BlobFile(String path_,
                    FileProviderPtr file_provider_,
                    PSDiskDelegatorPtr delegator_)
     : blob_id(blob_id_)
-    , file_provider{file_provider_}
-    , delegator(delegator_)
+    , file_provider{std::move(file_provider_)}
+    , delegator(std::move(delegator_))
     , path(path_)
-    , file_size(0)
 {
     // TODO: support encryption file
     wrfile = file_provider->newWriteReadableFile(
@@ -86,13 +85,18 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 #endif
     PageUtil::syncFile(wrfile);
 
-    if (offset + size > file_size)
+
+    BlobFileOffset cur_file_size = file_size.load();
+    size_t expand_size = (offset + size) - cur_file_size;
+    if (expand_size > 0)
     {
         delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
-                                       offset + size - file_size,
+                                       expand_size,
                                        path,
                                        true);
-        file_size = offset + size;
+
+        // CAS if `file_size` have not changed, ignore if changed.
+        file_size.compare_exchange_strong(cur_file_size, offset + size);
     }
 }
 
@@ -102,7 +106,7 @@ void BlobFile::truncate(size_t size)
     assert(size <= file_size);
 
     delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
-    file_size = size;
+    file_size.store(size);
 }
 
 void BlobFile::remove()
