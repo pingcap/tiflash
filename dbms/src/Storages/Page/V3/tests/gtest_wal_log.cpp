@@ -167,8 +167,7 @@ public:
                                            &report,
                                            /* verify_checksum */ true,
                                            /* log_number */ log_num,
-                                           wal_recovery_mode,
-                                           log);
+                                           wal_recovery_mode);
     }
 
     void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
