@@ -33,7 +33,7 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
-        : queue(clients * 2) // reduce contention
+        : queue(clients)
         , log(Logger::get(NAME, req_id))
         , in(in_)
     {
