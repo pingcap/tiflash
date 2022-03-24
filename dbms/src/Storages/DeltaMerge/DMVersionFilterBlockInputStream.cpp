@@ -380,7 +380,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         else
         {
             Block res;
-            for (auto & c : header)
+            for (const auto & c : header)
             {
                 auto & column = cur_raw_block.getByName(c.name);
                 column.column = column.column->filter(filter, passed_count);
