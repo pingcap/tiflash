@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/Embedded/RegionsHierarchy.h>
 #include <Dictionaries/Embedded/GeodataProviders/IHierarchiesProvider.h>
-
-#include <Poco/Util/Application.h>
-#include <Poco/Exception.h>
-
-#include <common/logger_useful.h>
-#include <ext/singleton.h>
-
+#include <Dictionaries/Embedded/RegionsHierarchy.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Exception.h>
+#include <Poco/Util/Application.h>
+#include <common/logger_useful.h>
+
+#include <ext/singleton.h>
 
 
 RegionsHierarchy::RegionsHierarchy(IRegionsHierarchyDataSourcePtr data_source_)
@@ -50,13 +48,13 @@ void RegionsHierarchy::reload()
     RegionParents new_continent(initial_size);
     RegionParents new_top_continent(initial_size);
     RegionPopulations new_populations(initial_size);
-    RegionDepths  new_depths(initial_size);
+    RegionDepths new_depths(initial_size);
     RegionTypes types(initial_size);
 
     RegionID max_region_id = 0;
 
 
-    auto regions_reader = data_source->createReader(); 
+    auto regions_reader = data_source->createReader();
 
     RegionEntry region_entry;
     while (regions_reader->readNext(region_entry))
@@ -81,16 +79,16 @@ void RegionsHierarchy::reload()
         types[region_entry.id] = region_entry.type;
     }
 
-    new_parents      .resize(max_region_id + 1);
-    new_city         .resize(max_region_id + 1);
-    new_country      .resize(max_region_id + 1);
-    new_area         .resize(max_region_id + 1);
-    new_district     .resize(max_region_id + 1);
-    new_continent    .resize(max_region_id + 1);
+    new_parents.resize(max_region_id + 1);
+    new_city.resize(max_region_id + 1);
+    new_country.resize(max_region_id + 1);
+    new_area.resize(max_region_id + 1);
+    new_district.resize(max_region_id + 1);
+    new_continent.resize(max_region_id + 1);
     new_top_continent.resize(max_region_id + 1);
-    new_populations  .resize(max_region_id + 1);
-    new_depths       .resize(max_region_id + 1);
-    types            .resize(max_region_id + 1);
+    new_populations.resize(max_region_id + 1);
+    new_depths.resize(max_region_id + 1);
+    types.resize(max_region_id + 1);
 
     /// prescribe the cities and countries for the regions
     for (RegionID i = 0; i <= max_region_id; ++i)
