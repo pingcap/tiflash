@@ -194,9 +194,10 @@ private:
             after_filter += u;
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
-        Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
+        Float64 filter_rate = 0.0;
         if (after_read_packs != 0)
         {
+            filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
         LOG_FMT_DEBUG(log,

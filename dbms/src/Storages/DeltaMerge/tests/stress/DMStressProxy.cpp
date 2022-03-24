@@ -356,7 +356,7 @@ void DMStressProxy::waitReadThreads()
 {
     LOG_FMT_INFO(log, "wait read threads begin: {}", read_threads.size());
     joinThreads(read_threads);
-    LOG_INFO(log, "wait read threads end: {}", read_threads.size());
+    LOG_FMT_INFO(log, "wait read threads end: {}", read_threads.size());
 }
 
 void DMStressProxy::waitInsertThreads()
