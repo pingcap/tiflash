@@ -1027,7 +1027,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            "");
+            db_context.getMPPTaskID().toString());
         res.push_back(stream);
     }
     return res;
@@ -1073,7 +1073,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            "");
+            db_context.getMPPTaskID().toString());
         res.push_back(stream);
     }
 

@@ -1338,6 +1338,13 @@ void Context::setDAGContext(DAGContext * dag_context_)
     dag_context = dag_context_;
 }
 
+const MPPTaskId & Context::getMPPTaskID() const
+{
+    if (dag_context == nullptr)
+        return MPPTaskId::unknown_mpp_task_id;
+    return dag_context->getMPPTaskId();
+}
+
 DAGContext * Context::getDAGContext() const
 {
     return dag_context;
