@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/assert_cast.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -355,6 +355,22 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
     return std::nullopt;
 }
 
+std::optional<PageEntryV3> VersionedPageEntries::getLastEntry() const
+{
+    auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_ENTRY)
+    {
+        for (auto it_r = entries.rbegin(); it_r != entries.rend(); it_r++)
+        {
+            if (it_r->second.isEntry())
+            {
+                return it_r->second.entry;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
 {
     auto page_lock = acquireLock();
@@ -626,7 +642,7 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
 PageDirectory::PageDirectory(WALStorePtr && wal_)
     : sequence(0)
     , wal(std::move(wal_))
-    , log(getLogWithPrefix(nullptr, "PageDirectory"))
+    , log(Logger::get("PageDirectory"))
 {
 }
 

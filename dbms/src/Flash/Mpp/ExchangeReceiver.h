@@ -22,7 +22,6 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
@@ -92,7 +91,8 @@ public:
         std::shared_ptr<RPCContext> rpc_context_,
         size_t source_num_,
         size_t max_streams_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id,
+        const String & executor_id);
 
     ~ExchangeReceiverBase();
 
@@ -141,7 +141,7 @@ private:
     void connectionDone(
         bool meet_error,
         const String & local_err_msg,
-        const LogWithPrefixPtr & log);
+        const LoggerPtr & log);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -162,7 +162,7 @@ private:
     ExchangeReceiverState state;
     String err_msg;
 
-    LogWithPrefixPtr exc_log;
+    LoggerPtr exc_log;
 
     bool collected = false;
     int thread_count = 0;

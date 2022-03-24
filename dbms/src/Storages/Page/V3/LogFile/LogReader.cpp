@@ -37,8 +37,7 @@ LogReader::LogReader(
     Reporter * reporter_,
     bool verify_checksum_,
     Format::LogNumberType log_num_,
-    WALRecoveryMode recovery_mode_,
-    Poco::Logger * log_)
+    WALRecoveryMode recovery_mode_)
     : verify_checksum(verify_checksum_)
     , recycled(false)
     , is_last_block(false)
@@ -51,7 +50,6 @@ LogReader::LogReader(
     , reporter(reporter_)
     , end_of_buffer_offset(0)
     , log_number(log_num_)
-    , log(log_)
 {
     // Must be `BLOCK_SIZE`, or we can not ensure the correctness of reading.
     assert(file->internalBuffer().size() == Format::BLOCK_SIZE);

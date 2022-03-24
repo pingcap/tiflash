@@ -416,6 +416,7 @@ private:
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
+    friend class DMFileBlockInputStreamBuilder;
     friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
     friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, const std::string & target);
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
