@@ -183,7 +183,7 @@ private:
             }
         }
 
-        return matched ? cur_version : UINT64_MAX;
+        return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
 
 private:
