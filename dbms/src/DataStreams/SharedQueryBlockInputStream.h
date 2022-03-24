@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
@@ -33,7 +33,7 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
-        : queue(clients)
+        : queue(clients * 2) // reduce contention
         , log(Logger::get(NAME, req_id))
         , in(in_)
     {
@@ -76,10 +76,23 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-        if (thread_manager)
-            thread_manager->wait();
-        if (!exception_msg.empty())
-            throw Exception(exception_msg);
+        queue.cancel();
+        waitThread();
+    }
+
+    /** Different from the default implementation by trying to cancel the queue
+      */
+    void cancel(bool kill) override
+    {
+        if (kill)
+            is_killed = true;
+
+        bool old_val = false;
+        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+            return;
+
+        // notify the thread exit asap.
+        queue.cancel();
     }
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
@@ -96,15 +109,12 @@ protected:
             throw Exception("read operation called before readPrefix");
 
         Block block;
-        do
+        if (!queue.pop(block))
         {
-            if (!exception_msg.empty())
-            {
-                throw Exception(exception_msg);
-            }
-            if (isCancelled() || read_suffixed)
-                return {};
-        } while (!queue.tryPop(block, try_action_millisecionds));
+            // canceled
+            waitThread();
+            return {};
+        }
 
         return block;
     }
@@ -114,20 +124,11 @@ protected:
         try
         {
             in->readPrefix();
-            while (!isCancelled())
+            while (true)
             {
                 Block block = in->read();
-                do
-                {
-                    if (isCancelled() || read_suffixed)
-                    {
-                        // Notify waiting client.
-                        queue.tryEmplace(0);
-                        break;
-                    }
-                } while (!queue.tryPush(block, try_action_millisecionds));
-
-                if (!block)
+                // canceled or in is finished
+                if (!queue.push(block) || !block)
                     break;
             }
             in->readSuffix();
@@ -146,10 +147,19 @@ protected:
         }
     }
 
-private:
-    static constexpr UInt64 try_action_millisecionds = 200;
+    void waitThread()
+    {
+        if (thread_manager)
+        {
+            thread_manager->wait();
+            thread_manager.reset();
+        }
+        if (!exception_msg.empty())
+            throw Exception(exception_msg);
+    }
 
-    ConcurrentBoundedQueue<Block> queue;
+private:
+    MPMCQueue<Block> queue;
 
     bool read_prefixed = false;
     bool read_suffixed = false;

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 
@@ -98,12 +98,13 @@ public:
         size_t max_threads,
         const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(inputs.size(), max_threads))
+        : output_queue(std::min(inputs.size(), max_threads) * 2) // reduce contention
         , log(Logger::get(NAME, req_id))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
     {
+        // TODO: assert capacity of output_queue is not less than processor.getMaxThreads()
         children = inputs;
         if (additional_input_at_end)
             children.push_back(additional_input_at_end);
@@ -178,7 +179,9 @@ protected:
             _UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
-                output_queue.pop(res);
+                // canceled
+                if (!output_queue.pop(res))
+                    break;
 
                 if (res.exception)
                 {
@@ -227,8 +230,9 @@ protected:
             processor.process();
         }
 
-        /// We will wait until the next block is ready or an exception is thrown.
-        output_queue.pop(received_payload);
+        /// We will wait until the next block is ready or an exception is thrown or canceled.
+        if (!output_queue.pop(received_payload))
+            return {};
 
         if (received_payload.exception)
         {
@@ -268,7 +272,7 @@ private:
 
 private:
     using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
-    using OutputQueue = ConcurrentBoundedQueue<Payload>;
+    using OutputQueue = MPMCQueue<Payload>;
 
 private:
     /** The queue of the finished blocks. Also, you can put an exception instead of a block.
@@ -305,7 +309,7 @@ private:
         void onBlock(Block & block, size_t /*thread_num*/)
         {
             if constexpr (!ignore_block)
-                parent.output_queue.emplace(Payload(block));
+                parent.output_queue.emplace(block);
         }
 
         void onBlock(Block & block, BlockExtraInfo & extra_info, size_t /*thread_num*/)
