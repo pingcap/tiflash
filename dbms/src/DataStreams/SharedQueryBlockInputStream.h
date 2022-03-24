@@ -145,6 +145,7 @@ protected:
         {
             exception_msg = "other error";
         }
+        queue.finish();
     }
 
     void waitThread()
