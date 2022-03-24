@@ -16,6 +16,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>

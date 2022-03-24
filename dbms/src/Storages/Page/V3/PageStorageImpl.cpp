@@ -229,7 +229,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
+    if (page_directory->tryDumpSnapshot(write_limiter))
+    {
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
+    }
     const auto & del_entries = page_directory->gcInMemEntries();
     LOG_FMT_DEBUG(log, "Remove entries from memory [num_entries={}]", del_entries.size());
 
@@ -245,6 +248,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     {
         clean_external_page();
         return false;
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(blob_need_gc.size());
     }
 
     // Execute full gc
