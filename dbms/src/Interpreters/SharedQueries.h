@@ -103,9 +103,9 @@ public:
         {
             if (clients != it->second->clients)
             {
-                LOG_WARNING(log,
-                            "Different client numbers between shared queries with same query_id(" //
-                                << query_id << "), former: " << it->second->clients << ", now: " << clients);
+                LOG_FMT_WARNING(log,
+                            "Different client numbers between shared queries with same query_id({}), former: {} now: {}",
+                            query_id, it->second->clients, clients);
             }
             auto & query = *(it->second);
             if (query.connected_clients >= clients)
@@ -113,7 +113,7 @@ public:
                 query.connected_clients++;
                 String msg = "SharedQueries: more clients than they claimed! expected " + toString(clients) + ", got "
                     + toString(query.connected_clients);
-                LOG_WARNING(log, msg);
+                LOG_FMT_WARNING(log, "{}", msg);
                 throw Exception(msg, ErrorCodes::TIFLASH_BAD_REQUEST);
             }
             query.connected_clients++;
@@ -143,10 +143,9 @@ public:
         const auto it = queries.find(query_id);
         if (it == queries.end())
         {
-            LOG_WARNING(log,
-                        "Shared query finished with query_id(" //
-                            << query_id << "), while resource cache not exists."
-                            << " Maybe this client takes too long before finish");
+            LOG_FMT_WARNING(log,
+                        "Shared query finished with query_id({}), while resource cache not exists. Maybe this client takes too long before finish",
+                        query_id);
             return;
         }
         auto & query = *(it->second);
