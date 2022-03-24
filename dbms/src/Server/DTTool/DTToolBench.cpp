@@ -386,22 +386,13 @@ int benchEntry(const std::vector<std::string> & opts)
 
             auto start = high_resolution_clock::now();
             {
-                auto stream = DB::DM::DMFileBlockInputStream(
-                    *db_context,
-                    std::numeric_limits<UInt64>::max(),
-                    false,
-                    dm_context->hash_salt,
-                    dmfile,
-                    *defines,
-                    {DB::DM::RowKeyRange::newAll(false, 1)},
-                    DB::DM::RSOperatorPtr{},
-                    std::make_shared<DB::DM::ColumnCache>(),
-                    DB::DM::IdSetPtr{});
+                auto builder = DB::DM::DMFileBlockInputStreamBuilder(*db_context);
+                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)});
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
-                    TIFLASH_NO_OPTIMIZE(stream.read());
+                    TIFLASH_NO_OPTIMIZE(stream->read());
                 }
-                stream.readSuffix();
+                stream->readSuffix();
             }
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
