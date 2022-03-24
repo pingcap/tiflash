@@ -19,11 +19,6 @@
 #include <Poco/Logger.h>
 #include <fmt/format.h>
 
-#define KEEP_STRINGSTREAM_FOR_LOG 1 // TODO: Disable it after we cleanup all stringstream in logging
-#if KEEP_STRINGSTREAM_FOR_LOG
-#include <sstream>
-#endif
-
 #ifndef QUERY_PREVIEW_LENGTH
 #define QUERY_PREVIEW_LENGTH 160
 #endif
@@ -66,31 +61,6 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
 
 /// Logs a message to a specified logger with that level.
 
-#if KEEP_STRINGSTREAM_FOR_LOG
-
-#define LOG_IMPL(logger, PRIORITY, message)                                     \
-    do                                                                          \
-    {                                                                           \
-        if ((logger)->is((PRIORITY)))                                           \
-        {                                                                       \
-            std::stringstream oss_internal_rare;                                \
-            oss_internal_rare << message; /* NOLINT */                          \
-            Poco::Message poco_message(                                         \
-                /*source*/ (logger)->name(),                                    \
-                /*text*/ oss_internal_rare.str(),                               \
-                /*prio*/ (PRIORITY),                                            \
-                /*file*/ &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
-                /*line*/ __LINE__);                                             \
-            (logger)->log(poco_message);                                        \
-        }                                                                       \
-    } while (false)
-
-#define LOG_TRACE(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)
-#define LOG_DEBUG(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_DEBUG, __VA_ARGS__)
-#define LOG_INFO(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_INFORMATION, __VA_ARGS__)
-#define LOG_WARNING(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, __VA_ARGS__)
-#define LOG_ERROR(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, __VA_ARGS__)
-#else
 #define LOG_IMPL(logger, PRIORITY, message)                                     \
     do                                                                          \
     {                                                                           \
@@ -111,7 +81,6 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
 #define LOG_INFO(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_INFORMATION, message)
 #define LOG_WARNING(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, message)
 #define LOG_ERROR(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, message)
-#endif // KEEP_STRINGSTREAM_FOR_LOG
 
 
 /// Logs a message to a specified logger with that level.
