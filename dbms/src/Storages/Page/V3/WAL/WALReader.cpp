@@ -206,8 +206,7 @@ bool WALStoreReader::openNextFile()
             &reporter,
             /*verify_checksum*/ true,
             log_num,
-            WALRecoveryMode::TolerateCorruptedTailRecords,
-            logger);
+            WALRecoveryMode::TolerateCorruptedTailRecords);
     };
 
     if (!checkpoint_read_done)

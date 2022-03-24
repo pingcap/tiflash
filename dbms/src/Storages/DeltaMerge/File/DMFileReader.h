@@ -16,6 +16,7 @@
 
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -43,7 +44,7 @@ public:
                const String & file_name_base,
                size_t aio_threshold,
                size_t max_read_buffer_size,
-               Poco::Logger * log,
+               const DB::LoggerPtr & log,
                const ReadLimiterPtr & read_limiter);
 
         const bool single_file_mode;
@@ -69,29 +70,27 @@ public:
     DMFileReader(
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
+        bool is_common_handle_,
         // Only set this param to true when
         // 1. There is no delta.
         // 2. You don't need pk, version and delete_tag columns
         // If you have no idea what it means, then simply set it to false.
         bool enable_clean_read_,
         // The the MVCC filter version. Used by clean read check.
-        UInt64 max_data_version_,
+        UInt64 max_read_version_,
         // filters
-        const RowKeyRanges & rowkey_ranges_,
-        const RSOperatorPtr & filter_,
-        const IdSetPtr & read_packs_, // filter by pack index
+        DMFilePackFilter && pack_filter_,
         // caches
-        UInt64 hash_salt_,
         const MarkCachePtr & mark_cache_,
-        const MinMaxIndexCachePtr & index_cache_,
         bool enable_column_cache_,
         const ColumnCachePtr & column_cache_,
         size_t aio_threshold,
         size_t max_read_buffer_size,
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter,
-        size_t rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
-        bool read_one_pack_every_time_ = false);
+        size_t rows_threshold_per_read_,
+        bool read_one_pack_every_time_,
+        const DB::LoggerPtr & tracing_logger);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -115,6 +114,13 @@ private:
     ColumnDefines read_columns;
     ColumnStreams column_streams;
 
+    const bool is_common_handle;
+
+    // read_one_pack_every_time is used to create info for every pack
+    const bool read_one_pack_every_time;
+
+    const bool single_file_mode;
+
     /// Clean read optimize
     // If there is no delta for some packs in stable, we can try to do clean read.
     const bool enable_clean_read;
@@ -122,15 +128,10 @@ private:
 
     /// Filters
     DMFilePackFilter pack_filter;
-    const std::vector<RSResult> & handle_res; // alias of handle_res in pack_filter
-    const std::vector<UInt8> & use_packs; // alias of use_packs in pack_filter
-
-    bool is_common_handle;
 
     std::vector<size_t> skip_packs_by_column;
 
     /// Caches
-    const UInt64 hash_salt;
     MarkCachePtr mark_cache;
     const bool enable_column_cache;
     ColumnCachePtr column_cache;
@@ -141,12 +142,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    // read_one_pack_every_time is used to create info for every pack
-    const bool read_one_pack_every_time;
-
-    const bool single_file_mode;
-
-    Poco::Logger * log;
+    DB::LoggerPtr log;
 };
 
 } // namespace DM
