@@ -820,10 +820,10 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
     return std::lock_guard(lock_stats);
 }
 
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & /*guard*/, bool from_restore)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
     // New blob file id won't bigger than roll_id
-    if (!from_restore && blob_file_id > roll_id)
+    if (blob_file_id > roll_id)
     {
         throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [RollMaxId={}]",
                                     blob_file_id,
@@ -831,23 +831,34 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (!from_restore)
+    for (auto & [path, stats] : stats_map)
     {
-        for (auto & [path, stats] : stats_map)
+        (void)path;
+        for (const auto & stat : stats)
         {
-            (void)path;
-            for (const auto & stat : stats)
+            if (stat->id == blob_file_id)
             {
-                if (stat->id == blob_file_id)
-                {
-                    throw Exception(fmt::format("BlobStats won't create [blob_id={}] which is exist",
-                                                blob_file_id),
-                                    ErrorCodes::LOGICAL_ERROR);
-                }
+                throw Exception(fmt::format("BlobStats can not create [blob_id={}] which is exist",
+                                            blob_file_id),
+                                ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
 
+    // Create a stat without checking the file_id exist or not
+    auto stat = createStatNotChecking(blob_file_id, guard);
+
+    // Roll to the next new blob id
+    if (blob_file_id == roll_id)
+    {
+        roll_id++;
+    }
+
+    return stat;
+}
+
+BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+{
     LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
@@ -859,16 +870,8 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     id_lvl.second = 0;
 
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
-
-    // Roll to the next new blob id
-    if (!from_restore && blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
     return stat;
 }
-
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
@@ -996,9 +999,8 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
 
     if (restore_if_not_exist)
     {
-        // Restore a stat without checking the roll_id
-        // No need check existed again.
-        return createStat(file_id, guard, true);
+        // Restore a stat without checking file_id exist or not and won't push forward the roll_id
+        return createStatNotChecking(file_id, guard);
     }
 
     if (!ignore_not_exist)
