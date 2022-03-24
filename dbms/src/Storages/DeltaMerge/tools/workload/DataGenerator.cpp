@@ -27,9 +27,8 @@ namespace DB::DM::tests
 class RandomDataGenerator : public DataGenerator
 {
 public:
-    RandomDataGenerator(const WorkloadOptions & opts_, const TableInfo & table_info_, TimestampGenerator & ts_gen_)
-        : opts(opts_)
-        , table_info(table_info_)
+    RandomDataGenerator(const TableInfo & table_info_, TimestampGenerator & ts_gen_)
+        : table_info(table_info_)
         , ts_gen(ts_gen_)
         , rand_gen(std::random_device()())
     {}
@@ -244,7 +243,6 @@ private:
         return str;
     }
 
-    const WorkloadOptions & opts;
     const TableInfo & table_info;
     TimestampGenerator & ts_gen;
     std::mt19937_64 rand_gen;
@@ -254,7 +252,7 @@ private:
 
 std::unique_ptr<DataGenerator> DataGenerator::create([[maybe_unused]] const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen)
 {
-    return std::make_unique<RandomDataGenerator>(opts, table_info, ts_gen);
+    return std::make_unique<RandomDataGenerator>(table_info, ts_gen);
 }
 
 } // namespace DB::DM::tests
