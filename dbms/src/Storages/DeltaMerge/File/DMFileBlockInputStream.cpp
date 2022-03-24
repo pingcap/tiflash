@@ -3,7 +3,6 @@
 
 namespace DB::DM
 {
-
 DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & context)
     : file_provider(context.getFileProvider())
     , read_limiter(context.getReadLimiter())
