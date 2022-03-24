@@ -426,12 +426,21 @@ void MPPTask::scheduleOrWait()
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
-        double time_cost;
+        double time_cost = 0;
         {
             std::unique_lock lock(schedule_mu);
             schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
             time_cost = stopwatch.elapsedSeconds();
             GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
+
+            if (schedule_state == ScheduleState::EXCEEDED)
+            {
+                throw Exception("{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after waiting for {}s.", id.toString(), time_cost);
+            }
+            else if (schedule_state == ScheduleState::FAILED)
+            {
+                throw Exception("{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.", id.toString(), time_cost);
+            }
         }
         LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
     }
