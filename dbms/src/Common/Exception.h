@@ -168,14 +168,14 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
             throw ExceptionType(__VA_ARGS__);        \
     } while (false)
 
-#define RUNTIME_ASSERT(condition, logger, fmt_str, ...)                                  \
-    do                                                                                   \
-    {                                                                                    \
-        if (unlikely(!(condition)))                                                      \
-        {                                                                                \
-            LOG_FMT_FATAL((logger), "Check {} fail! " fmt_str, #condition, __VA_ARGS__); \
-            std::terminate();                                                            \
-        }                                                                                \
+#define RUNTIME_ASSERT(condition, logger, fmt_str, ...)                                   \
+    do                                                                                    \
+    {                                                                                     \
+        if (unlikely(!(condition)))                                                       \
+        {                                                                                 \
+            LOG_FMT_FATAL((logger), "Assert {} fail! " fmt_str, #condition, __VA_ARGS__); \
+            std::terminate();                                                             \
+        }                                                                                 \
     } while (false)
 
 } // namespace DB
