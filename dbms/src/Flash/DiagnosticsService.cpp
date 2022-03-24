@@ -53,12 +53,12 @@ try
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, e.displayText());
+    LOG_FMT_ERROR(log, "{}", e.displayText());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, e.what());
+    LOG_FMT_ERROR(log, "{}", e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
@@ -81,7 +81,7 @@ std::list<std::string> getFilesToSearch(IServer & server, Poco::Logger * log, co
         }
     }
 
-    LOG_DEBUG(log, fmt::format("{}: got log directory {}", __FUNCTION__, log_dir));
+    LOG_FMT_DEBUG(log, "got log directory {}", log_dir);
 
     if (log_dir.empty())
         return files_to_search;
@@ -97,7 +97,7 @@ std::list<std::string> getFilesToSearch(IServer & server, Poco::Logger * log, co
         }
     }
 
-    LOG_DEBUG(log, fmt::format("{}: got log files to search {}", __FUNCTION__, files_to_search));
+    LOG_FMT_DEBUG(log, "got log files to search {}", files_to_search);
 
     return files_to_search;
 }
@@ -128,7 +128,7 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
 
         if (!stream->Write(resp))
         {
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            LOG_FMT_DEBUG(log, "Write response failed for unknown reason.");
             return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
         }
     }
@@ -158,16 +158,16 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
         patterns.push_back(pattern);
     }
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog: " << request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling SearchLog: {}", request->DebugString());
     SCOPE_EXIT({
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog done: " << request->DebugString());
+        LOG_FMT_DEBUG(log, "Handling SearchLog done: {}", request->DebugString());
     });
 
     auto files_to_search = getFilesToSearch(server, log, start_time);
 
     for (const auto & path : files_to_search)
     {
-        LOG_DEBUG(log, fmt::format("{}: start to search file {}", __FUNCTION__, path));
+        LOG_FMT_DEBUG(log, "start to search file {}", path);
         auto status = grpc::Status::OK;
         ReadLogFile(path, [&](std::istream & istr) {
             LogIterator log_itr(start_time, end_time, levels, patterns, istr);

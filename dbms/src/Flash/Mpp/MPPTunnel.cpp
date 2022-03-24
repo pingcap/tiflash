@@ -190,7 +190,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         err_msg = "fatal error in sendJob()";
     }
     if (!err_msg.empty())
-        LOG_ERROR(log, err_msg);
+        LOG_FMT_ERROR(log, "{}", err_msg);
     consumerFinish(err_msg, need_lock);
     if (is_async)
         writer->writeDone(grpc::Status::OK);
@@ -256,7 +256,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         connected = true;
         cv_for_connected_or_finished.notify_all();
     }
-    LOG_DEBUG(log, "connected");
+    LOG_FMT_DEBUG(log, "connected");
 }
 
 template <typename Writer>

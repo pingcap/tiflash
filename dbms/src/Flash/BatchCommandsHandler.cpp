@@ -86,7 +86,7 @@ grpc::Status BatchCommandsHandler::execute()
     /// Shortcut for only one request by not going to thread pool.
     if (request.requests_size() == 1)
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling the only batch command in place.");
+        LOG_FMT_DEBUG(log, "Handling the only batch command in place.");
 
         const auto & req = request.requests(0);
         auto resp = response.add_responses();
@@ -101,9 +101,11 @@ grpc::Status BatchCommandsHandler::execute()
     size_t max_threads = settings.batch_commands_threads ? static_cast<size_t>(settings.batch_commands_threads)
                                                          : static_cast<size_t>(settings.max_threads);
 
-    LOG_DEBUG(
+    LOG_FMT_DEBUG(
         log,
-        __PRETTY_FUNCTION__ << ": Handling " << request.requests_size() << " batch commands using " << max_threads << " threads.");
+        "Handling {} batch commands using {} threads.",
+        request.requests_size(),
+        max_threads);
 
     ThreadPool thread_pool(max_threads);
 
