@@ -293,7 +293,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                     name = config->getString(key + "." + config_settings.external_name);
                     if (name.empty())
                     {
-                        LOG_FMT_WARNING(log, "{}: {} name cannot be empty", config_path, key);
+                        LOG_FMT_WARNING(log, "{}: {} name cannot be empty", config_path, config_settings.external_name);
                         continue;
                     }
 

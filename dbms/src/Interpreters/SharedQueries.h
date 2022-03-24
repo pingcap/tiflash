@@ -115,7 +115,7 @@ public:
                 query.connected_clients++;
                 String msg = "SharedQueries: more clients than they claimed! expected " + toString(clients) + ", got "
                     + toString(query.connected_clients);
-                LOG_FMT_WARNING(log, "{}", msg);
+                LOG_WARNING(log, msg);
                 throw Exception(msg, ErrorCodes::TIFLASH_BAD_REQUEST);
             }
             query.connected_clients++;

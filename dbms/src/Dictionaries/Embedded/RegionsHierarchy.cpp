@@ -35,7 +35,7 @@ void RegionsHierarchy::reload()
     if (!data_source->isModified())
         return;
 
-    LOG_FMT_DEBUG(log, "Reloading regions hierarchy");
+    LOG_DEBUG(log, "Reloading regions hierarchy");
 
     const size_t initial_size = 10000;
     const size_t max_size = 15000000;

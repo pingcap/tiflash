@@ -53,12 +53,12 @@ try
 }
 catch (const Exception & e)
 {
-    LOG_FMT_ERROR(log, "{}", e.displayText());
+    LOG_ERROR(log, e.displayText());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 catch (const std::exception & e)
 {
-    LOG_FMT_ERROR(log, "{}", e.what());
+    LOG_ERROR(log, e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
