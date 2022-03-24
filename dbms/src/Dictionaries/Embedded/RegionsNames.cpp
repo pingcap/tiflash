@@ -33,7 +33,7 @@ RegionsNames::RegionsNames(IRegionsNamesDataProviderPtr data_provider)
 
 std::string RegionsNames::dumpSupportedLanguagesNames()
 {
-    std::string res = "";
+    std::string res;
     for (size_t i = 0; i < LANGUAGE_ALIASES_COUNT; ++i)
     {
         if (i > 0)
