@@ -62,13 +62,13 @@ public:
 
 private:
     void asyncDedupByQueue();
-    void asynFetch(size_t pisition);
+    void asynFetch(size_t position);
 
     void fetchBlock(size_t pisition);
 
     void readFromSource(DedupCursors & output, BoundQueue & bounds);
 
-    void pushBlockBounds(const DedupingBlockPtr & block, BoundQueue & queue);
+    void pushBlockBounds(const DedupingBlockPtr & block, BoundQueue & bounds);
 
     bool outputAndUpdateCursor(DedupCursors & cursors, BoundQueue & bounds, DedupCursor & cursor);
 
