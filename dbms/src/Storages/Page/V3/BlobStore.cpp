@@ -60,7 +60,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr 
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(Logger::get(nullptr, "BlobStore"))
+    , log(Logger::get("BlobStore"))
     , blob_stats(log, delegator, config_)
     , cached_files(config.cached_fd_size)
 {

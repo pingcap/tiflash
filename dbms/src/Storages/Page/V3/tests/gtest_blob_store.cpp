@@ -35,7 +35,7 @@ class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     BlobStoreStatsTest()
-        : logger(Logger::get(nullptr, "BlobStoreStatsTest"))
+        : logger(Logger::get("BlobStoreStatsTest"))
     {
         auto path = getTemporaryPath();
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
