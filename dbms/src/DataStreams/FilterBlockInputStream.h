@@ -39,7 +39,7 @@ public:
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & expression_,
         const String & filter_column_name_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
     Block getTotals() override;
@@ -55,7 +55,7 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

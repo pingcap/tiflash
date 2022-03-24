@@ -26,7 +26,7 @@ public:
     FmtBuffer() = default;
 
     template <typename... Args>
-    FmtBuffer & fmtAppend(Args... args)
+    FmtBuffer & fmtAppend(Args &&... args)
     {
         fmt::format_to(std::back_inserter(buffer), std::forward<Args>(args)...);
         return *this;

@@ -442,7 +442,7 @@ struct ReceiverHelper
         std::vector<BlockInputStreamPtr> streams;
         for (int i = 0; i < concurrency; ++i)
             streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream(int concurrency)
@@ -474,9 +474,9 @@ struct ReceiverHelper
         join_ptr->setSampleBlock(receiver_header);
 
         for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, nullptr);
+            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, /*req_id=*/"");
 
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()
@@ -557,10 +557,10 @@ struct SenderHelper
                     -1,
                     true,
                     *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer)));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
 
-        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()

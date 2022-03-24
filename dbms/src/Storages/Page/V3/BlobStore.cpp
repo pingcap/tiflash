@@ -14,7 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Poco/File.h>
@@ -60,7 +60,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr 
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(getLogWithPrefix(nullptr, "BlobStore"))
+    , log(Logger::get(nullptr, "BlobStore"))
     , blob_stats(log, delegator, config_)
     , cached_files(config.cached_fd_size)
 {
@@ -810,7 +810,7 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(LogWithPrefixPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
+BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
     : log(std::move(log_))
     , config(config_)
     , delegator(delegator_)

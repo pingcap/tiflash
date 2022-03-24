@@ -84,13 +84,13 @@ void NaturalDag::init()
     auto json_str = String((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed parsing json file: " << json_dag_path);
+    LOG_FMT_INFO(log, "Succeed parsing json file: {}", json_dag_path);
 
     const auto & obj = result.extract<JSONObjectPtr>();
     loadTables(obj);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading table data!");
+    LOG_FMT_INFO(log, "Succeed loading table data!");
     loadReqAndRsp(obj);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading req and rsp data!");
+    LOG_FMT_INFO(log, "Succeed loading req and rsp data!");
 }
 
 void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
@@ -156,7 +156,7 @@ NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & r
     String region_end;
     decodeBase64(region_obj->getValue<String>(REGION_END), region_end);
     region.end = RecordKVFormat::encodeAsTiKVKey(region_end);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": RegionID: " << region.id << ", RegionStart: " << printAsBytes(region.start) << ", RegionEnd: " << printAsBytes(region.end));
+    LOG_FMT_INFO(log, "RegionID: {}, RegionStart: {}, RegionEnd: {}", region.id, printAsBytes(region.start), printAsBytes(region.end));
 
     auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
     for (const auto & pair_json : *pairs_json)

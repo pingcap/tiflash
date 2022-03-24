@@ -15,7 +15,7 @@
 #include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
@@ -27,7 +27,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -1021,13 +1020,13 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             after_segment_read,
             columns_to_read,
             EMPTY_FILTER,
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             true,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            nullptr);
+            "");
         res.push_back(stream);
     }
     return res;
@@ -1073,7 +1072,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            nullptr);
+            "");
         res.push_back(stream);
     }
 
