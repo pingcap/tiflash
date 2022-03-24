@@ -27,7 +27,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -1019,7 +1018,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             after_segment_read,
             columns_to_read,
             EMPTY_FILTER,
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             true,
             db_settings.dt_raw_filter_range,
