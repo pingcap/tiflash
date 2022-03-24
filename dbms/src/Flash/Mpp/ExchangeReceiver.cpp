@@ -452,7 +452,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     meet_error = true;
                     auto local_state = getState();
                     local_err_msg = "receiver's state is " + getReceiverStateStr(local_state) + ", exit from readLoop";
-                    LOG_FMT_WARNING(log, local_err_msg);
+                    LOG_WARNING(log, local_err_msg);
                     break;
                 }
             }
