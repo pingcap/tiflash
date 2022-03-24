@@ -13,11 +13,12 @@
 // limitations under the License.
 
 #pragma once
-#include <common/logger_useful.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Core/SortDescription.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <common/logger_useful.h>
+
 #include <queue>
 
 namespace DB
@@ -33,7 +34,8 @@ public:
         const BlockInputStreams & inputs,
         const SortDescription & description_,
         const String & sign_column_name_)
-        : description(description_), sign_column_name(sign_column_name_)
+        : description(description_)
+        , sign_column_name(sign_column_name_)
     {
         children.insert(children.end(), inputs.begin(), inputs.end());
     }
@@ -52,7 +54,7 @@ protected:
 
 private:
     struct MergingBlock;
-    using BlockPlainPtrs = std::vector<MergingBlock*>;
+    using BlockPlainPtrs = std::vector<MergingBlock *>;
 
     struct MergingBlock : boost::noncopyable
     {
@@ -61,7 +63,9 @@ private:
                      const SortDescription & desc,
                      const String & sign_column_name,
                      BlockPlainPtrs * output_blocks)
-            : block(block_), stream_index(stream_index_), output_blocks(output_blocks)
+            : block(block_)
+            , stream_index(stream_index_)
+            , output_blocks(output_blocks)
         {
             sort_columns.resize(desc.size());
             for (size_t i = 0; i < desc.size(); ++i)
@@ -109,15 +113,19 @@ private:
     class MergingBlockPtr
     {
     public:
-        MergingBlockPtr() : ptr() {}
+        MergingBlockPtr()
+            : ptr()
+        {}
 
-        explicit MergingBlockPtr(MergingBlock * ptr_) : ptr(ptr_)
+        explicit MergingBlockPtr(MergingBlock * ptr_)
+            : ptr(ptr_)
         {
             if (ptr)
                 ++ptr->refcount;
         }
 
-        MergingBlockPtr(const MergingBlockPtr & rhs) : ptr(rhs.ptr)
+        MergingBlockPtr(const MergingBlockPtr & rhs)
+            : ptr(rhs.ptr)
         {
             if (ptr)
                 ++ptr->refcount;
@@ -125,10 +133,13 @@ private:
 
         MergingBlockPtr & operator=(const MergingBlockPtr & rhs)
         {
+            if (this == std::addressof(rhs))
+                return *this;
+
             destroy();
             ptr = rhs.ptr;
             if (ptr)
-                ++ptr->refcount;
+                ++ptr->refcount; // NOLINT
             return *this;
         }
 
@@ -179,10 +190,15 @@ private:
         MergingBlockPtr block;
         size_t pos;
 
-        Cursor() {}
-        explicit Cursor(const MergingBlockPtr & block_, size_t pos_ = 0) : block(block_), pos(pos_) {}
+        Cursor()
+            : pos(0)
+        {}
+        explicit Cursor(const MergingBlockPtr & block_, size_t pos_ = 0)
+            : block(block_)
+            , pos(pos_)
+        {}
 
-        bool operator< (const Cursor & rhs) const
+        bool operator<(const Cursor & rhs) const
         {
             for (size_t i = 0; i < block->sort_columns.size(); ++i)
             {
@@ -247,14 +263,14 @@ private:
 
     Queue queue;
 
-    Cursor previous;                    /// The current primary key.
-    Cursor last_positive;               /// The last positive row for the current primary key.
+    Cursor previous; /// The current primary key.
+    Cursor last_positive; /// The last positive row for the current primary key.
 
-    size_t count_positive = 0;          /// The number of positive rows for the current primary key.
-    size_t count_negative = 0;          /// The number of negative rows for the current primary key.
-    bool last_is_positive = false;      /// true if the last row for the current primary key is positive.
+    size_t count_positive = 0; /// The number of positive rows for the current primary key.
+    size_t count_negative = 0; /// The number of negative rows for the current primary key.
+    bool last_is_positive = false; /// true if the last row for the current primary key is positive.
 
-    size_t count_incorrect_data = 0;    /// To prevent too many error messages from writing to the log.
+    size_t count_incorrect_data = 0; /// To prevent too many error messages from writing to the log.
 
     /// Count the number of blocks fetched and outputted.
     size_t blocks_fetched = 0;
@@ -267,4 +283,4 @@ private:
     void reportBadSign(Int8 sign);
 };
 
-}
+} // namespace DB
