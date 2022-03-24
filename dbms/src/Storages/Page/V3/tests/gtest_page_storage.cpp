@@ -905,5 +905,45 @@ try
 }
 CATCH
 
+
+TEST_F(PageStorageTest, readRefAfterRestore)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putRefPage(3, 1);
+        batch.delPage(1);
+        batch.putPage(4, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    {
+        WriteBatch batch;
+        memset(c_buff, 0, buf_sz);
+        batch.putPage(5, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    std::vector<PageStorage::PageReadFields> fields;
+    PageStorage::PageReadFields field;
+    field.first = 3;
+    field.second = {0, 1, 2, 3, 4, 5, 6};
+    fields.emplace_back(field);
+
+    ASSERT_NO_THROW(page_storage->read(fields));
+}
+CATCH
+
 } // namespace PS::V3::tests
 } // namespace DB

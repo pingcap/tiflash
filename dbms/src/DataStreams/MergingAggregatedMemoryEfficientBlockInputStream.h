@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
@@ -72,17 +72,18 @@ namespace DB
 class MergingAggregatedMemoryEfficientBlockInputStream final : public IProfilingBlockInputStream
 {
 public:
+    static constexpr auto name = "MergingAggregatedMemoryEfficient";
     MergingAggregatedMemoryEfficientBlockInputStream(
         BlockInputStreams inputs_,
         const Aggregator::Params & params,
         bool final_,
         size_t reading_threads_,
         size_t merging_threads_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        const String & req_id);
 
     ~MergingAggregatedMemoryEfficientBlockInputStream() override;
 
-    String getName() const override { return "MergingAggregatedMemoryEfficient"; }
+    String getName() const override { return name; }
 
     /// Sends the request (initiates calculations) earlier than `read`.
     void readPrefix() override;
@@ -103,7 +104,7 @@ protected:
 private:
     static constexpr int NUM_BUCKETS = 256;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     Aggregator aggregator;
     bool final;

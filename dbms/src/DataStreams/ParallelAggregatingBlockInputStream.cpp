@@ -34,10 +34,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     bool final_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, NAME))
+    const String & req_id)
+    : log(Logger::get(NAME, req_id))
     , params(params_)
-    , aggregator(params, log)
+    , aggregator(params, req_id)
     , file_provider(file_provider_)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
@@ -45,7 +45,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler)
+    , processor(inputs, additional_input_at_end, max_threads, handler, log)
 {
     children = inputs;
     if (additional_input_at_end)
@@ -118,7 +118,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 final,
                 temporary_data_merge_threads,
                 temporary_data_merge_threads,
-                log);
+                log->identifier());
         }
 
         executed = true;

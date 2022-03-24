@@ -51,8 +51,8 @@ try
     for (size_t i = 0, size = streams.size(); i < size; ++i)
         streams[i] = std::make_shared<AsynchronousBlockInputStream>(streams[i]);
 
-    BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, settings.max_threads, nullptr);
-    stream = std::make_shared<LimitBlockInputStream>(stream, 10, 0, nullptr);
+    BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, settings.max_threads, /*req_id=*/"");
+    stream = std::make_shared<LimitBlockInputStream>(stream, 10, 0, "");
 
     WriteBufferFromFileDescriptor wb(STDERR_FILENO);
     Block sample = table->getSampleBlock();

@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/typeid_cast.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -225,7 +224,7 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     }
     else
     {
-        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, nullptr, settings.max_threads, nullptr);
+        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, nullptr, settings.max_threads, /*req_id=*/"");
         nested_streams.clear();
     }
 
