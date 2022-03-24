@@ -37,6 +37,7 @@ public:
     virtual ~ExchangePacketReader() = default;
     virtual bool read(MPPDataPacketPtr & packet) = 0;
     virtual ::grpc::Status finish() = 0;
+    virtual bool needFinishNow() { return false; }
 };
 using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 
@@ -47,6 +48,7 @@ public:
     virtual void init(UnaryCallback<bool> * callback) = 0;
     virtual void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
     virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+    virtual bool needFinishNow() { return false; }
 };
 using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
 

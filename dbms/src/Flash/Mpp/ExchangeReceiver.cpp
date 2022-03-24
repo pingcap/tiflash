@@ -433,6 +433,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         {
             auto reader = rpc_context->makeReader(req);
             bool has_data = false;
+            // current retry loop
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
@@ -447,14 +448,28 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (recv_msg->packet->has_error())
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
 
-                if (!msg_channel.push(std::move(recv_msg)))
+                bool break_current_retry_loop = false;
+                while (!msg_channel.tryPush(std::move(recv_msg), std::chrono::seconds(5)))
                 {
+                    if (msg_channel.getStatus() == MPMCQueueStatus::NORMAL)
+                    {
+                        if (reader->needFinishNow())
+                        {
+                            break_current_retry_loop = true;
+                            break;
+                        }
+                        else
+                            continue;
+                    }
                     meet_error = true;
                     auto local_state = getState();
                     local_err_msg = "receiver's state is " + getReceiverStateStr(local_state) + ", exit from readLoop";
                     LOG_WARNING(log, local_err_msg);
+                    break_current_retry_loop = true;
                     break;
                 }
+                if (break_current_retry_loop)
+                    break;
             }
             // if meet error, such as decode packect fails, it will not retry.
             if (meet_error)

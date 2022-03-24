@@ -108,6 +108,8 @@ struct MockReceiverContext
             return {0, ""};
         }
 
+        bool needFinishNow() { return false; }
+
         PacketQueuePtr queue;
     };
 

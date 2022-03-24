@@ -120,30 +120,46 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         : tunnel(tunnel_)
     {}
 
-    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~LocalExchangePacketReader() override
+    void tryConsumerFinishTunnel(const String & err_msg)
     {
         if (tunnel)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
             tunnel->consumerFinish("Receiver closed");
+            tunnel.reset();
         }
+    }
+
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~LocalExchangePacketReader() override
+    {
+        tryConsumerFinishTunnel("Receiver closed");
     }
 
     bool read(MPPDataPacketPtr & packet) override
     {
+        if (!tunnel)
+            return false;
         MPPDataPacketPtr tmp_packet = tunnel->readForLocal();
         bool success = tmp_packet != nullptr;
         if (success)
             packet = tmp_packet;
+        else
+            tunnel.reset(); // tunnel has been consumerFinished if success is false
+
         return success;
     }
 
     ::grpc::Status finish() override
     {
-        tunnel.reset();
+        tryConsumerFinishTunnel("");
         return ::grpc::Status::OK;
+    }
+
+    bool needFinishNow() override
+    {
+        return !tunnel || tunnel->getSendQueueStatus() != MPMCQueueStatus::NORMAL;
     }
 };
 
