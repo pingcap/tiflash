@@ -1002,9 +1002,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+    MPPTaskId task_id = MPPTaskId::unknown_mpp_task_id;
+    if (db_context.getDAGContext() != nullptr)
+        task_id = db_context.getDAGContext()->getMPPTaskId();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1020,11 +1020,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-<<<<<<< HEAD
+            task_id,
             nullptr);
-=======
-            req_info);
->>>>>>> 928e919b1c (Add some log to make it easier to observe data skew (#4404))
         res.push_back(stream);
     }
     return res;
@@ -1055,9 +1052,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+    MPPTaskId task_id = MPPTaskId::unknown_mpp_task_id;
+    if (db_context.getDAGContext() != nullptr)
+        task_id = db_context.getDAGContext()->getMPPTaskId();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1073,11 +1070,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-<<<<<<< HEAD
+            task_id,
             nullptr);
-=======
-            req_info);
->>>>>>> 928e919b1c (Add some log to make it easier to observe data skew (#4404))
         res.push_back(stream);
     }
 

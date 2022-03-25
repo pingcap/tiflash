@@ -52,6 +52,7 @@ public:
         bool do_range_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
+        const MPPTaskId & task_id,
         const LogWithPrefixPtr & log_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
@@ -65,7 +66,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getMPPTaskLog(log_, NAME, task_id))
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -179,12 +180,8 @@ private:
     SegmentPtr cur_segment;
     TableID physical_table_id;
 
-<<<<<<< HEAD
     LogWithPrefixPtr log;
-=======
-    LoggerPtr log;
     size_t total_rows = 0;
->>>>>>> 928e919b1c (Add some log to make it easier to observe data skew (#4404))
 };
 
 } // namespace DM
