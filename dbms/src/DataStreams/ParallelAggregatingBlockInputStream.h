@@ -18,9 +18,7 @@
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
-
 
 namespace DB
 {
@@ -44,7 +42,7 @@ public:
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 
@@ -66,7 +64,7 @@ protected:
     Block readImpl() override;
 
 private:
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;

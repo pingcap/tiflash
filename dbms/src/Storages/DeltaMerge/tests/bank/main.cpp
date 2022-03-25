@@ -168,7 +168,7 @@ void run_bank(UInt64 account, UInt64 initial_balance, UInt64 worker_count, UInt6
     verify_thread.join();
 
     std::cout << "Last Verify\n";
-    std::cout << proxy.sumBalance(0, end, UINT64_MAX) << std::endl;
+    std::cout << proxy.sumBalance(0, end, std::numeric_limits<UInt64>::max()) << std::endl;
 
     std::cout << "Complete\n";
 }

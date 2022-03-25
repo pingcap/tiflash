@@ -39,9 +39,9 @@ namespace tests
 {
 TEST(WriteLimiterTest, Rate)
 {
-    std::default_random_engine e;
-    e.seed(time(nullptr));
-    auto write = [&e](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
+    auto write = [](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
+        std::default_random_engine e;
+        e.seed(std::hash<std::thread::id>()(std::this_thread::get_id()));
         AtomicStopwatch watch;
         while (watch.elapsedSeconds() < 4)
         {
