@@ -150,11 +150,8 @@ target_link_libraries (
     ${MEMCPY_LIBRARIES}
     fmt
     cpu_features
+    ${RT_LIBRARY}
 )
-
-if (RT_LIBRARY)
-    target_link_libraries (common ${RT_LIBRARY})
-endif ()
 
 if (ENABLE_TESTS)
     add_subdirectory (src/tests EXCLUDE_FROM_ALL)
