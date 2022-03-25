@@ -13,7 +13,7 @@
 # limitations under the License.
 
 project (TiFlash)
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.21)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
@@ -107,8 +107,7 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
-    # clang: warning: private field 'hash_salt' is not used [-Wunused-private-field]
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument -Wno-unused-private-field")
+    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
 endif ()
 
 if (ARCH_LINUX)
