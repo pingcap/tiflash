@@ -71,7 +71,6 @@
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
  	branch = v1.44.0
-	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
