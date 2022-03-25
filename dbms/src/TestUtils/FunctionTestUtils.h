@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/MyDuration.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
@@ -550,6 +551,13 @@ ColumnWithTypeAndName executeFunction(
     return executeFunction(context, func_name, vec);
 }
 
+ColumnWithTypeAndName executeAggregateFunction(const String & func_name,
+                                               const ColumnsWithTypeAndName & cols,
+                                               const ColumnNumbers & group_keys_offset,
+                                               const bool empty_result_for_aggregation_by_empty_set = false,
+                                               const bool allow_to_use_two_level_group_by = false,
+                                               const TiDB::TiDBCollators & collators = TiDB::dummy_collators);
+
 DataTypePtr getReturnTypeForFunction(
     Context & context,
     const String & func_name,
@@ -703,6 +711,50 @@ public:
     {
         assert(dag_context_ptr != nullptr);
         return *dag_context_ptr;
+    }
+
+protected:
+    Context context;
+    std::unique_ptr<DAGContext> dag_context_ptr;
+};
+
+class AggregateFunctionTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        initializeDAGContext();
+    }
+
+public:
+    static void SetUpTestCase()
+    {
+        try
+        {
+            DB::registerAggregateFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    }
+    AggregateFunctionTest()
+        : context(TiFlashTestEnv::getContext())
+    {}
+    virtual void initializeDAGContext()
+    {
+        dag_context_ptr = std::make_unique<DAGContext>(1024);
+        context.setDAGContext(dag_context_ptr.get());
+    }
+
+    ColumnWithTypeAndName executeAggregateFunction(const String & func_name,
+                                                   const ColumnsWithTypeAndName & columns,
+                                                   const ColumnNumbers & argument_column_numbers,
+                                                   const bool empty_result_for_aggregation_by_empty_set = false,
+                                                   const bool allow_to_use_two_level_group_by = false,
+                                                   const TiDB::TiDBCollators & collators = TiDB::dummy_collators)
+    {
+        return DB::tests::executeAggregateFunction(func_name, columns, argument_column_numbers, empty_result_for_aggregation_by_empty_set, allow_to_use_two_level_group_by, collators);
     }
 
 protected:
