@@ -219,6 +219,8 @@ if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
 endif()
 
+# NetSSL headers are exposed in clickhouse_common_io's headers.
+# We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
     target_link_libraries (clickhouse_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
 endif()
