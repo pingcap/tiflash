@@ -37,6 +37,7 @@ public:
     void readSuffix() override
     {
         writer->finishWrite();
+        LOG_FMT_DEBUG(log, "finish write with {} rows", total_rows);
     }
 
 protected:
@@ -44,7 +45,12 @@ protected:
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
+<<<<<<< HEAD
     std::shared_ptr<LogWithPrefix> log;
+=======
+    const LoggerPtr log;
+    size_t total_rows = 0;
+>>>>>>> 928e919b1c (Add some log to make it easier to observe data skew (#4404))
 };
 
 } // namespace DB
