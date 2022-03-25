@@ -748,8 +748,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     {
         LOG_FMT_WARNING(
             log,
-            "{} unexpected split_handle: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
-            __FUNCTION__,
+            "unexpected split_handle: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
             rowkey_range.toDebugString(),
             cur_rows,
@@ -798,7 +797,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 
     if (exact_rows == 0)
     {
-        LOG_FMT_WARNING(log, "{} Segment {} has no rows, should not split.", __FUNCTION__, info());
+        LOG_FMT_WARNING(log, "Segment {} has no rows, should not split.", info());
         return {};
     }
 
@@ -841,8 +840,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
     {
         LOG_FMT_WARNING(
             log,
-            "{} unexpected split_handle: {}, should be in range {}, exact_rows: {}, cur count: {}, split_row_index: {}",
-            __FUNCTION__,
+            "unexpected split_handle: {}, should be in range {}, exact_rows: {}, cur count: {}, split_row_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
             rowkey_range.toDebugString(),
             exact_rows,
@@ -904,8 +902,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     {
         LOG_FMT_WARNING(
             log,
-            "{}: unexpected range! my_range: {}, other_range: {}, aborted",
-            __FUNCTION__,
+            "unexpected range! my_range: {}, other_range: {}, aborted",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
@@ -985,8 +982,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         LOG_FMT_WARNING(
             log,
-            "{}: unexpected range! my_range: {}, other_range: {}, aborted",
-            __FUNCTION__,
+            "unexpected range! my_range: {}, other_range: {}, aborted",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
@@ -1511,8 +1507,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     LOG_FMT_DEBUG(
         log,
-        "{} {} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
-        __FUNCTION__,
+        "{} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
         simpleInfo(),
         DB::DM::toDebugString(read_ranges),
         items.size(),

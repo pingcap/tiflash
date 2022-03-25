@@ -488,7 +488,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "{} table: {}.{}, rows: {}", __FUNCTION__, db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "table: {}.{}, rows: {}", db_name, table_name, block.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -641,7 +641,7 @@ void DeltaMergeStore::ingestFiles(
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
         const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
-        LOG_FMT_WARNING(log, "{} {}", __FUNCTION__, msg);
+        LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
 
@@ -670,8 +670,7 @@ void DeltaMergeStore::ingestFiles(
 
     LOG_FMT_INFO(
         log,
-        "{} table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
-        __FUNCTION__,
+        "table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
         db_name,
         table_name,
         rows,
@@ -810,8 +809,7 @@ void DeltaMergeStore::ingestFiles(
         fmt_buf.append("]");
         LOG_FMT_INFO(
             log,
-            "{} table: {}.{}, clear_data: {}, {}",
-            __FUNCTION__,
+            "table: {}.{}, clear_data: {}, {}",
             db_name,
             table_name,
             clear_data_in_range,
@@ -829,7 +827,7 @@ void DeltaMergeStore::ingestFiles(
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "{} table: {}.{} delete range {}", __FUNCTION__, db_name, table_name, delete_range.toDebugString());
+    LOG_FMT_INFO(log, "table: {}.{} delete range {}", db_name, table_name, delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -1011,6 +1009,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1026,7 +1027,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            "");
+            req_info);
         res.push_back(stream);
     }
     return res;
@@ -1057,6 +1058,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1072,7 +1076,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            "");
+            req_info);
         res.push_back(stream);
     }
 
@@ -1501,7 +1505,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{} {}", __PRETTY_FUNCTION__, property.toDebugString());
+    LOG_FMT_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1525,7 +1529,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "{} delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", __PRETTY_FUNCTION__, delete_rows, delete_bytes, stable_rows, stable_bytes);
+    LOG_FMT_TRACE(log, "delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", delete_rows, delete_bytes, stable_rows, stable_bytes);
 
     // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
     //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.

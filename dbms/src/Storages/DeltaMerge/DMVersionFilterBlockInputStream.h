@@ -59,14 +59,16 @@ public:
 
     ~DMVersionFilterBlockInputStream()
     {
-        LOG_DEBUG(log,
-                  "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
-                                 << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                                 << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) //
-                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) //
-                                 << "%, read tso: " << version_limit
-                                 << ", query id: " << (query_id.empty() ? String("<non-query>") : query_id));
+        LOG_FMT_DEBUG(log,
+                      "Total rows: {}, pass: {:.2f}%, complete pass: {:.2f}%, complete not pass: {:.2f}%, not clean: {:.2f}%, effective: {:.2f}%, read tso: {}, query id: {}",
+                      total_rows,
+                      passed_rows * 100.0 / total_rows,
+                      complete_passed * 100.0 / total_blocks,
+                      complete_not_passed * 100.0 / total_blocks,
+                      not_clean_rows * 100.0 / passed_rows,
+                      effective_num_rows * 100.0 / passed_rows,
+                      version_limit,
+                      (query_id.empty() ? "<non-query>" : query_id));
     }
 
     void readPrefix() override;
