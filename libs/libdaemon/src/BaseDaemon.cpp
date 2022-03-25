@@ -538,8 +538,8 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static constexpr int max_frames = 50;
-        int frames_size = 0;
+        static constexpr size_t max_frames = 50;
+        size_t frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND

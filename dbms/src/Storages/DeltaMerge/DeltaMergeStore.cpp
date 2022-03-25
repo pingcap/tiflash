@@ -15,7 +15,7 @@
 #include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
@@ -27,7 +27,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -489,7 +488,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "{} table: {}.{}, rows: {}", __FUNCTION__, db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "table: {}.{}, rows: {}", db_name, table_name, block.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -642,7 +641,7 @@ void DeltaMergeStore::ingestFiles(
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
         const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
-        LOG_FMT_WARNING(log, "{} {}", __FUNCTION__, msg);
+        LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
 
@@ -671,8 +670,7 @@ void DeltaMergeStore::ingestFiles(
 
     LOG_FMT_INFO(
         log,
-        "{} table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
-        __FUNCTION__,
+        "table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
         db_name,
         table_name,
         rows,
@@ -811,8 +809,7 @@ void DeltaMergeStore::ingestFiles(
         fmt_buf.append("]");
         LOG_FMT_INFO(
             log,
-            "{} table: {}.{}, clear_data: {}, {}",
-            __FUNCTION__,
+            "table: {}.{}, clear_data: {}, {}",
             db_name,
             table_name,
             clear_data_in_range,
@@ -830,7 +827,7 @@ void DeltaMergeStore::ingestFiles(
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "{} table: {}.{} delete range {}", __FUNCTION__, db_name, table_name, delete_range.toDebugString());
+    LOG_FMT_INFO(log, "table: {}.{} delete range {}", db_name, table_name, delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -1012,6 +1009,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1021,13 +1021,13 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             after_segment_read,
             columns_to_read,
             EMPTY_FILTER,
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             true,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            nullptr);
+            req_info);
         res.push_back(stream);
     }
     return res;
@@ -1058,6 +1058,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1073,7 +1076,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             db_settings.dt_raw_filter_range,
             extra_table_id_index,
             physical_table_id,
-            nullptr);
+            req_info);
         res.push_back(stream);
     }
 
@@ -1196,9 +1199,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     // Note that, we must use || to combine rows and bytes checks in split check, and use && in merge check.
     // Otherwise, segments could be split and merged over and over again.
-    bool should_split = (segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
-        && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows
-            || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
+    // Do background split in the following two cases:
+    //   1. The segment is large enough, and there are some data in the delta layer. (A hot segment which is large enough)
+    //   2. The segment is too large. (A segment which is too large, although it is cold)
+    bool should_bg_split = ((segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
+                            && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows
+                                || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes))
+        || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
@@ -1310,7 +1317,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_split = [&](const SegmentPtr & seg) {
-        if (should_split && !seg->isSplitForbidden())
+        if (should_bg_split && !seg->isSplitForbidden())
         {
             delta_last_try_split_rows = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
@@ -1498,7 +1505,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{} {}", __PRETTY_FUNCTION__, property.toDebugString());
+    LOG_FMT_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1522,7 +1529,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "{} delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", __PRETTY_FUNCTION__, delete_rows, delete_bytes, stable_rows, stable_bytes);
+    LOG_FMT_TRACE(log, "delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", delete_rows, delete_bytes, stable_rows, stable_bytes);
 
     // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
     //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.

@@ -375,7 +375,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     {
         if (unlikely(snap == nullptr))
         {
-            LOG_WARNING(log, name << " gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.");
+            LOG_FMT_WARNING(log, "{} gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.", name);
             continue;
         }
         collectLiveFilesFromVersionList(*snap->version(), live_files, live_normal_pages, need_scan_page_ids);
@@ -542,9 +542,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_WARNING(log,
-                        name << " Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage" + DB::toString(rec.page_id)
-                                + " to non-exist Page" + DB::toString(rec.ori_page_id));
+            LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
         }
         else
         {
@@ -580,9 +578,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             }
             catch (DB::Exception & e)
             {
-                LOG_WARNING(log,
-                            name << " Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage" + DB::toString(rec.page_id)
-                                    + " to non-exist Page" + DB::toString(rec.ori_page_id));
+                LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
             }
             break;
         case WriteBatch::WriteType::UPSERT:
