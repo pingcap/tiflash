@@ -269,8 +269,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema " << result << " Schema version [storage, global, query]: "
-                                           << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+        LOG_FMT_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
     };
     bool ok;
     {
