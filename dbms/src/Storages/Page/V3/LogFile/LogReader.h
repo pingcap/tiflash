@@ -49,8 +49,7 @@ public:
         Reporter * reporter_,
         bool verify_checksum_,
         Format::LogNumberType log_num_,
-        WALRecoveryMode recovery_mode_,
-        Poco::Logger * log_);
+        WALRecoveryMode recovery_mode_);
 
     LogReader(const LogReader &) = delete;
     LogReader & operator=(const LogReader &) = delete;
@@ -127,8 +126,6 @@ private:
     UInt64 end_of_buffer_offset;
     // which log number it is
     const Format::LogNumberType log_number;
-
-    Poco::Logger * log;
 };
 
 } // namespace PS::V3

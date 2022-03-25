@@ -17,10 +17,8 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <Interpreters/Aggregator.h>
-
 
 namespace DB
 {
@@ -43,10 +41,10 @@ public:
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
-        const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, NAME))
+        const String & req_id)
+        : log(Logger::get(NAME, req_id))
         , params(params_)
-        , aggregator(params, log)
+        , aggregator(params, req_id)
         , file_provider{file_provider_}
         , final(final_)
     {
@@ -60,7 +58,7 @@ public:
 protected:
     Block readImpl() override;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;

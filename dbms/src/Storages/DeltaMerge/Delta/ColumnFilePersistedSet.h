@@ -44,7 +44,8 @@ namespace DM
 class ColumnFilePersistedSet;
 using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 
-/// This class is not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// This class is mostly not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// Only the method that just access atomic variable can be called without extra synchronization
 class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
@@ -55,7 +56,9 @@ public:
 private:
     PageId metadata_id;
     ColumnFilePersistedLevels persisted_files_levels;
+    // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count;
+    std::atomic<size_t> persisted_files_level_count;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -80,25 +83,19 @@ public:
     /// Only called after reboot.
     static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
 
+    /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
     {
-        String levels_summary;
-        for (size_t i = 0; i < persisted_files_levels.size(); i++)
-        {
-            levels_summary += fmt::format("[{}: {}]", i, persisted_files_levels[i].size());
-            if (i != persisted_files_levels.size() - 1)
-                levels_summary += ",";
-        }
-
-        return fmt::format("ColumnFilePersistedSet [{}][levels summary: {}]: {} column files, {} rows, {} bytes, {} deletes.",
+        return fmt::format("ColumnFilePersistedSet [{}]: {} levels, {} column files, {} rows, {} bytes, {} deletes.",
                            metadata_id,
-                           levels_summary,
+                           persisted_files_level_count.load(),
                            persisted_files_count.load(),
                            rows.load(),
                            bytes.load(),
                            deletes.load());
     }
+    /// Thread safe part end
     String levelsInfo() const
     {
         String levels_info;
@@ -116,13 +113,15 @@ public:
     ColumnFilePersisteds
     checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
 
+    /// Thread safe part start
     PageId getId() const { return metadata_id; }
 
     size_t getColumnFileCount() const { return persisted_files_count.load(); }
-    size_t getColumnFileLevelCount() const { return persisted_files_levels.size(); }
+    size_t getColumnFileLevelCount() const { return persisted_files_level_count.load(); }
     size_t getRows() const { return rows.load(); }
     size_t getBytes() const { return bytes.load(); }
     size_t getDeletes() const { return deletes.load(); }
+    /// Thread safe part end
 
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;

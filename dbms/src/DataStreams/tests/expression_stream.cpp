@@ -12,28 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <iomanip>
-
-#include <IO/WriteBufferFromOStream.h>
-
-#include <Storages/System/StorageSystemNumbers.h>
-#include <Storages/RegionQueryInfo.h>
-
-#include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
-#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/LimitBlockInputStream.h>
+#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/copyData.h>
-
 #include <DataTypes/DataTypesNumber.h>
-
+#include <IO/WriteBufferFromOStream.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/System/StorageSystemNumbers.h>
 
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Context.h>
+#include <iomanip>
+#include <iostream>
 
 
 int main(int argc, char ** argv)
@@ -66,7 +61,7 @@ try
 
     BlockInputStreamPtr in;
     in = table->read(column_names, {}, context, stage, 8192, 1)[0];
-    in = std::make_shared<ExpressionBlockInputStream>(in, expression);
+    in = std::make_shared<ExpressionBlockInputStream>(in, expression, "");
     in = std::make_shared<LimitBlockInputStream>(in, 10, std::max(static_cast<Int64>(0), static_cast<Int64>(n) - 10));
 
     WriteBufferFromOStream out1(std::cout);
@@ -81,9 +76,9 @@ try
 
         stopwatch.stop();
         std::cout << std::fixed << std::setprecision(2)
-            << "Elapsed " << stopwatch.elapsedSeconds() << " sec."
-            << ", " << n / stopwatch.elapsedSeconds() << " rows/sec."
-            << std::endl;
+                  << "Elapsed " << stopwatch.elapsedSeconds() << " sec."
+                  << ", " << n / stopwatch.elapsedSeconds() << " rows/sec."
+                  << std::endl;
     }
 
     return 0;
@@ -93,4 +88,3 @@ catch (const DB::Exception & e)
     std::cerr << e.what() << ", " << e.displayText() << std::endl;
     throw;
 }
-

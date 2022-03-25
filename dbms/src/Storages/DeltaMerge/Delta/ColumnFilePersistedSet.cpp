@@ -67,6 +67,7 @@ void ColumnFilePersistedSet::updateColumnFileStats()
         }
     }
     persisted_files_count = new_persisted_files_count;
+    persisted_files_level_count = persisted_files_levels.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
@@ -289,7 +290,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 {
     if (task_flush_version != flush_version)
     {
-        LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
+        LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
         return false;
     }
     flush_version += 1;
@@ -319,6 +320,7 @@ bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFile
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
+    LOG_FMT_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
 
     return true;
 }
@@ -392,7 +394,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
-    LOG_FMT_DEBUG(log, "Before commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
     ColumnFilePersistedLevels new_persisted_files_levels;
     auto compaction_src_level = compaction->getCompactionSourceLevel();
     // Copy column files in level range [0, compaction_src_level)
@@ -461,7 +463,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
-    LOG_FMT_DEBUG(log, "After commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
 
     return true;
 }
