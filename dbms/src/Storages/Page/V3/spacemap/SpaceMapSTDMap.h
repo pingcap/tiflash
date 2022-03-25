@@ -61,10 +61,10 @@ protected:
     {
         UInt64 count = 0;
 
-        LOG_DEBUG(log, "STD-Map entries status: ");
+        LOG_FMT_DEBUG(log, "STD-Map entries status: ");
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            LOG_DEBUG(log, "  Space: " << count << " start:" << it->first << " size : " << it->second);
+            LOG_FMT_DEBUG(log, "  Space: {} start: {} size : {}", count, it->first, it->second);
             count++;
         }
     }
@@ -139,7 +139,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset=" << offset << ", size=" << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
+            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
             return false;
         }
 
@@ -186,7 +186,7 @@ protected:
 
         if (free_map.empty())
         {
-            LOG_ERROR(log, "Current space map is full");
+            LOG_FMT_ERROR(log, "Current space map is full");
             hint_biggest_cap = 0;
             return std::make_pair(offset, hint_biggest_cap);
         }
@@ -209,7 +209,7 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << hint_biggest_offset << "] [old biggest_cap=" << hint_biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
+            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert. [size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", size, hint_biggest_offset, hint_biggest_cap, scan_biggest_offset, scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
@@ -322,7 +322,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
                 free_map.erase(it);
                 return false;
             }
@@ -333,7 +333,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
                 free_map.erase(it);
                 return false;
             }
