@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
-#include <Common/Exception.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -610,7 +609,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 template <typename RPCContext>
 bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
-    RUNTIME_ASSERT(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
+    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
     std::unique_lock lock(mu);
     if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
     {
