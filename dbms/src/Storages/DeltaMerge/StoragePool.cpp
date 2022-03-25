@@ -28,8 +28,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
     config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
     config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
-    config.gc_force_hardlink_rate = settings.dt_storage_pool_##NAME##_gc_force_hardlink_rate;
+    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
 
     PageStorage::Config config = getConfigFromSettings(settings);
 
