@@ -96,7 +96,11 @@ public:
 
     ~ExchangeReceiverBase();
 
+    // idempotent cancel operation
     void cancel();
+
+    // idempotent close operation
+    void close();
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
