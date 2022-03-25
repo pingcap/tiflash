@@ -356,6 +356,12 @@ void MPPTask::runImpl()
     }
     else
     {
+<<<<<<< HEAD
+=======
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        if (dag_context)
+            dag_context->cancelAllExchangeReceiver();
+>>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());

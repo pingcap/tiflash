@@ -209,6 +209,29 @@ public:
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
+<<<<<<< HEAD
+=======
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        remote_reader->collectNewThreadCount(cnt);
+    }
+
+    virtual void resetNewThreadCountCompute() override
+    {
+        if (collected)
+        {
+            collected = false;
+            remote_reader->resetNewThreadCountCompute();
+        }
+    }
+
+    virtual void readSuffix() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        remote_reader->close();
+    }
+>>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

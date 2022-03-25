@@ -149,6 +149,57 @@ public:
         return io;
     }
 
+<<<<<<< HEAD
+=======
+    int getNewThreadCountOfExchangeReceiver() const;
+    UInt64 getFlags() const
+    {
+        return flags;
+    }
+    void setFlags(UInt64 f)
+    {
+        flags = f;
+    }
+    void addFlag(UInt64 f)
+    {
+        flags |= f;
+    }
+    void delFlag(UInt64 f)
+    {
+        flags &= (~f);
+    }
+    bool hasFlag(UInt64 f) const
+    {
+        return (flags & f);
+    }
+
+    UInt64 getSQLMode() const
+    {
+        return sql_mode;
+    }
+    void setSQLMode(UInt64 f)
+    {
+        sql_mode = f;
+    }
+    void addSQLMode(UInt64 f)
+    {
+        sql_mode |= f;
+    }
+    void delSQLMode(UInt64 f)
+    {
+        sql_mode &= (~f);
+    }
+    bool hasSQLMode(UInt64 f) const
+    {
+        return sql_mode & f;
+    }
+
+    void cancelAllExchangeReceiver();
+
+    void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
+
+>>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
