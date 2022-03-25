@@ -34,6 +34,6 @@ header:
     - 'dbms/src/IO/tests/DevicePixelRatio'
     - 'Cargo.lock'
     - 'Cargo.toml'
-    - 'rust-toolchain'        
+    - 'rust-toolchain'
 
   comment: on-failure
