@@ -266,6 +266,8 @@ public:
         return sql_mode & f;
     }
 
+    void cancelAllExchangeReceiver();
+
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 

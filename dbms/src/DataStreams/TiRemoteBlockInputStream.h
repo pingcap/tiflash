@@ -215,6 +215,12 @@ public:
         return block;
     }
 
+    void readSuffix() override
+    {
+        IProfilingBlockInputStream::readSuffix();
+        remote_reader->close();
+    }
+
     const std::unordered_map<String, ExecutionSummary> * getRemoteExecutionSummaries(size_t index)
     {
         return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;

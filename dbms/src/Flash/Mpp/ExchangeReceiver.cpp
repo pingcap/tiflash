@@ -311,8 +311,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    setState(ExchangeReceiverState::CLOSED);
-    msg_channel.finish();
+    close();
     thread_manager->wait();
 }
 
@@ -320,6 +319,13 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setState(ExchangeReceiverState::CANCELED);
+    msg_channel.finish();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::close()
+{
+    setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 }
 
