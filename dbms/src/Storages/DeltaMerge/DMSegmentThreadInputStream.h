@@ -52,6 +52,7 @@ public:
         bool do_range_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
+        const MPPTaskId & task_id,
         const LogWithPrefixPtr & log_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
@@ -65,7 +66,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(getMPPTaskLog(log_, NAME, task_id))
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -138,7 +139,10 @@ protected:
                 if (!res.rows())
                     continue;
                 else
+                {
+                    total_rows += res.rows();
                     return res;
+                }
             }
             else
             {
@@ -148,6 +152,11 @@ protected:
                 cur_stream = {};
             }
         }
+    }
+
+    void readSuffix() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:
@@ -172,6 +181,7 @@ private:
     TableID physical_table_id;
 
     LogWithPrefixPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DM
