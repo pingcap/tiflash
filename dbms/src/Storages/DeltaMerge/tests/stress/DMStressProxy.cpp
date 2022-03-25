@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -42,7 +56,7 @@ DMStressProxy::DMStressProxy(const StressOptions & opts_)
     cols->emplace_back(col_balance_define);
     cols->emplace_back(col_random_define);
     auto handle_col = (*cols)[0];
-    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, 100, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
     if (opts_.verify)
     {
         ColumnDefines columns;
@@ -59,7 +73,7 @@ DMStressProxy::DMStressProxy(const StressOptions & opts_)
         {
             if (block.columns() != 1)
             {
-                LOG_ERROR(log, "block columns must be 1.");
+                LOG_FMT_ERROR(log, "block columns must be 1.");
                 throw DB::Exception("block columns must be 1.", ErrorCodes::LOGICAL_ERROR);
             }
             // only one columns, so only need to fetch begin iterator.
@@ -79,15 +93,13 @@ void DMStressProxy::genMultiThread()
 {
     if (opts.gen_total_rows <= 0)
     {
-        LOG_INFO(log, "opts.gen_total_rows " << opts.gen_total_rows);
+        LOG_FMT_INFO(log, "opts.gen_total_rows {}", opts.gen_total_rows);
         return;
     }
 
     UInt64 gen_rows_per_thread = opts.gen_total_rows / opts.gen_concurrency + 1;
     UInt64 gen_total_rows = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row.
-    LOG_INFO(log,
-             "Generate concurrency: " << opts.gen_concurrency << " Generate rows per thread: " << gen_rows_per_thread
-                                      << " Generate total rows: " << gen_total_rows);
+    LOG_FMT_INFO(log, "Generate concurrency: {} Generate rows per thread: {} Generate total rows: {}", opts.gen_concurrency, gen_rows_per_thread, gen_total_rows);
 
     gen_threads.reserve(opts.gen_concurrency);
     for (UInt32 i = 0; i < opts.gen_concurrency; i++)
@@ -202,7 +214,7 @@ UInt64 DMStressProxy::countRows(UInt32 rnd_break_prob)
             break; // Randomly break
         }
     }
-    LOG_INFO(log, "countRows ThreadID: " << std::this_thread::get_id() << " TotalCount: " << total_count);
+    LOG_FMT_INFO(log, "countRows ThreadID: {} TotalCount: {}", std::this_thread::get_id(), total_count);
     return total_count;
 }
 
@@ -335,37 +347,37 @@ void DMStressProxy::deleteRange()
 
 void DMStressProxy::waitGenThreads()
 {
-    LOG_INFO(log, "wait gen threads begin: " << gen_threads.size());
+    LOG_FMT_INFO(log, "wait gen threads begin: {}", gen_threads.size());
     joinThreads(gen_threads);
-    LOG_INFO(log, "wait gen threads end: " << gen_threads.size());
+    LOG_FMT_INFO(log, "wait gen threads end: {}", gen_threads.size());
 }
 
 void DMStressProxy::waitReadThreads()
 {
-    LOG_INFO(log, "wait read threads begin: " << read_threads.size());
+    LOG_FMT_INFO(log, "wait read threads begin: {}", read_threads.size());
     joinThreads(read_threads);
-    LOG_INFO(log, "wait read threads end: " << read_threads.size());
+    LOG_FMT_INFO(log, "wait read threads end: {}", read_threads.size());
 }
 
 void DMStressProxy::waitInsertThreads()
 {
-    LOG_INFO(log, "wait insert threads begin: " << insert_threads.size());
+    LOG_FMT_INFO(log, "wait insert threads begin: {}", insert_threads.size());
     joinThreads(insert_threads);
-    LOG_INFO(log, "wait insert threads end: " << insert_threads.size());
+    LOG_FMT_INFO(log, "wait insert threads end: {}", insert_threads.size());
 }
 
 void DMStressProxy::waitUpdateThreads()
 {
-    LOG_INFO(log, "wait update threads begin: " << update_threads.size());
+    LOG_FMT_INFO(log, "wait update threads begin: {}", update_threads.size());
     joinThreads(update_threads);
-    LOG_INFO(log, "wait update threads end: " << update_threads.size());
+    LOG_FMT_INFO(log, "wait update threads end: {}", update_threads.size());
 }
 
 void DMStressProxy::waitDeleteThreads()
 {
-    LOG_INFO(log, "wait delete threads begin: " << delete_threads.size());
+    LOG_FMT_INFO(log, "wait delete threads begin: {}", delete_threads.size());
     joinThreads(delete_threads);
-    LOG_INFO(log, "wait delete threads end: " << delete_threads.size());
+    LOG_FMT_INFO(log, "wait delete threads end: {}", delete_threads.size());
 }
 
 void DMStressProxy::joinThreads(std::vector<std::thread> & threads)
@@ -399,9 +411,9 @@ void DMStressProxy::verifySingleThread()
 
 void DMStressProxy::waitVerifyThread()
 {
-    LOG_INFO(log, "wait verify thread begin");
+    LOG_FMT_INFO(log, "wait verify thread begin");
     verify_thread.join();
-    LOG_INFO(log, "wait verify thread end");
+    LOG_FMT_INFO(log, "wait verify thread end");
 }
 
 void DMStressProxy::verify()
@@ -424,7 +436,7 @@ void DMStressProxy::verify()
         std::string msg = "Verify rows: " + std::to_string(block.rows()) + " columns: " + std::to_string(block.columns());
         if (block.columns() != 1)
         {
-            LOG_ERROR(log, msg + " columns must be 1.");
+            LOG_FMT_ERROR(log, "{} columns must be 1.", msg);
             throw DB::Exception(msg + " columns must be 1.", ErrorCodes::LOGICAL_ERROR);
         }
 
@@ -434,7 +446,7 @@ void DMStressProxy::verify()
             Int64 id = itr->column->getInt(i);
             if (!pks.exist(id))
             {
-                LOG_ERROR(log, "Verify id " << id << " not found from pks.");
+                LOG_FMT_ERROR(log, "Verify id {} not found from pks.", id);
                 throw DB::Exception("id " + std::to_string(id) + " not found from pks.", ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -443,17 +455,17 @@ void DMStressProxy::verify()
     std::string msg = "Verify dm_total_count: " + std::to_string(dm_total_count) + " pks_total_count: " + std::to_string(pks_total_count);
     if (pks_total_count != dm_total_count)
     {
-        LOG_ERROR(log, msg + " total_count mismatch.");
+        LOG_FMT_ERROR(log, "{} total_count mismatch.", msg);
         throw DB::Exception(msg, ErrorCodes::LOGICAL_ERROR);
     }
     else
     {
-        LOG_INFO(log, msg + " Verify success!");
+        LOG_FMT_INFO(log, "{} Verify success!", msg);
     }
 
     if (pks_total_count >= max_total_count)
     {
-        LOG_INFO(log, "pks_total_count: " << pks_total_count << " max_total_count: " << max_total_count);
+        LOG_FMT_INFO(log, "pks_total_count: {} max_total_count: {}", pks_total_count, max_total_count);
         stop.store(true); // Stop the process to avoid use too much memory.
     }
 }

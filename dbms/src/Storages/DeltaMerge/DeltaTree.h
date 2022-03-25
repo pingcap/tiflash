@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -866,7 +880,7 @@ private:
         root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
 
-        LOG_TRACE(log, "create");
+        LOG_FMT_TRACE(log, "create");
     }
 
 public:
@@ -919,7 +933,7 @@ public:
         if (allocator)
             delete allocator;
 
-        LOG_TRACE(log, "free");
+        LOG_FMT_TRACE(log, "free");
     }
 
     void checkAll() const
@@ -1358,7 +1372,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_TRACE(log, "height " << DB::toString(height + 1) << " -> " << DB::toString(height));
+        LOG_FMT_TRACE(log, "height {} -> {}", (height + 1), height);
 
         return {};
     }
@@ -1381,7 +1395,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 
             ++height;
 
-            LOG_TRACE(log, "height " << DB::toString(height - 1) << " -> " << DB::toString(height));
+            LOG_FMT_TRACE(log, "height {} -> {}", (height - 1), height);
         }
 
         auto pos = parent->searchChild(asNode(node));

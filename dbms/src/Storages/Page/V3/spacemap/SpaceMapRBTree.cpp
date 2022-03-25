@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 
@@ -650,6 +664,34 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     return std::make_pair(offset, max_cap);
 }
 
+UInt64 RBTreeSpaceMap::updateAccurateMaxCapacity()
+{
+    struct rb_node * node = nullptr;
+    struct SmapRbEntry * entry;
+    UInt64 max_offset = 0;
+    UInt64 max_cap = 0;
+
+    node = rb_tree_first(&rb_tree->root);
+    if (node == nullptr)
+    {
+        return max_cap;
+    }
+
+    for (; node != nullptr; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        if (entry->count > max_cap)
+        {
+            max_offset = entry->start;
+            max_cap = entry->count;
+        }
+    }
+
+    biggest_range = max_offset;
+    biggest_cap = max_cap;
+    return max_cap;
+}
+
 std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
 {
     struct rb_node * node = rb_tree_last(&rb_tree->root);
@@ -660,18 +702,33 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
     }
 
     auto * entry = node_to_entry(node);
-    UInt64 total_size = entry->start - start;
-    UInt64 last_node_size = entry->count;
-    UInt64 valid_size = 0;
-
-    for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+    if (entry->start + entry->count != end)
     {
-        entry = node_to_entry(node);
-        valid_size += entry->count;
-    }
-    valid_size = total_size - (valid_size - last_node_size);
+        UInt64 total_size = end - start;
+        UInt64 valid_size = total_size;
+        for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+        {
+            entry = node_to_entry(node);
+            valid_size -= entry->count;
+        }
 
-    return std::make_pair(total_size, valid_size);
+        return std::make_pair(total_size, valid_size);
+    }
+    else
+    {
+        UInt64 total_size = entry->start - start;
+        UInt64 last_node_size = entry->count;
+        UInt64 valid_size = 0;
+
+        for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+        {
+            entry = node_to_entry(node);
+            valid_size += entry->count;
+        }
+        valid_size = total_size - (valid_size - last_node_size);
+
+        return std::make_pair(total_size, valid_size);
+    }
 }
 
 UInt64 RBTreeSpaceMap::getRightMargin()

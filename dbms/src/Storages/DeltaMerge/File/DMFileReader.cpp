@@ -1,8 +1,25 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
@@ -27,7 +44,7 @@ DMFileReader::Stream::Stream(
     const String & file_name_base,
     size_t aio_threshold,
     size_t max_read_buffer_size,
-    Poco::Logger * log,
+    const DB::LoggerPtr & log,
     const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode)
     , avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
@@ -97,11 +114,12 @@ DMFileReader::Stream::Stream(
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
+    const auto & use_packs = reader.pack_filter.getUsePacks();
     if (reader.single_file_mode)
     {
         for (size_t i = 0; i < packs; i++)
         {
-            if (!reader.use_packs[i])
+            if (!use_packs[i])
             {
                 continue;
             }
@@ -113,7 +131,7 @@ DMFileReader::Stream::Stream(
     {
         for (size_t i = 0; i < packs;)
         {
-            if (!reader.use_packs[i])
+            if (!use_packs[i])
             {
                 ++i;
                 continue;
@@ -121,7 +139,7 @@ DMFileReader::Stream::Stream(
             size_t cur_offset_in_file = getOffsetInFile(i);
             size_t end = i + 1;
             // First find the end of current available range.
-            while (end < packs && reader.use_packs[end])
+            while (end < packs && use_packs[end])
                 ++end;
 
             // Second If the end of range is inside the block, we will need to read it too.
@@ -185,17 +203,14 @@ DMFileReader::Stream::Stream(
 DMFileReader::DMFileReader(
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
+    bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
     UInt64 max_read_version_,
     // filters
-    const RowKeyRanges & rowkey_ranges_,
-    const RSOperatorPtr & filter_,
-    const IdSetPtr & read_packs_,
+    DMFilePackFilter && pack_filter_,
     // caches
-    UInt64 hash_salt_,
     const MarkCachePtr & mark_cache_,
-    const MinMaxIndexCachePtr & index_cache_,
     bool enable_column_cache_,
     const ColumnCachePtr & column_cache_,
     size_t aio_threshold,
@@ -203,38 +218,24 @@ DMFileReader::DMFileReader(
     const FileProviderPtr & file_provider_,
     const ReadLimiterPtr & read_limiter,
     size_t rows_threshold_per_read_,
-    bool read_one_pack_every_time_)
+    bool read_one_pack_every_time_,
+    const DB::LoggerPtr & tracing_logger)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
+    , is_common_handle(is_common_handle_)
+    , read_one_pack_every_time(read_one_pack_every_time_)
+    , single_file_mode(dmfile_->isSingleFileMode())
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
-    , handle_res(pack_filter.getHandleRes())
-    , use_packs(pack_filter.getUsePacks())
+    , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
-    , hash_salt(hash_salt_)
     , mark_cache(mark_cache_)
     , enable_column_cache(enable_column_cache_ && column_cache_)
     , column_cache(column_cache_)
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
-    , read_one_pack_every_time(read_one_pack_every_time_)
-    , single_file_mode(dmfile_->isSingleFileMode())
-    , log(&Poco::Logger::get("DMFileReader"))
+    , log(tracing_logger ? tracing_logger : DB::Logger::get("DMFileReader"))
 {
-    if (dmfile->getStatus() != DMFile::Status::READABLE)
-        throw Exception("DMFile [" + DB::toString(dmfile->fileId())
-                        + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
-
-    // if `rowkey_ranges` is empty, we unconditionally read all packs
-    // `rowkey_ranges` and `is_common_handle`  will only be useful in clean read mode.
-    // It is safe to ignore them here.
-    if (unlikely(rowkey_ranges_.empty() && enable_clean_read_))
-        throw Exception("rowkey ranges shouldn't be empty with clean-read enabled", ErrorCodes::LOGICAL_ERROR);
-
-    pack_filter.init();
-    is_common_handle = !rowkey_ranges_.empty() && rowkey_ranges_[0].is_common_handle;
-
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
@@ -262,12 +263,13 @@ DMFileReader::DMFileReader(
 bool DMFileReader::shouldSeek(size_t pack_id)
 {
     // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !use_packs[pack_id - 1];
+    return pack_id != 0 && !pack_filter.getUsePacks()[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
+    const auto & use_packs = pack_filter.getUsePacks();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
@@ -292,6 +294,7 @@ Block DMFileReader::read()
     size_t skip_rows;
     getSkippedRows(skip_rows);
 
+    const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
         return {};
 
@@ -301,10 +304,11 @@ Block DMFileReader::read()
     // 0 means no limit
     size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
-    auto & pack_stats = dmfile->getPackStats();
+    const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
 
+    const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {
@@ -368,7 +372,7 @@ Block DMFileReader::read()
                 }
                 else if (cd.id == TAG_COLUMN_ID)
                 {
-                    column = cd.type->createColumnConst(read_rows, Field((UInt64)(pack_stats[start_pack_id].first_tag)));
+                    column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
                 }
 
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});

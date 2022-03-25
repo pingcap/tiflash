@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Client/Connection.h>
 #include <Client/TimeoutSetter.h>
 #include <Common/ClickHouseRevision.h>
@@ -49,8 +63,7 @@ void Connection::connect()
         if (connected)
             disconnect();
 
-        LOG_TRACE(log_wrapper.get(), "Connecting. Database: " << (default_database.empty() ? "(not specified)" : default_database) << ". User: " << user << (static_cast<bool>(secure) ? ". Secure" : "") << (static_cast<bool>(compression) ? "" : ". Uncompressed"));
-
+        LOG_FMT_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}. {}, {}", (default_database.empty() ? "(not specified)" : default_database), user, (static_cast<bool>(secure) ? ". Secure" : ""), (static_cast<bool>(compression) ? "" : ". Uncompressed"));
         if (static_cast<bool>(secure))
         {
 #if Poco_NetSSL_FOUND
@@ -76,7 +89,7 @@ void Connection::connect()
         sendHello();
         receiveHello();
 
-        LOG_TRACE(log_wrapper.get(), "Connected to " << server_name << " server version " << server_version_major << "." << server_version_minor << "." << server_revision << ".");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.", server_name, server_version_major, server_version_minor, server_revision);
     }
     catch (Poco::Net::NetException & e)
     {
@@ -218,7 +231,7 @@ void Connection::forceConnected()
     }
     else if (!ping())
     {
-        LOG_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
         connect();
     }
 }

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -69,7 +83,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -102,7 +116,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -136,7 +150,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -170,7 +184,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -213,7 +227,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -246,7 +260,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -280,7 +294,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -314,7 +328,7 @@ try
         for (size_t i = 0; i < res.size(); ++i)
         {
             auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", res[i], stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)

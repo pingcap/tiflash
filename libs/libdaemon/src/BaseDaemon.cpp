@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigProcessor.h>
 #include <cxxabi.h>
 #include <daemon/BaseDaemon.h>
@@ -524,66 +538,38 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr size_t max_frames = 50;
+        size_t frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
-
-        if (frames_size)
-        {
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
         /// So at least print the function where the signal happened.
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
+        }
 #endif
 
-            char ** symbols = backtrace_symbols(frames, frames_size);
+        DB::FmtBuffer output;
 
-            if (!symbols)
-            {
-                if (caller_address)
-                    LOG_ERROR(log, "Caller address: " << caller_address);
-            }
-            else
-            {
-                for (int i = 0; i < frames_size; ++i)
-                {
-                    /// Perform demangling of names. Name is in parentheses, before '+' character.
-
-                    char * name_start = nullptr;
-                    char * name_end = nullptr;
-                    char * demangled_name = nullptr;
-                    int status = 0;
-
-                    if (nullptr != (name_start = strchr(symbols[i], '('))
-                        && nullptr != (name_end = strchr(name_start, '+')))
-                    {
-                        ++name_start;
-                        *name_end = '\0';
-                        demangled_name = abi::__cxa_demangle(name_start, 0, 0, &status);
-                        *name_end = '+';
-                    }
-
-                    std::stringstream res;
-
-                    res << i << ". ";
-
-                    if (nullptr != demangled_name && 0 == status)
-                    {
-                        res.write(symbols[i], name_start - symbols[i]);
-                        res << demangled_name << name_end;
-                    }
-                    else
-                        res << symbols[i];
-
-                    LOG_ERROR(log, res.rdbuf());
-                }
-            }
+        for (size_t f = 0; f < frames_size; ++f)
+        {
+            output.append("\n");
+            auto demangle_func = [](const char * name) {
+                int status = 0;
+                // __cxa_demangle will leak memory; but we are failing anyway
+                // freeing memory may increase possibilities to trigger other errors
+                auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+                return std::pair<const char *, int>{result, status};
+            };
+            StackTrace::addr2line(demangle_func, output, frames[f]);
         }
+        LOG_ERROR(log, output.toString());
     }
 };
 

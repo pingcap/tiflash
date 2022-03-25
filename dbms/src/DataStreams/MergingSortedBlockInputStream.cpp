@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/MergingSortedBlockInputStream.h>
 
 #include <iomanip>
@@ -93,9 +107,9 @@ void MergingSortedBlockInputStream::initQueue()
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::initQueue(std::priority_queue<TSortCursor> & queue)
 {
-    for (size_t i = 0; i < cursors.size(); ++i)
-        if (!cursors[i].empty())
-            queue.push(TSortCursor(&cursors[i]));
+    for (auto & cursor : cursors)
+        if (!cursor.empty())
+            queue.push(TSortCursor(&cursor));
 }
 
 
@@ -163,12 +177,7 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         }
 
         ++merged_rows;
-        if (merged_rows == max_block_size)
-        {
-            return true;
-        }
-
-        return false;
+        return merged_rows == expected_block_size;
     };
 
     /// Take rows in required order and put them into `merged_columns`, while the rows are no more than `max_block_size`
@@ -282,8 +291,7 @@ void MergingSortedBlockInputStream::readSuffixImpl()
 
     const BlockStreamProfileInfo & profile_info = getProfileInfo();
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
-    LOG_DEBUG(log, std::fixed << std::setprecision(2) << "Merge sorted " << profile_info.blocks << " blocks, " << profile_info.rows << " rows"
-                              << " in " << seconds << " sec., " << profile_info.rows / seconds << " rows/sec., " << profile_info.bytes / 1000000.0 / seconds << " MB/sec.");
+    LOG_FMT_DEBUG(log, "Merge sorted {} blocks, {} rows, {} bytes, {:.2f} rows/sec, {:.2f} MB/sec", profile_info.blocks, profile_info.rows, profile_info.bytes, profile_info.rows / seconds, profile_info.bytes / 1000000.0 / seconds);
 }
 
 } // namespace DB

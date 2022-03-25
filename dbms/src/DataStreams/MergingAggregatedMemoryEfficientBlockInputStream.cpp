@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/setThreadName.h>
 #include <Common/wrapInvocable.h>
@@ -74,9 +88,9 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     bool final_,
     size_t reading_threads_,
     size_t merging_threads_,
-    const LogWithPrefixPtr & log_)
-    : log(getLogWithPrefix(log_, getName()))
-    , aggregator(params)
+    const String & req_id)
+    : log(Logger::get(name, req_id))
+    , aggregator(params, req_id)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)
@@ -154,7 +168,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
                   * (example: connection reset during distributed query execution)
                   * - then don't care.
                   */
-                LOG_ERROR(log, "Exception while cancelling " << child->getName());
+                LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
             }
         }
     }

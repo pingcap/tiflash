@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <common/logger_useful.h>
@@ -308,13 +322,13 @@ private:
             {
                 // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: {}", e.what());
                 throw;
             }
             catch (...)
             {
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknown exception");
                 throw;
             }
         }
@@ -349,7 +363,7 @@ private:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
                 abort();
             }
 
@@ -369,7 +383,7 @@ private:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
         }
     }

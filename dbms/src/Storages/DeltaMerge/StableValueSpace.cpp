@@ -1,8 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -24,7 +40,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
 
     if (range.all())
     {
-        for (auto & file : files_)
+        for (const auto & file : files_)
         {
             rows += file->getRows();
             bytes += file->getBytes();
@@ -33,17 +49,17 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     else
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
-        auto hash_salt = dm_context->hash_salt;
-        for (auto & file : files_)
+        for (const auto & file : files_)
         {
-            auto pack_filter = DMFilePackFilter::loadFrom(file,
-                                                          index_cache,
-                                                          hash_salt,
-                                                          {range},
-                                                          EMPTY_FILTER,
-                                                          {},
-                                                          dm_context->db_context.getFileProvider(),
-                                                          dm_context->getReadLimiter());
+            auto pack_filter = DMFilePackFilter::loadFrom(
+                file,
+                index_cache,
+                {range},
+                EMPTY_FILTER,
+                {},
+                dm_context->db_context.getFileProvider(),
+                dm_context->getReadLimiter(),
+                /*tracing_logger*/ nullptr);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -61,7 +77,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
-    writeIntBinary((UInt64)files.size(), buf);
+    writeIntBinary(static_cast<UInt64>(files.size()), buf);
     for (auto & f : files)
         writeIntBinary(f->refId(), buf);
 
@@ -73,7 +89,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    Page page = context.storage_pool.meta()->read(id, nullptr); // not limit restore
+    Page page = context.storage_pool.metaReader().read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
@@ -88,7 +104,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     {
         readIntBinary(ref_id, buf);
 
-        auto file_id = context.storage_pool.data()->getNormalPageId(ref_id);
+        auto file_id = context.storage_pool.dataReader().getNormalPageId(ref_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
@@ -124,7 +140,7 @@ size_t StableValueSpace::getBytesOnDisk() const
 size_t StableValueSpace::getPacks() const
 {
     size_t packs = 0;
-    for (auto & file : files)
+    for (const auto & file : files)
         packs += file->getPacks();
     return packs;
 }
@@ -147,7 +163,7 @@ void StableValueSpace::enableDMFilesGC()
 
 void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 {
-    for (auto & file : files)
+    for (const auto & file : files)
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
@@ -161,11 +177,10 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
     property.num_versions = 0;
     property.num_puts = 0;
     property.num_rows = 0;
-    for (size_t i = 0; i < files.size(); i++)
+    for (auto & file : files)
     {
-        auto & file = files[i];
-        auto & pack_stats = file->getPackStats();
-        auto & pack_properties = file->getPackProperties();
+        const auto & pack_stats = file->getPackStats();
+        const auto & pack_properties = file->getPackProperties();
         if (pack_stats.empty())
             continue;
         // if PackPropertys of this DMFile is empty, this must be an old format file generated by previous version.
@@ -178,7 +193,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         DMFile::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
-            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable " << id);
+            LOG_FMT_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
@@ -189,18 +204,11 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             //
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
-            BlockInputStreamPtr data_stream = std::make_shared<DMFileBlockInputStream>(context.db_context,
-                                                                                       std::numeric_limits<UInt64>::max(),
-                                                                                       false,
-                                                                                       context.hash_salt,
-                                                                                       file,
-                                                                                       read_columns,
-                                                                                       RowKeyRanges{rowkey_range},
-                                                                                       nullptr,
-                                                                                       nullptr,
-                                                                                       IdSetPtr{},
-                                                                                       UINT64_MAX, // because we just read one pack at a time
-                                                                                       true);
+            DMFileBlockInputStreamBuilder builder(context.db_context);
+            BlockInputStreamPtr data_stream = builder
+                                                  .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
+                                                  .onlyReadOnePackEveryTime()
+                                                  .build(file, read_columns, RowKeyRanges{rowkey_range});
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -225,15 +233,16 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             }
             mvcc_stream->readSuffix();
         }
-        auto pack_filter = DMFilePackFilter::loadFrom(file,
-                                                      context.db_context.getGlobalContext().getMinMaxIndexCache(),
-                                                      context.hash_salt,
-                                                      {rowkey_range},
-                                                      EMPTY_FILTER,
-                                                      {},
-                                                      context.db_context.getFileProvider(),
-                                                      context.getReadLimiter());
-        auto & use_packs = pack_filter.getUsePacks();
+        auto pack_filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            {rowkey_range},
+            EMPTY_FILTER,
+            {},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
+        const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
@@ -259,14 +268,14 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
             if (use_new_pack_properties)
             {
-                auto & pack_property = new_pack_properties.property(new_pack_properties_index);
+                const auto & pack_property = new_pack_properties.property(new_pack_properties_index);
                 property.num_rows += pack_property.num_rows();
                 property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
                 new_pack_properties_index += 1;
             }
             else
             {
-                auto & pack_property = pack_properties.property(pack_id);
+                const auto & pack_property = pack_properties.property(pack_id);
                 property.num_rows += pack_property.num_rows();
                 property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
             }
@@ -316,30 +325,25 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
                                                                         size_t expected_block_size,
                                                                         bool enable_clean_read)
 {
-    LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
-        streams.push_back(std::make_shared<DMFileBlockInputStream>( //
-            context.db_context,
-            max_data_version,
-            enable_clean_read,
-            context.hash_salt,
-            stable->files[i],
-            read_columns,
-            rowkey_ranges,
-            filter,
-            column_caches[i],
-            IdSetPtr{},
-            expected_block_size));
+        DMFileBlockInputStreamBuilder builder(context.db_context);
+        builder
+            .enableCleanRead(enable_clean_read, max_data_version)
+            .setRSOperator(filter)
+            .setColumnCache(column_caches[i])
+            .setRowsThreshold(expected_block_size);
+        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
 
-RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
+RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const
 {
-    // Avoid unnessary reading IO
+    // Avoid unnecessary reading IO
     if (valid_rows == 0 || range.none())
         return {0, 0};
 
@@ -353,16 +357,17 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     // don't refill the cache if the index does not exist.
     for (auto & f : stable->files)
     {
-        auto filter = DMFilePackFilter::loadFrom(f, //
-                                                 nullptr,
-                                                 context.hash_salt,
-                                                 {range},
-                                                 RSOperatorPtr{},
-                                                 IdSetPtr{},
-                                                 context.db_context.getFileProvider(),
-                                                 context.getReadLimiter());
-        auto & pack_stats = f->getPackStats();
-        auto & use_packs = filter.getUsePacks();
+        auto filter = DMFilePackFilter::loadFrom(
+            f,
+            nullptr,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
+        const auto & pack_stats = f->getPackStats();
+        const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])
@@ -375,8 +380,8 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     }
     if (!total_match_rows || !match_packs)
         return {0, 0};
-    Float64 avg_pack_rows = total_match_rows / match_packs;
-    Float64 avg_pack_bytes = total_match_bytes / match_packs;
+    Float64 avg_pack_rows = static_cast<Float64>(total_match_rows) / match_packs;
+    Float64 avg_pack_bytes = static_cast<Float64>(total_match_bytes) / match_packs;
     // By average, the first and last pack are only half covered by the range.
     // And if this range only covers one pack, then return the pack's stat.
     size_t approx_rows = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);

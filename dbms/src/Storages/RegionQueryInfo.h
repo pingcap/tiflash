@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Transaction/TiKVHandle.h>
@@ -5,14 +19,22 @@
 
 namespace DB
 {
-
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct RegionQueryInfo
 {
+    RegionQueryInfo(RegionID region_id_, UInt64 version_, UInt64 conf_version_, Int64 physical_table_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_ = {}, const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & required_handle_ranges_ = {})
+        : region_id(region_id_)
+        , version(version_)
+        , conf_version(conf_version_)
+        , physical_table_id(physical_table_id_)
+        , range_in_table(range_in_table_)
+        , required_handle_ranges(required_handle_ranges_)
+    {}
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
+    Int64 physical_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;

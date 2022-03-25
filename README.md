@@ -23,13 +23,13 @@ Assume `$WORKSPACE` to be the directory under which the TiFlash repo is placed.
 
 ```bash
 cd $WORKSPACE
-git clone --recursive https://github.com/pingcap/tics.git
+git clone --recursive https://github.com/pingcap/tiflash.git
 ```
 
 ### Prerequisites
 
 The following packages are needed for all platforms:
-- CMake 3.13.2+
+- CMake 3.21.0+
 - Rust
   ```bash
   curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
@@ -53,12 +53,10 @@ Or you can also use system-wise toolchain if you can install `clang/compiler-rt/
 
 ###### TiFlash Env
 
-> For faster access to precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tiflash-env-x86_64.tar.xz).
-
 TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
 
 ```bash
-cd $WORKSPACE/tics/release-centos7-llvm/env
+cd $WORKSPACE/tiflash/release-centos7-llvm/env
 make tiflash-env-$(uname -m).tar.xz
 ```
 
@@ -128,7 +126,7 @@ For Ninja:
 
 ```bash
 cd $BUILD
-cmake $WORKSPACE/tics -Gninja
+cmake $WORKSPACE/tiflash -Gninja
 ninja tiflash
 ```
 
@@ -136,7 +134,7 @@ For GNU Make:
 
 ```bash
 cd $BUILD
-cmake $WORKSPACE/tics
+cmake $WORKSPACE/tiflash
 make tiflash -j
 ```
 
@@ -249,6 +247,6 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 > **NOTE**: It is required to use clang-format 12.0.0+.
 
 ```
-cd $WORKSPACE/tics
+cd $WORKSPACE/tiflash
 python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
 ```
