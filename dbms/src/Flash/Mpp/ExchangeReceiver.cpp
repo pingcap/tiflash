@@ -317,6 +317,11 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
+    auto cur_state = getState();
+    if (cur_state == ExchangeReceiverState::CANCELED || cur_state == ExchangeReceiverState::CLOSED)
+    {
+        return;
+    }
     setState(ExchangeReceiverState::CANCELED);
     msg_channel.finish();
 }
@@ -324,6 +329,11 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::close()
 {
+    auto cur_state = getState();
+    if (cur_state == ExchangeReceiverState::CANCELED || cur_state == ExchangeReceiverState::CLOSED)
+    {
+        return;
+    }
     setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 }
