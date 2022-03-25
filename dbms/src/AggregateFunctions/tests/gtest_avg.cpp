@@ -1,11 +1,11 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <Interpreters/Aggregator.h>
-#include <Interpreters/AggregateDescription.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Interpreters/AggregateDescription.h>
+#include <Interpreters/Aggregator.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
 {
@@ -37,8 +37,8 @@ ColumnWithTypeAndName real_col_without_null_value = createColumn<Nullable<double
 ColumnWithTypeAndName real_col_with_null_value = createColumn<Nullable<double>>({1.1, 2.2, 3.3, 4.4, {}, {}, {}});
 ColumnWithTypeAndName decimal_col_without_null_value = createColumn<Nullable<Decimal32>>(std::make_tuple(10, 4), {DecimalField32(1, 11), DecimalField32(2, 22), DecimalField32(3, 33), DecimalField32(4, 44)});
 ColumnWithTypeAndName decimal_col_with_null_value = createColumn<Nullable<Decimal32>>(std::make_tuple(10, 4), {DecimalField32(1, 11), DecimalField32(2, 22), DecimalField32(3, 33), DecimalField32(4, 44), {}, {}, {}});
-ColumnWithTypeAndName group_col_1 = createColumn<Nullable<Int64>>({1,1,2,2,{},1,{}});
-ColumnWithTypeAndName group_col_2 = createColumn<Nullable<Int64>>({1,{},2,2,{},{},1});
+ColumnWithTypeAndName group_col_1 = createColumn<Nullable<Int64>>({1, 1, 2, 2, {}, 1, {}});
+ColumnWithTypeAndName group_col_2 = createColumn<Nullable<Int64>>({1, {}, 2, 2, {}, {}, 1});
 
 TEST_F(TestAggFuncAvg, aggAvgTest)
 try
@@ -137,45 +137,45 @@ try
     // select count(col) group by col1, col2
 
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({2,1,1}),
+        createColumn<UInt64>({2, 1, 1}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{int_col_without_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({1,1,2,1,2}),
+        createColumn<UInt64>({1, 1, 2, 1, 2}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{int_col_with_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
 
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({2,1,1}),
+        createColumn<UInt64>({2, 1, 1}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{string_col_without_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({1,1,2,1,2}),
+        createColumn<UInt64>({1, 1, 2, 1, 2}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{string_col_with_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
 
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({2,1,1}),
+        createColumn<UInt64>({2, 1, 1}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{real_col_without_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({1,1,2,1,2}),
+        createColumn<UInt64>({1, 1, 2, 1, 2}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{real_col_with_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
 
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({2,1,1}),
+        createColumn<UInt64>({2, 1, 1}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{decimal_col_without_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
     ASSERT_COLUMN_EQ(
-        createColumn<UInt64>({1,1,2,1,2}),
+        createColumn<UInt64>({1, 1, 2, 1, 2}),
         executeAggregateFunction("count",
                                  ColumnsWithTypeAndName{decimal_col_with_null_value, group_col_1, group_col_2},
                                  ColumnNumbers{1, 2}));
