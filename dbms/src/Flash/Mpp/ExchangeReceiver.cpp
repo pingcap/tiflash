@@ -317,24 +317,16 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    auto cur_state = getState();
-    if (cur_state == ExchangeReceiverState::CANCELED || cur_state == ExchangeReceiverState::CLOSED)
-    {
+    if (!setEndState(ExchangeReceiverState::CANCELED))
         return;
-    }
-    setState(ExchangeReceiverState::CANCELED);
     msg_channel.finish();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::close()
 {
-    auto cur_state = getState();
-    if (cur_state == ExchangeReceiverState::CANCELED || cur_state == ExchangeReceiverState::CLOSED)
-    {
+    if (!setEndState(ExchangeReceiverState::CLOSED))
         return;
-    }
-    setState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 }
 
@@ -615,10 +607,16 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setState(ExchangeReceiverState new_state)
+bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
+    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
     std::unique_lock lock(mu);
+    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
+    {
+        return false;
+    }
     state = new_state;
+    return true;
 }
 
 template <typename RPCContext>
