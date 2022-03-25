@@ -32,7 +32,7 @@ def main():
     default_suffix = ['.cpp', '.h', '.cc', '.hpp']
     parser = argparse.ArgumentParser(description='TiFlash Code Format',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--repo_path', help='path of tics repository',
+    parser.add_argument('--repo_path', help='path of tiflash repository',
                         default=os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument('--suffix',
                         help='suffix of files to format, split by space', default=' '.join(default_suffix))
