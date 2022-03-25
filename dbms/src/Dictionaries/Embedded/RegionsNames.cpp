@@ -33,7 +33,7 @@ RegionsNames::RegionsNames(IRegionsNamesDataProviderPtr data_provider)
 
 std::string RegionsNames::dumpSupportedLanguagesNames()
 {
-    std::string res = "";
+    std::string res;
     for (size_t i = 0; i < LANGUAGE_ALIASES_COUNT; ++i)
     {
         if (i > 0)
@@ -60,7 +60,7 @@ void RegionsNames::reload()
         if (!names_source->isModified())
             continue;
 
-        LOG_DEBUG(log, "Reloading regions names for language: " << language);
+        LOG_FMT_DEBUG(log, "Reloading regions names for language: {}", language);
 
         auto names_reader = names_source->createReader();
 
