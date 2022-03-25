@@ -434,11 +434,11 @@ void MPPTask::scheduleOrWait()
 
             if (schedule_state == ScheduleState::EXCEEDED)
             {
-                throw Exception(id.toString() + " is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after waiting for " + std::to_string(time_cost) + "s.");
+                throw Exception(fmt::format("{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
             }
             else if (schedule_state == ScheduleState::FAILED)
             {
-                throw Exception(id.toString() + " is failed to schedule because of being cancelled in min-tso scheduler after waiting for " + std::to_string(time_cost) + "s.");
+                throw Exception(fmt::format("{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
             }
         }
         LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
