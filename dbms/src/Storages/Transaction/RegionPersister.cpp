@@ -116,7 +116,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     if (region.isPendingRemove())
     {
-        LOG_DEBUG(log, "no need to persist " << region.toString(false) << " because of pending remove");
+        LOG_FMT_DEBUG(log, "no need to persist {} because of pending remove", region.toString(false));
         return;
     }
 

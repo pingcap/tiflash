@@ -464,7 +464,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             status = reader->finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req.debugString());
+                LOG_FMT_DEBUG(log, "finish read : {}", req.debugString());
                 break;
             }
             else
