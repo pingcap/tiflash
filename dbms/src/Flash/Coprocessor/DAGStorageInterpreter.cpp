@@ -427,8 +427,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
         LOG_FMT_INFO(
             log,
-            "{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].",
-            __PRETTY_FUNCTION__,
+            "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].",
             table_id,
             result,
             storage_schema_version,
@@ -441,7 +440,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, table_id, schema_sync_cost);
+        LOG_FMT_INFO(log, "Table {} schema sync cost {}ms.", table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.

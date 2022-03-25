@@ -1462,7 +1462,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{} {}", __PRETTY_FUNCTION__, property.toDebugString());
+    LOG_FMT_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1486,7 +1486,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "{} delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", __PRETTY_FUNCTION__, delete_rows, delete_bytes, stable_rows, stable_bytes);
+    LOG_FMT_TRACE(log, "delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", delete_rows, delete_bytes, stable_rows, stable_bytes);
 
     // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
     //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.

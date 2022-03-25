@@ -297,7 +297,7 @@ void applyAlter(ColumnDefines & table_columns,
     }
     else
     {
-        LOG_FMT_WARNING(log, "{} receive unknown alter command, type: {}", __PRETTY_FUNCTION__, static_cast<Int32>(command.type));
+        LOG_FMT_WARNING(log, "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
     }
 }
 
