@@ -98,6 +98,8 @@ public:
 
     void cancel();
 
+    void close();
+
     const DAGSchema & getOutputSchema() const { return schema; }
 
     ExchangeReceiverResult nextResult(
@@ -129,7 +131,7 @@ private:
     void readLoop(const Request & req);
     void reactor(const std::vector<Request> & async_requests);
 
-    void setState(ExchangeReceiverState new_state);
+    bool setEndState(ExchangeReceiverState new_state);
     ExchangeReceiverState getState();
 
     DecodeDetail decodeChunks(
