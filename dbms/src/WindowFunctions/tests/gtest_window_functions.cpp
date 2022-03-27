@@ -216,7 +216,7 @@ protected:
 TEST_F(WindowFunction, testWindowFunctionByPartitionAndOrder)
 try
 {
-    setMaxBlockSize(2);
+    setMaxBlockSize(3);
 
     std::string window_json;
     std::string sort_json;
