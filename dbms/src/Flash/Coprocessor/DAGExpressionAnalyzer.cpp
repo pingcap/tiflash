@@ -514,7 +514,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & windo
     chain.finalize();
     chain.clear();
 
-    window_description.after_window_columns = appendWindowSelect(chain, window, window_columns);
+    window_description.after_window_columns = appendCastAfterWindow(chain, window, window_columns);
     window_description.after_window = chain.getLastActions();
     window_description.add_columns = window_columns;
     chain.finalize();
@@ -905,7 +905,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-NamesAndTypes DAGExpressionAnalyzer::appendWindowSelect(
+NamesAndTypes DAGExpressionAnalyzer::appendCastAfterWindow(
     ExpressionActionsChain & chain,
     const tipb::Window & window,
     const NamesAndTypes after_window_columns)

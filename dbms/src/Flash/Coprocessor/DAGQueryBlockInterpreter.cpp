@@ -761,7 +761,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     DAGPipeline & pipeline,
     WindowDescription & window_description)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, taskLogger()); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, window_description.before_window, log->identifier()); });
     Block header = pipeline.firstStream()->getHeader();
 
     if (pipeline.streams.size() == 1)
@@ -876,7 +876,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
 {
     const Settings & settings = context.getSettingsRef();
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, taskLogger(), 0);
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), 0);
 
         /// Limits on sorting
         IProfilingBlockInputStream::LocalLimits limits;
@@ -888,7 +888,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
     });
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, taskLogger());
+    executeUnion(pipeline, max_streams, log);
 
     /// Merge the sorted blocks.
     pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
@@ -898,7 +898,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
         0,
         settings.max_bytes_before_external_sort,
         context.getTemporaryPath(),
-        taskLogger());
+        log->identifier());
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)

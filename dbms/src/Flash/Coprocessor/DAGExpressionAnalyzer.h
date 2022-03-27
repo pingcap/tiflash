@@ -146,7 +146,7 @@ public:
 
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
 
-    NamesAndTypes appendWindowSelect(
+    NamesAndTypes appendCastAfterWindow(
         ExpressionActionsChain & chain,
         const tipb::Window & window,
         const NamesAndTypes window_columns);
