@@ -241,6 +241,7 @@ public:
     virtual void readSuffix() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        remote_reader->close();
     }
 };
 
