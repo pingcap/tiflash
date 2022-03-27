@@ -31,8 +31,8 @@ class Logger;
 
 namespace DB
 {
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 class Exception : public Poco::Exception
 {
@@ -108,7 +108,7 @@ using Exceptions = std::vector<std::exception_ptr>;
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 
@@ -169,5 +169,22 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
         return nullptr;
     }
 }
+
+#define RUNTIME_CHECK(condition, ExceptionType, ...) \
+    do                                               \
+    {                                                \
+        if (unlikely(!(condition)))                  \
+            throw ExceptionType(__VA_ARGS__);        \
+    } while (false)
+
+#define RUNTIME_ASSERT(condition, logger, fmt_str, ...)                                   \
+    do                                                                                    \
+    {                                                                                     \
+        if (unlikely(!(condition)))                                                       \
+        {                                                                                 \
+            LOG_FMT_FATAL((logger), "Assert {} fail! " fmt_str, #condition, __VA_ARGS__); \
+            std::terminate();                                                             \
+        }                                                                                 \
+    } while (false)
 
 } // namespace DB

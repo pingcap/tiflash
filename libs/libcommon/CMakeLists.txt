@@ -136,6 +136,8 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+# `libcommon` provides a bridge for many other libs.
+# We expose the linkage to public because we want headers to be inherited.
 target_link_libraries (
     common
     PUBLIC
@@ -153,7 +155,7 @@ target_link_libraries (
 )
 
 if (RT_LIBRARY)
-    target_link_libraries (common ${RT_LIBRARY})
+    target_link_libraries (common PUBLIC ${RT_LIBRARY})
 endif ()
 
 if (ENABLE_TESTS)

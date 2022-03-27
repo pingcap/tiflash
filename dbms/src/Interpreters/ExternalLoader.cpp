@@ -250,7 +250,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
 {
     if (config_path.empty() || !config_repository->exists(config_path))
     {
-        LOG_WARNING(log, "config file '" + config_path + "' does not exist");
+        LOG_FMT_WARNING(log, "config file '{}' does not exist", config_path);
     }
     else
     {
@@ -284,7 +284,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                 if (!startsWith(key, config_settings.external_config))
                 {
                     if (!startsWith(key, "comment") && !startsWith(key, "include_from"))
-                        LOG_WARNING(log, config_path << ": unknown node in file: '" << key << "', expected '" << config_settings.external_config << "'");
+                        LOG_FMT_WARNING(log, "{}: unknown node in file: '{}', expected '{}'", config_path, key, config_settings.external_config);
                     continue;
                 }
 
@@ -293,7 +293,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                     name = config->getString(key + "." + config_settings.external_name);
                     if (name.empty())
                     {
-                        LOG_WARNING(log, config_path << ": " + config_settings.external_name + " name cannot be empty");
+                        LOG_FMT_WARNING(log, "{}: {} name cannot be empty", config_path, config_settings.external_name);
                         continue;
                     }
 
