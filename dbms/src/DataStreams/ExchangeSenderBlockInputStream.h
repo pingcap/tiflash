@@ -37,14 +37,14 @@ public:
     static constexpr auto name = "ExchangeSender";
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
+
+protected:
+    Block readImpl() override;
     void readSuffixImpl() override
     {
         writer->finishWrite();
         LOG_FMT_DEBUG(log, "finish write with {} rows", total_rows);
     }
-
-protected:
-    Block readImpl() override;
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
