@@ -92,9 +92,8 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
         current_size += holder.size;
 
         removeOverflow(removed);
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
     }
-
-    CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
 
 void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
@@ -124,9 +123,8 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
         lru_queue.erase(holder.queue_it);
         // Remove it later
         index_map.erase(it);
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
     }
-
-    CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
 
 DeltaIndexPtr DeltaIndexManager::getRef(UInt64 index_id)
