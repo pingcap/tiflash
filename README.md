@@ -157,50 +157,66 @@ After building, you can get TiFlash binary under `$BUILD/dbms/src/Server/tiflash
 
 ### Build Options
 
-TiFlash has several build options to tweak the build, mostly for development purposes.
+TiFlash has several CMake build options to tweak for development purposes. These options SHOULD NOT be changed for production usage, as they may introduce unexpected build errors and unpredictable runtime behaviors.
 
-> **WARNING**: These options SHOULD NOT be tuned for production usage, as they may introduce unexpected build errors and unpredictable runtime behaviors.
-
-They are all CMake options thus are specified using `-D...=...`s in CMake command line.
-
-#### Build Types
-
-- `CMAKE_BUILD_TYPE`: `DEBUG` / `RELWITHDEBINFO` (default) / `RELEASE`
-
-#### Build with Unit Tests
-
-- `ENABLE_TESTS`: `ON` / `OFF` (default)
-
-#### Build with System Libraries
-
-For local development, it is sometimes handy to use pre-installed third-party libraries in the system, rather than to compile them from sources of the bundled (internal) submodules.
-
-Options are supplied to control whether to use internal third-party libraries (bundled in TiFlash) or to try using the pre-installed system ones.
-
-> **WARNING**: It is NOT guaranteed that TiFlash would still build if any of the system libraries are used.
-> Build errors are very likely to happen, almost all the time.
-
-You can view these options along with their descriptions by running:
+To tweat options, pass one or multiple `-D...=...` args when invoking CMake, for example:
 
 ```shell
-cd $BUILD
-cmake -LH | grep "USE_INTERNAL" -A3
+cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 ```
 
-All of these options are default as `ON`, as the names tell, using the internal libraries and build from sources.
+- **Build Type**:
 
-There is another option to append extra paths for CMake to find system libraries:
+  - `-DCMAKE_BUILD_TYPE=RELWITHDEBINFO`: Release build with debug info (default)
 
-- `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+  - `-DCMAKE_BUILD_TYPE=DEBUG`: Debug build
 
-Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
+  - `-DCMAKE_BUILD_TYPE=RELEASE`: Release build
 
-- `USE_INTERNAL_TIFLASH_PROXY`: `TRUE` (default) / `FALSE`
-  - One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
-  - Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
+- **Build with Unit Tests**:
+
+  - `-DENABLE_TESTS=OFF`: Default
+
+  - `-DENABLE_TESTS=ON`
+
+- **Build with System Libraries**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  For local development, it is sometimes handy to use pre-installed third-party libraries in the system, rather than to compile them from sources of the bundled (internal) submodules.
+
+  Options are supplied to control whether to use internal third-party libraries (bundled in TiFlash) or to try using the pre-installed system ones.
+
+  > **WARNING**: It is NOT guaranteed that TiFlash would still build if any of the system libraries are used.
+  > Build errors are very likely to happen, almost all the time.
+
+  You can view these options along with their descriptions by running:
+
+  ```shell
+  cd $BUILD
+  cmake -LH | grep "USE_INTERNAL" -A3
+  ```
+
+  All of these options are default as `ON`, as the names tell, using the internal libraries and build from sources.
+
+  There is another option to append extra paths for CMake to find system libraries:
+
+  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+
+  Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
+
+  - `USE_INTERNAL_TIFLASH_PROXY=TRUE` (default) / `FALSE`
+
+    One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
+
+    Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
+
     - Header files are under directory `$TIFLASH_PROXY_REPO/raftstore-proxy/ffi/src`
+
     - Built library is under directory `$TIFLASH_PROXY_REPO/target/release`
 
+  </details>
 ### IDE Support
 
 Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFlash project with no pain as long as the toolchains are properly configured.
