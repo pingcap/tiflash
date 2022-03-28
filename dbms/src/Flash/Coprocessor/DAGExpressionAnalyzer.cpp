@@ -442,7 +442,7 @@ void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActions
     }
 }
 
-WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & window)
+WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
     ExpressionActionsChain chain;
     WindowDescription window_description;
@@ -481,7 +481,7 @@ WindowDescription DAGExpressionAnalyzer::appendWindow(const tipb::Window & windo
             DataTypes types(child_size);
             window_function_description.argument_names.resize(child_size);
             TiDB::TiDBCollators arg_collators;
-            for (Int32 i = 0; i < child_size; i++)
+            for (Int32 i = 0; i < child_size; ++i)
             {
                 String arg_name = getActions(expr.children(i), step.actions);
                 types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
@@ -631,7 +631,7 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
     throw TiFlashException(fmt::format("Filter on {} is not supported.", org_type->getName()), Errors::Coprocessor::Unimplemented);
 }
 
-NamesAndTypes DAGExpressionAnalyzer::appendWindowOrderBy(const tipb::Sort & window_sort)
+NamesAndTypes DAGExpressionAnalyzer::buildWindowOrderColumns(const tipb::Sort & window_sort)
 {
     ExpressionActionsChain chain;
     ExpressionActionsChain::Step & step = initAndGetLastStep(chain);

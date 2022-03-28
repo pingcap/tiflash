@@ -1060,7 +1060,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
-    WindowDescription window_description = dag_analyzer.appendWindow(window);
+    WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
     executeWindow(pipeline, window_description);
     executeExpression(pipeline, window_description.after_window);
 
@@ -1074,7 +1074,7 @@ void DAGQueryBlockInterpreter::handleWindowSort(DAGPipeline & pipeline, const ti
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
-    auto order_columns = dag_analyzer.appendWindowOrderBy(window_sort);
+    auto order_columns = dag_analyzer.buildWindowOrderColumns(window_sort);
     executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()));
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(input_columns), context);
@@ -1192,6 +1192,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
+    // if the type of query_block source is window or window sort, streams will be merged to one stream and we should not restore pipeline concurrency.
     if (query_block.source->tp() != tipb::ExecType::TypeWindow && query_block.source->tp() != tipb::ExecType::TypeSort)
         restorePipelineConcurrency(pipeline);
 

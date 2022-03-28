@@ -63,7 +63,7 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
-    NamesAndTypes appendWindowOrderBy(const tipb::Sort & window_sort);
+    NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort);
 
     std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
@@ -76,7 +76,7 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    WindowDescription appendWindow(const tipb::Window & window);
+    WindowDescription buildWindowDescription(const tipb::Window & window);
 
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & byItems,

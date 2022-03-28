@@ -46,7 +46,8 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
     for (const auto & expr : agg.agg_func())
     {
         if (!exprHasValidFieldType(expr))
-            output_field_types.push_back(expr.field_type());
+            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
     }
     for (const auto & expr : agg.group_by())
     {
