@@ -880,7 +880,7 @@ private:
         root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
 
-        LOG_TRACE(log, "create");
+        LOG_FMT_TRACE(log, "create");
     }
 
 public:
@@ -933,7 +933,7 @@ public:
         if (allocator)
             delete allocator;
 
-        LOG_TRACE(log, "free");
+        LOG_FMT_TRACE(log, "free");
     }
 
     void checkAll() const
@@ -1372,7 +1372,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_TRACE(log, "height " << DB::toString(height + 1) << " -> " << DB::toString(height));
+        LOG_FMT_TRACE(log, "height {} -> {}", (height + 1), height);
 
         return {};
     }
@@ -1395,7 +1395,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 
             ++height;
 
-            LOG_TRACE(log, "height " << DB::toString(height - 1) << " -> " << DB::toString(height));
+            LOG_FMT_TRACE(log, "height {} -> {}", (height - 1), height);
         }
 
         auto pos = parent->searchChild(asNode(node));

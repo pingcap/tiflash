@@ -178,7 +178,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_FMT_ERROR(log, "!!!=========================delta [ {}] is expected to be updating=========================!!!", getId());
+            LOG_FMT_ERROR(log, "!!!=========================delta [{}] is expected to be updating=========================!!!", getId());
             return false;
         }
         else

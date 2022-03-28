@@ -234,7 +234,7 @@ try
             num_pages += 1;
         }
 
-        LOG_INFO(storage.log, "All " << num_pages << " are consist.");
+        LOG_FMT_INFO(storage.log, "All {} are consist.", num_pages);
     }
 }
 CATCH
