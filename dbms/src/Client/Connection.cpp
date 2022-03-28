@@ -17,6 +17,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/NetException.h>
 #include <Common/config.h>
 #include <Core/Defines.h>
@@ -451,21 +452,25 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
 
     out_bytes = out->count() - out_bytes;
     maybe_compressed_out_bytes = maybe_compressed_out->count() - maybe_compressed_out_bytes;
-    double elapsed = watch.elapsedSeconds();
+    const double elapsed_seconds = watch.elapsedSeconds();
 
-    std::stringstream msg;
-    msg << std::fixed << std::setprecision(3);
-    msg << "Sent data for " << data.size() << " external tables, total " << rows << " rows in " << elapsed << " sec., "
-        << static_cast<size_t>(rows / watch.elapsedSeconds()) << " rows/sec., "
-        << maybe_compressed_out_bytes / 1048576.0 << " MiB (" << maybe_compressed_out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend(
+        "Sent data for {} external tables, total {} rows in {:.3f} sec., {:.3f} rows/sec., "
+        "{:.3f} MiB ({:.3f} MiB/sec.)",
+        data.size(),
+        rows,
+        elapsed_seconds,
+        1.0 * rows / elapsed_seconds,
+        maybe_compressed_out_bytes / 1048576.0,
+        maybe_compressed_out_bytes / 1048576.0 / elapsed_seconds);
 
     if (compression == Protocol::Compression::Enable)
-        msg << ", compressed " << static_cast<double>(maybe_compressed_out_bytes) / out_bytes << " times to "
-            << out_bytes / 1048576.0 << " MiB (" << out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
+        fmt_buf.fmtAppend(", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)", 1.0 * maybe_compressed_out_bytes / out_bytes, out_bytes / 1048576.0, out_bytes / 1048576.0 / elapsed_seconds);
     else
-        msg << ", no compression.";
+        fmt_buf.append(", no compression.");
 
-    LOG_DEBUG(log_wrapper.get(), msg.rdbuf());
+    LOG_DEBUG(log_wrapper.get(), fmt_buf.toString());
 }
 
 

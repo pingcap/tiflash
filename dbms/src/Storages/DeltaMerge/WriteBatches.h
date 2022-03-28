@@ -62,10 +62,10 @@ struct WriteBatches : private boost::noncopyable
                 if (!wb.empty())
                 {
                     StackTrace trace;
-                    LOG_ERROR(logger,
-                              "!!!=========================Modifications in " + name
-                                      + " haven't persisted=========================!!! Stack trace: "
-                                  << trace.toString());
+                    LOG_FMT_ERROR(logger,
+                                  "!!!=========================Modifications in {} haven't persisted=========================!!! Stack trace: {}",
+                                  name,
+                                  trace.toString());
                 }
             };
             check_empty(log, "log");
