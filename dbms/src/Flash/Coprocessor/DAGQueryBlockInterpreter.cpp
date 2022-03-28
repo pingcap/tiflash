@@ -31,6 +31,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -105,15 +106,6 @@ bool addExtraCastsAfterTs(
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
-bool isFinalAgg(const tipb::Expr & expr)
-{
-    if (!expr.has_aggfuncmode())
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        return true;
-    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
-}
-
 AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
@@ -136,22 +128,8 @@ AnalysisResult analyzeExpressions(
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        res.is_final_agg = true;
-        const auto & aggregation = query_block.aggregation->aggregation();
-        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
-            res.is_final_agg = false;
-        for (int i = 1; i < aggregation.agg_func_size(); i++)
-        {
-            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
-                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-        }
-        // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
-        //  aggregation if the stage is partial
-        bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower than normal group by, use normal group by by default
-            context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
+        res.is_final_agg = AggregationInterpreterHelper::isFinalAgg(query_block.aggregation->aggregation());
+        bool group_by_collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
 
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
             chain,
@@ -765,45 +743,16 @@ void DAGQueryBlockInterpreter::executeAggregation(
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier()); });
 
     Block header = pipeline.firstStream()->getHeader();
-    ColumnNumbers keys;
-    for (const auto & name : key_names)
-    {
-        keys.push_back(header.getPositionByName(name));
-    }
-    for (auto & descr : aggregate_descriptions)
-    {
-        if (descr.arguments.empty())
-        {
-            for (const auto & name : descr.argument_names)
-            {
-                descr.arguments.push_back(header.getPositionByName(name));
-            }
-        }
-    }
+    Aggregator::Params params = AggregationInterpreterHelper::buildAggregatorParams(
+        context,
+        header,
+        pipeline.streams.size(),
+        key_names,
+        collators,
+        aggregate_descriptions,
+        is_final_agg);
 
     const Settings & settings = context.getSettingsRef();
-
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
-    bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
-
-    Aggregator::Params params(
-        header,
-        keys,
-        aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
-        !is_final_agg,
-        context.getTemporaryPath(),
-        has_collator ? collators : TiDB::dummy_collators);
-
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
