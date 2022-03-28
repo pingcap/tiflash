@@ -2022,7 +2022,7 @@ private:
                 src_offset = src_offsets[i];
                 dst_offset += src_length;
 
-                if (src_length > 1 && dst_data[dst_offset - 2] != trailing_char_str.front())
+                if (src_length > 1 && dst_data[dst_offset - 2] != static_cast<unsigned char>(trailing_char_str.front()))
                 {
                     dst_data[dst_offset - 1] = trailing_char_str.front();
                     dst_data[dst_offset] = 0;
@@ -2718,8 +2718,9 @@ private:
 
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-        static const std::string default_rem = " ";
-        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+        static constexpr std::string_view default_rem = " ";
+        static const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(default_rem.data());
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
     }
@@ -2739,16 +2740,18 @@ private:
             const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
-            std::string data = data_col->getValue<String>();
-            constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+            const std::string data = data_col->getValue<String>();
+            const auto * data_ptr = reinterpret_cast<const UInt8 *>(data.c_str());
+            constVector(is_ltrim, is_rtrim, data_ptr, data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
         {
             const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-            std::string remstr = remstr_col->getValue<String>();
-            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)remstr.c_str(), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
+            const std::string remstr = remstr_col->getValue<String>();
+            const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(remstr.c_str());
+            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
         {
@@ -2834,8 +2837,8 @@ private:
         bool is_rtrim,
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        UInt8 * remstr,
-        size_t remstr_size,
+        const UInt8 * remstr,
+        const size_t remstr_size,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -2857,8 +2860,8 @@ private:
     static void constVector(
         bool is_ltrim,
         bool is_rtrim,
-        UInt8 * data,
-        size_t data_size,
+        const UInt8 * data,
+        const size_t data_size,
         const ColumnString::Chars_t & remstr,
         const ColumnString::Offsets & remstr_offsets,
         ColumnString::Chars_t & res_data,
@@ -4088,13 +4091,11 @@ class FunctionASCII : public IFunction
 {
 public:
     static constexpr auto name = "ascii";
-    explicit FunctionASCII(const Context & context)
-        : context(context)
-    {}
+    FunctionASCII() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionASCII>(context);
+        return std::make_shared<FunctionASCII>();
     }
 
     std::string getName() const override { return name; }
@@ -4135,20 +4136,17 @@ public:
     }
 
 private:
-    const Context & context;
 };
 
 class FunctionLength : public IFunction
 {
 public:
     static constexpr auto name = "length";
-    explicit FunctionLength(const Context & context)
-        : context(context)
-    {}
+    FunctionLength() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionLength>(context);
+        return std::make_shared<FunctionLength>();
     }
 
     std::string getName() const override { return name; }
@@ -4188,20 +4186,17 @@ public:
     }
 
 private:
-    const Context & context;
 };
 
 class FunctionPosition : public IFunction
 {
 public:
     static constexpr auto name = "position";
-    explicit FunctionPosition(const Context & context)
-        : context(context)
-    {}
+    FunctionPosition() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionPosition>(context);
+        return std::make_shared<FunctionPosition>();
     }
 
     std::string getName() const override { return name; }
@@ -4264,21 +4259,17 @@ private:
         const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
-
-    const Context & context;
 };
 
 class FunctionSubStringIndex : public IFunction
 {
 public:
     static constexpr auto name = "substringIndex";
-    explicit FunctionSubStringIndex(const Context & context_)
-        : context(context_)
-    {}
+    FunctionSubStringIndex() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionSubStringIndex>(context);
+        return std::make_shared<FunctionSubStringIndex>();
     }
 
     std::string getName() const override { return name; }
@@ -4530,8 +4521,6 @@ private:
         res_data[res_offset + (end - begin)] = '\0';
         res_offset += end - begin + 1;
     }
-
-    const Context & context;
 };
 
 template <typename Name, typename Format>

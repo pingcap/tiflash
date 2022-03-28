@@ -808,7 +808,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         to_read,
         {range},
         1,
-        MAX_UINT64,
+        std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER)[0];
     stream->readPrefix();
     Block block;
@@ -831,7 +831,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             to_read,
             {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             1,
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;

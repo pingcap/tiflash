@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## Mark targets to build sequentially
-# Example: build_sequentially(a, b, c, d)
-# a -> b -> c -> d
-function(build_sequentially target1 target2)
-    add_dependencies(${target2} ${target1})
-    if(${ARGC} GREATER 2)
-        build_sequentially(${target2} ${ARGN})
-    endif()
-endfunction()
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key)
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; select count(*) from test.t where case when a then isnull(a) else 12.991 end;
++----------+
+| count(*) |
++----------+
+|        0 |
++----------+
+
+mysql> drop table test.t

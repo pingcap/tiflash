@@ -30,7 +30,7 @@ git clone --recursive https://github.com/pingcap/tiflash.git
 
 The following packages are needed for all platforms:
 
-- CMake 3.13.2+
+- CMake 3.21.0+
 
 - Rust: Recommended to use [rustup](https://rustup.rs) to install:
 

@@ -95,6 +95,7 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
+
     static DecodeDetail decodeChunks(
         const std::shared_ptr<tipb::SelectResponse> & resp,
         std::queue<Block> & block_queue,
@@ -186,6 +187,8 @@ public:
     {
         collected = false;
     }
+
+    void close() {}
 
     bool collected = false;
     int concurrency_;

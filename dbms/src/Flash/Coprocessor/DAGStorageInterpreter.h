@@ -99,7 +99,7 @@ private:
     const TiDBTableScan & table_scan;
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
