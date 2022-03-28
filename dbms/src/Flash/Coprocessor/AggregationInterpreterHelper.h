@@ -23,7 +23,7 @@ namespace DB::AggregationInterpreterHelper
 {
 Aggregator::Params buildAggregatorParams(
     const Context & context,
-    Block before_agg_header,
+    const Block & before_agg_header,
     size_t before_agg_streams_size,
     Names & key_names,
     TiDB::TiDBCollators & collators,
