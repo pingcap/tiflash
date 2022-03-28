@@ -809,13 +809,6 @@ void BlobStore::BlobStats::restore()
             stat->recalculateSpaceMap();
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
         }
-
-        // After single path restore finished.
-        // We need remove blob(in disk) which valid rate is 0
-        // And that blobs won't be restored by BlobStats.
-
-        // Poco::File store_path(path);
-        // if (store_path.list());
     }
 
     // restore `roll_id`
