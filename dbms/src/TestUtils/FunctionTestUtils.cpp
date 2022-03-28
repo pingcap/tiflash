@@ -167,7 +167,7 @@ ColumnWithTypeAndName executeAggregateFunction(const String & func_name,
         empty_result_for_aggregation_by_empty_set,
         "", // temporary path
         collators);
-    Aggregator aggregator(params);
+    Aggregator aggregator(params, "agg_0");
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     FileProviderPtr file_provider = std::make_shared<FileProvider>(key_manager, false);
     AggregatedDataVariantsPtr data_variants = std::make_shared<AggregatedDataVariants>();
