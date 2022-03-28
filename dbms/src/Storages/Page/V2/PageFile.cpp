@@ -302,7 +302,7 @@ bool PageFile::LinkingMetaAdapter::hasNext() const
     return meta_file_offset < meta_size;
 }
 
-void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
+bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
     char * pos = meta_buffer + meta_file_offset;
@@ -311,7 +311,7 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         LOG_WARNING(page_file.log,
                     "[batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
                                         << "] ignored.");
-        return;
+        return false;
     }
 
     const char * wb_start_pos = pos;
@@ -321,7 +321,7 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         LOG_WARNING(page_file.log,
                     "[expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
                                            << "] ignored.");
-        return;
+        return false;
     }
 
     WriteBatch::SequenceID wb_sequence = 0;
@@ -450,6 +450,8 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
                         ErrorCodes::LOGICAL_ERROR);
 
     meta_file_offset = pos - meta_buffer;
+
+    return true;
 }
 
 // =========================================================
@@ -735,7 +737,11 @@ void PageFile::Writer::hardlinkFrom(PageFile & linked_file, WriteBatch::Sequence
     // Move to the SequenceID item
     while (reader->hasNext())
     {
-        reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel());
+        if (!reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel()))
+        {
+            throw Exception(fmt::format("Failed to update [sid={}] into [file_id={}] , [file_level={}]", sid, page_file.getFileId(), page_file.getLevel()),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     char * linked_meta_data;
