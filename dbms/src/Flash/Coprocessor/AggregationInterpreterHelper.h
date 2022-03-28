@@ -103,4 +103,4 @@ bool isGroupByCollationSensitive(const Context & context)
     /// collation sensitive group by is slower than normal group by, use normal group by by default
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
-}
+} // namespace DB::AggregationInterpreterHelper
