@@ -35,6 +35,9 @@ public:
     template <typename F, typename... Args>
     static std::thread newThread(bool propagate_memory_tracker, String thread_name, F && f, Args &&... args)
     {
+        /// submit current local delta memory if the memory tracker needs to be propagated to other threads
+        if (propagate_memory_tracker)
+            CurrentMemoryTracker::submitLocalDeltaMemory();
         auto memory_tracker = current_memory_tracker;
         auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::move(f)](auto &&... args) {
             UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);

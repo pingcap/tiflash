@@ -176,27 +176,44 @@ static thread_local Int64 local_delta{};
 
 __attribute__((always_inline)) inline void checkSubmitAndUpdateLocalDelta(Int64 updated_local_delta)
 {
-    if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
+    if (current_memory_tracker)
     {
-        if (current_memory_tracker)
+        if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
+        {
             current_memory_tracker->alloc(updated_local_delta);
-        local_delta = 0;
-    }
-    else if (unlikely(updated_local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
-    {
-        if (current_memory_tracker)
+            local_delta = 0;
+        }
+        else if (unlikely(updated_local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
+        {
             current_memory_tracker->free(-updated_local_delta);
-        local_delta = 0;
-    }
-    else
-    {
-        local_delta = updated_local_delta;
+            local_delta = 0;
+        }
+        else
+        {
+            local_delta = updated_local_delta;
+        }
     }
 }
 
 void disableThreshold()
 {
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
+}
+
+__attribute__((always_inline)) inline void submitLocalDeltaMemory()
+{
+    if (current_memory_tracker)
+    {
+        if (local_delta > 0)
+        {
+            current_memory_tracker->alloc(local_delta);
+        }
+        else if (local_delta < 0)
+        {
+            current_memory_tracker->free(-local_delta);
+        }
+        local_delta = 0;
+    }
 }
 
 void alloc(Int64 size)

@@ -36,6 +36,9 @@ public:
 
     ~MemoryTrackerSetter()
     {
+        if (enable)
+            /// submit current local delta memory if the memory tracker is leaving current thread
+            CurrentMemoryTracker::submitLocalDeltaMemory();
         current_memory_tracker = old_memory_tracker;
     }
 
