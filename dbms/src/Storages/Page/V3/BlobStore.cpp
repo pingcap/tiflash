@@ -767,7 +767,7 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id)
     PageFileIdAndLevel id_lvl{blob_id, 0};
     String parent_path = delegator->choosePath(id_lvl);
 
-    return parent_path + "/blobfile_" + DB::toString(blob_id);
+    return fmt::format("{}/{}{}", parent_path, BLOB_PREFIX_NAME, blob_id);
 }
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
@@ -806,6 +806,67 @@ void BlobStore::BlobStats::restore()
         {
             stat->recalculateSpaceMap();
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
+        }
+
+        // After single path restore finished.
+        // We need remove blob(in disk) which valid rate is 0
+        // And that blobs won't be restored by BlobStats.
+
+        Poco::File store_path(path);
+        std::vector<String> file_list;
+        if (store_path.exists())
+        {
+            store_path.list(file_list);
+            for (const auto & blob_name : file_list)
+            {
+                if (!startsWith(blob_name, BLOB_PREFIX_NAME))
+                {
+                    LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+                    continue;
+                }
+
+                Strings ss;
+                boost::split(ss, blob_name, boost::is_any_of("_"));
+
+                if (ss.size() != 2)
+                {
+                    LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
+                    continue;
+                }
+
+                String err_msg;
+                try
+                {
+                    const auto & blob_id = std::stoull(ss[1]);
+                    bool found = false;
+                    for (const auto & stat : stats)
+                    {
+                        if (stat->id == blob_id)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        LOG_FMT_INFO(log, "Remove invalid blob file [dir={}] [file={}]", path, blob_name);
+
+                        Poco::File invalid_blob(fmt::format("{}/{}", path, blob_name));
+                        invalid_blob.remove();
+                    }
+                    continue;
+                }
+                catch (std::invalid_argument & e)
+                {
+                    err_msg = e.what();
+                }
+                catch (std::out_of_range & e)
+                {
+                    err_msg = e.what();
+                }
+                LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
+            }
         }
     }
 

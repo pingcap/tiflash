@@ -258,7 +258,7 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    constexpr static const char * blob_prefix_name = "/blobfile_";
+    constexpr static const char * BLOB_PREFIX_NAME = "blobfile_";
 
     PSDiskDelegatorPtr delegator;
 
