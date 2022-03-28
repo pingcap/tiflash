@@ -114,7 +114,7 @@ endif()
 
 # if installed directory structure, set full include dir
 if(Poco_INSTALLED)
-    set(Poco_INCLUDE_DIRS ${Poco_ROOT_DIR}/include/ CACHE PATH "The global include path for Poco")
+    set(Poco_INCLUDE_DIRS ${Poco_ROOT_DIR}/include/)
 endif()
 
 # append the default minimum components to the list to find

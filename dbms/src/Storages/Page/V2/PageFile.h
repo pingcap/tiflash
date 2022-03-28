@@ -221,7 +221,7 @@ public:
 
         bool hasNext() const;
 
-        void linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level);
+        bool linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level);
 
         std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
 
