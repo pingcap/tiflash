@@ -89,10 +89,12 @@ public:
 
             std::mutex sm_lock;
 
-            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
-                : smap(std::move(smap_))
+        public:
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , id(id_)
                 , type(BlobStatType::NORMAL)
+                , sm_max_caps(sm_max_caps_)
             {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()

@@ -862,23 +862,17 @@ BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id,
     LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
-        SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size));
-    stat->sm_max_caps = config.file_limit_size;
+        static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
+        config.file_limit_size);
 
-    PageFileIdAndLevel id_lvl;
-    id_lvl.first = blob_file_id;
-    id_lvl.second = 0;
-
+    PageFileIdAndLevel id_lvl{blob_file_id, 0};
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
     return stat;
 }
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
-    PageFileIdAndLevel id_lvl;
-    id_lvl.first = stat->id;
-    id_lvl.second = 0;
-
+    PageFileIdAndLevel id_lvl{stat->id, 0};
     stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
 }
 
