@@ -53,7 +53,7 @@ NO_INLINE void function_2(bool output = false, size_t level = 0)
     function_1(output, level);
 }
 
-// Sanitizers wrongly reports info on the rust side and they may mess up the stacktrace.
+// Sanitizers wrongly report info on the rust side and they may mess up the stacktrace.
 // Setting no_sanitize does not fix the issue.
 // we skip the multi-thread test for TSAN
 #if !defined(THREAD_SANITIZER) && !defined(ADDRESS_SANITIZER)
