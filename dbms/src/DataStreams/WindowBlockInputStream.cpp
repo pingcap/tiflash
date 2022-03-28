@@ -84,7 +84,8 @@ void WindowBlockInputStream::initialWorkspaces()
     // TODO: handle agg functions
     for (auto aggregate_description : window_description.aggregate_descriptions)
     {
-        // agg functions
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "Unsupport agg function in window.");
     }
 }
 
@@ -176,7 +177,7 @@ void WindowBlockInputStream::advancePartitionEnd()
     for (; partition_end.row < block_rows; ++partition_end.row)
     {
         size_t i = 0;
-        for (; i < partition_by_columns; i++)
+        for (; i < partition_by_columns; ++i)
         {
             const auto reference_column
                 = inputAt(prev_frame_start)[partition_by_indices[i]];
@@ -388,7 +389,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
     }
 
 
-    for (size_t i = 0; i < n; i++)
+    for (size_t i = 0; i < n; ++i)
     {
         const auto * column_x = inputAt(x)[order_by_indices[i]].get();
         const auto * column_y = inputAt(y)[order_by_indices[i]].get();
@@ -618,10 +619,13 @@ void WindowBlockInputStream::appendBlock(Block & current_block)
         window_block.input_columns = current_block.getColumns();
     }
 
+    // Start the calculations. First, advance the partition end.
     for (;;)
     {
         advancePartitionEnd();
 
+        // Either we ran out of data or we found the end of partition (maybe
+        // both, but this only happens at the total end of data).
         assert(partition_ended || partition_end == blocksEnd());
         if (partition_ended && partition_end == blocksEnd())
         {

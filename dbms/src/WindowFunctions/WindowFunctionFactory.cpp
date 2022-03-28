@@ -31,12 +31,12 @@ void WindowFunctionFactory::registerFunction(const String & name, Creator creato
 {
     if (creator == nullptr)
         throw Exception(
-            "WindowFunctionFactory: the window function " + name + " has been provided a null constructor",
+            fmt::format("WindowFunctionFactory: the window function {} has been provided a null constructor", name),
             ErrorCodes::LOGICAL_ERROR);
 
     if (!window_functions.emplace(name, creator).second)
         throw Exception(
-            "WindowFunctionFactory: the window function name '" + name + "' is not unique",
+            fmt::format("WindowFunctionFactory: the window function {} is not unique", name),
             ErrorCodes::LOGICAL_ERROR);
 }
 

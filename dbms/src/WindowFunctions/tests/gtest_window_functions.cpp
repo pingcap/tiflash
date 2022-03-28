@@ -137,7 +137,6 @@ protected:
         {
             const auto & expected = lhs.getByPosition(i);
             const auto & actual = rhs.getByPosition(i);
-            //            std::cout << actual.type->getName() << "---" << expected.type->getName() << std::endl;
             ASSERT_TRUE(actual.type->getName() == expected.type->getName());
             ASSERT_COLUMN_EQ(expected.column, actual.column);
         }
@@ -165,7 +164,7 @@ protected:
 
             for (size_t i = 0; i < block.columns(); ++i)
             {
-                for (size_t j = 0; j < block.rows(); j++)
+                for (size_t j = 0; j < block.rows(); ++j)
                 {
                     actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
                 }
