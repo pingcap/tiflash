@@ -28,6 +28,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
+#include <iterator>
 #include <mutex>
 
 namespace ProfileEvents
@@ -915,35 +916,18 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         return std::make_pair(nullptr, roll_id);
     }
 
-    // If the stats_map size changes, or stats_map_w_index is out of range.
-    // Then make stats_map_w_index to 0.
-    stats_map_w_index %= stats_map.size();
+    // If the stats_map size changes, or stats_map_path_index is out of range,
+    // then make stats_map_path_index fit to current size.
+    stats_map_path_index %= stats_map.size();
 
-    // Update stats_map_w_index.
-    // No need to consider that stats_map_w_index out of range.
-    // Because stats_map_w_index will be corrected in the next call.
-    auto selected_w_index = stats_map_w_index++;
+    auto stats_iter = stats_map.begin();
+    std::advance(stats_iter, stats_map_path_index);
 
-    auto loop_w_index = selected_w_index;
-    bool first_loop = true;
-
-    while (true)
+    size_t path_iter_idx = 0;
+    for (path_iter_idx = 0; path_iter_idx < stats_map.size(); ++path_iter_idx)
     {
-        // If all of BlobStat have been checked.
-        // Then we need break the loop
-        if (loop_w_index == selected_w_index)
-        {
-            if (!first_loop)
-            {
-                break;
-            }
-            first_loop = false;
-        }
-
-        auto it = stats_map.begin();
-        std::advance(it, loop_w_index);
-
-        for (const auto & stat : it->second)
+        // Try to find a suitable stat under current path (path=`stats_iter->first`)
+        for (const auto & stat : stats_iter->second)
         {
             if (!stat->isReadOnly()
                 && stat->sm_max_caps >= buf_size
@@ -954,21 +938,25 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
             }
         }
 
-        // Already find the available BlobStat in current path.
+        // Already find the available stat under current path.
         if (stat_ptr != nullptr)
         {
             break;
         }
 
-        // Find BlobStat in next path.
-        loop_w_index++;
-        if (loop_w_index >= stats_map.size())
+        // Try to find stat in the next path.
+        stats_iter++;
+        if (stats_iter == stats_map.end())
         {
-            loop_w_index = 0;
+            stats_iter = stats_map.begin();
         }
     }
 
-    if (!stat_ptr)
+    // advance the `stats_map_path_idx` without size checking
+    stats_map_path_index += path_iter_idx + 1;
+
+    // Can not find a suitable stat under all paths
+    if (stat_ptr == nullptr)
     {
         return std::make_pair(nullptr, roll_id);
     }

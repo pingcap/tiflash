@@ -190,7 +190,8 @@ public:
 
         BlobFileId roll_id = 1;
         std::map<String, std::list<BlobStatPtr>> stats_map;
-        UInt16 stats_map_w_index = 0;
+        // Index for selecting next path for creating new blobfile
+        UInt16 stats_map_path_index = 0;
 
         PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
