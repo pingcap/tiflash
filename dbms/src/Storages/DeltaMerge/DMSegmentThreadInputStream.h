@@ -137,7 +137,10 @@ protected:
                 if (!res.rows())
                     continue;
                 else
+                {
+                    total_rows += res.rows();
                     return res;
+                }
             }
             else
             {
@@ -147,6 +150,11 @@ protected:
                 cur_stream = {};
             }
         }
+    }
+
+    void readSuffix() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:
@@ -171,6 +179,7 @@ private:
     TableID physical_table_id;
 
     LoggerPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DM

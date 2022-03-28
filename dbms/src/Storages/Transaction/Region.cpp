@@ -608,8 +608,7 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     if (del_write)
     {
         LOG_FMT_INFO(log,
-                     "{}: delete {} records in write cf for region {}",
-                     __FUNCTION__,
+                     "delete {} records in write cf for region {}",
                      del_write,
                      meta.regionId());
     }
@@ -738,8 +737,7 @@ void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt6
             auto sst_reader = SSTReader{proxy_helper, snapshot};
 
             LOG_FMT_INFO(log,
-                         "{}: {} begin to ingest sst of cf {} at [term: {}, index: {}]",
-                         __FUNCTION__,
+                         "{} begin to ingest sst of cf {} at [term: {}, index: {}]",
                          this->toString(false),
                          CFToName(snapshot.type),
                          term,
@@ -756,8 +754,7 @@ void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt6
             }
 
             LOG_FMT_INFO(log,
-                         "{}: {} finish to ingest sst of kv count {}",
-                         __FUNCTION__,
+                         "{} finish to ingest sst of kv count {}",
                          this->toString(false),
                          kv_size);
             GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(kv_size);
@@ -785,8 +782,7 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
         meta.setApplied(index, term);
     }
     LOG_FMT_INFO(log,
-                 "{}: {} finish to ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
-                 __FUNCTION__,
+                 "{} finish to ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
                  this->toString(false),
                  data.write_cf.getSize(),
                  data.default_cf.getSize(),

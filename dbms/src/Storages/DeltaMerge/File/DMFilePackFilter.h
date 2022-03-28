@@ -195,17 +195,22 @@ private:
             after_filter += u;
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
-        Float64 filter_rate = (after_read_packs - after_filter) * 100.0 / after_read_packs;
+        Float64 filter_rate = 0.0;
         if (after_read_packs != 0)
         {
+            filter_rate = (after_read_packs - after_filter) * 100.0 / after_read_packs;
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
-        LOG_DEBUG(log,
-                  "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
-                                            << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs
-                                            << ", after_filter: " << after_filter << ", handle_ranges: " << toDebugString(rowkey_ranges)
-                                            << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
-                                            << ", pack_count: " << pack_count);
+        LOG_FMT_DEBUG(log,
+                      "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
+                      ", read_packs: {}, pack_count: {}",
+                      ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
+                      after_pk,
+                      after_read_packs,
+                      after_filter,
+                      toDebugString(rowkey_ranges),
+                      ((!read_packs) ? 0 : read_packs->size()),
+                      pack_count);
     }
 
     static void loadIndex(ColumnIndexes & indexes,

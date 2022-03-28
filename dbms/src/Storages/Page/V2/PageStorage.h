@@ -162,7 +162,7 @@ public:
                 reader->moveNext(&temp_version);
                 max_binary_version = std::max(max_binary_version, temp_version);
             }
-            LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+            LOG_FMT_DEBUG(log, "getMaxDataVersion done from {} [max version={}]", reader->toString(), max_binary_version);
             break;
         }
         max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);

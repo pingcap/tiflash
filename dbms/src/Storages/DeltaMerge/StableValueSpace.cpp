@@ -193,7 +193,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         DMFile::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
-            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable " << id);
+            LOG_FMT_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
@@ -325,7 +325,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
                                                                         size_t expected_block_size,
                                                                         bool enable_clean_read)
 {
-    LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
