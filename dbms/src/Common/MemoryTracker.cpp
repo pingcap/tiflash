@@ -200,7 +200,7 @@ void disableThreshold()
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
-__attribute__((always_inline)) inline void submitLocalDeltaMemory()
+void submitLocalDeltaMemory()
 {
     if (current_memory_tracker)
     {
