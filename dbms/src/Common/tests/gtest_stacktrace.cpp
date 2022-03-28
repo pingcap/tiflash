@@ -53,26 +53,34 @@ GTEST_NO_INLINE_ void function_2(bool output = false, size_t level = 0)
 }
 TEST(StackTrace, SingleThread)
 {
-    function_2(true);
-    function_2(true, 16);
+    []() __attribute__((no_sanitize("address", "thread"), noinline))
+    {
+        function_2(true);
+        function_2(true, 16);
+    }
+    ();
 }
 TEST(StackTrace, MultiThreads)
 {
-    size_t num = std::thread::hardware_concurrency();
-    std::vector<std::thread> threads{};
-    for (size_t i = 0; i < num; ++i)
+    []() __attribute__((no_sanitize("address", "thread"), noinline))
     {
-        threads.emplace_back([] {
-            for (int j = 0; j < 16; ++j)
-            {
-                function_2(false, j);
-            }
-        });
+        size_t num = std::thread::hardware_concurrency();
+        std::vector<std::thread> threads{};
+        for (size_t i = 0; i < num; ++i)
+        {
+            threads.emplace_back([] {
+                for (int j = 0; j < 16; ++j)
+                {
+                    function_2(false, j);
+                }
+            });
+        }
+        for (auto & i : threads)
+        {
+            i.join();
+        }
     }
-    for (auto & i : threads)
-    {
-        i.join();
-    }
+    ();
 }
 } // namespace tests
 } // namespace DB
