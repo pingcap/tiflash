@@ -247,8 +247,6 @@ private:
 
     String getBlobFilePath(BlobFileId blob_id);
 
-    std::pair<bool, PageFileIdAndLevel> getBlobFileByName(String blob_file_name);
-
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
     friend class PageDirectoryFactory;

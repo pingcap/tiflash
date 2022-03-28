@@ -773,31 +773,6 @@ String BlobStore::getBlobFilePath(BlobFileId blob_id)
     return parent_path + "/blobfile_" + DB::toString(blob_id);
 }
 
-std::pair<bool, PageFileIdAndLevel> BlobStore::getBlobFileByName(String blob_file_name)
-{
-    PageFileIdAndLevel id_lvl;
-
-    if (!startsWith(blob_file_name, blob_prefix_name))
-    {
-        LOG_FMT_INFO(log, "Not blob file, ignored: {}", blob_file_name);
-        return {false, id_lvl};
-    }
-
-    std::vector<std::string> ss;
-    boost::split(ss, blob_file_name, boost::is_any_of("_"));
-    if (ss.size() != 2)
-    {
-        LOG_FMT_INFO(log, "Unrecognized file, ignored: {}", blob_file_name);
-        return {false, id_lvl};
-    }
-
-    BlobFileId file_id = std::stoull(ss[1]);
-    id_lvl.first = file_id;
-    id_lvl.second = 0;
-
-    return {true, id_lvl};
-}
-
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
     return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
@@ -946,18 +921,21 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 
     // If the stats_map size changes, or stats_map_w_index is out of range.
     // Then make stats_map_w_index to 0.
-    if (stats_map_w_index >= stats_map.size())
-    {
-        stats_map_w_index = 0;
-    }
+    stats_map_w_index %= stats_map.size();
 
-    auto loop_w_index = stats_map_w_index;
+    // Update stats_map_w_index.
+    // No need to consider that stats_map_w_index out of range.
+    // Because stats_map_w_index will be corrected in the next call.
+    auto selected_w_index = stats_map_w_index++;
+
+    auto loop_w_index = selected_w_index;
     bool first_loop = true;
 
     while (true)
     {
-        // All of BlobStat have been checked.
-        if (loop_w_index == stats_map_w_index)
+        // If all of BlobStat have been checked.
+        // Then we need break the loop
+        if (loop_w_index == selected_w_index)
         {
             if (!first_loop)
             {
@@ -975,7 +953,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
                 && stat->sm_max_caps >= buf_size
                 && stat->sm_valid_rate < smallest_valid_rate)
             {
-                smallest_valid_rate = stat->sm_valid_size;
+                smallest_valid_rate = stat->sm_valid_rate;
                 stat_ptr = stat;
             }
         }
@@ -993,11 +971,6 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
             loop_w_index = 0;
         }
     }
-
-    // Update stats_map_w_index.
-    // No need to consider that stats_map_w_index out of range.
-    // Because stats_map_w_index will be corrected in the next call.
-    stats_map_w_index = loop_w_index + 1;
 
     if (!stat_ptr)
     {
