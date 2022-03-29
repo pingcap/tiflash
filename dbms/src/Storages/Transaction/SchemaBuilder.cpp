@@ -346,7 +346,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
                 ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
         }
 
-    LOG_FMT_DEBUG(log, "{} : {}", __PRETTY_FUNCTION__, ss.str());
+    LOG_DEBUG(log, ss.str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,

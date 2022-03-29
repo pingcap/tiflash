@@ -297,7 +297,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_INFO(log, "{}: [region {}] is not found, might be removed already", __PRETTY_FUNCTION__, region_id);
+        LOG_FMT_INFO(log, "[region {}] is not found, might be removed already", region_id);
         return;
     }
     LOG_FMT_INFO(log, "Handle destroy {}", region->toString());
@@ -423,8 +423,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         if (curr_region_ptr == nullptr)
         {
             LOG_FMT_WARNING(log,
-                            "{}: [region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
-                            __PRETTY_FUNCTION__,
+                            "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
                             curr_region_id,
                             term,
                             index,

@@ -60,8 +60,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             auto tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
             LOG_FMT_DEBUG(
                 log,
-                "{}: Handling {} regions from {} physical tables in DAG request: {}",
-                __PRETTY_FUNCTION__,
+                "Handling {} regions from {} physical tables in DAG request: {}",
                 tables_regions_info.regionCount(),
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
