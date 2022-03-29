@@ -558,7 +558,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
         LOG_FMT_WARNING(page_file.log,
-                        "Incomplete write batch {{{}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                        "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
                         toString(),
                         wb_bytes,
                         meta_size,

@@ -343,7 +343,7 @@ void RemoteBlockInputStream::tryCancel(const char * reason)
     if (!was_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
         return;
 
-    LOG_FMT_TRACE(log, "({}) {}", multiplexed_connections->dumpAddresses(), query);
+    LOG_FMT_TRACE(log, "({}) {}", multiplexed_connections->dumpAddresses(), reason);
     multiplexed_connections->sendCancel();
 }
 
