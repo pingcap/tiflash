@@ -94,11 +94,10 @@ public:
         // notify the thread exit asap.
         queue.cancel();
 
-        forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-        {
-            child.cancel(kill);
-            return false;
-        });
+        auto * ptr = dynamic_cast<IProfilingBlockInputStream *>(in.get());
+        assert(ptr);
+
+        ptr->cancel(kill);
     }
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
