@@ -221,6 +221,14 @@ const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext
     return mpp_exchange_receiver_map;
 }
 
+void DAGContext::cancelAllExchangeReceiver()
+{
+    for (auto & it : mpp_exchange_receiver_map)
+    {
+        it.second->cancel();
+    }
+}
+
 int DAGContext::getNewThreadCountOfExchangeReceiver() const
 {
     return new_thread_count_of_exchange_receiver;

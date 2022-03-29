@@ -183,7 +183,7 @@ private:
 
     /// Check objects definitions in config files and reload or/and add new ones if the definition is changed
     /// If loadable_name is not empty, load only loadable object with name loadable_name
-    void reloadFromConfigFiles(bool throw_on_error, bool force_reload = false, const std::string & loadable_name = "");
+    void reloadFromConfigFiles(bool throw_on_error, bool force_reload = false, const std::string & only_dictionary = "");
     void reloadFromConfigFile(const std::string & config_path, bool throw_on_error, bool force_reload, const std::string & loadable_name);
 
     /// Check config files and update expired loadable objects

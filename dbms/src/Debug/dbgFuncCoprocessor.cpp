@@ -515,7 +515,7 @@ struct QueryFragment
         }
         else
         {
-            MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
+            MPPInfo mpp_info(properties.start_ts, /*partition_id*/ -1, /*task_id*/ -1, /*sender_target_task_ids*/ {}, /*receiver_source_task_ids_map*/ {});
             ret.push_back(toQueryTask(properties, mpp_info, context));
         }
         return ret;

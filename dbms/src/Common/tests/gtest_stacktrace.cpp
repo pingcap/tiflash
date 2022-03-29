@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/StackTrace.h>
+#include <common/defines.h>
 #include <gtest/gtest.h>
 
 #include <thread>
@@ -21,7 +22,7 @@ namespace DB
 {
 namespace tests
 {
-GTEST_NO_INLINE_ void function_0(bool output = false)
+NO_INLINE void function_0(bool output = false)
 {
     auto res = StackTrace().toString();
     std::string::size_type idx;
@@ -36,7 +37,7 @@ GTEST_NO_INLINE_ void function_0(bool output = false)
     idx = res.find("function_2", idx);
     EXPECT_NE(idx, std::string::npos);
 }
-GTEST_NO_INLINE_ void function_1(bool output = false, size_t level = 0)
+NO_INLINE void function_1(bool output = false, size_t level = 0)
 {
     if (level == 0)
     {
@@ -47,10 +48,15 @@ GTEST_NO_INLINE_ void function_1(bool output = false, size_t level = 0)
         function_1(output, level - 1);
     }
 }
-GTEST_NO_INLINE_ void function_2(bool output = false, size_t level = 0)
+NO_INLINE void function_2(bool output = false, size_t level = 0)
 {
     function_1(output, level);
 }
+
+// Sanitizers wrongly report info on the rust side and they may mess up the stacktrace.
+// Setting no_sanitize does not fix the issue.
+// we skip the stacktrace tests for TSAN
+#if !defined(THREAD_SANITIZER) && !defined(ADDRESS_SANITIZER)
 TEST(StackTrace, SingleThread)
 {
     function_2(true);
@@ -74,5 +80,7 @@ TEST(StackTrace, MultiThreads)
         i.join();
     }
 }
+#endif
+
 } // namespace tests
 } // namespace DB
