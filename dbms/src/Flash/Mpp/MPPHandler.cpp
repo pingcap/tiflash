@@ -46,7 +46,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     try
     {
         Stopwatch stopwatch;
-        task = MPPTask::newTask(task_request.meta(), context);
+        task = MPPTask::newTask(task_request.meta(), context, is_async_enabled);
 
         task->prepare(task_request);
         for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())

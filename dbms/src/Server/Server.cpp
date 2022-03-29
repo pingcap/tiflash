@@ -587,7 +587,7 @@ public:
         }
 
         /// Init and register flash service.
-        bool enable_async_server = server.context().getSettingsRef().enable_async_server;
+        enable_async_server = server.context().getSettingsRef().enable_async_server;
         if (enable_async_server)
             flash_service = std::make_unique<AsyncFlashService>(server);
         else
@@ -672,6 +672,7 @@ public:
 private:
     Poco::Logger * log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
+    bool enable_async_server;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
