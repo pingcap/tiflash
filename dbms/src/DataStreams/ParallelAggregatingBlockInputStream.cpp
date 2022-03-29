@@ -108,9 +108,12 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_TRACE(
+            LOG_FMT_TRACE(
                 log,
-                "Will merge " << files.files.size() << " temporary files of size " << (files.sum_size_compressed / 1048576.0) << " MiB compressed, " << (files.sum_size_uncompressed / 1048576.0) << " MiB uncompressed.");
+                "Will merge {} temporary files of size {} MiB compressed, {} MiB uncompressed.",
+                files.files.size(),
+                files.sum_size_compressed / 1048576.0,
+                files.sum_size_uncompressed / 1048576.0);
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
                 input_streams,
@@ -213,7 +216,7 @@ void ParallelAggregatingBlockInputStream::execute()
     for (size_t i = 0; i < max_threads; ++i)
         threads_data.emplace_back(keys_size, aggregates_size);
 
-    LOG_TRACE(log, "Aggregating");
+    LOG_FMT_TRACE(log, "Aggregating");
 
     Stopwatch watch;
 
