@@ -43,6 +43,17 @@ BlobFile::BlobFile(String path_,
 
     Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
+    {
+        std::lock_guard<std::mutex> lock(file_size_lock);
+        // If file_size is 0, we still need insert it.
+        if (!delegator->fileExist({blob_id, 0}))
+        {
+            delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
+                                           file_size,
+                                           path,
+                                           true);
+        }
+    }
 }
 
 void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter)
@@ -92,7 +103,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
             delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
                                            (offset + size - file_size),
                                            path,
-                                           true);
+                                           false);
             file_size = offset + size;
         }
     }

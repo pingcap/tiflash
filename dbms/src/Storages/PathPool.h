@@ -140,6 +140,8 @@ class PSDiskDelegator : private boost::noncopyable
 public:
     virtual ~PSDiskDelegator() {}
 
+    virtual bool fileExist(const PageFileIdAndLevel & id_lvl) const = 0;
+
     virtual size_t numPaths() const = 0;
 
     virtual String defaultPath() const = 0;
@@ -173,6 +175,8 @@ public:
         : pool(pool_)
         , path_prefix(std::move(prefix))
     {}
+
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
 
     size_t numPaths() const override;
 
@@ -213,6 +217,8 @@ public:
         , path_prefix(std::move(prefix))
     {}
 
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
+
     size_t numPaths() const override;
 
     String defaultPath() const override;
@@ -245,6 +251,8 @@ class PSDiskDelegatorRaft : public PSDiskDelegator
 {
 public:
     PSDiskDelegatorRaft(PathPool & pool_);
+
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
 
     size_t numPaths() const override;
 
@@ -292,6 +300,8 @@ public:
         , path_prefix(std::move(prefix))
     {}
 
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
+
     size_t numPaths() const override;
 
     String defaultPath() const override;
@@ -333,6 +343,8 @@ public:
         , path_prefix(std::move(prefix))
     {}
 
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
+
     size_t numPaths() const override;
 
     String defaultPath() const override;
@@ -359,6 +371,9 @@ public:
 private:
     const PathPool & pool;
     const String path_prefix;
+
+    mutable std::mutex mutex;
+    PathPool::PageFilePathMap page_path_map;
 };
 
 /// A class to manage paths for the specified storage.

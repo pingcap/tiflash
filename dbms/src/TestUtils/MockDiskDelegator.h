@@ -34,6 +34,11 @@ public:
         : path(std::move(path_))
     {}
 
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    {
+        return true;
+    }
+
     size_t numPaths() const
     {
         return 1;
@@ -93,6 +98,12 @@ public:
         if (paths.empty())
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
     }
+
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    {
+        return true;
+    }
+
 
     size_t numPaths() const
     {
