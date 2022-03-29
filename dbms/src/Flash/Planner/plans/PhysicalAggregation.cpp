@@ -48,7 +48,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
     cast_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(analyzer.getCurrentInputColumns())));
 
-    NamesAndTypes schema = analyzer.getCurrentInputColumns();
+    const NamesAndTypes & schema = analyzer.getCurrentInputColumns();
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
         schema,
@@ -119,8 +119,8 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, const Context & 
 
 void PhysicalAggregation::finalize(const Names & parent_require)
 {
+    // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
-
     cast_after_agg->finalize(PhysicalPlanHelper::schemaToNames(schema));
 
     Names before_agg_output;
@@ -134,7 +134,6 @@ void PhysicalAggregation::finalize(const Names & parent_require)
         before_agg_output.push_back(aggregation_key);
     }
     before_agg_actions->finalize(before_agg_output);
-
     child->finalize(before_agg_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(before_agg_actions, child->getSampleBlock().columns());
 }

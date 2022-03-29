@@ -25,4 +25,16 @@ void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names 
             throw Exception(fmt::format("schema don't contain parent require column: {}", parent_require_column));
     }
 }
+
+void checkParentRequireContainsSchema(const Names & parent_require, const NamesAndTypes & schema)
+{
+    NameSet parent_require_set;
+    for (const auto & parent_require_column : parent_require)
+        parent_require_set.insert(parent_require_column);
+    for (const auto & schema_column : schema)
+    {
+        if (parent_require_set.find(schema_column.name) == parent_require_set.end())
+            throw Exception(fmt::format("parent require don't contain schema column: {}", schema_column.name));
+    }
+}
 } // namespace DB::FinalizeHelper

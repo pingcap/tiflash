@@ -26,9 +26,13 @@ PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
     assert(final_project_aliases.size() == schema.size());
     // replace name by alias.
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
+    {
+        assert(schema[i].name == final_project_aliases[i].first);
         schema[i].name = final_project_aliases[i].second;
+    }
 
     auto physical_projection = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, project_actions);
+    // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);
     return physical_projection;
@@ -70,6 +74,7 @@ PhysicalPlanPtr PhysicalProjection::buildRootFinal(
     }
 
     auto physical_projection = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, project_actions);
+    // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);
     return physical_projection;
@@ -85,14 +90,9 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, const Context & c
 
 void PhysicalProjection::finalize(const Names & parent_require)
 {
-    // Maybe parent_require.size() >= schema.size()
-    Names required_output;
-    required_output.reserve(schema.size() + parent_require.size());
-    for (const auto & column : schema)
-        required_output.push_back(column.name);
-    for (const auto & name : parent_require)
-        required_output.push_back(name);
-    project_actions->finalize(required_output);
+    // parent_require.size() >= schema.size()
+    FinalizeHelper::checkParentRequireContainsSchema(parent_require, schema);
+    project_actions->finalize(parent_require);
 
     child->finalize(project_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
