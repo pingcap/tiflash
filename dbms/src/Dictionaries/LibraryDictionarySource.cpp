@@ -260,9 +260,9 @@ bool LibraryDictionarySource::isModified() const
 
 bool LibraryDictionarySource::supportsSelectiveLoad() const
 {
-    if (auto func_supports_selectiveLoad
+    if (auto func_supports_selective_load
         = library->tryGet<bool (*)(decltype(lib_data), decltype(&settings->strings))>("ClickHouseDictionary_v2_supportsSelectiveLoad"))
-        return func_supports_selectiveLoad(lib_data, &settings->strings);
+        return func_supports_selective_load(lib_data, &settings->strings);
     return true;
 }
 
