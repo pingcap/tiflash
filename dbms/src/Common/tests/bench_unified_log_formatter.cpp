@@ -148,7 +148,7 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldStream)
         {
             LOG_FMT_INFO(
                 log,
-                " GC exit within {:.2F} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}, num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}, num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
                 elapsed_sec,
                 beg.first,
                 beg.second,
