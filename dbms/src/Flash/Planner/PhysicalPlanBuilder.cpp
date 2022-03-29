@@ -19,15 +19,20 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     {
     case tipb::ExecType::TypeSelection:
         cur_plan = PhysicalFilter::build(context, executor_id, executor->selection(), cur_plan);
+        break;
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         cur_plan = PhysicalAggregation::build(context, executor_id, executor->aggregation(), cur_plan);
+        break;
     case tipb::ExecType::TypeTopN:
         cur_plan = PhysicalTopN::build(context, executor_id, executor->topn(), cur_plan);
+        break;
     case tipb::ExecType::TypeLimit:
         cur_plan = PhysicalLimit::build(executor_id, executor->limit(), cur_plan);
+        break;
     case tipb::ExecType::TypeExchangeSender:
         cur_plan = PhysicalExchangeSender::build(executor_id, executor->exchange_sender(), cur_plan);
+        break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Coprocessor::Unimplemented);
     }
