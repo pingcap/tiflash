@@ -133,16 +133,15 @@ void ColumnGathererStream::readSuffixImpl()
         return;
 
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
-    std::stringstream speed;
+    String speed;
     if (seconds)
-        speed << ", " << profile_info.rows / seconds << " rows/sec., "
-              << profile_info.bytes / 1048576.0 / seconds << " MiB/sec.";
+        speed = fmt::format(", {:.2f} rows/sec., {:.2f} MiB/sec.", profile_info.rows / seconds, profile_info.bytes / 1048576.0 / seconds);
     LOG_FMT_TRACE(log,
-                  "Gathered column {:.2f} ({:.2f} bytes/elem.) in {:.2f} sec.{}",
-                  static_cast<double>(profile_info.bytes) / profile_info.rows,
+                  "Gathered column {} ({:.2f} bytes/elem.) in {} sec.{}",
+                  name,
                   static_cast<double>(profile_info.bytes) / profile_info.rows,
                   seconds,
-                  speed.str());
+                  speed);
 }
 
 } // namespace DB
