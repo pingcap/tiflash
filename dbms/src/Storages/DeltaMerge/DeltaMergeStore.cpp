@@ -1268,7 +1268,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             auto it = segments.find(segment->getRowKeyRange().getEnd());
             // check legality
             if (it == segments.end())
-
                 return {};
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
@@ -1604,6 +1603,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         // meet empty segment, try merge it
         if (segment_snap->getRows() == 0)
         {
+            // release segment_snap before checkSegmentUpdate, otherwise this segment is still in update status.
+            segment_snap = nullptr;
             checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
             continue;
         }
