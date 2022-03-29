@@ -65,7 +65,8 @@ private:
 
     WriteReadableFilePtr wrfile;
 
-    std::atomic<BlobFileOffset> file_size;
+    std::mutex file_size_lock;
+    BlobFileOffset file_size;
 };
 using BlobFilePtr = std::shared_ptr<BlobFile>;
 

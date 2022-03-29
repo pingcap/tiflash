@@ -85,18 +85,16 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 #endif
     PageUtil::syncFile(wrfile);
 
-
-    BlobFileOffset cur_file_size = file_size.load();
-    size_t expand_size = (offset + size) - cur_file_size;
-    if (expand_size > 0)
     {
-        delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
-                                       expand_size,
-                                       path,
-                                       true);
-
-        // CAS if `file_size` have not changed, ignore if changed.
-        file_size.compare_exchange_strong(cur_file_size, offset + size);
+        std::lock_guard<std::mutex> lock(file_size_lock);
+        if (offset + size > file_size)
+        {
+            delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
+                                           (offset + size - file_size),
+                                           path,
+                                           true);
+            file_size = offset + size;
+        }
     }
 }
 
@@ -105,8 +103,11 @@ void BlobFile::truncate(size_t size)
     PageUtil::ftruncateFile(wrfile, size);
     assert(size <= file_size);
 
-    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
-    file_size.store(size);
+    {
+        std::lock_guard<std::mutex> lock(file_size_lock);
+        delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
+        file_size = size;
+    }
 }
 
 void BlobFile::remove()
