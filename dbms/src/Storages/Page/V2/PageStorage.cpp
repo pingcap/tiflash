@@ -503,7 +503,7 @@ void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limi
     {
         wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
 #ifdef FIU_ENABLE
-        static int num_call = 0;
+        static std::atomic<int> num_call = 0;
         num_call++;
 #endif
         fiu_do_on(FailPoints::random_slow_page_storage_write, {
