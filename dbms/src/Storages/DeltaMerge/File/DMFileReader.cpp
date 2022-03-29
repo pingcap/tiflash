@@ -449,7 +449,7 @@ Block DMFileReader::read()
                 {
                     LOG_FMT_TRACE(
                         log,
-                        "Column [id: {},name: {},type: {}] not found, use default value. DMFile: {}",
+                        "Column [id: {}, name: {}, type: {}] not found, use default value. DMFile: {}",
                         cd.id,
                         cd.name,
                         cd.type->getName(),
