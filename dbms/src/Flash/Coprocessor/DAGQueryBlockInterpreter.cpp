@@ -1193,7 +1193,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // if the type of query_block source is window or window sort, streams will be merged to one stream and we should not restore pipeline concurrency.
-    if (query_block.source->tp() != tipb::ExecType::TypeWindow && query_block.source->tp() != tipb::ExecType::TypeSort)
+    // exclude the last window which is exchange_sender
+    if (canRestorePipelineConcurrency())
         restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
@@ -1279,6 +1280,14 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
     restoreConcurrency(pipeline, dagContext().final_concurrency, log);
+}
+
+bool DAGQueryBlockInterpreter::canRestorePipelineConcurrency()
+{
+    return (query_block.source->tp() != tipb::ExecType::TypeWindow
+            && query_block.source->tp() != tipb::ExecType::TypeSort
+            && query_block.source->sort().ispartialsort()
+            && query_block.exchange_sender);
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()

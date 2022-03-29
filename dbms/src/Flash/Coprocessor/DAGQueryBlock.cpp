@@ -160,7 +160,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
         children.push_back(std::make_shared<DAGQueryBlock>(source->window().child(), id_generator));
         GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
     }
-    else if (current->tp() == tipb::ExecType::TypeSort)
+    else if (current->tp() == tipb::ExecType::TypeSort && current->sort().ispartialsort())
     {
         children.push_back(std::make_shared<DAGQueryBlock>(source->sort().child(), id_generator));
         GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();

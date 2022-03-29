@@ -76,6 +76,8 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
+    std::tuple<WindowDescription, NamesAndTypes> appendWindowColumns(const tipb::Window & window, ExpressionActionsChain::Step & step);
+
     WindowDescription buildWindowDescription(const tipb::Window & window);
 
     SortDescription getWindowSortDescription(
@@ -144,12 +146,12 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
-    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step);
+    void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
-    NamesAndTypes appendCastAfterWindow(
-        ExpressionActionsChain & chain,
+    void appendCastAfterWindow(
+        const ExpressionActionsPtr & actions,
         const tipb::Window & window,
-        const NamesAndTypes window_columns);
+        const size_t window_columns_start_index);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

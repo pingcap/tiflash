@@ -105,6 +105,8 @@ private:
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
+    bool canRestorePipelineConcurrency();
+
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
         std::vector<RemoteRequest> & remote_requests);
