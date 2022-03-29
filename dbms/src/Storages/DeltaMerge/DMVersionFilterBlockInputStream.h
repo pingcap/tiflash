@@ -65,7 +65,10 @@ public:
     ~DMVersionFilterBlockInputStream()
     {
         LOG_FMT_DEBUG(log,
-                      "Total rows: {}, pass: {:.2f}%, complete pass: {:.2f}%, complete not pass: {:.2f}%, not clean: {:.2f}%, effective: {:.2f}%, read tso: {}",
+                      "Total rows: {}, pass: {:.2f}%"
+                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
+                      ", not clean: {:.2f}%, effective: {:.2f}%"
+                      ", read tso: {}",
                       total_rows,
                       passed_rows * 100.0 / total_rows,
                       complete_passed * 100.0 / total_blocks,

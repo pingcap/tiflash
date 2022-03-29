@@ -529,7 +529,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     if (rows == 0)
         return;
 
-    auto dm_context = newDMContext(db_context, db_settings);
+    auto dm_context = newDMContext(db_context, db_settings, "write");
 
     const auto bytes = block.bytes();
 
@@ -588,8 +588,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             auto alloc_bytes = block.bytes(offset, limit);
 
             bool is_small = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
-            // Small column fies are appended to Delta Cache, then flushed later.
-            // While large column fies are directly written to PageStorage.
+            // Small column files are appended to Delta Cache, then flushed later.
+            // While large column files are directly written to PageStorage.
             if (is_small)
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
@@ -641,6 +641,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             throw Exception("Fail point random_exception_after_dt_write_done is triggered.", ErrorCodes::FAIL_POINT_ERROR);
     });
 
+    // TODO: Update the tracing_id before checkSegmentUpdate
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
@@ -854,6 +855,7 @@ void DeltaMergeStore::ingestFiles(
 
     flushCache(dm_context, range);
 
+    // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
@@ -867,7 +869,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     if (delete_range.none())
         return;
 
-    auto dm_context = newDMContext(db_context, db_settings);
+    auto dm_context = newDMContext(db_context, db_settings, "delete_range");
 
     Segments updated_segments;
 
@@ -912,6 +914,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         cur_range.setEnd(delete_range.end);
     }
 
+    // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
@@ -954,7 +957,7 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
 
 void DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
-    auto dm_context = newDMContext(context, context.getSettingsRef());
+    auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaAll");
 
     std::vector<SegmentPtr> all_segments;
     {
@@ -974,7 +977,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
 void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & range)
 {
-    auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    auto dm_context = newDMContext(db_context, db_context.getSettingsRef(), /*tracing_id*/ "compact");
 
     RowKeyRange cur_range = range;
     while (!cur_range.none())
@@ -1020,7 +1023,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 {
     SegmentReadTasks tasks;
 
-    auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
+    auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1080,6 +1083,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
 {
+    // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
 
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
@@ -1088,6 +1092,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+        // TODO: Update the tracing_id before checkSegmentUpdate?
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
 
@@ -1614,7 +1619,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (shutdown_called.load(std::memory_order_relaxed))
             break;
 
-        auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        auto dm_context = newDMContext(global_context, global_context.getSettingsRef(), "onSyncGc");
         SegmentPtr segment;
         SegmentSnapshotPtr segment_snap;
         {

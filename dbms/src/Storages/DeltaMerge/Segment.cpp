@@ -727,6 +727,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     auto stream = builder
                       .setColumnCache(stable_snap->getColumnCaches()[file_index])
                       .setReadPacks(read_pack)
+                      .setTracingID(fmt::format("{}-getSplitPointFast", dm_context.tracing_id))
                       .build(
                           read_file,
                           /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},

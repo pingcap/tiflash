@@ -209,6 +209,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             BlockInputStreamPtr data_stream = builder
                                                   .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
                                                   .onlyReadOnePackEveryTime()
+                                                  .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
                                                   .build(file, read_columns, RowKeyRanges{rowkey_range});
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,

@@ -83,7 +83,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
-    const String tracing_id;
+    String tracing_id;
 
 public:
     DMContext(const Context & db_context_,

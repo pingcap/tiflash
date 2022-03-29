@@ -44,7 +44,7 @@ public:
                const String & file_name_base,
                size_t aio_threshold,
                size_t max_read_buffer_size,
-               const DB::LoggerPtr & log,
+               const LoggerPtr & log,
                const ReadLimiterPtr & read_limiter);
 
         const bool single_file_mode;

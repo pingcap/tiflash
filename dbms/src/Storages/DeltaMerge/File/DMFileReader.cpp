@@ -44,7 +44,7 @@ DMFileReader::Stream::Stream(
     const String & file_name_base,
     size_t aio_threshold,
     size_t max_read_buffer_size,
-    const DB::LoggerPtr & log,
+    const LoggerPtr & log,
     const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode)
     , avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
