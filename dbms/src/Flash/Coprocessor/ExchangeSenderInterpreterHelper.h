@@ -15,9 +15,12 @@
 #pragma once
 
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/types.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::ExchangeSenderInterpreterHelper

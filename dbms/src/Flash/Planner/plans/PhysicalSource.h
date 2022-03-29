@@ -1,11 +1,11 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/plans/PhysicalLeaf.h>
 
 namespace DB
 {
-class PhysicalSource : public PhysicalPlan
+class PhysicalSource : public PhysicalLeaf
 {
 public:
     static PhysicalPlanPtr build(
@@ -20,26 +20,9 @@ public:
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const Block & sample_block_)
-        : PhysicalPlan(executor_id_, PlanType::Source, schema_)
+        : PhysicalLeaf(executor_id_, PlanType::Source, schema_)
         , sample_block(sample_block_)
     {}
-
-    PhysicalPlanPtr children(size_t) const override
-    {
-        throw Exception("the children size of PhysicalSource is zero");
-    }
-
-    void setChild(size_t, const PhysicalPlanPtr &) override
-    {
-        throw Exception("the children size of PhysicalSource is zero");
-    }
-
-    void appendChild(const PhysicalPlanPtr &) override
-    {
-        throw Exception("the children size of PhysicalSource is zero");
-    }
-
-    size_t childrenSize() const override { return 0; };
 
     void transformImpl(DAGPipeline &, const Context &, size_t) override {}
 

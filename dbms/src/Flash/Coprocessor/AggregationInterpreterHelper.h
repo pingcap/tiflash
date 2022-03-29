@@ -17,10 +17,12 @@
 #include <Common/TiFlashException.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <Core/Names.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::AggregationInterpreterHelper
