@@ -179,9 +179,7 @@ protected:
             _UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
-                // canceled
-                if (!output_queue.pop(res))
-                    break;
+                output_queue.pop(res);
 
                 if (res.exception)
                 {
@@ -230,9 +228,8 @@ protected:
             processor.process();
         }
 
-        /// We will wait until the next block is ready or an exception is thrown or canceled.
-        if (!output_queue.pop(received_payload))
-            return {};
+        /// We will wait until the next block is ready or an exception is thrown.
+        output_queue.pop(received_payload);
 
         if (received_payload.exception)
         {

@@ -93,6 +93,12 @@ public:
 
         // notify the thread exit asap.
         queue.cancel();
+
+        forEachProfilingChild([&] (IProfilingBlockInputStream & child)
+        {
+            child.cancel(kill);
+            return false;
+        });
     }
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
@@ -111,8 +117,8 @@ protected:
         Block block;
         if (!queue.pop(block))
         {
-            // canceled
-            waitThread();
+            if (!isCancelled() && !read_suffixed)
+                waitThread();
             return {};
         }
 
