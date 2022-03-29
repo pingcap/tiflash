@@ -8,6 +8,19 @@ namespace DB
 class PhysicalProjection : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr buildNonRootFinal(
+        const Context & context,
+        const String & column_prefix,
+        const PhysicalPlanPtr & child);
+
+    static PhysicalPlanPtr buildRootFinal(
+        const Context & context,
+        const std::vector<tipb::FieldType> & require_schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info,
+        const PhysicalPlanPtr & child);
+
     PhysicalProjection(
         const String & executor_id_,
         const NamesAndTypes & schema_,

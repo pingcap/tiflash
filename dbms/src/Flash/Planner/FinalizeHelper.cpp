@@ -25,13 +25,4 @@ void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names 
             throw Exception(fmt::format("schema don't contain parent require column: {}", parent_require_column));
     }
 }
-
-Names schemaToNames(const NamesAndTypes & schema)
-{
-    Names names;
-    names.reserve(schema.size());
-    for (const auto & column : schema)
-        names.push_back(column.name);
-    return names;
-}
 } // namespace DB::FinalizeHelper

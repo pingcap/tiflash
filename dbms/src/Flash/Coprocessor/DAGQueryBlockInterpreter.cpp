@@ -92,29 +92,23 @@ PhysicalPlanPtr analysePhysicalPlan(
     // selection on table scan had been executed in handleTableScan
     if (query_block.selection && !query_block.isTableScanSource())
     {
-        builder.buildFilter(query_block.selection_name, query_block.selection->selection());
+        builder.build(query_block.selection_name, query_block.selection);
     }
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        builder.buildAggregation(query_block.aggregation_name, query_block.aggregation->aggregation());
+        builder.build(query_block.aggregation_name, query_block.aggregation);
 
         if (query_block.having != nullptr)
         {
-            builder.buildFilter(query_block.having_name, query_block.having->selection());
+            builder.build(query_block.having_name, query_block.having);
         }
     }
 
-    // Or TopN, not both.
-    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
+    // TopN/Limit
+    if (query_block.limit_or_topn)
     {
-        builder.buildTopN(query_block.limit_or_topn_name, query_block.limit_or_topn->topn());
-    }
-
-    // Or Limit, not both.
-    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeLimit)
-    {
-        builder.buildLimit(query_block.limit_or_topn_name, query_block.limit_or_topn->limit());
+        builder.build(query_block.limit_or_topn_name, query_block.limit_or_topn);
     }
 
     // Append final project results if needed.
@@ -133,10 +127,10 @@ PhysicalPlanPtr analysePhysicalPlan(
 
     if (query_block.exchange_sender)
     {
-        builder.buildExchangeSender(query_block.exchange_sender_name, query_block.exchange_sender->exchange_sender());
+        builder.build(query_block.exchange_sender_name, query_block.exchange_sender);
     }
 
-    return builder.getRes();
+    return builder.getResult();
 }
 
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)

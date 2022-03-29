@@ -8,6 +8,14 @@ namespace DB
 class PhysicalSource : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const String & executor_id,
+        const NamesAndTypes & source_schema,
+        const Block & source_sample_block)
+    {
+        return std::make_shared<PhysicalSource>(executor_id, source_schema, source_sample_block);
+    }
+
     PhysicalSource(
         const String & executor_id_,
         const NamesAndTypes & schema_,

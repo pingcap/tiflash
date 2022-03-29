@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Flash/Planner/PhysicalPlan.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -8,6 +9,11 @@ namespace DB
 class PhysicalExchangeSender : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const String & executor_id,
+        const tipb::ExchangeSender & exchange_sender,
+        const PhysicalPlanPtr & child);
+
     PhysicalExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,

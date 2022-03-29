@@ -3,12 +3,19 @@
 #include <Core/SortDescription.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/ExpressionActions.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
 class PhysicalTopN : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const Context & context,
+        const String & executor_id,
+        const tipb::TopN & top_n,
+        const PhysicalPlanPtr & child);
+
     PhysicalTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,

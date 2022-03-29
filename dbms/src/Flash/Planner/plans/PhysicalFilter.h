@@ -2,12 +2,19 @@
 
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/ExpressionActions.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
 class PhysicalFilter : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const Context & context,
+        const String & executor_id,
+        const tipb::Selection & selection,
+        const PhysicalPlanPtr & child);
+
     PhysicalFilter(
         const String & executor_id_,
         const NamesAndTypes & schema_,

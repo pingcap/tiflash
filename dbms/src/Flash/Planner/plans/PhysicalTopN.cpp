@@ -3,14 +3,40 @@
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+PhysicalPlanPtr PhysicalTopN::build(
+    const Context & context,
+    const String & executor_id,
+    const tipb::TopN & top_n,
+    const PhysicalPlanPtr & child)
+{
+    assert(child);
+
+    if (top_n.order_by_size() == 0)
+    {
+        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
+    }
+
+    DAGExpressionAnalyzer analyzer{child->getSchema(), context};
+    ExpressionActionsPtr before_sort_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+
+    auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
+    SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
+
+    auto physical_top_n = std::make_shared<PhysicalTopN>(executor_id, child->getSchema(), order_descr, before_sort_actions, top_n.limit());
+    physical_top_n->appendChild(child);
+    return physical_top_n;
+}
+
 void PhysicalTopN::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);

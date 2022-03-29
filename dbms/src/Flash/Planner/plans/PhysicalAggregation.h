@@ -2,12 +2,19 @@
 
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/AggregateDescription.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
 class PhysicalAggregation : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const Context & context,
+        const String & executor_id,
+        const tipb::Aggregation & aggregation,
+        const PhysicalPlanPtr & child);
+
     PhysicalAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,

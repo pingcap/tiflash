@@ -1,12 +1,18 @@
 #pragma once
 
 #include <Flash/Planner/PhysicalPlan.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
 class PhysicalLimit : public PhysicalPlan
 {
 public:
+    static PhysicalPlanPtr build(
+        const String & executor_id,
+        const tipb::Limit & limit,
+        const PhysicalPlanPtr & child);
+
     PhysicalLimit(
         const String & executor_id_,
         const NamesAndTypes & schema_,

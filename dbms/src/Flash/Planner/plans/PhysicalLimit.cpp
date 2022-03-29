@@ -8,6 +8,18 @@
 
 namespace DB
 {
+PhysicalPlanPtr PhysicalLimit::build(
+    const String & executor_id,
+    const tipb::Limit & limit,
+    const PhysicalPlanPtr & child)
+{
+    assert(child);
+
+    auto physical_limit = std::make_shared<PhysicalLimit>(executor_id, child->getSchema(), limit.limit());
+    physical_limit->appendChild(child);
+    return physical_limit;
+}
+
 void PhysicalLimit::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
