@@ -2172,8 +2172,12 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
         if (!f(ctx, my_time))
         {
 #ifndef NDEBUG
-            LOG_TRACE(&Poco::Logger::get("MyDateTimeParser"),
-                      "parse error, [str=" << ctx.view.toString() << "] [format=" << format << "] [parse_pos=" << ctx.pos << "]");
+            LOG_FMT_TRACE(
+                &Poco::Logger::get("MyDateTimeParser"),
+                "parse error, [str={}] [format={}] [parse_pos={}]",
+                ctx.view.toString(),
+                format,
+                ctx.pos);
 #endif
             return std::nullopt;
         }
