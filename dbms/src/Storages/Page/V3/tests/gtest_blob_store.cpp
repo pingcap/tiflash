@@ -279,6 +279,7 @@ TEST_F(BlobStoreTest, Restore)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    config.file_limit_size = 2560;
     auto blob_store = BlobStore(file_provider, delegator, config);
 
     BlobFileId file_id1 = 10;
