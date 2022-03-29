@@ -687,7 +687,7 @@ void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/
 }
 
 //==========================================================================================
-// Raft data
+// Raft Region data
 //==========================================================================================
 PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_)
     : pool(pool_)
@@ -1017,13 +1017,12 @@ size_t PSDiskDelegatorGlobalSingle::addPageFileUsedSize(
     const String & pf_parent_path,
     bool need_insert_location)
 {
+    // We need a map for id_lvl -> path_index for function `fileExist`
     if (need_insert_location)
     {
         std::lock_guard<std::mutex> lock{mutex};
         page_path_map[id_lvl] = 0;
     }
-    // In this case, inserting to page_path_map seems useless.
-    // Simply add used size for global capacity is OK.
     pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
     return 0;
 }
@@ -1033,8 +1032,6 @@ size_t PSDiskDelegatorGlobalSingle::freePageFileUsedSize(
     size_t size_to_free,
     const String & pf_parent_path)
 {
-    // In this case, inserting to page_path_map seems useless.
-    // Simply add used size for global capacity is OK.
     pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
     return 0;
 }

@@ -115,7 +115,7 @@ private:
 class StableDiskDelegator : private boost::noncopyable
 {
 public:
-    StableDiskDelegator(StoragePathPool & pool_)
+    explicit StableDiskDelegator(StoragePathPool & pool_)
         : pool(pool_)
     {}
 
@@ -138,7 +138,7 @@ private:
 class PSDiskDelegator : private boost::noncopyable
 {
 public:
-    virtual ~PSDiskDelegator() {}
+    virtual ~PSDiskDelegator() = default;
 
     virtual bool fileExist(const PageFileIdAndLevel & id_lvl) const = 0;
 
@@ -250,7 +250,7 @@ private:
 class PSDiskDelegatorRaft : public PSDiskDelegator
 {
 public:
-    PSDiskDelegatorRaft(PathPool & pool_);
+    explicit PSDiskDelegatorRaft(PathPool & pool_);
 
     bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
 
