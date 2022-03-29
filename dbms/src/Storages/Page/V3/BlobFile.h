@@ -22,6 +22,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/PathPool.h>
 
 namespace DB::PS::V3
 {
@@ -29,7 +30,9 @@ class BlobFile
 {
 public:
     BlobFile(String path_,
-             FileProviderPtr file_provider_);
+             BlobFileId blob_id_,
+             FileProviderPtr file_provider_,
+             PSDiskDelegatorPtr delegator_);
 
     ~BlobFile();
 
@@ -54,10 +57,16 @@ public:
     void remove();
 
 private:
+    const BlobFileId blob_id;
+
     FileProviderPtr file_provider;
+    PSDiskDelegatorPtr delegator;
     String path;
 
     WriteReadableFilePtr wrfile;
+
+    std::mutex file_size_lock;
+    BlobFileOffset file_size;
 };
 using BlobFilePtr = std::shared_ptr<BlobFile>;
 
