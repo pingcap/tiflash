@@ -57,12 +57,11 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_FMT_TRACE(
-            log,
-            "onClientFinish, SharedQuery({}), clients: {}, finished_clients: {}",
-            query_id,
-            clients,
-            finished_clients);
+        LOG_FMT_TRACE(log,
+                      "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+                      query_id,
+                      clients,
+                      finished_clients);
     }
 
     bool isDone() const
@@ -124,13 +123,11 @@ public:
             }
             query.connected_clients++;
 
-            LOG_FMT_TRACE(
-                log,
-                "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
-                query_id,
-                clients,
-                query.connected_clients);
-
+            LOG_FMT_TRACE(log,
+                          "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                          query_id,
+                          clients,
+                          query.connected_clients);
             return query.io;
         }
         else
@@ -162,7 +159,7 @@ public:
 
         //        if (it->second->isDone())
         //        {
-        //            LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+        //            LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
         //            queries.erase(it);
         //        }
     }
