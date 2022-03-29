@@ -73,12 +73,11 @@ Block AggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_FMT_TRACE(
-                log,
-                "Will merge {} temporary files of size {} MiB compressed, {} MiB uncompressed.",
-                files.files.size(),
-                (files.sum_size_compressed / 1048576.0),
-                (files.sum_size_uncompressed / 1048576.0));
+            LOG_FMT_TRACE(log,
+                          "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
+                          files.files.size(),
+                          (files.sum_size_compressed / 1048576.0),
+                          (files.sum_size_uncompressed / 1048576.0));
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(input_streams, params, final, 1, 1, log->identifier());
         }
