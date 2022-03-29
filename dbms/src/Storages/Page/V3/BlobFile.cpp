@@ -96,28 +96,36 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 #endif
     PageUtil::syncFile(wrfile);
 
+    UInt64 expected_size = 0;
     {
         std::lock_guard<std::mutex> lock(file_size_lock);
-        if (offset + size > file_size)
+        if ((offset + size) > file_size)
         {
-            delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
-                                           (offset + size - file_size),
-                                           path,
-                                           false);
+            expected_size = offset + size - file_size;
             file_size = offset + size;
         }
+    }
+
+    if (expected_size != 0)
+    {
+        delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
+                                       expected_size,
+                                       path,
+                                       false);
     }
 }
 
 void BlobFile::truncate(size_t size)
 {
     PageUtil::ftruncateFile(wrfile, size);
+    Int64 expected_size = 0;
     {
         std::lock_guard<std::mutex> lock(file_size_lock);
         assert(size <= file_size);
-        delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
+        expected_size = file_size - size;
         file_size = size;
     }
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), expected_size, path);
 }
 
 void BlobFile::remove()
