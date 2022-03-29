@@ -24,7 +24,7 @@ void PhysicalFilter::finalize(const Names & parent_require)
     before_filter_actions->finalize(required_output);
 
     child->finalize(before_filter_actions->getRequiredColumns());
-    prependProjectInputIfNeed(before_filter_actions, child->getSampleBlock().columns());
+    FinalizeHelper::prependProjectInputIfNeed(before_filter_actions, child->getSampleBlock().columns());
 }
 
 const Block & PhysicalFilter::getSampleBlock() const

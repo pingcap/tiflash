@@ -2,6 +2,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -10,7 +11,7 @@
 
 namespace DB
 {
-void PhysicalTopN::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalTopN::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 
@@ -53,7 +54,7 @@ void PhysicalTopN::finalize(const Names & parent_require)
     before_sort_actions->finalize(required_output);
 
     child->finalize(before_sort_actions->getRequiredColumns());
-    prependProjectInputIfNeed(before_sort_actions, child->getSampleBlock().columns());
+    FinalizeHelper::prependProjectInputIfNeed(before_sort_actions, child->getSampleBlock().columns());
 }
 
 const Block & PhysicalTopN::getSampleBlock() const

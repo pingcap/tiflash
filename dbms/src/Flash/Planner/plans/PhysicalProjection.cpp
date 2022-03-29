@@ -27,7 +27,7 @@ void PhysicalProjection::finalize(const Names & parent_require)
     project_actions->finalize(required_output);
 
     child->finalize(project_actions->getRequiredColumns());
-    prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
+    FinalizeHelper::prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
 }
 
 const Block & PhysicalProjection::getSampleBlock() const

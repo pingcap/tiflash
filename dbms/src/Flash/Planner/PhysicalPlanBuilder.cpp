@@ -221,9 +221,10 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     schema.clear();
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
-        auto alias = final_project_aliases[i].second;
-        auto offset = output_offsets[i];
-        schema.emplace_back(alias, analyzer.getCurrentInputColumns()[offset]);
+        const auto & alias = final_project_aliases[i].second;
+        assert(!alias.empty());
+        const auto & type = analyzer.getCurrentInputColumns()[output_offsets[i]].type;
+        schema.emplace_back(alias, type);
     }
 
     assignCurPlan(std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions));

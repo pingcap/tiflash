@@ -30,6 +30,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, const Context & 
         aggregate_descriptions,
         is_final_agg);
 
+    const Settings & settings = context.getSettingsRef();
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
