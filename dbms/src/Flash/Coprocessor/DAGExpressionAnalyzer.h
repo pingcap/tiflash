@@ -42,7 +42,6 @@ enum class ExtraCastAfterTSMode
 };
 
 class DAGExpressionAnalyzerHelper;
-class PhysicalPlanBuilder;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   */
 class DAGExpressionAnalyzer : private boost::noncopyable
@@ -69,17 +68,6 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
-    std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::TopN & topN);
-
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
-    /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        bool group_by_collation_sensitive);
-
     void initChain(
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
@@ -94,19 +82,10 @@ public:
     // Generate a project action for non-root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same, and
     // guarantee that left/right block of join don't have duplicated column names.
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix) const;
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     // Generate a project action for root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same.
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info);
-
     NamesWithAliases buildFinalProjection(
         const ExpressionActionsPtr & actions,
         const std::vector<tipb::FieldType> & schema,
@@ -176,8 +155,6 @@ public:
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
-
-    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
 private:
     String buildTupleFunctionForGroupConcat(
@@ -305,7 +282,6 @@ private:
     Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
-    friend class PhysicalPlanBuilder;
 };
 
 } // namespace DB
