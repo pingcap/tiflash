@@ -36,8 +36,8 @@ String astToDebugString(const IAST * const ast)
 // Useless for production env
 void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
-    std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
-    castDefaultValue = [&](const Field & value, const DataTypePtr & type) -> Field {
+    std::function<Field(const Field &, const DataTypePtr &)> cast_default_value; // for lazy bind
+    cast_default_value = [cast_default_value](const Field & value, const DataTypePtr & type) -> Field {
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:
@@ -93,7 +93,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             time_t time = 0;
             ReadBufferFromMemory buf(date.data(), date.size());
             readDateTimeText(time, buf);
-            return toField((Int64)time);
+            return toField(static_cast<Int64>(time));
         }
         case TypeIndex::Decimal32:
         {
@@ -138,7 +138,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
                 return value;
             auto nullable = std::dynamic_pointer_cast<const DataTypeNullable>(type);
             DataTypePtr nested_type = nullable->getNestedType();
-            return castDefaultValue(value, nested_type); // Recursive call on nested type
+            return cast_default_value(value, nested_type); // Recursive call on nested type
         }
         default:
             throw Exception("Unsupported to setColumnDefineDefaultValue with data type: " + type->getName()
@@ -153,12 +153,12 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             // a cast function
             // change column_define.default_value
 
-            if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+            if (const auto * default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
                 default_literal && default_literal->value.getType() == Field::Types::String)
             {
                 define.default_value = default_literal->value;
             }
-            else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
+            else if (const auto * default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
                      default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
             {
                 // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
@@ -167,10 +167,10 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
                     throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
                 }
 
-                auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
+                const auto * default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
                 if (default_literal_in_cast)
                 {
-                    Field default_value = castDefaultValue(default_literal_in_cast->value, define.type);
+                    Field default_value = cast_default_value(default_literal_in_cast->value, define.type);
                     define.default_value = default_value;
                 }
                 else
@@ -192,14 +192,14 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
         {
             DB::Exception ex(e);
             ex.addMessage(fmt::format("(in setColumnDefineDefaultValue for default_expression: {})", astToDebugString(command.default_expression.get())));
-            throw ex;
+            throw ex; // NOLINT
         }
         catch (std::exception & e)
         {
             DB::Exception ex(
                 fmt::format("std::exception: {} (in setColumnDefineDefaultValue for default_expression: {})", e.what(), astToDebugString(command.default_expression.get())),
                 ErrorCodes::LOGICAL_ERROR);
-            throw ex;
+            throw ex; // NOLINT
         }
     }
 }

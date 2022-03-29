@@ -207,43 +207,43 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const String DMFile::encryptionBasePath() const
+String DMFile::encryptionBasePath() const
 {
     return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
 }
 
 
-const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::DATA_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::MARK_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMetaPath() const
+EncryptionPath DMFile::encryptionMetaPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : metaFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackStatPath() const
+EncryptionPath DMFile::encryptionPackStatPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packStatFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackPropertyPath() const
+EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-const EncryptionPath DMFile::encryptionConfigurationPath() const
+EncryptionPath DMFile::encryptionConfigurationPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
 }
