@@ -13,10 +13,8 @@
 // limitations under the License.
 
 #include <Dictionaries/Embedded/RegionsHierarchies.h>
-
-#include <common/logger_useful.h>
-
 #include <Poco/DirectoryIterator.h>
+#include <common/logger_useful.h>
 
 
 RegionsHierarchies::RegionsHierarchies(IRegionsHierarchiesDataProviderPtr data_provider)
@@ -28,7 +26,7 @@ RegionsHierarchies::RegionsHierarchies(IRegionsHierarchiesDataProviderPtr data_p
 
     for (const auto & name : data_provider->listCustomHierarchies())
     {
-        LOG_DEBUG(log, "Adding regions hierarchy for " << name);
+        LOG_FMT_DEBUG(log, "Adding regions hierarchy for {}", name);
         data.emplace(name, data_provider->getHierarchySource(name));
     }
 
