@@ -259,7 +259,7 @@ private:
                 if (i != 0 && e.code() == ErrorCodes::RECEIVED_ERROR_FROM_REMOTE_IO_SERVER
                     && nullptr != strstr(e.displayText().data(), "File not found"))
                 {
-                    LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
+                    LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
                 }
                 else
                     throw;

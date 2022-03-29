@@ -17,6 +17,7 @@
 #include <DataStreams/OwningBlockInputStream.h>
 #include <Dictionaries/DictionarySourceHelpers.h>
 #include <Dictionaries/ExecutableDictionarySource.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -26,13 +27,11 @@
 
 namespace DB
 {
-
 static const size_t max_block_size = 8192;
 
 
 namespace
 {
-
 /// Owns ShellCommand and calls wait for it.
 class ShellCommandOwningBlockInputStream : public OwningBlockInputStream<ShellCommand>
 {
@@ -124,7 +123,6 @@ BlockInputStreamPtr ExecutableDictionarySource::loadUpdatedAll()
 
 namespace
 {
-
 /** A stream, that also runs and waits for background thread
   * (that will feed data into pipe to be read from the other side of the pipe).
   */
