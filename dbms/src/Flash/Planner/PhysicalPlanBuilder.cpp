@@ -205,10 +205,12 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     DAGExpressionAnalyzer analyzer{schema, context};
 
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    auto [need_append_type_cast, need_append_type_cast_vec] = analyzer.checkIfCastIsRequiredForRootFinalProjection(require_schema, output_offsets);
+    auto [need_append_type_cast, need_append_type_cast_vec] = analyzer.isCastRequiredForRootFinalProjection(require_schema, output_offsets);
+    assert(need_append_type_cast_vec.size() == output_offsets.size());
 
     if (need_append_timezone_cast || need_append_type_cast)
     {
+        // after appendCastForRootFinalProjection, analyzer.source_columns has been modified.
         analyzer.appendCastForRootFinalProjection(actions, require_schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
     }
 

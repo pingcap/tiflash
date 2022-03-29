@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Flash/Planner/PhysicalPlan.h>
-#include <Interpreters/ExpressionActions.h>
 #include <tipb/select.pb.h>
 
 namespace DB
