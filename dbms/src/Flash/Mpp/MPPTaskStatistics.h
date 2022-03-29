@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
@@ -56,7 +56,7 @@ public:
 private:
     void recordInputBytes(DAGContext & dag_context);
 
-    const LogWithPrefixPtr logger;
+    const LoggerPtr logger;
 
     // common
     const MPPTaskId id;

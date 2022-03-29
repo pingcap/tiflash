@@ -370,7 +370,7 @@ try
             snap,
             {RowKeyRange::newAll(false, 1)},
             {},
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         int num_rows_read = 0;
         in->readPrefix();
@@ -1769,10 +1769,10 @@ try
     }
 
     {
-        auto & stable = segment->getStable();
+        const auto & stable = segment->getStable();
         ASSERT_GT(stable->getDMFiles()[0]->getPacks(), (size_t)1);
         ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
-        // caculate StableProperty
+        // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
         auto start = RowKeyValue::fromHandle(0);
         auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
@@ -1780,8 +1780,8 @@ try
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
-        auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        const auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, std::numeric_limits<UInt64>::max());
         ASSERT_EQ(property.num_versions, num_rows_write_every_round);
         ASSERT_EQ(property.num_puts, num_rows_write_every_round);
         ASSERT_EQ(property.num_rows, num_rows_write_every_round);
@@ -1831,7 +1831,7 @@ try
         stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.gc_hint_version, std::numeric_limits<UInt64>::max());
         ASSERT_EQ(property.num_versions, num_rows_write_every_round);
         ASSERT_EQ(property.num_puts, num_rows_write_every_round);
         ASSERT_EQ(property.num_rows, num_rows_write_every_round);

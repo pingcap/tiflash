@@ -216,7 +216,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (old_region != nullptr)
         {
-            LOG_FMT_DEBUG(log, "{}: previous {}, new {}", __FUNCTION__, old_region->getDebugString(), new_region->getDebugString());
+            LOG_FMT_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
             {
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
@@ -344,6 +344,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     // Use failpoint to change the expected_block_size for some test cases
     fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
+
     PageIds ids;
     while (true)
     {
@@ -416,9 +419,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
-                LOG_INFO(log,
-                         "Decoding Region snapshot data meet error, sync schema and try to decode again " //
-                             << new_region->toString(true) << " [error=" << e.displayText() << "]");
+                LOG_FMT_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
@@ -429,7 +430,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // We can ignore if storage is dropped.
-                LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped " << new_region->toString(true));
+                LOG_FMT_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
                 try_clean_up();
                 break;
             }
@@ -523,9 +524,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log,
-                    __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found at [term " << term << ", index " << index
-                                        << "], might be removed already");
+        LOG_FMT_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
 
@@ -545,9 +544,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         default:
             break;
         }
-        LOG_INFO(
-            log,
-            __FUNCTION__ << ": " << region->toString(true) << " ingest sst by method " << applyMethodToString(snapshot_apply_method));
+        LOG_FMT_INFO(log, "{} ingest sst by method {}", region->toString(true), applyMethodToString(snapshot_apply_method));
     });
 
     const auto func_try_flush = [&]() {
@@ -562,7 +559,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         {
             // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
             // ignore it.
-            LOG_DEBUG(log, "catch but ignore exception: " << e.message());
+            LOG_FMT_DEBUG(log, "catch but ignore exception: {}", e.message());
         }
     };
 

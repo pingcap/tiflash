@@ -118,7 +118,7 @@ public:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), e.displayText() << ", URL: " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "{}, URL: {}:{}{}, try No {}.", e.displayText(), host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -127,7 +127,7 @@ public:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from {}:{}{}, try No {}.", host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -240,7 +240,7 @@ private:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), e.what() << ", message: " << e.displayText() << ", URL: " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "{}, message: {}, URL: {}:{}{}, try No {}.", e.what(), e.displayText(), host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -249,7 +249,7 @@ private:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from {}:{}{}, try No {}.", host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }

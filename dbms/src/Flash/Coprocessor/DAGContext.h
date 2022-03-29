@@ -24,7 +24,7 @@
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
@@ -266,6 +266,8 @@ public:
         return sql_mode & f;
     }
 
+    void cancelAllExchangeReceiver();
+
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
@@ -287,7 +289,7 @@ public:
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> result_field_types;

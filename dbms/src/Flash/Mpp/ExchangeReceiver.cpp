@@ -71,13 +71,13 @@ public:
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const LogWithPrefixPtr & log_)
+        const String & req_id)
         : rpc_context(context)
         , request(&req)
         , notify_queue(queue)
         , msg_channel(msg_channel_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(getMPPTaskLog(log_, req_info))
+        , log(Logger::get("ExchangeReceiver", req_id, req_info))
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -193,7 +193,7 @@ public:
 
     bool meetError() const { return meet_error; }
     const String & getErrMsg() const { return err_msg; }
-    const LogWithPrefixPtr & getLog() const { return log; }
+    const LoggerPtr & getLog() const { return log; }
 
 private:
     void notifyReactor()
@@ -282,7 +282,7 @@ private:
     MPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 } // namespace
 
@@ -291,7 +291,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
     size_t source_num_,
     size_t max_streams_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const String & req_id,
+    const String & executor_id)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -300,7 +301,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(log_)
+    , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
     , collected(false)
 {
     rpc_context->fillSchema(schema);
@@ -310,15 +311,21 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    setState(ExchangeReceiverState::CLOSED);
-    msg_channel.finish();
+    close();
     thread_manager->wait();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    setState(ExchangeReceiverState::CANCELED);
+    setEndState(ExchangeReceiverState::CANCELED);
+    msg_channel.finish();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::close()
+{
+    setEndState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 }
 
@@ -366,7 +373,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<AsyncRequestHandler<RPCContext>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
+        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier());
 
     while (alive_async_connections > 0)
     {
@@ -423,7 +430,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-    LogWithPrefixPtr log = getMPPTaskLog(exc_log, req_info);
+    LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier(), req_info);
 
     try
     {
@@ -463,7 +470,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             status = reader->finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req.debugString());
+                LOG_FMT_DEBUG(log, "finish read : {}", req.debugString());
                 break;
             }
             else
@@ -599,10 +606,16 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setState(ExchangeReceiverState new_state)
+bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
+    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
     std::unique_lock lock(mu);
+    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
+    {
+        return false;
+    }
     state = new_state;
+    return true;
 }
 
 template <typename RPCContext>
@@ -616,7 +629,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionDone(
     bool meet_error,
     const String & local_err_msg,
-    const LogWithPrefixPtr & log)
+    const LoggerPtr & log)
 {
     Int32 copy_live_conn = -1;
     {
