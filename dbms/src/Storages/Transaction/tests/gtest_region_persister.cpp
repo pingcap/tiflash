@@ -268,7 +268,7 @@ try
             auto new_iter = new_regions.find(i);
             if (new_iter == new_regions.end())
             {
-                LOG_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id=" << i);
+                LOG_FMT_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id={}", i);
                 ++num_regions_missed;
             }
             else
@@ -523,8 +523,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
     }
 
     auto seconds = watch.elapsedSeconds();
-    LOG_INFO(&Poco::Logger::get("RegionPersister_test"), //
-             "[sync_on_write=" << sync_on_write << "], [time=" << DB::toString(seconds, 4) << "s]");
+    LOG_FMT_INFO(&Poco::Logger::get("RegionPersister_test"), "[sync_on_write={}], [time={:.4f}s]", sync_on_write, seconds);
 }
 
 // This test takes about 10 minutes. Disable by default

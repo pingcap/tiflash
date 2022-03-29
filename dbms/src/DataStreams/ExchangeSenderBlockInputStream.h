@@ -37,17 +37,19 @@ public:
     static constexpr auto name = "ExchangeSender";
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
-    void readSuffix() override
-    {
-        writer->finishWrite();
-    }
 
 protected:
     Block readImpl() override;
+    void readSuffixImpl() override
+    {
+        writer->finishWrite();
+        LOG_FMT_DEBUG(log, "finish write with {} rows", total_rows);
+    }
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
     const LoggerPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DB
