@@ -57,7 +57,7 @@ public:
     void remove();
 
 private:
-    BlobFileId blob_id;
+    const BlobFileId blob_id;
 
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;

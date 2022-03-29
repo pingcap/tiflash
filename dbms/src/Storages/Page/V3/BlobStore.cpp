@@ -764,12 +764,8 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id)
 {
-    PageFileIdAndLevel id_lvl;
-    id_lvl.first = blob_id;
-    id_lvl.second = 0;
-
-    String parent_path;
-    parent_path = delegator->choosePath(id_lvl);
+    PageFileIdAndLevel id_lvl{blob_id, 0};
+    String parent_path = delegator->choosePath(id_lvl);
 
     return parent_path + "/blobfile_" + DB::toString(blob_id);
 }

@@ -45,13 +45,15 @@ BlobFile::BlobFile(String path_,
     file_size = file_in_disk.getSize();
     {
         std::lock_guard<std::mutex> lock(file_size_lock);
+
         // If file_size is 0, we still need insert it.
-        if (!delegator->fileExist({blob_id, 0}))
+        PageFileIdAndLevel id_lvl{blob_id, 0};
+        if (!delegator->fileExist(id_lvl))
         {
-            delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
+            delegator->addPageFileUsedSize(id_lvl,
                                            file_size,
                                            path,
-                                           true);
+                                           /*need_insert_location*/ true);
         }
     }
 }
@@ -96,20 +98,20 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 #endif
     PageUtil::syncFile(wrfile);
 
-    UInt64 expected_size = 0;
+    UInt64 expand_size = 0;
     {
         std::lock_guard<std::mutex> lock(file_size_lock);
         if ((offset + size) > file_size)
         {
-            expected_size = offset + size - file_size;
+            expand_size = offset + size - file_size;
             file_size = offset + size;
         }
     }
 
-    if (expected_size != 0)
+    if (expand_size != 0)
     {
         delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
-                                       expected_size,
+                                       expand_size,
                                        path,
                                        false);
     }
@@ -118,14 +120,14 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 void BlobFile::truncate(size_t size)
 {
     PageUtil::ftruncateFile(wrfile, size);
-    Int64 expected_size = 0;
+    Int64 shrink_size = 0;
     {
         std::lock_guard<std::mutex> lock(file_size_lock);
         assert(size <= file_size);
-        expected_size = file_size - size;
+        shrink_size = file_size - size;
         file_size = size;
     }
-    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), expected_size, path);
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), shrink_size, path);
 }
 
 void BlobFile::remove()
