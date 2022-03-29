@@ -124,8 +124,7 @@ bool checkMatch(
     store->mergeDeltaAll(context);
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
-    auto log = Logger::get(__PRETTY_FUNCTION__);
-    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, log);
+    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, name);
     streams[0]->readPrefix();
     auto rows = streams[0]->read().rows();
     streams[0]->readSuffix();

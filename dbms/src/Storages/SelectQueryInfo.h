@@ -15,6 +15,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 namespace DB
@@ -31,11 +32,7 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 struct MvccQueryInfo;
 struct DAGQueryInfo;
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -53,7 +50,7 @@ struct SelectQueryInfo
 
     std::unique_ptr<DAGQueryInfo> dag_query;
 
-    LogWithPrefixPtr logger;
+    std::string req_id;
 
 
     SelectQueryInfo();

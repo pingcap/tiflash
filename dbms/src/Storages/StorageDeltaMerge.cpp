@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -81,7 +81,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
-    , log(&Poco::Logger::get("StorageDeltaMerge"))
+    , log(DB::Logger::get("StorageDeltaMerge", fmt::format("{}.{}", db_name_, table_name_)))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -627,7 +627,7 @@ BlockInputStreams StorageDeltaMerge::read(
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = query_info.logger;
+    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
 
     LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
@@ -737,7 +737,7 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
-        tracing_logger,
+        query_info.req_id,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -814,7 +814,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         1,
         std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
-        Logger::get("StorageDeltaMerge", "getRows"))[0];
+        /*tracing_id*/ "getRows")[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -839,7 +839,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             1,
             std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
-            Logger::get("StorageDeltaMerge", "getRange"))[0];
+            /*tracing_id*/ "getRange")[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

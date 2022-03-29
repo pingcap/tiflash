@@ -50,9 +50,9 @@ public:
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
-        const DB::LoggerPtr & tracing_logger)
+        const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_logger);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -110,7 +110,7 @@ private:
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
-                     const DB::LoggerPtr & tracing_logger)
+                     const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -120,7 +120,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
-        , log(tracing_logger ? tracing_logger : Logger::get("DMFilePackFilter"))
+        , log(Logger::get("DMFilePackFilter", tracing_id))
         , read_limiter(read_limiter_)
     {
     }

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 #include <Storages/RegionQueryInfo.h>
@@ -37,7 +37,7 @@ inline DM::RowKeyRanges getQueryRanges(
     bool is_common_handle,
     size_t rowkey_column_size,
     size_t expected_ranges_count = 1,
-    const LogWithPrefixPtr & log = nullptr)
+    const LoggerPtr & log = nullptr)
 {
     // todo check table id in DecodedTiKVKey???
     DM::RowKeyRanges ranges;

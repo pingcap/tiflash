@@ -60,7 +60,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 {},
                 dm_context->db_context.getFileProvider(),
                 dm_context->getReadLimiter(),
-                dm_context->tracing_logger);
+                dm_context->tracing_id);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -243,7 +243,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             {},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
-            context.tracing_logger);
+            context.tracing_id);
         const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
@@ -339,6 +339,7 @@ StableValueSpace::Snapshot::getInputStream(
             .enableCleanRead(enable_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
+            .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges));
     }
@@ -368,7 +369,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             IdSetPtr{},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),
-            context.tracing_logger);
+            context.tracing_id);
         const auto & pack_stats = f->getPackStats();
         const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)

@@ -382,7 +382,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
     BlockInputStreamPtr stream;
     if (dm_context.read_delta_only)
     {
-        throw Exception("Unsupported");
+        throw Exception("Unsupported for read_delta_only");
     }
     else if (dm_context.read_stable_only)
     {
@@ -430,10 +430,10 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.tracing_logger);
+        dm_context.tracing_id);
 
     LOG_FMT_TRACE(
-        dm_context.tracing_logger,
+        Logger::get(log->name(), dm_context.tracing_id),
         "Segment [{}] is read by max_version: {}, {} ranges: {}",
         segment_id,
         max_version,

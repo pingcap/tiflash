@@ -67,7 +67,6 @@ public:
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
-    // TODO: Use a builder to replace these params
     DMFileReader(
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
@@ -91,7 +90,7 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const DB::LoggerPtr & tracing_logger);
+        const String & tracing_id_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -143,7 +142,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    DB::LoggerPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DM

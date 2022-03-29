@@ -38,16 +38,20 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
+    constexpr static const char * MVCC_FILTER_NAME = "DMVersionFilterBlockInputStream<MVCC>";
+    constexpr static const char * COMPACT_FILTER_NAME = "DMVersionFilterBlockInputStream<COMPACT>";
+
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
                                     const ColumnDefines & read_columns,
                                     UInt64 version_limit_,
                                     bool is_common_handle_,
-                                    const LogWithPrefixPtr & log_ = nullptr)
+                                    const String & tracing_id = "")
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
-        , log(getLogWithPrefix(log_, fmt::format("DMVersionFilterBlockInputStream<{}>", (MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT"))))
+        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
+                          tracing_id))
     {
         children.push_back(input);
 
@@ -229,7 +233,7 @@ private:
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 } // namespace DM
 } // namespace DB

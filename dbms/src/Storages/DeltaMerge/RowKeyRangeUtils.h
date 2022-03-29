@@ -18,14 +18,14 @@
 
 namespace DB
 {
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 namespace DM
 {
 void sortRangesByStartEdge(RowKeyRanges & ranges);
 
-RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, const LogWithPrefixPtr & log = nullptr);
+RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, const LoggerPtr & log = nullptr);
 
 } // namespace DM
 } // namespace DB

@@ -223,7 +223,7 @@ DMFileReader::DMFileReader(
     const ReadLimiterPtr & read_limiter,
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
-    const DB::LoggerPtr & tracing_logger)
+    const String & tracing_id_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
@@ -238,7 +238,7 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
-    , log(tracing_logger ? tracing_logger : DB::Logger::get("DMFileReader"))
+    , log(Logger::get("DMFileReader", tracing_id_))
 {
     for (const auto & cd : read_columns)
     {

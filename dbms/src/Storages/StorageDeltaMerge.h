@@ -235,7 +235,7 @@ private:
 
     Context & global_context;
 
-    Poco::Logger * log;
+    DB::LoggerPtr log;
 };
 
 

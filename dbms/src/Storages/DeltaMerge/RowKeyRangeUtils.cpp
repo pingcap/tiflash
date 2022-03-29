@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 #include <common/logger_useful.h>
@@ -158,7 +158,7 @@ void sortRangesByStartEdge(RowKeyRanges & ranges)
     });
 }
 
-RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, const LogWithPrefixPtr & log)
+RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, const LoggerPtr & log)
 {
     if (sorted_ranges.size() <= 1)
         return std::move(sorted_ranges);

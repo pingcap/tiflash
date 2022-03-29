@@ -28,7 +28,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , sets(rhs.sets)
     , mvcc_query_info(rhs.mvcc_query_info != nullptr ? std::make_unique<MvccQueryInfo>(*rhs.mvcc_query_info) : nullptr)
     , dag_query(rhs.dag_query != nullptr ? std::make_unique<DAGQueryInfo>(*rhs.dag_query) : nullptr)
-    , logger(rhs.logger)
+    , req_id(rhs.req_id)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -36,7 +36,7 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , sets(std::move(rhs.sets))
     , mvcc_query_info(std::move(rhs.mvcc_query_info))
     , dag_query(std::move(rhs.dag_query))
-    , logger(std::move(rhs.logger))
+    , req_id(std::move(rhs.req_id))
 {}
 
 } // namespace DB
