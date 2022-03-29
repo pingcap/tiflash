@@ -147,7 +147,7 @@ grpc::Status FlashService::Coprocessor(
     ::mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -279,7 +279,7 @@ grpc::Status FlashService::Coprocessor(
                 }
                 else
                 {
-                    LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
+                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
                     return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
                 }
             }
