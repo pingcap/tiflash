@@ -1,8 +1,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
+#include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
@@ -10,22 +13,12 @@
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
-#include <Flash/Planner/toPhysicalPlan.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
 namespace
 {
-bool isFinalAgg(const tipb::Expr & expr)
-{
-    if (!expr.has_aggfuncmode())
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        return true;
-    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
-}
-
 Names schemaToNames(const NamesAndTypes & schema)
 {
     Names names;
@@ -71,22 +64,6 @@ void PhysicalPlanBuilder::buildAggregation(const String & executor_id, const tip
     assert(!schema.empty());
     assert(cur_plan);
 
-    /// set default value to true to make it compatible with old version of TiDB since before this
-    /// change, all the aggregation in TiFlash is treated as final aggregation
-    bool is_final_agg = true;
-    if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
-        is_final_agg = false;
-    for (int i = 1; i < aggregation.agg_func_size(); ++i)
-    {
-        if (is_final_agg != isFinalAgg(aggregation.agg_func(i)))
-            throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-    }
-    // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
-    //  aggregation if the stage is partial
-    bool group_by_collation_sensitive =
-        /// collation sensitive group by is slower than normal group by, use normal group by by default
-        context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
-
     if (aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0)
     {
         //should not reach here
@@ -100,20 +77,31 @@ void PhysicalPlanBuilder::buildAggregation(const String & executor_id, const tip
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
-    std::unordered_set<String> agg_key_set;
-    analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
-    analyzer.buildAggGroupBy(aggregation.group_by(), before_agg_actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
-
+    {
+        std::unordered_set<String> agg_key_set;
+        analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
+        bool group_by_collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
+        analyzer.buildAggGroupBy(aggregation.group_by(), before_agg_actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
+    }
+   
     schema = std::move(aggregated_columns);
 
     auto cast_after_agg_actions = newActionsFromSchema();
     analyzer.source_columns = schema;
     analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
-    if (cast_after_agg_actions->getActions().empty())
-        cast_after_agg_actions->add(ExpressionAction::project(schemaToNames(schema)));
+    cast_after_agg_actions->add(ExpressionAction::project(schemaToNames(analyzer.getCurrentInputColumns())));
     schema = analyzer.getCurrentInputColumns();
 
-    assignCurPlan(std::make_shared<PhysicalAggregation>(executor_id, schema, before_agg_actions, aggregation_keys, collators, aggregate_descriptions, cast_after_agg_actions));
+    bool is_final_agg = AggregationInterpreterHelper::isFinalAgg(aggregation);
+    assignCurPlan(std::make_shared<PhysicalAggregation>(
+        executor_id,
+        schema,
+        before_agg_actions,
+        aggregation_keys,
+        collators,
+        is_final_agg,
+        aggregate_descriptions,
+        cast_after_agg_actions));
 }
 
 void PhysicalPlanBuilder::buildFilter(const String & executor_id, const tipb::Selection & selection)
@@ -164,35 +152,14 @@ void PhysicalPlanBuilder::buildExchangeSender(const String & executor_id, const 
     assert(!schema.empty());
     assert(cur_plan);
 
-    /// get partition column ids
-    const auto & part_keys = exchange_sender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    TiDB::TiDBCollators collators;
-    /// in case TiDB is an old version, it has no collation info
-    bool has_collator_info = exchange_sender.types_size() != 0;
-    if (has_collator_info && part_keys.size() != exchange_sender.types_size())
-    {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
-            Errors::Coprocessor::BadRequest);
-    }
-    for (int i = 0; i < part_keys.size(); ++i)
-    {
-        const auto & expr = part_keys[i];
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
-        {
-            collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
-        }
-        else
-        {
-            collators.emplace_back(nullptr);
-        }
-    }
+    // Can't use auto [partition_col_ids, partition_col_collators],
+    // because of `Structured bindings cannot be captured by lambda expressions. (until C++20)`
+    // https://en.cppreference.com/w/cpp/language/structured_binding
+    std::vector<Int64> partition_col_ids;
+    TiDB::TiDBCollators partition_col_collators;
+    std::tie(partition_col_ids, partition_col_collators) = ExchangeSenderInterpreterHelper::genPartitionColIdsAndCollators(exchange_sender);
 
-    assignCurPlan(std::make_shared<PhysicalExchangeSender>(executor_id, schema, partition_col_id, collators, exchange_sender.tp()));
+    assignCurPlan(std::make_shared<PhysicalExchangeSender>(executor_id, schema, partition_col_ids, partition_col_collators, exchange_sender.tp()));
 }
 
 void PhysicalPlanBuilder::buildSource(const String & executor_id, const NamesAndTypes & source_schema, const Block & source_sample_block)
@@ -214,7 +181,9 @@ void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_pref
     auto actions = newActionsForNewPlan();
     actions->add(ExpressionAction::project(final_project_aliases));
 
-    schema = analyzer.getCurrentInputColumns();
+    assert(final_project_aliases.size() == schema.size());
+    for (size_t i = 0; i < final_project_aliases.size(); ++i)
+        schema[i].name = final_project_aliases[i].second;
 
     assignCurPlan(std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, actions));
     cur_plan->disableRecordProfileStreams();
@@ -236,7 +205,7 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     DAGExpressionAnalyzer analyzer{schema, context};
 
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    auto [need_append_type_cast, need_append_type_cast_vec] = analyzer.checkIfCastIsRequired(require_schema, output_offsets);
+    auto [need_append_type_cast, need_append_type_cast_vec] = analyzer.checkIfCastIsRequiredForRootFinalProjection(require_schema, output_offsets);
 
     if (need_append_timezone_cast || need_append_type_cast)
     {
@@ -246,7 +215,14 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     NamesWithAliases final_project_aliases = analyzer.genRootFinalProjectAliases(column_prefix, output_offsets);
     actions->add(ExpressionAction::project(final_project_aliases));
 
-    schema = analyzer.getCurrentInputColumns();
+    assert(final_project_aliases.size() == output_offsets.size());
+    schema.clear();
+    for (size_t i = 0; i < final_project_aliases.size(); ++i)
+    {
+        auto alias = final_project_aliases[i].second;
+        auto offset = output_offsets[i];
+        schema.emplace_back(alias, analyzer.getCurrentInputColumns()[offset]);
+    }
 
     assignCurPlan(std::make_shared<PhysicalProjection>("RootFinalProjection", schema, actions));
     cur_plan->disableRecordProfileStreams();

@@ -32,7 +32,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
-#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -40,6 +39,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -72,24 +72,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
 
 namespace
 {
-struct AnalysisResult
-{
-    ExpressionActionsPtr before_where;
-    ExpressionActionsPtr before_aggregation;
-    ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
-    ExpressionActionsPtr final_projection;
-
-    String filter_column_name;
-    String having_column_name;
-    std::vector<NameAndTypePair> order_columns;
-
-    Names aggregation_keys;
-    TiDB::TiDBCollators aggregation_collators;
-    AggregateDescriptions aggregate_descriptions;
-    bool is_final_agg;
-};
-
 // add timezone cast for timestamp type, this is used to support session level timezone
 bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
@@ -107,70 +89,63 @@ bool addExtraCastsAfterTs(
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
-AnalysisResult analyzeExpressions(
+PhysicalPlanPtr analysePhysicalPlan(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    const Block & source_sample_block)
 {
-    AnalysisResult res;
-    ExpressionActionsChain chain;
+    PhysicalPlanBuilder builder{context};
+    builder.buildSource(query_block.source_name, analyzer.getCurrentInputColumns(), source_sample_block);
     // selection on table scan had been executed in handleTableScan
     if (query_block.selection && !query_block.isTableScanSource())
     {
-        std::vector<const tipb::Expr *> where_conditions;
-        for (const auto & c : query_block.selection->selection().conditions())
-            where_conditions.push_back(&c);
-        res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
-        res.before_where = chain.getLastActions();
-        chain.addStep();
+        builder.buildFilter(query_block.selection_name, query_block.selection->selection());
     }
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        res.is_final_agg = AggregationInterpreterHelper::isFinalAgg(query_block.aggregation->aggregation());
-        bool group_by_collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
-
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
-            chain,
-            query_block.aggregation->aggregation(),
-            group_by_collation_sensitive);
+        builder.buildAggregation(query_block.aggregation_name, query_block.aggregation->aggregation());
 
         if (query_block.having != nullptr)
         {
-            std::vector<const tipb::Expr *> having_conditions;
-            for (const auto & c : query_block.having->selection().conditions())
-                having_conditions.push_back(&c);
-            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
-            res.before_having = chain.getLastActions();
-            chain.addStep();
+            builder.buildFilter(query_block.having_name, query_block.having->selection());
         }
     }
+
     // Or TopN, not both.
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
-        res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
+        builder.buildTopN(query_block.limit_or_topn_name, query_block.limit_or_topn->topn());
+    }
+
+    // Or Limit, not both.
+    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeLimit)
+    {
+        builder.buildLimit(query_block.limit_or_topn_name, query_block.limit_or_topn->limit());
     }
 
     // Append final project results if needed.
-    final_project = query_block.isRootQueryBlock()
-        ? analyzer.appendFinalProjectForRootQueryBlock(
-            chain,
+    if (query_block.isRootQueryBlock())
+    {
+        builder.buildRootFinalProjection(
             query_block.output_field_types,
             query_block.output_offsets,
             query_block.qb_column_prefix,
-            keep_session_timezone_info)
-        : analyzer.appendFinalProjectForNonRootQueryBlock(
-            chain,
-            query_block.qb_column_prefix);
+            keep_session_timezone_info);
+    }
+    else
+    {
+        builder.buildNonRootFinalProjection(query_block.qb_column_prefix);
+    }
 
-    res.before_order_and_select = chain.getLastActions();
+    if (query_block.exchange_sender)
+    {
+        builder.buildExchangeSender(query_block.exchange_sender_name, query_block.exchange_sender->exchange_sender());
+    }
 
-    chain.finalize();
-    chain.clear();
-    //todo need call prependProjectInput??
-    return res;
+    return builder.getRes();
 }
 
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
@@ -728,111 +703,6 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
-void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
-{
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier()); });
-}
-
-void DAGQueryBlockInterpreter::executeAggregation(
-    DAGPipeline & pipeline,
-    const ExpressionActionsPtr & expression_actions_ptr,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg)
-{
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier()); });
-
-    Block header = pipeline.firstStream()->getHeader();
-    Aggregator::Params params = AggregationInterpreterHelper::buildAggregatorParams(
-        context,
-        header,
-        pipeline.streams.size(),
-        key_names,
-        collators,
-        aggregate_descriptions,
-        is_final_agg);
-
-    const Settings & settings = context.getSettingsRef();
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1)
-    {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
-            pipeline.streams,
-            stream_with_non_joined_data,
-            params,
-            context.getFileProvider(),
-            true,
-            max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            log->identifier());
-        pipeline.streams.resize(1);
-        // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-        restorePipelineConcurrency(pipeline);
-    }
-    else
-    {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
-        if (stream_with_non_joined_data)
-            inputs.push_back(stream_with_non_joined_data);
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
-            params,
-            context.getFileProvider(),
-            true,
-            log->identifier());
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-    }
-    // add cast
-}
-
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
-{
-    if (!expressionActionsPtr->getActions().empty())
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier()); });
-    }
-}
-
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
-{
-    SortDescription order_descr = getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by());
-    const Settings & settings = context.getSettingsRef();
-    Int64 limit = query_block.limit_or_topn->topn().limit();
-
-    pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
-    });
-
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
-
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
-}
-
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
     auto & profile_streams = dagContext().getProfileStreamsMap()[key];
@@ -998,71 +868,24 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             Errors::Coprocessor::BadRequest);
     }
 
-    auto res = analyzeExpressions(
-        context,
-        *analyzer,
-        query_block,
-        keep_session_timezone_info,
-        final_project);
-
-    if (res.before_where)
-    {
-        // execute where
-        executeWhere(pipeline, res.before_where, res.filter_column_name);
-        recordProfileStreams(pipeline, query_block.selection_name);
-    }
-
     // this log measures the concurrent degree in this mpp task
     LOG_FMT_DEBUG(
         log,
-        "execution stream size for query block(before aggregation) {} is {}",
+        "execution stream size for query block(source) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
     dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
 
-    if (res.before_aggregation)
-    {
-        // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
-    }
+    assert(pipeline.hasMoreThanOneStream());
+    auto physical_plan = analysePhysicalPlan(
+        context,
+        *analyzer,
+        query_block,
+        keep_session_timezone_info,
+        pipeline.firstStream()->getHeader());
+    physical_plan->finalize();
 
-    if (res.before_having)
-    {
-        // execute having
-        executeWhere(pipeline, res.before_having, res.having_column_name);
-        recordProfileStreams(pipeline, query_block.having_name);
-    }
-
-    if (res.before_order_and_select)
-    {
-        executeExpression(pipeline, res.before_order_and_select);
-    }
-
-    if (!res.order_columns.empty())
-    {
-        // execute topN
-        executeOrder(pipeline, res.order_columns);
-        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
-    }
-
-    // execute final project action
-    executeProject(pipeline, final_project);
-
-    // execute limit
-    if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
-    {
-        executeLimit(pipeline);
-        recordProfileStreams(pipeline, query_block.limit_or_topn_name);
-    }
-
-    restorePipelineConcurrency(pipeline);
-
-    // execute exchange_sender
-    if (query_block.exchange_sender)
-    {
-        handleExchangeSender(pipeline);
-        recordProfileStreams(pipeline, query_block.exchange_sender_name);
-    }
+    physical_plan->transform(pipeline, context, max_streams);
 }
 
 void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
@@ -1071,51 +894,6 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
         return;
     ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log->identifier()); });
-}
-
-void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
-{
-    size_t limit = 0;
-    if (query_block.limit_or_topn->tp() == tipb::TypeLimit)
-        limit = query_block.limit_or_topn->limit().limit();
-    else
-        limit = query_block.limit_or_topn->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
-    if (pipeline.hasMoreThanOneStream())
-    {
-        executeUnion(pipeline, max_streams, log);
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
-    }
-}
-
-void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
-{
-    /// only run in MPP
-    assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
-    /// exchange sender should be at the top of operators
-    const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
-
-    // Can't use auto [partition_col_ids, partition_col_collators],
-    // because of `Structured bindings cannot be captured by lambda expressions. (until C++20)`
-    // https://en.cppreference.com/w/cpp/language/structured_binding
-    std::vector<Int64> partition_col_ids;
-    TiDB::TiDBCollators partition_col_collators;
-    std::tie(partition_col_ids, partition_col_collators) = ExchangeSenderInterpreterHelper::genPartitionColIdsAndCollators(exchange_sender);
-
-    int stream_id = 0;
-    pipeline.transform([&](auto & stream) {
-        // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-            context.getDAGContext()->tunnel_set,
-            partition_col_ids,
-            partition_col_collators,
-            exchange_sender.tp(),
-            context.getSettingsRef().dag_records_per_chunk,
-            context.getSettingsRef().batch_send_min_limit,
-            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dagContext());
-        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-    });
 }
 
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)

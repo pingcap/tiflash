@@ -77,19 +77,8 @@ private:
         std::vector<NameAndTypePair> & source_columns,
         String & filter_column_for_other_condition,
         String & filter_column_for_other_eq_condition);
-    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
-    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
-    void executeLimit(DAGPipeline & pipeline);
-    void executeAggregation(
-        DAGPipeline & pipeline,
-        const ExpressionActionsPtr & expression_actions_ptr,
-        Names & key_names,
-        TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions,
-        bool is_final_agg);
+
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
-    void handleExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
@@ -107,8 +96,6 @@ private:
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-
-    NamesWithAliases final_project;
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;

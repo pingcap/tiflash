@@ -3,6 +3,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -20,41 +21,14 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, const Context & 
 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, before_agg_actions, logger->identifier()); });
 
-    Block header = pipeline.firstStream()->getHeader();
-    ColumnNumbers keys;
-    for (const auto & name : aggregation_keys)
-        keys.push_back(header.getPositionByName(name));
-    for (auto & descr : aggregate_descriptions)
-    {
-        if (descr.arguments.empty())
-        {
-            for (const auto & name : descr.argument_names)
-                descr.arguments.push_back(header.getPositionByName(name));
-        }
-    }
-
-    const Settings & settings = context.getSettingsRef();
-
-    /** Two-level aggregation is useful in two cases:
-          * 1. Parallel aggregation is done, and the results should be merged in parallel.
-          * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-          */
-    bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = std::any_of(begin(aggregation_collators), end(aggregation_collators), [](const auto & p) { return p != nullptr; });
-
-    Aggregator::Params params(
-        header,
-        keys,
+    Aggregator::Params params = AggregationInterpreterHelper::buildAggregatorParams(
+        context,
+        pipeline.firstStream()->getHeader(),
+        pipeline.streams.size(),
+        aggregation_keys,
+        aggregation_collators,
         aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
-        settings.empty_result_for_aggregation_by_empty_set,
-        context.getTemporaryPath(),
-        has_collator ? aggregation_collators : TiDB::dummy_collators);
+        is_final_agg);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)

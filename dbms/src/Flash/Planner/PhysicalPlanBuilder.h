@@ -1,14 +1,7 @@
 #pragma once
 
-#include <Core/Block.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGSet.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
-#include <Flash/Planner/toPhysicalPlan.h>
-#include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Storages/Transaction/TMTStorages.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
