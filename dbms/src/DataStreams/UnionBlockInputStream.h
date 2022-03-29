@@ -27,7 +27,7 @@ extern const int LOGICAL_ERROR;
 }
 
 
-namespace _UnionBlockInputStreamImpl
+namespace UnionBlockInputStreamImpl
 {
 template <StreamUnionMode mode>
 struct OutputData;
@@ -66,7 +66,7 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     {}
 };
 
-} // namespace _UnionBlockInputStreamImpl
+} // namespace UnionBlockInputStreamImpl
 
 /** Merges several sources into one.
   * Blocks from different sources are interleaved with each other in an arbitrary way.
@@ -168,7 +168,7 @@ protected:
         if (!started)
             return;
 
-        LOG_TRACE(log, "Waiting for threads to finish");
+        LOG_FMT_TRACE(log, "Waiting for threads to finish");
 
         std::exception_ptr exception;
         if (!all_read)
@@ -176,7 +176,7 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            _UnionBlockInputStreamImpl::OutputData<mode> res;
+            UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
                 output_queue.pop(res);
@@ -197,7 +197,7 @@ protected:
 
         processor.wait();
 
-        LOG_TRACE(log, "Waited for threads to finish");
+        LOG_FMT_TRACE(log, "Waited for threads to finish");
 
         if (exception)
             std::rethrow_exception(exception);
@@ -268,7 +268,7 @@ private:
     }
 
 private:
-    using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
+    using Payload = UnionBlockInputStreamImpl::OutputData<mode>;
     using OutputQueue = MPMCQueue<Payload>;
 
 private:

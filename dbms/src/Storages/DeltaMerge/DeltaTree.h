@@ -80,7 +80,7 @@ inline std::string DTTypeString(bool is_insert)
 
 inline DT_TypeCount getTypeCount(bool is_insert, UInt32 count)
 {
-    return (count << 1) | (DT_TypeCount)is_insert;
+    return (count << 1) | static_cast<DT_TypeCount>(is_insert);
 }
 
 inline UInt32 getCount(DT_TypeCount type_count)
@@ -100,7 +100,7 @@ inline bool isDelete(DT_TypeCount type_count)
 
 inline DT_TypeCount updateCount(DT_TypeCount type_count, UInt32 count)
 {
-    return (count << 1) | (DT_TypeCount)isInsert(type_count);
+    return (count << 1) | static_cast<DT_TypeCount>(isInsert(type_count));
 }
 
 } // namespace DTType
@@ -160,7 +160,7 @@ struct DTLeaf
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
     inline UInt16 isInsert(size_t pos) const { return mutations[pos].isInsert(); }
-    inline UInt32 mut_count(size_t pos) const { return mutations[pos].count(); }
+    inline UInt32 mutCount(size_t pos) const { return mutations[pos].count(); }
     inline UInt64 value(size_t pos) const { return mutations[pos].value; }
 
     static inline bool overflow(size_t count) { return count > M * S; }
@@ -223,7 +223,7 @@ struct DTLeaf
             if (isInsert(i))
                 delta += 1;
             else
-                delta -= mut_count(i);
+                delta -= mutCount(i);
         }
         return {i, delta};
     }
@@ -371,7 +371,7 @@ struct DTIntern
             std::move_backward(std::begin(sids) + child_pos, std::begin(sids) + count, std::begin(sids) + count + n);
             std::move_backward(std::begin(deltas) + child_pos, std::begin(deltas) + count, std::begin(deltas) + count + n);
             std::move_backward(std::begin(children) + child_pos, std::begin(children) + count, std::begin(children) + count + n);
-            if (((int)child_pos) - 1 >= 0)
+            if ((static_cast<int>(child_pos)) - 1 >= 0)
                 sids[child_pos - 1 + n] = sids[child_pos - 1];
 
             return;
@@ -380,11 +380,11 @@ struct DTIntern
         {
             if (child_pos != count)
             {
-                if ((Int64)child_pos < -n)
+                if (static_cast<Int64>(child_pos) < -n)
                     throw Exception("Underflow");
             }
 
-            if (((int)child_pos) - 1 + n >= 0)
+            if ((static_cast<int>(child_pos)) - 1 + n >= 0)
                 sids[child_pos - 1 + n] = sids[child_pos - 1];
             std::move(std::begin(sids) + child_pos, std::begin(sids) + count, std::begin(sids) + child_pos + n);
             std::move(std::begin(deltas) + child_pos, std::begin(deltas) + count, std::begin(deltas) + child_pos + n);
@@ -526,7 +526,7 @@ public:
         if (leaf->isInsert(pos))
             delta += 1;
         else
-            delta -= leaf->mut_count(pos);
+            delta -= leaf->mutCount(pos);
 
         if (++pos >= leaf->count && leaf->next)
         {
@@ -552,7 +552,7 @@ public:
         if (leaf->isInsert(pos))
             delta -= 1;
         else
-            delta += leaf->mut_count(pos);
+            delta += leaf->mutCount(pos);
 
         return *this;
     }
@@ -687,7 +687,7 @@ public:
     {
         typename Entries::iterator it;
 
-        Iterator(typename Entries::iterator it_)
+        explicit Iterator(typename Entries::iterator it_)
             : it(it_)
         {}
         bool operator==(const Iterator & rhs) const { return it == rhs.it; }
@@ -784,7 +784,7 @@ private:
     void check(NodePtr node, bool recursive) const;
 
     template <bool is_rid, bool is_left>
-    EntryIterator findLeaf(const UInt64 id) const;
+    EntryIterator findLeaf(UInt64 id) const;
 
     /// Find the leaf which could contains id.
     template <bool is_rid>
@@ -794,7 +794,7 @@ private:
     }
 
     template <bool is_rid, bool is_left>
-    void searchId(EntryIterator & it, const UInt64 id) const;
+    void searchId(EntryIterator & it, UInt64 id) const;
 
     /// Go to first entry that has greater or equal id.
     template <bool is_rid>
@@ -885,7 +885,7 @@ private:
 
 public:
     DeltaTree() { init(std::make_shared<ValueSpace>()); }
-    DeltaTree(const ValueSpacePtr & insert_value_space_) { init(insert_value_space_); }
+    explicit DeltaTree(const ValueSpacePtr & insert_value_space_) { init(insert_value_space_); }
     DeltaTree(const Self & o);
 
     DeltaTree & operator=(const Self & o)
@@ -925,13 +925,12 @@ public:
         if (root)
         {
             if (isLeaf(root))
-                freeTree<Leaf>((LeafPtr)root);
+                freeTree<Leaf>(static_cast<LeafPtr>(root));
             else
-                freeTree<Intern>((InternPtr)root);
+                freeTree<Intern>(static_cast<InternPtr>(root));
         }
 
-        if (allocator)
-            delete allocator;
+        delete allocator;
 
         LOG_FMT_TRACE(log, "free");
     }
@@ -974,8 +973,8 @@ public:
     size_t numInserts() const { return num_inserts; }
     size_t numDeletes() const { return num_deletes; }
 
-    void addDelete(const UInt64 rid);
-    void addInsert(const UInt64 rid, const UInt64 tuple_id);
+    void addDelete(UInt64 rid);
+    void addInsert(UInt64 rid, UInt64 tuple_id);
     void removeInsertsStartFrom(UInt64 tuple_id_start);
     void updateTupleId(const TupleRefs & tuple_refs, size_t offset);
 };
@@ -1005,7 +1004,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     LeafPtr last_leaf = nullptr;
     while (!nodes.empty())
     {
-        auto node = nodes.front();
+        auto * node = nodes.front();
         nodes.pop();
 
         if (isLeaf(node))
