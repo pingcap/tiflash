@@ -474,7 +474,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
             configuration->getChecksumAlgorithm(),
             configuration->getChecksumFrameLength());
         buf->seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf->readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -483,7 +483,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
         buf.seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf.readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
