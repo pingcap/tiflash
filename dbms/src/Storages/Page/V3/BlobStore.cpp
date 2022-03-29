@@ -28,6 +28,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
+#include <iterator>
 #include <mutex>
 
 namespace ProfileEvents
@@ -820,10 +821,10 @@ std::lock_guard<std::mutex> BlobStore::BlobStats::lock() const
     return std::lock_guard(lock_stats);
 }
 
-BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & /*guard*/, bool from_restore)
+BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
     // New blob file id won't bigger than roll_id
-    if (!from_restore && blob_file_id > roll_id)
+    if (blob_file_id > roll_id)
     {
         throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [RollMaxId={}]",
                                     blob_file_id,
@@ -831,37 +832,25 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (!from_restore)
+    for (auto & [path, stats] : stats_map)
     {
-        for (auto & [path, stats] : stats_map)
+        (void)path;
+        for (const auto & stat : stats)
         {
-            (void)path;
-            for (const auto & stat : stats)
+            if (stat->id == blob_file_id)
             {
-                if (stat->id == blob_file_id)
-                {
-                    throw Exception(fmt::format("BlobStats won't create [blob_id={}] which is exist",
-                                                blob_file_id),
-                                    ErrorCodes::LOGICAL_ERROR);
-                }
+                throw Exception(fmt::format("BlobStats can not create [blob_id={}] which is exist",
+                                            blob_file_id),
+                                ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
 
-    LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
-    BlobStatPtr stat = std::make_shared<BlobStat>(
-        blob_file_id,
-        SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size));
-    stat->sm_max_caps = config.file_limit_size;
-
-    PageFileIdAndLevel id_lvl;
-    id_lvl.first = blob_file_id;
-    id_lvl.second = 0;
-
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    // Create a stat without checking the file_id exist or not
+    auto stat = createStatNotChecking(blob_file_id, guard);
 
     // Roll to the next new blob id
-    if (!from_restore && blob_file_id == roll_id)
+    if (blob_file_id == roll_id)
     {
         roll_id++;
     }
@@ -869,13 +858,22 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     return stat;
 }
 
+BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+{
+    LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
+    BlobStatPtr stat = std::make_shared<BlobStat>(
+        blob_file_id,
+        static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
+        config.file_limit_size);
+
+    PageFileIdAndLevel id_lvl{blob_file_id, 0};
+    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    return stat;
+}
 
 void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
-    PageFileIdAndLevel id_lvl;
-    id_lvl.first = stat->id;
-    id_lvl.second = 0;
-
+    PageFileIdAndLevel id_lvl{stat->id, 0};
     stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
 }
 
@@ -918,35 +916,18 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         return std::make_pair(nullptr, roll_id);
     }
 
-    // If the stats_map size changes, or stats_map_w_index is out of range.
-    // Then make stats_map_w_index to 0.
-    stats_map_w_index %= stats_map.size();
+    // If the stats_map size changes, or stats_map_path_index is out of range,
+    // then make stats_map_path_index fit to current size.
+    stats_map_path_index %= stats_map.size();
 
-    // Update stats_map_w_index.
-    // No need to consider that stats_map_w_index out of range.
-    // Because stats_map_w_index will be corrected in the next call.
-    auto selected_w_index = stats_map_w_index++;
+    auto stats_iter = stats_map.begin();
+    std::advance(stats_iter, stats_map_path_index);
 
-    auto loop_w_index = selected_w_index;
-    bool first_loop = true;
-
-    while (true)
+    size_t path_iter_idx = 0;
+    for (path_iter_idx = 0; path_iter_idx < stats_map.size(); ++path_iter_idx)
     {
-        // If all of BlobStat have been checked.
-        // Then we need break the loop
-        if (loop_w_index == selected_w_index)
-        {
-            if (!first_loop)
-            {
-                break;
-            }
-            first_loop = false;
-        }
-
-        auto it = stats_map.begin();
-        std::advance(it, loop_w_index);
-
-        for (const auto & stat : it->second)
+        // Try to find a suitable stat under current path (path=`stats_iter->first`)
+        for (const auto & stat : stats_iter->second)
         {
             if (!stat->isReadOnly()
                 && stat->sm_max_caps >= buf_size
@@ -957,21 +938,25 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
             }
         }
 
-        // Already find the available BlobStat in current path.
+        // Already find the available stat under current path.
         if (stat_ptr != nullptr)
         {
             break;
         }
 
-        // Find BlobStat in next path.
-        loop_w_index++;
-        if (loop_w_index >= stats_map.size())
+        // Try to find stat in the next path.
+        stats_iter++;
+        if (stats_iter == stats_map.end())
         {
-            loop_w_index = 0;
+            stats_iter = stats_map.begin();
         }
     }
 
-    if (!stat_ptr)
+    // advance the `stats_map_path_idx` without size checking
+    stats_map_path_index += path_iter_idx + 1;
+
+    // Can not find a suitable stat under all paths
+    if (stat_ptr == nullptr)
     {
         return std::make_pair(nullptr, roll_id);
     }
@@ -996,9 +981,8 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
 
     if (restore_if_not_exist)
     {
-        // Restore a stat without checking the roll_id
-        // No need check existed again.
-        return createStat(file_id, guard, true);
+        // Restore a stat without checking file_id exist or not and won't push forward the roll_id
+        return createStatNotChecking(file_id, guard);
     }
 
     if (!ignore_not_exist)

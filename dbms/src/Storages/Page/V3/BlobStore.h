@@ -89,10 +89,12 @@ public:
 
             std::mutex sm_lock;
 
-            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
-                : smap(std::move(smap_))
+        public:
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , id(id_)
                 , type(BlobStatType::NORMAL)
+                , sm_max_caps(sm_max_caps_)
             {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
@@ -140,7 +142,9 @@ public:
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &, bool from_restore = false);
+        BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+
+        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
@@ -186,7 +190,8 @@ public:
 
         BlobFileId roll_id = 1;
         std::map<String, std::list<BlobStatPtr>> stats_map;
-        UInt16 stats_map_w_index = 0;
+        // Index for selecting next path for creating new blobfile
+        UInt16 stats_map_path_index = 0;
 
         PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
