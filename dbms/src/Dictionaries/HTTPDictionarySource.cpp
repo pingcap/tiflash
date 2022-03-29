@@ -48,7 +48,7 @@ HTTPDictionarySource::HTTPDictionarySource(const DictionaryStructure & dict_stru
 
     /// TODO This code is totally wrong and ignorant.
     /// What if URL contains fragment (#). What if update_field contains characters that must be %-encoded.
-    std::string::size_type option = url.find("?");
+    std::string::size_type option = url.find('?');
     if (option == std::string::npos)
         update_field = '?' + update_field;
     else
