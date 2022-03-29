@@ -105,7 +105,7 @@ private:
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
-    bool canRestorePipelineConcurrency();
+    bool canRestorePipelineConcurrency() const;
 
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
