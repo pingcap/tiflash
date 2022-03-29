@@ -230,8 +230,7 @@ bool AddressPatterns::contains(const Poco::Net::IPAddress & addr) const
         }
         catch (const DB::Exception & e)
         {
-            LOG_WARNING(&Poco::Logger::get("AddressPatterns"),
-                        "Failed to check if pattern contains address " << addr.toString() << ". " << e.displayText() << ", code = " << e.code());
+            LOG_FMT_WARNING(&Poco::Logger::get("AddressPatterns"), "Failed to check if pattern contains address {} {}", addr.toString(), e.displayText());
 
             if (e.code() == ErrorCodes::DNS_ERROR)
             {

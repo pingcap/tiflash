@@ -40,7 +40,7 @@ struct SharedQuery
         , clients(clients_)
         , log(&Poco::Logger::get("SharedQuery"))
     {
-        LOG_TRACE(log, "Create SharedQuery(" << query_id << ")");
+        LOG_FMT_TRACE(log, "Create SharedQuery({})", query_id);
         /// We only share BlockInputStream between clients,
         /// other resources in BlockIO should only be used by current thread.
         io.in = in;
@@ -56,9 +56,11 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_TRACE(
-            log,
-            "onClientFinish, SharedQuery(" << query_id << "), clients:" << clients << ", finished_clients: " << finished_clients);
+        LOG_FMT_TRACE(log,
+                      "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+                      query_id,
+                      clients,
+                      finished_clients);
     }
 
     bool isDone()
@@ -120,10 +122,11 @@ public:
             }
             query.connected_clients++;
 
-            LOG_TRACE(log,
-                      "getOrCreateBlockIO, query_id: " << query_id << ", clients: " << clients
-                                                       << ", connected_clients: " << query.connected_clients);
-
+            LOG_FMT_TRACE(log,
+                          "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                          query_id,
+                          clients,
+                          query.connected_clients);
             return query.io;
         }
         else
@@ -132,7 +135,7 @@ public:
             io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, /*req_id=*/"");
             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
 
-            LOG_TRACE(log, "getOrCreateBlockIO, query_id: " << query_id << ", clients: " << clients << ", connected_clients: " << 1);
+            LOG_FMT_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}", query_id, clients, 1);
 
             return io;
         }
@@ -155,7 +158,7 @@ public:
 
         //        if (it->second->isDone())
         //        {
-        //            LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+        //            LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
         //            queries.erase(it);
         //        }
     }
@@ -168,7 +171,7 @@ public:
         {
             if (it->second->isDone())
             {
-                LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+                LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
                 queries.erase(it++);
             }
             else

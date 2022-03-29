@@ -537,7 +537,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
         result.collators = params.collators;
-        LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
+        LOG_FMT_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
     /** Constant columns are not supported directly during aggregation.

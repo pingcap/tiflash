@@ -205,7 +205,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
-    LOG_TRACE(log, "ready to finish, is_local: " << is_local);
+    LOG_FMT_TRACE(log, "ready to finish, is_local: {}", is_local);
     {
         std::unique_lock lk(mu);
         if (finished)

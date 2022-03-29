@@ -1422,8 +1422,6 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         }
 
         parent_updated = true;
-
-        // LOG_TRACE(log, nodeName(node) << " split");
     }
     else if (T::underflow(node->count) && root != asNode(node)) // adopt or merge
     {
@@ -1475,8 +1473,6 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
                     right_leaf = as(Leaf, node);
             }
             --(parent->count);
-
-            // LOG_TRACE(log, nodeName(node) << " merge");
         }
         else
         {
@@ -1488,8 +1484,6 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             parent->sids[std::min(pos, sibling_pos)] = new_sep_sid;
             parent->deltas[pos] = checkDelta(node->getDelta());
             parent->deltas[sibling_pos] = checkDelta(sibling->getDelta());
-
-            // LOG_TRACE(log, nodeName(node) << " adoption");
         }
 
         parent_updated = true;
