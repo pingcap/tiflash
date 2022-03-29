@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <common/logger_useful.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <Storages/MutableSupport.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -50,8 +49,7 @@ Block ReplacingDeletingSortedBlockInputStream::readImpl()
     if (finished)
     {
         if (is_optimized)
-            LOG_TRACE(log, "read by_row:" + toString(by_row) + ", by_column: " + toString(by_column) + ", "
-                      + toString(((Float64)by_column) / (by_row + by_column) * 100, 2) + "%");
+            LOG_FMT_TRACE(log, "read by_row: {}, by_column: {}, {:.2f}%", by_row, by_column, ((Float64)by_column) / (by_row + by_column) * 100);
         return Block();
     }
 
@@ -234,14 +232,14 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
 
             if (next_key != current_key)
             {
-                by_row ++;
+                by_row++;
 
                 max_version = 0;
                 /// Write the data for the previous primary key.
                 if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)))
                     insertRow(merged_columns, merged_rows);
 
-                if(is_clean_top)
+                if (is_clean_top)
                 {
                     /// Delete current cache and return.
                     /// We will come back later and use current block's data directly.
@@ -300,10 +298,12 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
             else
             {
                 current->next();
-                if(is_complete_top || queue.empty() || !(current.greater(queue.top())))
+                if (is_complete_top || queue.empty() || !(current.greater(queue.top())))
                 {
                     continue; /// Continue current block loop.
-                }else{
+                }
+                else
+                {
                     if (current != cur_block_cursor)
                         queue.push(current);
                     else
@@ -338,7 +338,7 @@ bool ReplacingDeletingSortedBlockInputStream::insertByColumn(SortCursor current,
 
     bool give_up = false;
     RowRef cur_key;
-    for (size_t i = 0; i < current->all_columns[0]->size(); i ++)
+    for (size_t i = 0; i < current->all_columns[0]->size(); i++)
     {
         /// If we find any continually equal keys, give up by_column optimization.
         if (cur_key.empty())
@@ -371,7 +371,7 @@ bool ReplacingDeletingSortedBlockInputStream::insertByColumn(SortCursor current,
     bool direct_move = true;
     if (version_column_number != -1)
     {
-        const auto del_column =  typeid_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_number]);
+        const auto * del_column = typeid_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_number]);
 
         // reverse_filter - 1: delete, 0: remain.
         // filter         - 0: delete, 1: remain.
@@ -379,10 +379,10 @@ bool ReplacingDeletingSortedBlockInputStream::insertByColumn(SortCursor current,
         IColumn::Filter filter(reverse_filter.size());
         bool no_delete = true;
 
-        for (size_t i = 0; i < reverse_filter.size(); i ++)
+        for (size_t i = 0; i < reverse_filter.size(); i++)
         {
             no_delete &= !reverse_filter[i];
-            filter[i] = reverse_filter[i] ^ (UInt8)1;
+            filter[i] = reverse_filter[i] ^ static_cast<UInt8>(1);
         }
 
         direct_move = no_delete;
@@ -432,4 +432,4 @@ bool ReplacingDeletingSortedBlockInputStream::insertByColumn(SortCursor current,
     return true;
 }
 
-}
+} // namespace DB

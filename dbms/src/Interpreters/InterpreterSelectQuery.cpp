@@ -476,7 +476,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         throw Exception("Distributed on Distributed is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
     if (!dry_run)
-        LOG_TRACE(log, QueryProcessingStage::toString(from_stage) << " -> " << QueryProcessingStage::toString(to_stage));
+        LOG_FMT_TRACE(log, "{} -> {}", QueryProcessingStage::toString(from_stage), QueryProcessingStage::toString(to_stage));
 
     AnalysisResult expressions = analyzeExpressions(from_stage);
 
