@@ -452,25 +452,29 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
 
     out_bytes = out->count() - out_bytes;
     maybe_compressed_out_bytes = maybe_compressed_out->count() - maybe_compressed_out_bytes;
-    const double elapsed_seconds = watch.elapsedSeconds();
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend(
-        "Sent data for {} external tables, total {} rows in {:.3f} sec., {:.3f} rows/sec., "
-        "{:.3f} MiB ({:.3f} MiB/sec.)",
-        data.size(),
-        rows,
-        elapsed_seconds,
-        1.0 * rows / elapsed_seconds,
-        maybe_compressed_out_bytes / 1048576.0,
-        maybe_compressed_out_bytes / 1048576.0 / elapsed_seconds);
+    auto get_logging_msg = [&]() -> String {
+        const double elapsed_seconds = watch.elapsedSeconds();
 
-    if (compression == Protocol::Compression::Enable)
-        fmt_buf.fmtAppend(", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)", 1.0 * maybe_compressed_out_bytes / out_bytes, out_bytes / 1048576.0, out_bytes / 1048576.0 / elapsed_seconds);
-    else
-        fmt_buf.append(", no compression.");
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend(
+            "Sent data for {} external tables, total {} rows in {:.3f} sec., {:.3f} rows/sec., "
+            "{:.3f} MiB ({:.3f} MiB/sec.)",
+            data.size(),
+            rows,
+            elapsed_seconds,
+            1.0 * rows / elapsed_seconds,
+            maybe_compressed_out_bytes / 1048576.0,
+            maybe_compressed_out_bytes / 1048576.0 / elapsed_seconds);
 
-    LOG_DEBUG(log_wrapper.get(), fmt_buf.toString());
+        if (compression == Protocol::Compression::Enable)
+            fmt_buf.fmtAppend(", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)", 1.0 * maybe_compressed_out_bytes / out_bytes, out_bytes / 1048576.0, out_bytes / 1048576.0 / elapsed_seconds);
+        else
+            fmt_buf.append(", no compression.");
+        return fmt_buf.toString();
+    };
+
+    LOG_DEBUG(log_wrapper.get(), get_logging_msg());
 }
 
 
