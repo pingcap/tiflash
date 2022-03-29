@@ -115,8 +115,8 @@ private:
 #endif
 
     // unused except Linux
-    int query_cpu_percent;
-    int cpu_cores;
+    [[maybe_unused]] int query_cpu_percent;
+    [[maybe_unused]] int cpu_cores;
     std::vector<std::string> query_threads;
     Poco::Logger * log;
 
