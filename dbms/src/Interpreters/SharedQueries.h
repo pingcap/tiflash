@@ -20,6 +20,7 @@
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <Poco/Util/Timer.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <mutex>
 
@@ -40,7 +41,7 @@ struct SharedQuery
         , clients(clients_)
         , log(&Poco::Logger::get("SharedQuery"))
     {
-        LOG_TRACE(log, "Create SharedQuery(" << query_id << ")");
+        LOG_FMT_TRACE(log, "Create SharedQuery({})", query_id);
         /// We only share BlockInputStream between clients,
         /// other resources in BlockIO should only be used by current thread.
         io.in = in;
@@ -56,12 +57,14 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_TRACE(
-            log,
-            "onClientFinish, SharedQuery(" << query_id << "), clients:" << clients << ", finished_clients: " << finished_clients);
+        LOG_FMT_TRACE(log,
+                      "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+                      query_id,
+                      clients,
+                      finished_clients);
     }
 
-    bool isDone()
+    bool isDone() const
     {
         /// Some clients connected and consumed all data, and we already waited long enough.
         /// Or This cache exists for too long.
@@ -120,10 +123,11 @@ public:
             }
             query.connected_clients++;
 
-            LOG_TRACE(log,
-                      "getOrCreateBlockIO, query_id: " << query_id << ", clients: " << clients
-                                                       << ", connected_clients: " << query.connected_clients);
-
+            LOG_FMT_TRACE(log,
+                          "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                          query_id,
+                          clients,
+                          query.connected_clients);
             return query.io;
         }
         else
@@ -132,7 +136,7 @@ public:
             io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, /*req_id=*/"");
             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
 
-            LOG_TRACE(log, "getOrCreateBlockIO, query_id: " << query_id << ", clients: " << clients << ", connected_clients: " << 1);
+            LOG_FMT_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: 1", query_id, clients);
 
             return io;
         }
@@ -155,7 +159,7 @@ public:
 
         //        if (it->second->isDone())
         //        {
-        //            LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+        //            LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
         //            queries.erase(it);
         //        }
     }
@@ -168,7 +172,7 @@ public:
         {
             if (it->second->isDone())
             {
-                LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+                LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
                 queries.erase(it++);
             }
             else
@@ -179,7 +183,7 @@ public:
     SharedQueries()
         : log(&Poco::Logger::get("SharedQueries"))
     {
-        timer.schedule(FunctionTimerTask::create(std::bind(&SharedQueries::checkAll, this)), //
+        timer.schedule(FunctionTimerTask::create([this] { checkAll(); }), //
                        check_interval_milliseconds,
                        check_interval_milliseconds);
     }
@@ -190,7 +194,7 @@ public:
     }
 
 private:
-    static constexpr long check_interval_milliseconds = 20 * 1000; // 20 seconds
+    static constexpr Int64 check_interval_milliseconds = 20 * 1000; // 20 seconds
 
     Queries queries;
     Poco::Util::Timer timer;

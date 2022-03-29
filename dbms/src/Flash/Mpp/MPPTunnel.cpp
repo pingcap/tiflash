@@ -124,7 +124,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
 template <typename Writer>
 void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
-    LOG_TRACE(log, "ready to write");
+    LOG_FMT_TRACE(log, "ready to write");
     {
         std::unique_lock lk(mu);
         waitUntilConnectedOrFinished(lk);
@@ -140,7 +140,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
             if (close_after_write)
             {
                 finishSendQueue();
-                LOG_TRACE(log, "finish write.");
+                LOG_FMT_TRACE(log, "finish write.");
             }
             return;
         }
@@ -205,7 +205,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
-    LOG_TRACE(log, "ready to finish, is_local: " << is_local);
+    LOG_FMT_TRACE(log, "ready to finish, is_local: {}", is_local);
     {
         std::unique_lock lk(mu);
         if (finished)
@@ -238,7 +238,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         if (finished)
             throw Exception("MPPTunnel has finished");
 
-        LOG_TRACE(log, "ready to connect");
+        LOG_FMT_TRACE(log, "ready to connect");
         if (is_local)
             assert(writer_ == nullptr);
         else
@@ -287,18 +287,18 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
     };
     if (timeout.count() > 0)
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
         auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
-        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
+        LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
     else
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
         cv_for_connected_or_finished.wait(lk, connected_or_finished);
-        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
+        LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (!connected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");

@@ -152,7 +152,7 @@ protected:
         }
     }
 
-    void readSuffix() override
+    void readSuffixImpl() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }

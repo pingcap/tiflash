@@ -311,15 +311,21 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    setState(ExchangeReceiverState::CLOSED);
-    msg_channel.finish();
+    close();
     thread_manager->wait();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    setState(ExchangeReceiverState::CANCELED);
+    setEndState(ExchangeReceiverState::CANCELED);
+    msg_channel.finish();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::close()
+{
+    setEndState(ExchangeReceiverState::CLOSED);
     msg_channel.finish();
 }
 
@@ -435,7 +441,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_TRACE(log, "begin next ");
+                LOG_FMT_TRACE(log, "begin next ");
                 auto recv_msg = std::make_shared<ReceivedMessage>();
                 recv_msg->packet = std::make_shared<MPPDataPacket>();
                 recv_msg->req_info = req_info;
@@ -600,10 +606,16 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setState(ExchangeReceiverState new_state)
+bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
+    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
     std::unique_lock lock(mu);
+    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
+    {
+        return false;
+    }
     state = new_state;
+    return true;
 }
 
 template <typename RPCContext>
