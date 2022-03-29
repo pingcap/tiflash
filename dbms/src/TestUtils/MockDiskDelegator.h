@@ -72,9 +72,9 @@ public:
         return 0;
     }
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
-        size_t /*size_to_set*/,
+        size_t /*size_to_free*/,
         const String & /*pf_parent_path*/)
     {
         return 0;
@@ -132,9 +132,9 @@ public:
         return 0;
     }
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
-        size_t /*size_to_set*/,
+        size_t /*size_to_free*/,
         const String & /*pf_parent_path*/)
     {
         return 0;

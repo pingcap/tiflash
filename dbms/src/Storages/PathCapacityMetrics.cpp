@@ -99,7 +99,7 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
     path_infos[path_idx].used_bytes += used_bytes;
 }
 
-void PathCapacityMetrics::setUsedSize(std::string_view file_path, size_t used_bytes)
+void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_bytes)
 {
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
@@ -109,7 +109,7 @@ void PathCapacityMetrics::setUsedSize(std::string_view file_path, size_t used_by
     }
 
     // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
-    path_infos[path_idx].used_bytes = used_bytes;
+    path_infos[path_idx].used_bytes -= used_bytes;
 }
 
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()

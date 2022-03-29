@@ -155,9 +155,9 @@ public:
         bool need_insert_location)
         = 0;
 
-    virtual size_t setPageFileUsedSize(
+    virtual size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path)
         = 0;
 
@@ -188,9 +188,9 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
@@ -227,9 +227,9 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
@@ -260,9 +260,9 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
@@ -306,9 +306,9 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
@@ -347,9 +347,9 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t setPageFileUsedSize(
+    size_t freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
-        size_t size_to_set,
+        size_t size_to_free,
         const String & pf_parent_path) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;

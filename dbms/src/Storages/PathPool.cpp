@@ -249,7 +249,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                     (void)file_id;
                     total_bytes += file_size;
                 }
-                global_capacity->setUsedSize(path_info.path, total_bytes);
+                global_capacity->freeUsedSize(path_info.path, total_bytes);
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)
@@ -499,7 +499,7 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     pool.dt_file_path_map.erase(file_id);
     pool.main_path_infos[index].file_size_map.erase(file_id);
     // update global used size
-    pool.global_capacity->setUsedSize(pool.main_path_infos[index].path, file_size);
+    pool.global_capacity->freeUsedSize(pool.main_path_infos[index].path, file_size);
 }
 
 //==========================================================================================
@@ -580,9 +580,9 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorMulti::setPageFileUsedSize(
+size_t PSDiskDelegatorMulti::freePageFileUsedSize(
     const PageFileIdAndLevel & id_lvl,
-    size_t size_to_set,
+    size_t size_to_free,
     const String & pf_parent_path)
 {
     // Get a normalized path without `path_prefix` and trailing '/'
@@ -608,7 +608,7 @@ size_t PSDiskDelegatorMulti::setPageFileUsedSize(
     }
 
     // update global used size
-    pool.global_capacity->setUsedSize(upper_path, size_to_set);
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
     return 0;
 }
 
@@ -626,7 +626,7 @@ void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, siz
     std::lock_guard<std::mutex> lock{pool.mutex};
     if (remove_from_default_path)
     {
-        pool.global_capacity->setUsedSize(pool.latest_path_infos[default_path_index].path, file_size);
+        pool.global_capacity->freeUsedSize(pool.latest_path_infos[default_path_index].path, file_size);
     }
     else
     {
@@ -637,7 +637,7 @@ void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, siz
         if (!meta_left)
             page_path_map.erase(iter);
 
-        pool.global_capacity->setUsedSize(pool.latest_path_infos[index].path, file_size);
+        pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
     }
 }
 
@@ -681,14 +681,14 @@ size_t PSDiskDelegatorSingle::addPageFileUsedSize(
 }
 
 
-size_t PSDiskDelegatorSingle::setPageFileUsedSize(
+size_t PSDiskDelegatorSingle::freePageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
-    size_t size_to_set,
+    size_t size_to_free,
     const String & pf_parent_path)
 {
     // In this case, inserting to page_path_map seems useless.
     // Simply add used size for global capacity is OK.
-    pool.global_capacity->setUsedSize(pf_parent_path, size_to_set);
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
     return 0;
 }
 
@@ -699,7 +699,7 @@ String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lv
 
 void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
 {
-    pool.global_capacity->setUsedSize(pool.latest_path_infos[0].path, file_size);
+    pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
 
 //==========================================================================================
@@ -786,9 +786,9 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorRaft::setPageFileUsedSize(
+size_t PSDiskDelegatorRaft::freePageFileUsedSize(
     const PageFileIdAndLevel & id_lvl,
-    size_t size_to_set,
+    size_t size_to_free,
     const String & pf_parent_path)
 {
     String upper_path = getNormalizedPath(pf_parent_path);
@@ -813,7 +813,7 @@ size_t PSDiskDelegatorRaft::setPageFileUsedSize(
     }
 
     // update global used size
-    pool.global_capacity->setUsedSize(upper_path, size_to_set);
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
     return index;
 }
 
@@ -831,7 +831,7 @@ void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size
     std::lock_guard<std::mutex> lock{mutex};
     if (remove_from_default_path)
     {
-        pool.global_capacity->setUsedSize(raft_path_infos[default_path_index].path, file_size);
+        pool.global_capacity->freeUsedSize(raft_path_infos[default_path_index].path, file_size);
     }
     else
     {
@@ -841,7 +841,7 @@ void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size
         auto index = iter->second;
         if (!meta_left)
             page_path_map.erase(iter);
-        pool.global_capacity->setUsedSize(raft_path_infos[index].path, file_size);
+        pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
     }
 }
 
@@ -926,9 +926,9 @@ size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorGlobalMulti::setPageFileUsedSize(
+size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
     const PageFileIdAndLevel & id_lvl,
-    size_t size_to_set,
+    size_t size_to_free,
     const String & pf_parent_path)
 {
     // Get a normalized path without `path_prefix` and trailing '/'
@@ -956,7 +956,7 @@ size_t PSDiskDelegatorGlobalMulti::setPageFileUsedSize(
     }
 
     // update global used size
-    pool.global_capacity->setUsedSize(upper_path, size_to_set);
+    pool.global_capacity->freeUsedSize(upper_path, size_to_free);
     return 0;
 }
 
@@ -974,7 +974,7 @@ void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & id_lv
     std::lock_guard<std::mutex> lock{mutex};
     if (remove_from_default_path)
     {
-        pool.global_capacity->setUsedSize(pool.listGlobalPagePaths()[default_path_index], file_size);
+        pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[default_path_index], file_size);
     }
     else
     {
@@ -985,7 +985,7 @@ void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & id_lv
         if (!meta_left)
             page_path_map.erase(iter);
 
-        pool.global_capacity->setUsedSize(pool.listGlobalPagePaths()[index], file_size);
+        pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[index], file_size);
     }
 }
 
@@ -1025,14 +1025,14 @@ size_t PSDiskDelegatorGlobalSingle::addPageFileUsedSize(
     return 0;
 }
 
-size_t PSDiskDelegatorGlobalSingle::setPageFileUsedSize(
+size_t PSDiskDelegatorGlobalSingle::freePageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
-    size_t size_to_set,
+    size_t size_to_free,
     const String & pf_parent_path)
 {
     // In this case, inserting to page_path_map seems useless.
     // Simply add used size for global capacity is OK.
-    pool.global_capacity->setUsedSize(pf_parent_path, size_to_set);
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
     return 0;
 }
 
@@ -1043,7 +1043,7 @@ String PSDiskDelegatorGlobalSingle::getPageFilePath(const PageFileIdAndLevel & /
 
 void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
 {
-    pool.global_capacity->setUsedSize(pool.listGlobalPagePaths()[0], file_size);
+    pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[0], file_size);
 }
 
 } // namespace DB

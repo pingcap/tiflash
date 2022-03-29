@@ -102,9 +102,10 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
 void BlobFile::truncate(size_t size)
 {
-    delegator->setPageFileUsedSize(std::make_pair(blob_id, 0), size, path);
-
     PageUtil::ftruncateFile(wrfile, size);
+    assert(size <= file_size);
+
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), file_size - size, path);
     file_size.store(size);
 }
 
