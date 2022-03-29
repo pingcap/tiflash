@@ -23,7 +23,7 @@ inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&..
 {
     /// submit current local delta memory if the memory tracker needs to be propagated to other threads
     if (propagate_memory_tracker)
-        CurrentMemoryTracker::submitLocalDeltaMemory();
+        CurrentMemoryTracker::submitLocalDeltaMemory(true);
     auto memory_tracker = current_memory_tracker;
 
     // capature our task into lambda with all its parameters

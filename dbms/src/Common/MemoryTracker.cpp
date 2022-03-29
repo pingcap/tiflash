@@ -61,7 +61,7 @@ void MemoryTracker::logPeakMemoryUsage() const
     LOG_FMT_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
 }
 
-void MemoryTracker::alloc(Int64 size)
+void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 {
     /** Using memory_order_relaxed means that if allocations are done simultaneously,
       *  we allow exception about memory limit exceeded to be thrown only on next allocation.
@@ -72,48 +72,51 @@ void MemoryTracker::alloc(Int64 size)
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::add(metric, size);
 
-    Int64 current_limit = limit.load(std::memory_order_relaxed);
-
-    /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
-    /// In this case, it doesn't matter.
-    if (unlikely(fault_probability && drand48() < fault_probability))
+    if (check_memory_limit)
     {
-        free(size);
+        Int64 current_limit = limit.load(std::memory_order_relaxed);
 
-        DB::FmtBuffer fmt_buf;
-        fmt_buf.append("Memory tracker");
-        if (description)
-            fmt_buf.fmtAppend(" {}", description);
-        fmt_buf.fmtAppend(": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
-                          formatReadableSizeWithBinarySuffix(will_be),
-                          size,
-                          formatReadableSizeWithBinarySuffix(current_limit));
+        /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
+        /// In this case, it doesn't matter.
+        if (unlikely(fault_probability && drand48() < fault_probability))
+        {
+            free(size);
 
-        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
-    }
+            DB::FmtBuffer fmt_buf;
+            fmt_buf.append("Memory tracker");
+            if (description)
+                fmt_buf.fmtAppend(" {}", description);
+            fmt_buf.fmtAppend(": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
+                              formatReadableSizeWithBinarySuffix(will_be),
+                              size,
+                              formatReadableSizeWithBinarySuffix(current_limit));
 
-    if (unlikely(current_limit && will_be > current_limit))
-    {
-        free(size);
+            throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        }
 
-        DB::FmtBuffer fmt_buf;
-        fmt_buf.append("Memory limit");
-        if (description)
-            fmt_buf.fmtAppend(" {}", description);
+        if (unlikely(current_limit && will_be > current_limit))
+        {
+            free(size);
 
-        fmt_buf.fmtAppend(" exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
-                          formatReadableSizeWithBinarySuffix(will_be),
-                          size,
-                          formatReadableSizeWithBinarySuffix(current_limit));
+            DB::FmtBuffer fmt_buf;
+            fmt_buf.append("Memory limit");
+            if (description)
+                fmt_buf.fmtAppend(" {}", description);
 
-        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+            fmt_buf.fmtAppend(" exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
+                              formatReadableSizeWithBinarySuffix(will_be),
+                              size,
+                              formatReadableSizeWithBinarySuffix(current_limit));
+
+            throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        }
     }
 
     if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
         peak.store(will_be, std::memory_order_relaxed);
 
     if (auto * loaded_next = next.load(std::memory_order_relaxed))
-        loaded_next->alloc(size);
+        loaded_next->alloc(size, check_memory_limit);
 }
 
 
@@ -200,20 +203,27 @@ void disableThreshold()
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
-void submitLocalDeltaMemory()
+void submitLocalDeltaMemory(bool check_memory_limit)
 {
     if (current_memory_tracker)
     {
-        if (local_delta > 0)
+        try
         {
-            current_memory_tracker->alloc(local_delta);
+            if (local_delta > 0)
+            {
+                current_memory_tracker->alloc(local_delta, check_memory_limit);
+            }
+            else if (local_delta < 0)
+            {
+                current_memory_tracker->free(-local_delta);
+            }
         }
-        else if (local_delta < 0)
+        catch (...)
         {
-            current_memory_tracker->free(-local_delta);
+            DB::tryLogCurrentException("MemoryTracker", "Failed when try to submit local delta memory");
         }
-        local_delta = 0;
     }
+    local_delta = 0;
 }
 
 void alloc(Int64 size)

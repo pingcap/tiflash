@@ -58,7 +58,7 @@ public:
 
     /** Call the following functions before calling of corresponding operations with memory allocators.
       */
-    void alloc(Int64 size);
+    void alloc(Int64 size, bool check_memory_limit = true);
 
     void realloc(Int64 old_size, Int64 new_size) { alloc(new_size - old_size); }
 
@@ -110,7 +110,7 @@ extern thread_local MemoryTracker * current_memory_tracker;
 namespace CurrentMemoryTracker
 {
 void disableThreshold();
-void submitLocalDeltaMemory();
+void submitLocalDeltaMemory(bool check_memory_limit);
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);
