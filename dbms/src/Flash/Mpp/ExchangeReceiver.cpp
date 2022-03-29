@@ -441,7 +441,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_TRACE(log, "begin next ");
+                LOG_FMT_TRACE(log, "begin next ");
                 auto recv_msg = std::make_shared<ReceivedMessage>();
                 recv_msg->packet = std::make_shared<MPPDataPacket>();
                 recv_msg->req_info = req_info;

@@ -46,12 +46,13 @@ public:
 
     Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
     {
-        LOG_FMT_TRACE(log,
-                      "HTTP Request for {} Method: {}, Address: {}, User-Agent: {}",
-                      name,
-                      request.getMethod(),
-                      request.clientAddress().toString(),
-                      request.has("User-Agent") ? request.get("User-Agent") : "none");
+        LOG_FMT_TRACE(
+            log,
+            "HTTP Request for {}. Method: {}, Address: {}, User-Agent: {}",
+            name,
+            request.getMethod(),
+            request.clientAddress().toString(),
+            (request.has("User-Agent") ? request.get("User-Agent") : "none"));
 
         const auto & uri = request.getURI();
 

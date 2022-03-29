@@ -20,6 +20,7 @@
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <Poco/Util/Timer.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <mutex>
 
@@ -63,7 +64,7 @@ struct SharedQuery
                       finished_clients);
     }
 
-    bool isDone()
+    bool isDone() const
     {
         /// Some clients connected and consumed all data, and we already waited long enough.
         /// Or This cache exists for too long.
@@ -135,7 +136,7 @@ public:
             io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, /*req_id=*/"");
             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
 
-            LOG_FMT_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}", query_id, clients, 1);
+            LOG_FMT_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: 1", query_id, clients);
 
             return io;
         }
@@ -182,7 +183,7 @@ public:
     SharedQueries()
         : log(&Poco::Logger::get("SharedQueries"))
     {
-        timer.schedule(FunctionTimerTask::create(std::bind(&SharedQueries::checkAll, this)), //
+        timer.schedule(FunctionTimerTask::create([this] { checkAll(); }), //
                        check_interval_milliseconds,
                        check_interval_milliseconds);
     }
@@ -193,7 +194,7 @@ public:
     }
 
 private:
-    static constexpr long check_interval_milliseconds = 20 * 1000; // 20 seconds
+    static constexpr Int64 check_interval_milliseconds = 20 * 1000; // 20 seconds
 
     Queries queries;
     Poco::Util::Timer timer;

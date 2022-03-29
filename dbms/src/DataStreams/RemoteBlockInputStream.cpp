@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_PACKET_FROM_SERVER;
