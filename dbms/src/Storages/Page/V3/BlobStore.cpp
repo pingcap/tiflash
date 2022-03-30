@@ -858,7 +858,7 @@ void BlobStore::BlobStats::restore()
                     Poco::File invalid_blob(fmt::format("{}/{}", path, blob_name));
                     invalid_blob.remove();
                 }
-                continue;
+                continue; // continue to handle next file
             }
             catch (std::invalid_argument & e)
             {
