@@ -81,6 +81,7 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
 #define LOG_INFO(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_INFORMATION, message)
 #define LOG_WARNING(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, message)
 #define LOG_ERROR(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, message)
+#define LOG_FATAL(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_FATAL, message)
 
 
 /// Logs a message to a specified logger with that level.
