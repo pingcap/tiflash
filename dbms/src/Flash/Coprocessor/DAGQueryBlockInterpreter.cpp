@@ -14,7 +14,6 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
@@ -30,8 +29,8 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/traversePhysicalPlans.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -868,7 +867,22 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block,
         keep_session_timezone_info,
         pipeline.firstStream()->getHeader());
+    LOG_FMT_DEBUG(log, "begin finalize physical plan");
     physical_plan->finalize();
+    LOG_FMT_DEBUG(log, "finish finalize physical plan");
+
+    auto physical_plan_to_string = [&physical_plan]() -> String {
+        FmtBuffer buffer;
+        // now all physical_plan.childrenSize() == 0 or 1.
+        String prefix;
+        traverse(physical_plan, [&buffer, &prefix](const PhysicalPlanPtr & plan) {
+            assert(plan);
+            buffer.fmtAppend("{}{}\n", prefix, plan->toString());
+            prefix += "  ";
+        });
+        return buffer.toString();
+    };
+    LOG_FMT_DEBUG(log, "physical plan tree: \n{}", physical_plan_to_string());
 
     physical_plan->transform(pipeline, context, max_streams);
 }

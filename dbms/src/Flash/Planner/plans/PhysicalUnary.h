@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/FmtUtils.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Planner/PhysicalPlan.h>
 
 namespace DB
@@ -16,14 +18,20 @@ public:
 
     PhysicalPlanPtr children(size_t i) const override
     {
-        assert(i == 0);
+        if (i != 0)
+            throw TiFlashException(
+                fmt::format("child_index({}) should not >= childrenSize({})", i, childrenSize()),
+                Errors::Coprocessor::Internal);
         assert(child);
         return child;
     }
 
     void setChild(size_t i, const PhysicalPlanPtr & new_child) override
     {
-        assert(i == 0);
+        if (i != 0)
+            throw TiFlashException(
+                fmt::format("child_index({}) should not >= childrenSize({})", i, childrenSize()),
+                Errors::Coprocessor::Internal);
         assert(new_child);
         assert(new_child.get() != this);
         child = new_child;
@@ -31,7 +39,10 @@ public:
 
     void appendChild(const PhysicalPlanPtr & new_child) override
     {
-        assert(!child);
+        if (child)
+            throw TiFlashException(
+                fmt::format("the actual children size had be the max size({}), don't append child again", childrenSize()),
+                Errors::Coprocessor::Internal);
         assert(new_child);
         assert(new_child.get() != this);
         child = new_child;

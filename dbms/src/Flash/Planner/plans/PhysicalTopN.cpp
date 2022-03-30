@@ -23,6 +23,7 @@ PhysicalPlanPtr PhysicalTopN::build(
 
     if (top_n.order_by_size() == 0)
     {
+        //should not reach here
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
 
