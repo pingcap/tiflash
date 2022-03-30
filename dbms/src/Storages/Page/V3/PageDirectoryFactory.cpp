@@ -65,7 +65,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileP
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
     (void)reader;
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;

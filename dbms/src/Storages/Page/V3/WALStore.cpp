@@ -46,7 +46,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(storage_name, delegator, provider, last_log_num)),
+        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num)),
         reader};
 }
 
@@ -59,7 +59,7 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(Logger::get("WALStore", storage_name))
+    , logger(Logger::get("WALStore", std::move(storage_name)))
 {
 }
 
