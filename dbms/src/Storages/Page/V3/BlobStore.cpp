@@ -49,6 +49,12 @@ namespace PS::V3
 {
 static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
+#ifndef NDEBUG
+static constexpr bool CHECK_STATS_ALL_IN_DISK = true;
+#else
+static constexpr bool CHECK_STATS_ALL_IN_DISK = false;
+#endif
+
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
@@ -795,79 +801,131 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
+std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path)
+{
+    std::set<BlobFileId> blob_ids_in_disk;
+
+    Poco::File store_path(path);
+    if (!store_path.exists())
+    {
+        return blob_ids_in_disk;
+    }
+
+
+    std::vector<String> file_list;
+    store_path.list(file_list);
+
+    for (const auto & blob_name : file_list)
+    {
+        if (!startsWith(blob_name, BLOB_PREFIX_NAME))
+        {
+            LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+            continue;
+        }
+
+        Strings ss;
+        boost::split(ss, blob_name, boost::is_any_of("_"));
+
+        if (ss.size() != 2)
+        {
+            LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
+            continue;
+        }
+
+        String err_msg;
+        try
+        {
+            const auto & blob_id = std::stoull(ss[1]);
+            blob_ids_in_disk.insert(blob_id);
+            continue; // continue to handle next file
+        }
+        catch (std::invalid_argument & e)
+        {
+            err_msg = e.what();
+        }
+        catch (std::out_of_range & e)
+        {
+            err_msg = e.what();
+        }
+        LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
+    }
+
+    return blob_ids_in_disk;
+}
+
 void BlobStore::BlobStats::restore()
 {
     BlobFileId max_restored_file_id = 0;
 
     for (auto & [path, stats] : stats_map)
     {
+        std::set<BlobFileId> blob_ids_in_stats;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
+            blob_ids_in_stats.insert(stat->id);
         }
 
         // If a BlobFile on disk with a valid rate of 0 (but has not been deleted because of some reason),
         // then it won't be restored to stats. But we should check and clean up if such files exist.
 
-        Poco::File store_path(path);
+        std::set<BlobFileId> blob_ids_in_disk = getBlobIdsFromDisk(path);
 
-        if (!store_path.exists())
+        if (blob_ids_in_disk.size() < blob_ids_in_stats.size())
         {
-            continue;
+            String stats_str = "";
+            for (const auto & id_in_stats : blob_ids_in_stats)
+            {
+                stats_str += fmt::format("{},", id_in_stats);
+            }
+
+            throw Exception(fmt::format("Some of Blob are missing in disk.[path={}][stats={}]",
+                                        path,
+                                        stats_str),
+                            ErrorCodes::LOGICAL_ERROR);
         }
 
-        std::vector<String> file_list;
-        store_path.list(file_list);
-        for (const auto & blob_name : file_list)
+        std::vector<BlobFileId> invalid_blob_ids(blob_ids_in_disk.size());
+
+        auto last_it = std::set_difference(blob_ids_in_disk.begin(),
+                                           blob_ids_in_disk.end(),
+                                           blob_ids_in_stats.begin(),
+                                           blob_ids_in_stats.end(),
+                                           invalid_blob_ids.begin());
+
+        invalid_blob_ids.resize(last_it - invalid_blob_ids.begin());
+
+        if (CHECK_STATS_ALL_IN_DISK)
         {
-            if (!startsWith(blob_name, BLOB_PREFIX_NAME))
-            {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
-                continue;
-            }
+            std::vector<BlobFileId> blob_ids_in_disk_not_in_stats(blob_ids_in_stats.size());
+            auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
+                                                     blob_ids_in_stats.end(),
+                                                     blob_ids_in_disk.begin(),
+                                                     blob_ids_in_disk.end(),
+                                                     blob_ids_in_disk_not_in_stats.begin());
 
-            Strings ss;
-            boost::split(ss, blob_name, boost::is_any_of("_"));
-
-            if (ss.size() != 2)
+            if (last_check_it != blob_ids_in_disk_not_in_stats.begin())
             {
-                LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
-                continue;
-            }
-
-            String err_msg;
-            try
-            {
-                const auto & blob_id = std::stoull(ss[1]);
-                bool found = false;
-                for (const auto & stat : stats)
+                String stats_str = "";
+                for (const auto & id_in_stats : blob_ids_in_stats)
                 {
-                    if (stat->id == blob_id)
-                    {
-                        found = true;
-                        break;
-                    }
+                    stats_str += fmt::format("{},", id_in_stats);
                 }
 
-                if (!found)
-                {
-                    LOG_FMT_INFO(log, "Remove invalid blob file [dir={}] [file={}]", path, blob_name);
+                throw Exception(fmt::format("Some of Blob are missing in disk.[path={}][stats={}]",
+                                            path,
+                                            stats_str),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
 
-                    Poco::File invalid_blob(fmt::format("{}/{}", path, blob_name));
-                    invalid_blob.remove();
-                }
-                continue; // continue to handle next file
-            }
-            catch (std::invalid_argument & e)
-            {
-                err_msg = e.what();
-            }
-            catch (std::out_of_range & e)
-            {
-                err_msg = e.what();
-            }
-            LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
+        for (const auto & invalid_blob_id : invalid_blob_ids)
+        {
+            const auto & invalid_blob_path = fmt::format("{}/{}{}", path, BLOB_PREFIX_NAME, invalid_blob_id);
+            LOG_FMT_INFO(log, "Remove invalid blob file [file={}]", invalid_blob_path);
+            Poco::File invalid_blob(invalid_blob_path);
+            invalid_blob.remove();
         }
     }
 

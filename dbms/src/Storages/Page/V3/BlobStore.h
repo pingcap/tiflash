@@ -180,6 +180,7 @@ public:
 #endif
         void restoreByEntry(const PageEntryV3 & entry);
         void restore();
+        std::set<BlobFileId> getBlobIdsFromDisk(String path);
         friend class PageDirectoryFactory;
 
 #ifndef DBMS_PUBLIC_GTEST

@@ -334,6 +334,156 @@ try
 }
 CATCH
 
+
+TEST_F(BlobStoreTest, RestoreWithInvalidBlob)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    config.file_limit_size = 1024;
+
+    // Generate blob [1,2,3]
+    auto writeBlobData = [](BlobStore & blob_store) {
+        WriteBatch write_batch;
+        PageId page_id = 55;
+        size_t buff_size = 1024;
+        char c_buff[buff_size];
+        memset(c_buff, 0x1, buff_size);
+
+        // write blob 1
+        write_batch.putPage(page_id, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+
+        // write blob 2
+        write_batch.putPage(page_id + 1, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+
+        // write blob 3
+        write_batch.putPage(page_id + 2, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+    };
+
+    auto check_in_disk_file = [](String parent_path, std::vector<BlobFileId> exited_blobs) -> bool {
+        for (const auto blob_id : exited_blobs)
+        {
+            Poco::File file(fmt::format("{}/{}{}", parent_path, BlobStore::BLOB_PREFIX_NAME, blob_id));
+            if (!file.exists())
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    auto restoreBlobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
+        for (const auto & id : blob_ids)
+        {
+            blob_store.blob_stats.restoreByEntry(PageEntryV3{
+                .file_id = id,
+                .size = 1024,
+                .tag = 0,
+                .offset = 0,
+                .checksum = 0x4567,
+            });
+        }
+    };
+
+    // Case 1, all of blob been restored
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(file_provider, delegator, config);
+        writeBlobData(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check, {1, 2, 3});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 2, only recover blob 1
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(file_provider, delegator, config);
+        writeBlobData(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check, {1});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 3, only recover blob 2
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(file_provider, delegator, config);
+        writeBlobData(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check, {2});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {2}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 4, only recover blob 3
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(file_provider, delegator, config);
+        writeBlobData(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check, {3});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {3}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 5, recover a not exist blob
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(file_provider, delegator, config);
+        writeBlobData(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check, {4});
+        ASSERT_THROW(blob_store_check.blob_stats.restore(), DB::Exception);
+        // Won't remove blob if exception happened.
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check2 = BlobStore(file_provider, delegator, config);
+        restoreBlobs(blob_store_check2, {1, 2, 3, 4});
+        ASSERT_THROW(blob_store_check2.blob_stats.restore(), DB::Exception);
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+    }
+}
+CATCH
+
 TEST_F(BlobStoreTest, testWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
