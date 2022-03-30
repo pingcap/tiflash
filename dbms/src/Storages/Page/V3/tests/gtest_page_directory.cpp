@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <Common/LogWithPrefix.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
@@ -43,7 +42,7 @@ class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageDirectoryTest()
-        : log(getLogWithPrefix(nullptr, "PageDirectoryTest"))
+        : log(Logger::get("PageDirectoryTest"))
     {}
 
     void SetUp() override
@@ -61,7 +60,7 @@ public:
 protected:
     PageDirectoryPtr dir;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 TEST_F(PageDirectoryTest, ApplyPutRead)
@@ -1989,7 +1988,9 @@ try
     {
         auto snap = dir->createSnapshot();
         auto edit = dir->dumpSnapshotToEdit(snap);
-        BlobStore::BlobStats stats(log, BlobStore::Config{});
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        BlobStore::BlobStats stats(log, delegator, BlobStore::Config{});
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();
         EXPECT_SAME_ENTRY(entry_1_v1, restored_dir->get(2, temp_snap).second);

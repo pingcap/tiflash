@@ -16,8 +16,6 @@
 
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {
@@ -33,11 +31,11 @@ public:
     PartialSortingBlockInputStream(
         const BlockInputStreamPtr & input_,
         SortDescription & description_,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
     {
         children.push_back(input_);
     }
@@ -56,7 +54,7 @@ protected:
 private:
     SortDescription description;
     size_t limit;
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB

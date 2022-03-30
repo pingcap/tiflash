@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -25,26 +25,31 @@ namespace DB
 class ExchangeSenderBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSenderBlockInputStream(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    ExchangeSenderBlockInputStream(
+        const BlockInputStreamPtr & input,
+        std::unique_ptr<DAGResponseWriter> writer,
+        const String & req_id)
         : writer(std::move(writer))
-        , log(getLogWithPrefix(log_, name))
+        , log(Logger::get(name, req_id))
     {
         children.push_back(input);
     }
     static constexpr auto name = "ExchangeSender";
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
-    void readSuffix() override
-    {
-        writer->finishWrite();
-    }
 
 protected:
     Block readImpl() override;
+    void readSuffixImpl() override
+    {
+        writer->finishWrite();
+        LOG_FMT_DEBUG(log, "finish write with {} rows", total_rows);
+    }
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
-    std::shared_ptr<LogWithPrefix> log;
+    const LoggerPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DB

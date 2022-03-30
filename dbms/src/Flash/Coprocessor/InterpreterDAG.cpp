@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -83,8 +82,7 @@ BlockIO InterpreterDAG::execute()
             pipeline.firstStream(),
             std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dagContext().getMPPTaskId(),
-            dagContext().log);
+            dagContext().log->identifier());
     }
 
     BlockIO res;

@@ -17,6 +17,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/NetException.h>
 #include <Common/config.h>
 #include <Core/Defines.h>
@@ -63,8 +64,7 @@ void Connection::connect()
         if (connected)
             disconnect();
 
-        LOG_TRACE(log_wrapper.get(), "Connecting. Database: " << (default_database.empty() ? "(not specified)" : default_database) << ". User: " << user << (static_cast<bool>(secure) ? ". Secure" : "") << (static_cast<bool>(compression) ? "" : ". Uncompressed"));
-
+        LOG_FMT_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}. {}, {}", (default_database.empty() ? "(not specified)" : default_database), user, (static_cast<bool>(secure) ? ". Secure" : ""), (static_cast<bool>(compression) ? "" : ". Uncompressed"));
         if (static_cast<bool>(secure))
         {
 #if Poco_NetSSL_FOUND
@@ -90,7 +90,7 @@ void Connection::connect()
         sendHello();
         receiveHello();
 
-        LOG_TRACE(log_wrapper.get(), "Connected to " << server_name << " server version " << server_version_major << "." << server_version_minor << "." << server_revision << ".");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.", server_name, server_version_major, server_version_minor, server_revision);
     }
     catch (Poco::Net::NetException & e)
     {
@@ -111,7 +111,7 @@ void Connection::connect()
 
 void Connection::disconnect()
 {
-    //LOG_TRACE(log_wrapper.get(), "Disconnecting");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Disconnecting");
 
     in = nullptr;
     out = nullptr; // can write to socket
@@ -124,7 +124,7 @@ void Connection::disconnect()
 
 void Connection::sendHello()
 {
-    //LOG_TRACE(log_wrapper.get(), "Sending hello");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Sending hello");
 
     writeVarUInt(Protocol::Client::Hello, *out);
     writeStringBinary((DBMS_NAME " ") + client_name, *out);
@@ -141,7 +141,7 @@ void Connection::sendHello()
 
 void Connection::receiveHello()
 {
-    //LOG_TRACE(log_wrapper.get(), "Receiving hello");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Receiving hello");
 
     /// Receive hello packet.
     UInt64 packet_type = 0;
@@ -232,14 +232,14 @@ void Connection::forceConnected()
     }
     else if (!ping())
     {
-        LOG_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
+        LOG_FMT_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
         connect();
     }
 }
 
 bool Connection::ping()
 {
-    // LOG_TRACE(log_wrapper.get(), "Ping");
+    // LOG_FMT_TRACE(log_wrapper.get(), "Ping");
 
     TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
     try
@@ -269,7 +269,7 @@ bool Connection::ping()
     }
     catch (const Poco::Exception & e)
     {
-        LOG_TRACE(log_wrapper.get(), e.displayText());
+        LOG_FMT_TRACE(log_wrapper.get(), "{}", e.displayText());
         return false;
     }
 
@@ -316,7 +316,7 @@ void Connection::sendQuery(
 
     query_id = query_id_;
 
-    //LOG_TRACE(log_wrapper.get(), "Sending query");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Sending query");
 
     writeVarUInt(Protocol::Client::Query, *out);
     writeStringBinary(query_id, *out);
@@ -370,7 +370,7 @@ void Connection::sendQuery(
 
 void Connection::sendCancel()
 {
-    //LOG_TRACE(log_wrapper.get(), "Sending cancel");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Sending cancel");
 
     writeVarUInt(Protocol::Client::Cancel, *out);
     out->next();
@@ -379,7 +379,7 @@ void Connection::sendCancel()
 
 void Connection::sendData(const Block & block, const String & name)
 {
-    //LOG_TRACE(log_wrapper.get(), "Sending data");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Sending data");
 
     if (!block_out)
     {
@@ -452,21 +452,29 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
 
     out_bytes = out->count() - out_bytes;
     maybe_compressed_out_bytes = maybe_compressed_out->count() - maybe_compressed_out_bytes;
-    double elapsed = watch.elapsedSeconds();
 
-    std::stringstream msg;
-    msg << std::fixed << std::setprecision(3);
-    msg << "Sent data for " << data.size() << " external tables, total " << rows << " rows in " << elapsed << " sec., "
-        << static_cast<size_t>(rows / watch.elapsedSeconds()) << " rows/sec., "
-        << maybe_compressed_out_bytes / 1048576.0 << " MiB (" << maybe_compressed_out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
+    auto get_logging_msg = [&]() -> String {
+        const double elapsed_seconds = watch.elapsedSeconds();
 
-    if (compression == Protocol::Compression::Enable)
-        msg << ", compressed " << static_cast<double>(maybe_compressed_out_bytes) / out_bytes << " times to "
-            << out_bytes / 1048576.0 << " MiB (" << out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
-    else
-        msg << ", no compression.";
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend(
+            "Sent data for {} external tables, total {} rows in {:.3f} sec., {:.3f} rows/sec., "
+            "{:.3f} MiB ({:.3f} MiB/sec.)",
+            data.size(),
+            rows,
+            elapsed_seconds,
+            1.0 * rows / elapsed_seconds,
+            maybe_compressed_out_bytes / 1048576.0,
+            maybe_compressed_out_bytes / 1048576.0 / elapsed_seconds);
 
-    LOG_DEBUG(log_wrapper.get(), msg.rdbuf());
+        if (compression == Protocol::Compression::Enable)
+            fmt_buf.fmtAppend(", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)", 1.0 * maybe_compressed_out_bytes / out_bytes, out_bytes / 1048576.0, out_bytes / 1048576.0 / elapsed_seconds);
+        else
+            fmt_buf.append(", no compression.");
+        return fmt_buf.toString();
+    };
+
+    LOG_DEBUG(log_wrapper.get(), get_logging_msg());
 }
 
 
@@ -484,7 +492,7 @@ bool Connection::hasReadBufferPendingData() const
 
 Connection::Packet Connection::receivePacket()
 {
-    //LOG_TRACE(log_wrapper.get(), "Receiving packet");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Receiving packet");
 
     try
     {
@@ -544,7 +552,7 @@ Connection::Packet Connection::receivePacket()
 
 Block Connection::receiveData()
 {
-    //LOG_TRACE(log_wrapper.get(), "Receiving data");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Receiving data");
 
     initBlockInput();
 
@@ -589,7 +597,7 @@ void Connection::setDescription()
 
 std::unique_ptr<Exception> Connection::receiveException()
 {
-    //LOG_TRACE(log_wrapper.get(), "Receiving exception");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Receiving exception");
 
     Exception e;
     readException(e, *in, "Received from " + getDescription());
@@ -599,7 +607,7 @@ std::unique_ptr<Exception> Connection::receiveException()
 
 Progress Connection::receiveProgress()
 {
-    //LOG_TRACE(log_wrapper.get(), "Receiving progress");
+    //LOG_FMT_TRACE(log_wrapper.get(), "Receiving progress");
 
     Progress progress;
     progress.read(*in, server_revision);

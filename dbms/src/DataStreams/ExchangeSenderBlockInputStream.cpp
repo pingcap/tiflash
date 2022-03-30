@@ -38,7 +38,10 @@ Block ExchangeSenderBlockInputStream::readImpl()
 
     Block block = children.back()->read();
     if (block)
+    {
+        total_rows += block.rows();
         writer->write(block);
+    }
     return block;
 }
 } // namespace DB

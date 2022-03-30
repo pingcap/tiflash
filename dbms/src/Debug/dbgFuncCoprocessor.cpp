@@ -393,8 +393,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                     context.getSettingsRef().enable_async_grpc_client),
                 tipb_exchange_receiver.encoded_task_meta_size(),
                 10,
-                nullptr);
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);
+                /*req_id=*/"",
+                /*executor_id=*/"");
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"");
         return ret;
     }
     else
@@ -459,8 +460,8 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGProperties properties = getDAGProperties("");
         std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
-        static Poco::Logger * log = &Poco::Logger::get("MockDAG");
-        LOG_INFO(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+        static auto log = Logger::get("MockDAG");
+        LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
         tipb::SelectResponse dag_response;
         TablesRegionsInfo tables_regions_info(true);
         auto & table_regions_info = tables_regions_info.getSingleTableRegions();
@@ -468,7 +469,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 
         DAGContext dag_context(dag_request);
         dag_context.tables_regions_info = std::move(tables_regions_info);
-        dag_context.log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("MockDAG"), "");
+        dag_context.log = log;
         context.setDAGContext(&dag_context);
         DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
         driver.execute();
@@ -1006,9 +1007,15 @@ struct MPPInfo
     Timestamp start_ts;
     Int64 partition_id;
     Int64 task_id;
-    const std::vector<Int64> & sender_target_task_ids;
-    const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map;
-    MPPInfo(Timestamp start_ts_, Int64 partition_id_, Int64 task_id_, const std::vector<Int64> & sender_target_task_ids_, const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
+    const std::vector<Int64> sender_target_task_ids;
+    const std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+
+    MPPInfo(
+        Timestamp start_ts_,
+        Int64 partition_id_,
+        Int64 task_id_,
+        const std::vector<Int64> & sender_target_task_ids_,
+        const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
         , partition_id(partition_id_)
         , task_id(task_id_)
@@ -2174,7 +2181,7 @@ struct QueryFragment
         }
         else
         {
-            MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
+            MPPInfo mpp_info(properties.start_ts, /*partition_id*/ -1, /*task_id*/ -1, /*sender_target_task_ids*/ {}, /*receiver_source_task_ids_map*/ {});
             ret.push_back(toQueryTask(properties, mpp_info, context));
         }
         return ret;
@@ -2530,8 +2537,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
-    static Poco::Logger * log = &Poco::Logger::get("MockDAG");
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+    static auto log = Logger::get("MockDAG");
+    LOG_FMT_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
     TablesRegionsInfo tables_regions_info(true);
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
@@ -2540,12 +2547,12 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     DAGContext dag_context(dag_request);
     dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+    dag_context.log = log;
     context.setDAGContext(&dag_context);
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
+    LOG_FMT_DEBUG(log, "Handle DAG request done");
     return dag_response;
 }
 
@@ -2600,7 +2607,7 @@ Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, c
 {
     auto src = outputDAGResponse(context, schema, dag_response);
     // Try to merge into big block. 128 MB should be enough.
-    SquashingBlockInputStream squashed_delete_stream(src, 0, 128 * (1UL << 20), nullptr);
+    SquashingBlockInputStream squashed_delete_stream(src, 0, 128 * (1UL << 20), /*req_id=*/"");
     Blocks result_data;
     while (true)
     {
