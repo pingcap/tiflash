@@ -99,6 +99,11 @@ void PhysicalProjection::finalize(const Names & parent_require)
 
     child->finalize(project_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
+
+    if (parent_require.size() >= schema.size())
+        FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
+    else
+        FinalizeHelper::checkSchemaContainsSampleBlock(schema, getSampleBlock());
 }
 
 const Block & PhysicalProjection::getSampleBlock() const

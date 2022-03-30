@@ -15,6 +15,7 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
 
@@ -46,5 +47,11 @@ void PhysicalPlan::recordProfileStreams(DAGPipeline & pipeline, const Context & 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
     }
+}
+
+void PhysicalPlan::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+{
+    transformImpl(pipeline, context, max_streams);
+    recordProfileStreams(pipeline, context);
 }
 } // namespace DB

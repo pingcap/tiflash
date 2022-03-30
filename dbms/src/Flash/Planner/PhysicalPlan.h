@@ -55,14 +55,10 @@ public:
 
     virtual size_t childrenSize() const = 0;
 
-    void transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
-    {
-        transformImpl(pipeline, context, max_streams);
-        recordProfileStreams(pipeline, context);
-    }
+    void transform(DAGPipeline & pipeline, const Context & context, size_t max_streams);
 
     virtual void finalize(const Names & parent_require) = 0;
-    virtual void finalize() { finalize({}); }
+    void finalize() { finalize({}); }
 
     /// Obtain a sample block that contains the names and types of result columns.
     virtual const Block & getSampleBlock() const = 0;

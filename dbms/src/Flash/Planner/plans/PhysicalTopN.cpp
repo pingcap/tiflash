@@ -82,6 +82,8 @@ void PhysicalTopN::finalize(const Names & parent_require)
 
     child->finalize(before_sort_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(before_sort_actions, child->getSampleBlock().columns());
+
+    FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
 }
 
 const Block & PhysicalTopN::getSampleBlock() const

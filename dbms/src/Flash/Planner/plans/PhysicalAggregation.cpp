@@ -136,6 +136,8 @@ void PhysicalAggregation::finalize(const Names & parent_require)
     before_agg_actions->finalize(before_agg_output);
     child->finalize(before_agg_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(before_agg_actions, child->getSampleBlock().columns());
+
+    FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
 }
 
 const Block & PhysicalAggregation::getSampleBlock() const
