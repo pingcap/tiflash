@@ -45,6 +45,7 @@
 /// \code
 /// # Some possible command line options:
 /// #    --config-file, -C or --config - path to configuration file. By default - config.xml in the current directory.
+/// #    --pid-file - PID file name. Default is pid
 /// #    --log-file
 /// #    --errorlog-file
 /// #    --daemon - run as daemon; without this option, the program will be attached to the terminal and also output logs to stderr.
