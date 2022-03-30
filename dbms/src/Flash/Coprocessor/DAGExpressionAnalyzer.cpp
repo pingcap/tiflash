@@ -1008,7 +1008,7 @@ String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, const 
     // first construct the second argument
     tipb::Expr type_expr = constructStringLiteralTiExpr(target_type->getName());
     auto type_expr_name = getActions(type_expr, actions);
-    String cast_expr_name = applyFunction("TIDB_CAST", {expr_name, type_expr_name}, actions, nullptr);
+    String cast_expr_name = applyFunction("tidb_cast", {expr_name, type_expr_name}, actions, nullptr);
     return cast_expr_name;
 }
 
