@@ -220,7 +220,7 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
-    RUNTIME_ASSERT(!is_local, log, "should not reach readForLocal for remote tunnels");
+    RUNTIME_ASSERT(is_local, log, "should not reach readForLocal for remote tunnels");
     MPPDataPacketPtr res;
     if (send_queue.pop(res))
         return res;
