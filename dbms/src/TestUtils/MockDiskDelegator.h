@@ -34,6 +34,11 @@ public:
         : path(std::move(path_))
     {}
 
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    {
+        return true;
+    }
+
     size_t numPaths() const
     {
         return 1;
@@ -72,6 +77,14 @@ public:
         return 0;
     }
 
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_free*/,
+        const String & /*pf_parent_path*/)
+    {
+        return 0;
+    }
+
 private:
     String path;
 };
@@ -85,6 +98,12 @@ public:
         if (paths.empty())
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
     }
+
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    {
+        return true;
+    }
+
 
     size_t numPaths() const
     {
@@ -120,6 +139,14 @@ public:
         size_t /*size_to_add*/,
         const String & /*pf_parent_path*/,
         bool /*need_insert_location*/)
+    {
+        return 0;
+    }
+
+    size_t freePageFileUsedSize(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_free*/,
+        const String & /*pf_parent_path*/)
     {
         return 0;
     }

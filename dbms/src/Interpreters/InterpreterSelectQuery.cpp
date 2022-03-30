@@ -269,8 +269,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema " << result << " Schema version [storage, global, query]: "
-                                           << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+        LOG_FMT_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
     };
     bool ok;
     {
@@ -290,7 +289,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto start_time = Clock::now();
         context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_FMT_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 
         std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)
@@ -477,7 +476,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         throw Exception("Distributed on Distributed is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
     if (!dry_run)
-        LOG_TRACE(log, QueryProcessingStage::toString(from_stage) << " -> " << QueryProcessingStage::toString(to_stage));
+        LOG_FMT_TRACE(log, "{} -> {}", QueryProcessingStage::toString(from_stage), QueryProcessingStage::toString(to_stage));
 
     AnalysisResult expressions = analyzeExpressions(from_stage);
 
