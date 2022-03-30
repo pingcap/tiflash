@@ -37,12 +37,16 @@ class IConnectionPool : private boost::noncopyable
 public:
     using Entry = PoolBase<Connection>::Entry;
 
-public:
-    virtual ~IConnectionPool() {}
+    virtual ~IConnectionPool() = default;
 
     /// Selects the connection to work.
     /// If force_connected is false, the client must manually ensure that returned connection is good.
-    virtual Entry get(const Settings * settings = nullptr, bool force_connected = true) = 0;
+    Entry get(const Settings * settings = nullptr, bool force_connected = true) {
+        return getImpl(settings, force_connected);
+    }
+
+protected:
+    virtual Entry getImpl(const Settings * settings, bool force_connected) = 0;
 };
 
 using ConnectionPoolPtr = std::shared_ptr<IConnectionPool>;
@@ -106,7 +110,7 @@ public:
     {
     }
 
-    Entry get(const Settings * settings = nullptr, bool force_connected = true) override
+    Entry getImpl(const Settings * settings, bool force_connected) override
     {
         Entry entry;
         if (settings)
