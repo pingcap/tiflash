@@ -56,7 +56,7 @@ public:
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return uniform_dist(rand_gen);
     }
 
@@ -80,7 +80,7 @@ public:
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return normal_dist(rand_gen);
     }
 

@@ -252,7 +252,7 @@ public:
     // Auto finished: return empty blocks when finished.
     DedupingBlockPtr pop()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (last)
             return last;
         DedupingBlockPtr block = Self::pop();

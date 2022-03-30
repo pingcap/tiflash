@@ -35,7 +35,7 @@ MetricsTransmitter::~MetricsTransmitter()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard lock{mutex};
             quit = true;
         }
 
@@ -69,7 +69,7 @@ void MetricsTransmitter::run()
 
     std::vector<ProfileEvents::Count> prev_counters(ProfileEvents::end());
 
-    std::unique_lock<std::mutex> lock{mutex};
+    std::unique_lock lock{mutex};
 
     while (true)
     {

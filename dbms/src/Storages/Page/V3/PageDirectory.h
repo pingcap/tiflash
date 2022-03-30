@@ -150,7 +150,7 @@ public:
 
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::lock_guard<std::mutex>(m);
+        return std::lock_guard(m);
     }
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);

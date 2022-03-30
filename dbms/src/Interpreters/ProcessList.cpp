@@ -197,7 +197,7 @@ ProcessListEntry::~ProcessListEntry()
     /// Destroy all streams to avoid long lock of ProcessList
     it->releaseQueryStreams();
 
-    std::lock_guard<std::mutex> lock(parent.mutex);
+    std::lock_guard lock(parent.mutex);
 
     String user = it->getClientInfo().current_user;
     String query_id = it->getClientInfo().current_query_id;
@@ -258,7 +258,7 @@ ProcessListEntry::~ProcessListEntry()
 
 void ProcessListElement::setQueryStreams(const BlockIO & io)
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     query_stream_in = io.in;
     query_stream_out = io.out;
@@ -271,7 +271,7 @@ void ProcessListElement::releaseQueryStreams()
     BlockOutputStreamPtr out;
 
     {
-        std::lock_guard<std::mutex> lock(query_streams_mutex);
+        std::lock_guard lock(query_streams_mutex);
 
         query_streams_status = QueryStreamsStatus::Released;
         in = std::move(query_stream_in);
@@ -283,14 +283,14 @@ void ProcessListElement::releaseQueryStreams()
 
 bool ProcessListElement::streamsAreReleased()
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     return query_streams_status == QueryStreamsStatus::Released;
 }
 
 bool ProcessListElement::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     if (query_streams_status != QueryStreamsStatus::Initialized)
         return false;
@@ -327,7 +327,7 @@ ProcessListElement * ProcessList::tryGetProcessListElement(const String & curren
 
 ProcessList::CancellationCode ProcessList::sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     ProcessListElement * elem = tryGetProcessListElement(current_query_id, current_user);
 

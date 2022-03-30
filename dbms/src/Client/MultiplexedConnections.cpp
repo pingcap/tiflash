@@ -69,7 +69,7 @@ MultiplexedConnections::MultiplexedConnections(
 
 void MultiplexedConnections::sendExternalTablesData(std::vector<ExternalTablesData> & data)
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!sent_query)
         throw Exception("Cannot send external tables data: query not yet sent.", ErrorCodes::LOGICAL_ERROR);
@@ -96,7 +96,7 @@ void MultiplexedConnections::sendQuery(
     const ClientInfo * client_info,
     bool with_pending_data)
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (sent_query)
         throw Exception("Query already sent.", ErrorCodes::LOGICAL_ERROR);
@@ -130,7 +130,7 @@ void MultiplexedConnections::sendQuery(
 
 Connection::Packet MultiplexedConnections::receivePacket()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
     Connection::Packet packet = receivePacketUnlocked();
     if (block_extra_info)
     {
@@ -152,7 +152,7 @@ BlockExtraInfo MultiplexedConnections::getBlockExtraInfo() const
 
 void MultiplexedConnections::disconnect()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     for (ReplicaState & state : replica_states)
     {
@@ -167,7 +167,7 @@ void MultiplexedConnections::disconnect()
 
 void MultiplexedConnections::sendCancel()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!sent_query || cancelled)
         throw Exception("Cannot cancel. Either no query sent or already cancelled.", ErrorCodes::LOGICAL_ERROR);
@@ -184,7 +184,7 @@ void MultiplexedConnections::sendCancel()
 
 Connection::Packet MultiplexedConnections::drain()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!cancelled)
         throw Exception("Cannot drain connections: cancel first.", ErrorCodes::LOGICAL_ERROR);
@@ -219,7 +219,7 @@ Connection::Packet MultiplexedConnections::drain()
 
 std::string MultiplexedConnections::dumpAddresses() const
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
     return dumpAddressesUnlocked();
 }
 

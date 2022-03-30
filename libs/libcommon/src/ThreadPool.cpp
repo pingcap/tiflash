@@ -30,7 +30,7 @@ ThreadPool::ThreadPool(size_t m_size, Job pre_worker) : m_size(m_size)
 void ThreadPool::schedule(Job job)
 {
     {
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
         has_free_thread.wait(lock, [this] { return active_jobs < m_size || shutdown; });
         if (shutdown)
             return;
@@ -44,7 +44,7 @@ void ThreadPool::schedule(Job job)
 void ThreadPool::wait()
 {
     {
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
         has_free_thread.wait(lock, [this] { return active_jobs == 0; });
 
         if (first_exception)
@@ -59,7 +59,7 @@ void ThreadPool::wait()
 ThreadPool::~ThreadPool()
 {
     {
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
         shutdown = true;
     }
 
@@ -71,7 +71,7 @@ ThreadPool::~ThreadPool()
 
 size_t ThreadPool::active() const
 {
-    std::unique_lock<std::mutex> lock(mutex);
+    std::unique_lock lock(mutex);
     return active_jobs;
 }
 
@@ -84,7 +84,7 @@ void ThreadPool::worker()
         bool need_shutdown = false;
 
         {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock lock(mutex);
             has_new_job_or_shutdown.wait(lock, [this] { return shutdown || !jobs.empty(); });
             need_shutdown = shutdown;
 
@@ -108,7 +108,7 @@ void ThreadPool::worker()
             catch (...)
             {
                 {
-                    std::unique_lock<std::mutex> lock(mutex);
+                    std::unique_lock lock(mutex);
                     if (!first_exception)
                         first_exception = std::current_exception();
                     shutdown = true;
@@ -121,7 +121,7 @@ void ThreadPool::worker()
         }
 
         {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock lock(mutex);
             --active_jobs;
         }
 

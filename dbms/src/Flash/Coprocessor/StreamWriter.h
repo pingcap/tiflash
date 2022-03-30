@@ -55,7 +55,7 @@ struct StreamWriter
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
             throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-        std::lock_guard<std::mutex> lk(write_mutex);
+        std::lock_guard lk(write_mutex);
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }

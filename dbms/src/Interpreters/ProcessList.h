@@ -318,7 +318,7 @@ public:
     /// Get current state of process list.
     Info getInfo() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         Info res;
         res.reserve(cur_size);
@@ -330,7 +330,7 @@ public:
 
     void setMaxSize(size_t max_size_)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         max_size = max_size_;
     }
 

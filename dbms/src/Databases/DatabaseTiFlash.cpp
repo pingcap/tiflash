@@ -184,7 +184,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     /// But there is protection from it - see using DDLGuard in InterpreterCreateQuery.
 
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (tables.find(table_name) != tables.end())
             throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
     }
@@ -208,7 +208,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     {
         /// Add a table to the map of known tables.
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             if (!tables.emplace(table_name, table).second)
                 throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
         }
@@ -488,7 +488,7 @@ void DatabaseTiFlash::shutdown()
 
     Tables tables_snapshot;
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         tables_snapshot = tables;
     }
 
@@ -502,7 +502,7 @@ void DatabaseTiFlash::shutdown()
             managed_storage->removeFromTMTContext();
     }
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     tables.clear();
 }
 
