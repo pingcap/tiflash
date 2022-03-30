@@ -379,7 +379,7 @@ void DeltaMergeStore::drop()
         std::unique_lock lock(read_write_mutex);
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
         std::stack<PageId> segment_ids;
-        while (segment_id)
+        while (segment_id != 0)
         {
             segment_ids.push(segment_id);
             auto segment = id_to_segment[segment_id];
