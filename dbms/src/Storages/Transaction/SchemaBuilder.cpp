@@ -338,19 +338,16 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         for (const auto & command : schema_change.first)
         {
             if (command.type == AlterCommand::ADD_COLUMN)
-                fmt_buf.fmtAppend("ADD COLUMN {} , ", command.data_type->getName());
+                fmt_buf.fmtAppend("ADD COLUMN {} {},", command.column_name, command.data_type->getName());
             else if (command.type == AlterCommand::DROP_COLUMN)
-                fmt_buf.fmtAppend("DROP COLUMN {} , ", command.data_type->getName());
+                fmt_buf.fmtAppend("DROP COLUMN {}, ", command.data_type->getName());
             else if (command.type == AlterCommand::MODIFY_COLUMN)
                 fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
             else if (command.type == AlterCommand::RENAME_COLUMN)
                 fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
         }
-    auto get_logging_msg = [&]() -> String {
-        return fmt_buf.toString();
-    };
 
-    LOG_DEBUG(log, get_logging_msg());
+    LOG_DEBUG(log, fmt_buf.toString());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
