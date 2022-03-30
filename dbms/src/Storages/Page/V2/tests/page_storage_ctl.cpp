@@ -217,7 +217,7 @@ try
         for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
         {
             LOG_FMT_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
-            storage.gc(/*not_skip=*/true, nullptr, nullptr);
+            storage.gcImpl(/*not_skip=*/true, nullptr, nullptr);
             LOG_FMT_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
         }
         break;
