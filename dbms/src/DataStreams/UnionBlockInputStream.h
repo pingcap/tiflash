@@ -98,7 +98,7 @@ public:
         size_t max_threads,
         const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(inputs.size(), max_threads) * 2) // reduce contention
+        : output_queue(std::min(inputs.size(), max_threads) * 5) // reduce contention
         , log(Logger::get(NAME, req_id))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler, log)
