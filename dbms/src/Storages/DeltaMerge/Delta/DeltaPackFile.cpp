@@ -21,8 +21,21 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
     auto hash_salt = context.hash_salt;
 
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/Delta/DeltaPackFile.cpp
     auto pack_filter
         = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+=======
+    auto pack_filter = DMFilePackFilter::loadFrom(
+        file,
+        index_cache,
+        /*set_cache_if_miss*/ false,
+        {segment_range},
+        EMPTY_FILTER,
+        {},
+        context.db_context.getFileProvider(),
+        context.getReadLimiter(),
+        /*tracing_logger*/ nullptr);
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500)):dbms/src/Storages/DeltaMerge/ColumnFile/ColumnFileBig.cpp
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
