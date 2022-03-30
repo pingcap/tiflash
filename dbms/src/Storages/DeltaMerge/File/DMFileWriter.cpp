@@ -121,7 +121,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
-    write_data = true;
+    is_empty_file = false;
     DMFile::PackStat stat;
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
@@ -360,7 +360,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                         dmfile->encryptionIndexPath(stream_name),
                         false,
                         write_limiter);
-                    if (write_data)
+                    if (!is_empty_file)
                         stream->minmaxes->write(*type, buf);
                     buf.sync();
                     bytes_written += buf.getMaterializedBytes();
@@ -374,7 +374,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                            write_limiter,
                                                                            dmfile->configuration->getChecksumAlgorithm(),
                                                                            dmfile->configuration->getChecksumFrameLength());
-                    if (write_data)
+                    if (!is_empty_file)
                         stream->minmaxes->write(*type, *buf);
                     buf->sync();
                     bytes_written += buf->getMaterializedBytes();

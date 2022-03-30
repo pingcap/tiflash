@@ -251,7 +251,7 @@ private:
     WriteLimiterPtr write_limiter;
 
     // use to avoid write index data for empty file
-    bool write_data = false;
+    bool is_empty_file = true;
 };
 
 } // namespace DM
