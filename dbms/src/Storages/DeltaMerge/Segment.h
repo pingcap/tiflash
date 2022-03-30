@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -144,7 +158,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter = {},
-        UInt64 max_version = MAX_UINT64,
+        UInt64 max_version = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Return a stream which is suitable for exporting data.
@@ -253,7 +267,7 @@ public:
 
     void abandon(DMContext & context)
     {
-        LOG_DEBUG(log, "Abandon segment [" << segment_id << "]");
+        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
         delta->abandon(context);
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
@@ -279,7 +293,7 @@ private:
         const ColumnDefines & read_columns,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
-        UInt64 max_version = MAX_UINT64) const;
+        UInt64 max_version = std::numeric_limits<UInt64>::max()) const;
 
     static ColumnDefinesPtr arrangeReadColumns(
         const ColumnDefine & handle,
@@ -297,7 +311,7 @@ private:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
-        UInt64 max_version = MAX_UINT64);
+        UInt64 max_version = std::numeric_limits<UInt64>::max());
 
     /// Merge delta & stable, and then take the middle one.
     std::optional<RowKeyValue> getSplitPointSlow(

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -236,7 +250,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
 {
     if (config_path.empty() || !config_repository->exists(config_path))
     {
-        LOG_WARNING(log, "config file '" + config_path + "' does not exist");
+        LOG_FMT_WARNING(log, "config file '{}' does not exist", config_path);
     }
     else
     {
@@ -270,7 +284,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                 if (!startsWith(key, config_settings.external_config))
                 {
                     if (!startsWith(key, "comment") && !startsWith(key, "include_from"))
-                        LOG_WARNING(log, config_path << ": unknown node in file: '" << key << "', expected '" << config_settings.external_config << "'");
+                        LOG_FMT_WARNING(log, "{}: unknown node in file: '{}', expected '{}'", config_path, key, config_settings.external_config);
                     continue;
                 }
 
@@ -279,7 +293,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                     name = config->getString(key + "." + config_settings.external_name);
                     if (name.empty())
                     {
-                        LOG_WARNING(log, config_path << ": " + config_settings.external_name + " name cannot be empty");
+                        LOG_FMT_WARNING(log, "{}: {} name cannot be empty", config_path, config_settings.external_name);
                         continue;
                     }
 

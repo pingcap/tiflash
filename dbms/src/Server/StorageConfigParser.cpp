@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -188,7 +202,13 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         lazily_init_store = (*lazily_init != 0);
     }
 
-    LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
+    // config for experimental feature, may remove later
+    if (auto enable_v3 = table->get_qualified_as<Int32>("enable_ps_v3"); enable_v3)
+    {
+        enable_ps_v3 = (*enable_v3 != 0);
+    }
+
+    LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const

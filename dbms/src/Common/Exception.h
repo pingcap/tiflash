@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/StackTrace.h>
@@ -15,8 +29,8 @@ class Logger;
 
 namespace DB
 {
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 class Exception : public Poco::Exception
 {
@@ -85,7 +99,7 @@ using Exceptions = std::vector<std::exception_ptr>;
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 
@@ -146,5 +160,22 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
         return nullptr;
     }
 }
+
+#define RUNTIME_CHECK(condition, ExceptionType, ...) \
+    do                                               \
+    {                                                \
+        if (unlikely(!(condition)))                  \
+            throw ExceptionType(__VA_ARGS__);        \
+    } while (false)
+
+#define RUNTIME_ASSERT(condition, logger, fmt_str, ...)                                   \
+    do                                                                                    \
+    {                                                                                     \
+        if (unlikely(!(condition)))                                                       \
+        {                                                                                 \
+            LOG_FMT_FATAL((logger), "Assert {} fail! " fmt_str, #condition, __VA_ARGS__); \
+            std::terminate();                                                             \
+        }                                                                                 \
+    } while (false)
 
 } // namespace DB

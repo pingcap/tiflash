@@ -1,12 +1,25 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/PoolWithFailoverBase.h>
 #include <Client/ConnectionPool.h>
+#include <Common/PoolWithFailoverBase.h>
 
 
 namespace DB
 {
-
 /** Connection pool with fault tolerance.
   * Initialized by several other IConnectionPools.
   * When a connection is received, it tries to create or select a live connection from a pool,
@@ -28,19 +41,20 @@ enum class PoolMode
     GET_ALL
 };
 
-class ConnectionPoolWithFailover : public IConnectionPool, private PoolWithFailoverBase<IConnectionPool>
+class ConnectionPoolWithFailover : public IConnectionPool
+    , private PoolWithFailoverBase<IConnectionPool>
 {
 public:
     ConnectionPoolWithFailover(
-            ConnectionPoolPtrs nested_pools_,
-            LoadBalancing load_balancing,
-            size_t max_tries_ = DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES,
-            time_t decrease_error_period_ = DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_DECREASE_ERROR_PERIOD);
+        ConnectionPoolPtrs nested_pools_,
+        LoadBalancing load_balancing,
+        size_t max_tries_ = DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES,
+        time_t decrease_error_period_ = DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_DECREASE_ERROR_PERIOD);
 
     using Entry = IConnectionPool::Entry;
 
     /** Allocates connection to work. */
-    Entry get(const Settings * settings = nullptr, bool force_connected = true) override; /// From IConnectionPool
+    Entry get(const Settings * settings, bool force_connected) override; /// From IConnectionPool
 
     /** Allocates up to the specified number of connections to work.
       * Connections provide access to different replicas of one shard.
@@ -53,23 +67,25 @@ public:
     /// The same as getMany(), but check that replication delay for table_to_check is acceptable.
     /// Delay threshold is taken from settings.
     std::vector<TryResult> getManyChecked(
-            const Settings * settings, PoolMode pool_mode, const QualifiedTableName & table_to_check);
+        const Settings * settings,
+        PoolMode pool_mode,
+        const QualifiedTableName & table_to_check);
 
 private:
     /// Get the values of relevant settings and call Base::getMany()
     std::vector<TryResult> getManyImpl(
-            const Settings * settings,
-            PoolMode pool_mode,
-            const TryGetEntryFunc & try_get_entry);
+        const Settings * settings,
+        PoolMode pool_mode,
+        const TryGetEntryFunc & try_get_entry);
 
     /// Try to get a connection from the pool and check that it is good.
     /// If table_to_check is not null and the check is enabled in settings, check that replication delay
     /// for this table is not too large.
     TryResult tryGetEntry(
-            IConnectionPool & pool,
-            std::string & fail_message,
-            const Settings * settings,
-            const QualifiedTableName * table_to_check = nullptr);
+        IConnectionPool & pool,
+        std::string & fail_message,
+        const Settings * settings,
+        const QualifiedTableName * table_to_check = nullptr);
 
 private:
     std::vector<size_t> hostname_differences; /// Distances from name of this host to the names of hosts of pools.
@@ -79,4 +95,4 @@ private:
 using ConnectionPoolWithFailoverPtr = std::shared_ptr<ConnectionPoolWithFailover>;
 using ConnectionPoolWithFailoverPtrs = std::vector<ConnectionPoolWithFailoverPtr>;
 
-}
+} // namespace DB

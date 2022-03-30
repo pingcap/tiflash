@@ -1,9 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -14,7 +27,7 @@ extern const int LOGICAL_ERROR;
 }
 
 
-namespace _UnionBlockInputStreamImpl
+namespace UnionBlockInputStreamImpl
 {
 template <StreamUnionMode mode>
 struct OutputData;
@@ -26,11 +39,11 @@ struct OutputData<StreamUnionMode::Basic>
     Block block;
     std::exception_ptr exception;
 
-    OutputData() {}
+    OutputData() = default;
     explicit OutputData(Block & block_)
         : block(block_)
     {}
-    explicit OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -43,17 +56,17 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     BlockExtraInfo extra_info;
     std::exception_ptr exception;
 
-    OutputData() {}
+    OutputData() = default;
     OutputData(Block & block_, BlockExtraInfo & extra_info_)
         : block(block_)
         , extra_info(extra_info_)
     {}
-    explicit OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
 
-} // namespace _UnionBlockInputStreamImpl
+} // namespace UnionBlockInputStreamImpl
 
 /** Merges several sources into one.
   * Blocks from different sources are interleaved with each other in an arbitrary way.
@@ -83,13 +96,13 @@ public:
         BlockInputStreams inputs,
         BlockInputStreamPtr additional_input_at_end,
         size_t max_threads,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
+        , log(Logger::get(NAME, req_id))
         , handler(*this)
-        , processor(inputs, additional_input_at_end, max_threads, handler)
+        , processor(inputs, additional_input_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
-        , log(getMPPTaskLog(log_, NAME))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -117,7 +130,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -154,7 +167,7 @@ protected:
         if (!started)
             return;
 
-        LOG_TRACE(log, "Waiting for threads to finish");
+        LOG_FMT_TRACE(log, "Waiting for threads to finish");
 
         std::exception_ptr exception;
         if (!all_read)
@@ -162,7 +175,7 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            _UnionBlockInputStreamImpl::OutputData<mode> res;
+            UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
                 output_queue.pop(res);
@@ -183,7 +196,7 @@ protected:
 
         processor.wait();
 
-        LOG_TRACE(log, "Waited for threads to finish");
+        LOG_FMT_TRACE(log, "Waited for threads to finish");
 
         if (exception)
             std::rethrow_exception(exception);
@@ -254,7 +267,7 @@ private:
     }
 
 private:
-    using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
+    using Payload = UnionBlockInputStreamImpl::OutputData<mode>;
     using OutputQueue = ConcurrentBoundedQueue<Payload>;
 
 private:
@@ -265,6 +278,23 @@ private:
       *  otherwise ParallelInputsProcessor can be blocked during insertion into the queue.
       */
     OutputQueue output_queue;
+    std::mutex mu;
+    bool meet_exception = false;
+
+    void handleException(const std::exception_ptr & exception)
+    {
+        std::unique_lock lock(mu);
+        if (meet_exception)
+            return;
+        meet_exception = true;
+        /// The order of the rows matters. If it is changed, then the situation is possible,
+        /// when before exception, an empty block (end of data) will be put into the queue,
+        /// and the exception is lost.
+        output_queue.emplace(exception);
+        /// can not cancel itself or the exception might be lost
+        /// kill the processor so ExchangeReceiver will be closed
+        processor.cancel(true);
+    }
 
     struct Handler
     {
@@ -295,13 +325,7 @@ private:
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
-            /// The order of the rows matters. If it is changed, then the situation is possible,
-            /// when before exception, an empty block (end of data) will be put into the queue,
-            /// and the exception is lost.
-
-            parent.output_queue.emplace(exception);
-            /// can not cancel parent inputStream or the exception might be lost
-            parent.processor.cancel(false); /// Does not throw exceptions.
+            parent.handleException(exception);
         }
 
         String getName() const
@@ -312,6 +336,8 @@ private:
         Self & parent;
     };
 
+    LoggerPtr log;
+
     Handler handler;
     ParallelInputsProcessor<Handler, mode> processor;
 
@@ -321,8 +347,6 @@ private:
 
     bool started = false;
     bool all_read = false;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

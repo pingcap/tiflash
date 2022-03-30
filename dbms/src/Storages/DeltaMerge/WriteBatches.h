@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -9,12 +24,13 @@ namespace DM
 {
 struct WriteBatches : private boost::noncopyable
 {
+    NamespaceId ns_id;
     WriteBatch log;
     WriteBatch data;
     WriteBatch meta;
 
-    PageIds writtenLog;
-    PageIds writtenData;
+    PageIds written_log;
+    PageIds written_data;
 
     WriteBatch removed_log;
     WriteBatch removed_data;
@@ -26,7 +42,13 @@ struct WriteBatches : private boost::noncopyable
     WriteLimiterPtr write_limiter;
 
     WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : storage_pool(storage_pool_)
+        : log(storage_pool_.getNamespaceId())
+        , data(storage_pool_.getNamespaceId())
+        , meta(storage_pool_.getNamespaceId())
+        , removed_log(storage_pool_.getNamespaceId())
+        , removed_data(storage_pool_.getNamespaceId())
+        , removed_meta(storage_pool_.getNamespaceId())
+        , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {
     }
@@ -72,12 +94,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type == WriteBatch::WriteType::DEL))
                         throw Exception("Unexpected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(log, "log", logger);
@@ -93,9 +115,9 @@ struct WriteBatches : private boost::noncopyable
         storage_pool.data()->write(std::move(data), write_limiter);
 
         for (auto page_id : log_write_pages)
-            writtenLog.push_back(page_id);
+            written_log.push_back(page_id);
         for (auto page_id : data_write_pages)
-            writtenData.push_back(page_id);
+            written_data.push_back(page_id);
 
         log.clear();
         data.clear();
@@ -103,11 +125,11 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        WriteBatch log_wb;
-        for (auto p : writtenLog)
+        WriteBatch log_wb(ns_id);
+        for (auto p : written_log)
             log_wb.delPage(p);
-        WriteBatch data_wb;
-        for (auto p : writtenData)
+        WriteBatch data_wb(ns_id);
+        for (auto p : written_data)
             data_wb.delPage(p);
 
         if constexpr (DM_RUN_CHECK)
@@ -117,12 +139,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Rollback remove from " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Rollback remove from {} : {}", what, wb.toString());
             };
 
             check(log_wb, "log_wb", logger);
@@ -132,8 +154,8 @@ struct WriteBatches : private boost::noncopyable
         storage_pool.log()->write(std::move(log_wb), write_limiter);
         storage_pool.data()->write(std::move(data_wb), write_limiter);
 
-        writtenLog.clear();
-        writtenData.clear();
+        written_log.clear();
+        written_data.clear();
     }
 
     void writeMeta()
@@ -145,12 +167,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::PUT))
                         throw Exception("Expected puts in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(meta, "meta", logger);
@@ -169,12 +191,12 @@ struct WriteBatches : private boost::noncopyable
             auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
-                for (auto & w : wb.getWrites())
+                for (const auto & w : wb.getWrites())
                 {
                     if (unlikely(w.type != WriteBatch::WriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
-                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+                LOG_FMT_TRACE(logger, "Write into {} : {}", what, wb.toString());
             };
 
             check(removed_log, "removed_log", logger);
@@ -204,8 +226,8 @@ struct WriteBatches : private boost::noncopyable
         data.clear();
         meta.clear();
 
-        writtenLog.clear();
-        writtenData.clear();
+        written_log.clear();
+        written_data.clear();
 
         removed_log.clear();
         removed_data.clear();

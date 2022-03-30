@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
@@ -794,19 +808,131 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
     }
 }
 
+NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const String & column_prefix) const
+{
+    NamesWithAliases final_project_aliases;
+    UniqueNameGenerator unique_name_generator;
+    for (const auto & element : getCurrentInputColumns())
+        final_project_aliases.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
+    return final_project_aliases;
+}
+
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
     ExpressionActionsChain & chain,
     const String & column_prefix) const
 {
-    NamesWithAliases final_project;
-    UniqueNameGenerator unique_name_generator;
-    for (const auto & element : getCurrentInputColumns())
-        final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
+    NamesWithAliases final_project = genNonRootFinalProjectAliases(column_prefix);
 
     auto & step = initAndGetLastStep(chain);
     for (const auto & name : final_project)
         step.required_output.push_back(name.first);
     return final_project;
+}
+
+NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
+    const String & column_prefix,
+    const std::vector<Int32> & output_offsets) const
+{
+    NamesWithAliases final_project_aliases;
+    const auto & current_columns = getCurrentInputColumns();
+    UniqueNameGenerator unique_name_generator;
+    for (auto i : output_offsets)
+    {
+        final_project_aliases.emplace_back(
+            current_columns[i].name,
+            unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
+    }
+    return final_project_aliases;
+}
+
+void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
+    const ExpressionActionsPtr & actions,
+    const std::vector<tipb::FieldType> & require_schema,
+    const std::vector<Int32> & output_offsets,
+    bool need_append_timezone_cast,
+    const BoolVec & need_append_type_cast_vec)
+{
+    tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+    String tz_col;
+    String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
+    // <origin_column_name, offset>
+    std::unordered_map<String, size_t> had_casted_map;
+
+    const auto & current_columns = getCurrentInputColumns();
+    NamesAndTypes after_cast_columns = current_columns;
+
+    for (size_t index = 0; index < output_offsets.size(); ++index)
+    {
+        UInt32 offset = output_offsets[index];
+        assert(offset < current_columns.size());
+        assert(offset < require_schema.size());
+        assert(offset < after_cast_columns.size());
+
+        /// for all the columns that need to be returned, if the type is timestamp, then convert
+        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
+        if ((need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
+        {
+            const String & origin_column_name = current_columns[offset].name;
+            auto it = had_casted_map.find(origin_column_name);
+            if (it == had_casted_map.end())
+            {
+                String updated_name = origin_column_name;
+                auto updated_type = current_columns[offset].type;
+                /// first add timestamp cast
+                if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
+                {
+                    if (tz_col.empty())
+                        tz_col = getActions(tz_expr, actions);
+                    updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
+                }
+                /// then add type cast
+                if (need_append_type_cast_vec[index])
+                {
+                    updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
+                    updated_name = appendCast(updated_type, actions, updated_name);
+                }
+                had_casted_map[origin_column_name] = offset;
+
+                after_cast_columns[offset].name = updated_name;
+                after_cast_columns[offset].type = updated_type;
+            }
+            else
+            {
+                size_t pre_casted_offset = it->second;
+                assert(after_cast_columns.size() > pre_casted_offset);
+                after_cast_columns[offset] = after_cast_columns[pre_casted_offset];
+            }
+        }
+    }
+
+    source_columns = std::move(after_cast_columns);
+}
+
+std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjection(
+    const std::vector<tipb::FieldType> & require_schema,
+    const std::vector<Int32> & output_offsets) const
+{
+    /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
+    /// TiFlash will append extra type cast if needed.
+    const auto & current_columns = getCurrentInputColumns();
+    bool need_append_type_cast = false;
+    BoolVec need_append_type_cast_vec;
+    /// we need to append type cast for root final projection if necessary
+    for (UInt32 i : output_offsets)
+    {
+        const auto & actual_type = current_columns[i].type;
+        auto expected_type = getDataTypeByFieldTypeForComputingLayer(require_schema[i]);
+        if (actual_type->getName() != expected_type->getName())
+        {
+            need_append_type_cast = true;
+            need_append_type_cast_vec.push_back(true);
+        }
+        else
+        {
+            need_append_type_cast_vec.push_back(false);
+        }
+    }
+    return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
@@ -819,89 +945,21 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     if (unlikely(output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
-    NamesWithAliases final_project;
-    const auto & current_columns = getCurrentInputColumns();
-    UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
-    /// TiFlash will append extra type cast if needed.
-    bool need_append_type_cast = false;
-    BoolVec need_append_type_cast_vec;
-    /// we need to append type cast for root block if necessary
-    for (UInt32 i : output_offsets)
-    {
-        const auto & actual_type = current_columns[i].type;
-        auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
-        if (actual_type->getName() != expected_type->getName())
-        {
-            need_append_type_cast = true;
-            need_append_type_cast_vec.push_back(true);
-        }
-        else
-        {
-            need_append_type_cast_vec.push_back(false);
-        }
-    }
-    if (!need_append_timezone_cast && !need_append_type_cast)
-    {
-        for (auto i : output_offsets)
-        {
-            final_project.emplace_back(
-                current_columns[i].name,
-                unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
-        }
-    }
-    else
-    {
-        /// for all the columns that need to be returned, if the type is timestamp, then convert
-        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
-        auto & step = initAndGetLastStep(chain);
-
-        tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-        String tz_col;
-        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-        std::vector<Int32> casted(schema.size(), 0);
-        std::unordered_map<String, String> casted_name_map;
-
-        for (size_t index = 0; index < output_offsets.size(); index++)
-        {
-            UInt32 i = output_offsets[index];
-            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
-            {
-                const auto & it = casted_name_map.find(current_columns[i].name);
-                if (it == casted_name_map.end())
-                {
-                    /// first add timestamp cast
-                    String updated_name = current_columns[i].name;
-                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
-                    {
-                        if (tz_col.length() == 0)
-                            tz_col = getActions(tz_expr, step.actions);
-                        updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
-                    }
-                    /// then add type cast
-                    if (need_append_type_cast_vec[index])
-                    {
-                        updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name);
-                    }
-                    final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
-                    casted_name_map[current_columns[i].name] = updated_name;
-                }
-                else
-                {
-                    final_project.emplace_back(it->second, unique_name_generator.toUniqueName(column_prefix + it->second));
-                }
-            }
-            else
-            {
-                final_project.emplace_back(
-                    current_columns[i].name,
-                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
-            }
-        }
-    }
+    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
+    assert(need_append_type_cast_vec.size() == output_offsets.size());
 
     auto & step = initAndGetLastStep(chain);
+
+    if (need_append_timezone_cast || need_append_type_cast)
+    {
+        // after appendCastForRootFinalProjection, source_columns has been modified.
+        appendCastForRootFinalProjection(step.actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+    }
+
+    // generate project aliases from source_columns.
+    NamesWithAliases final_project = genRootFinalProjectAliases(column_prefix, output_offsets);
+
     for (const auto & name : final_project)
     {
         step.required_output.push_back(name.first);

@@ -1,6 +1,20 @@
-#include <DataStreams/RemoteBlockInputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/NetException.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <DataStreams/RemoteBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <Storages/IStorage.h>
@@ -8,56 +22,82 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_PACKET_FROM_SERVER;
-    extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_PACKET_FROM_SERVER;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 RemoteBlockInputStream::RemoteBlockInputStream(
-        Connection & connection,
-        const String & query_, const Block & header_, const Context & context_, const Settings * settings,
-        const ThrottlerPtr & throttler, const Tables & external_tables_, QueryProcessingStage::Enum stage_)
-    : header(header_), query(query_), context(context_), external_tables(external_tables_), stage(stage_)
+    Connection & connection,
+    const String & query_,
+    const Block & header_,
+    const Context & context_,
+    const Settings * settings,
+    const ThrottlerPtr & throttler,
+    const Tables & external_tables_,
+    QueryProcessingStage::Enum stage_)
+    : header(header_)
+    , query(query_)
+    , context(context_)
+    , external_tables(external_tables_)
+    , stage(stage_)
 {
     if (settings)
         context.setSettings(*settings);
 
-    create_multiplexed_connections = [this, &connection, throttler]()
-    {
+    create_multiplexed_connections = [this, &connection, throttler]() {
         return std::make_unique<MultiplexedConnections>(connection, context.getSettingsRef(), throttler);
     };
 }
 
 RemoteBlockInputStream::RemoteBlockInputStream(
-        std::vector<IConnectionPool::Entry> && connections,
-        const String & query_, const Block & header_, const Context & context_, const Settings * settings,
-        const ThrottlerPtr & throttler, const Tables & external_tables_, QueryProcessingStage::Enum stage_)
-    : header(header_), query(query_), context(context_), external_tables(external_tables_), stage(stage_)
+    std::vector<IConnectionPool::Entry> && connections,
+    const String & query_,
+    const Block & header_,
+    const Context & context_,
+    const Settings * settings,
+    const ThrottlerPtr & throttler,
+    const Tables & external_tables_,
+    QueryProcessingStage::Enum stage_)
+    : header(header_)
+    , query(query_)
+    , context(context_)
+    , external_tables(external_tables_)
+    , stage(stage_)
 {
     if (settings)
         context.setSettings(*settings);
 
-    create_multiplexed_connections = [this, connections, throttler]() mutable
-    {
+    create_multiplexed_connections = [this, connections, throttler]() mutable {
         return std::make_unique<MultiplexedConnections>(
-                std::move(connections), context.getSettingsRef(), throttler, append_extra_info);
+            std::move(connections),
+            context.getSettingsRef(),
+            throttler,
+            append_extra_info);
     };
 }
 
 RemoteBlockInputStream::RemoteBlockInputStream(
-        const ConnectionPoolWithFailoverPtr & pool,
-        const String & query_, const Block & header_, const Context & context_, const Settings * settings,
-        const ThrottlerPtr & throttler, const Tables & external_tables_, QueryProcessingStage::Enum stage_)
-    : header(header_), query(query_), context(context_), external_tables(external_tables_), stage(stage_)
+    const ConnectionPoolWithFailoverPtr & pool,
+    const String & query_,
+    const Block & header_,
+    const Context & context_,
+    const Settings * settings,
+    const ThrottlerPtr & throttler,
+    const Tables & external_tables_,
+    QueryProcessingStage::Enum stage_)
+    : header(header_)
+    , query(query_)
+    , context(context_)
+    , external_tables(external_tables_)
+    , stage(stage_)
 {
     if (settings)
         context.setSettings(*settings);
 
-    create_multiplexed_connections = [this, pool, throttler]()
-    {
+    create_multiplexed_connections = [this, pool, throttler]() {
         const Settings & settings = context.getSettingsRef();
 
         std::vector<IConnectionPool::Entry> connections;
@@ -72,7 +112,10 @@ RemoteBlockInputStream::RemoteBlockInputStream(
             connections = pool->getMany(&settings, pool_mode);
 
         return std::make_unique<MultiplexedConnections>(
-                std::move(connections), settings, throttler, append_extra_info);
+            std::move(connections),
+            settings,
+            throttler,
+            append_extra_info);
     };
 }
 
@@ -138,9 +181,8 @@ void RemoteBlockInputStream::sendExternalTables()
             {
                 StoragePtr cur = table.second;
                 QueryProcessingStage::Enum stage = QueryProcessingStage::Complete;
-                BlockInputStreams input = cur->read(cur->getColumns().getNamesOfPhysical(), {}, context,
-                    stage, DEFAULT_BLOCK_SIZE, 1);
-                if (input.size() == 0)
+                BlockInputStreams input = cur->read(cur->getColumns().getNamesOfPhysical(), {}, context, stage, DEFAULT_BLOCK_SIZE, 1);
+                if (input.empty())
                     res.push_back(std::make_pair(std::make_shared<OneBlockInputStream>(cur->getSampleBlock()), table.first));
                 else
                     res.push_back(std::make_pair(input[0], table.first));
@@ -166,7 +208,7 @@ static Block adaptBlockStructure(const Block & block, const Block & header, cons
     res.info = block.info;
 
     for (const auto & elem : header)
-        res.insert({ castColumn(block.getByName(elem.name), elem.type, context), elem.type, elem.name });
+        res.insert({castColumn(block.getByName(elem.name), elem.type, context), elem.type, elem.name});
     return res;
 }
 
@@ -190,51 +232,51 @@ Block RemoteBlockInputStream::readImpl()
 
         switch (packet.type)
         {
-            case Protocol::Server::Data:
-                /// If the block is not empty and is not a header block
-                if (packet.block && (packet.block.rows() > 0))
-                    return adaptBlockStructure(packet.block, header, context);
-                break;  /// If the block is empty - we will receive other packets before EndOfStream.
+        case Protocol::Server::Data:
+            /// If the block is not empty and is not a header block
+            if (packet.block && (packet.block.rows() > 0))
+                return adaptBlockStructure(packet.block, header, context);
+            break; /// If the block is empty - we will receive other packets before EndOfStream.
 
-            case Protocol::Server::Exception:
-                got_exception_from_replica = true;
-                packet.exception->rethrow();
-                break;
+        case Protocol::Server::Exception:
+            got_exception_from_replica = true;
+            packet.exception->rethrow();
+            break;
 
-            case Protocol::Server::EndOfStream:
-                if (!multiplexed_connections->hasActiveConnections())
-                {
-                    finished = true;
-                    return Block();
-                }
-                break;
+        case Protocol::Server::EndOfStream:
+            if (!multiplexed_connections->hasActiveConnections())
+            {
+                finished = true;
+                return Block();
+            }
+            break;
 
-            case Protocol::Server::Progress:
-                /** We use the progress from a remote server.
+        case Protocol::Server::Progress:
+            /** We use the progress from a remote server.
                   * We also include in ProcessList,
                   * and we use it to check
                   * constraints (for example, the minimum speed of query execution)
                   * and quotas (for example, the number of lines to read).
                   */
-                progressImpl(packet.progress);
-                break;
+            progressImpl(packet.progress);
+            break;
 
-            case Protocol::Server::ProfileInfo:
-                /// Use own (client-side) info about read bytes, it is more correct info than server-side one.
-                info.setFrom(packet.profile_info, true);
-                break;
+        case Protocol::Server::ProfileInfo:
+            /// Use own (client-side) info about read bytes, it is more correct info than server-side one.
+            info.setFrom(packet.profile_info, true);
+            break;
 
-            case Protocol::Server::Totals:
-                totals = packet.block;
-                break;
+        case Protocol::Server::Totals:
+            totals = packet.block;
+            break;
 
-            case Protocol::Server::Extremes:
-                extremes = packet.block;
-                break;
+        case Protocol::Server::Extremes:
+            extremes = packet.block;
+            break;
 
-            default:
-                got_unknown_packet_from_replica = true;
-                throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+        default:
+            got_unknown_packet_from_replica = true;
+            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
         }
     }
 }
@@ -262,18 +304,18 @@ void RemoteBlockInputStream::readSuffixImpl()
     Connection::Packet packet = multiplexed_connections->drain();
     switch (packet.type)
     {
-        case Protocol::Server::EndOfStream:
-            finished = true;
-            break;
+    case Protocol::Server::EndOfStream:
+        finished = true;
+        break;
 
-        case Protocol::Server::Exception:
-            got_exception_from_replica = true;
-            packet.exception->rethrow();
-            break;
+    case Protocol::Server::Exception:
+        got_exception_from_replica = true;
+        packet.exception->rethrow();
+        break;
 
-        default:
-            got_unknown_packet_from_replica = true;
-            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+    default:
+        got_unknown_packet_from_replica = true;
+        throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
     }
 }
 
@@ -300,7 +342,7 @@ void RemoteBlockInputStream::tryCancel(const char * reason)
     if (!was_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
         return;
 
-    LOG_TRACE(log, "(" << multiplexed_connections->dumpAddresses() << ") " << reason);
+    LOG_FMT_TRACE(log, "({}) {}", multiplexed_connections->dumpAddresses(), reason);
     multiplexed_connections->sendCancel();
 }
 
@@ -314,4 +356,4 @@ bool RemoteBlockInputStream::hasThrownException() const
     return got_exception_from_replica || got_unknown_packet_from_replica;
 }
 
-}
+} // namespace DB

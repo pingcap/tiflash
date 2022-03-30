@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Core/Block.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -202,7 +216,7 @@ TEST(VersionFilter_test, Compact)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, false);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -215,14 +229,14 @@ TEST(VersionFilter_test, Compact)
         }
         ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)1);
         ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)0);
-        ASSERT_EQ(gc_hint_version, (size_t)UINT64_MAX);
+        ASSERT_EQ(gc_hint_version, (size_t)std::numeric_limits<UInt64>::max());
         in->readSuffix();
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, false);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -242,7 +256,7 @@ TEST(VersionFilter_test, Compact)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, false);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -262,7 +276,7 @@ TEST(VersionFilter_test, Compact)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, false);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -305,7 +319,7 @@ TEST(VersionFilter_test, CompactCommonHandle)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, true);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -318,14 +332,14 @@ TEST(VersionFilter_test, CompactCommonHandle)
         }
         ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)1);
         ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)0);
-        ASSERT_EQ(gc_hint_version, (size_t)UINT64_MAX);
+        ASSERT_EQ(gc_hint_version, (size_t)std::numeric_limits<UInt64>::max());
         in->readSuffix();
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, true);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -345,7 +359,7 @@ TEST(VersionFilter_test, CompactCommonHandle)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, true);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
@@ -365,7 +379,7 @@ TEST(VersionFilter_test, CompactCommonHandle)
         auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, true);
         auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
-        UInt64 gc_hint_version = UINT64_MAX;
+        UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
         while (true)
         {
