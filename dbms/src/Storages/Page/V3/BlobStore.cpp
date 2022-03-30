@@ -807,9 +807,8 @@ void BlobStore::BlobStats::restore()
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
         }
 
-        // After single path restore finished.
-        // We need remove blob(in disk) which valid rate is 0
-        // And that blobs won't be restored by BlobStats.
+        // If a BlobFile on disk with a valid rate of 0 (but has not been deleted because of some reason),
+        // then it won't be restored to stats. But we should check and clean up if such files exist.
 
         Poco::File store_path(path);
 
