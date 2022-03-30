@@ -1268,7 +1268,7 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
 SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
 {
-    auto new_segment = std::make_shared<Segment>(epoch, //
+    auto new_segment = std::make_shared<Segment>(epoch + 1, //
                                             rowkey_range,
                                             segment_id,
                                             0,
