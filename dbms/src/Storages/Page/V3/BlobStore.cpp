@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/TiFlashMetrics.h>
 #include <Poco/File.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
