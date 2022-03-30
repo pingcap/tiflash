@@ -1269,13 +1269,14 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
 {
     auto new_segment = std::make_shared<Segment>(epoch + 1, //
-                                            rowkey_range,
-                                            segment_id,
-                                            0,
-                                            delta,
-                                            stable);
+                                                 rowkey_range,
+                                                 segment_id,
+                                                 0,
+                                                 delta,
+                                                 stable);
     new_segment->serialize(wbs.meta);
     wbs.writeMeta();
+    LOG_FMT_INFO(log, "Segment [{}] drop its next segment done", info());
     return new_segment;
 }
 
