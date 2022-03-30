@@ -23,6 +23,7 @@ namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"equals", tipb::ScalarFuncSig::EQInt},
+    {"notEquals", tipb::ScalarFuncSig::NEInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
     {"or", tipb::ScalarFuncSig::LogicalOr},
     {"xor", tipb::ScalarFuncSig::LogicalXor},
@@ -1212,7 +1213,7 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     tipb_executor->set_tp(tipb::ExecType::TypeJoin);
     tipb_executor->set_executor_id(name);
     tipb::Join * join = tipb_executor->mutable_join();
-    switch (join_params.kind)
+    switch (join_params.kind) // todo support more type...
     {
     case ASTTableJoin::Kind::Inner:
         join->set_join_type(tipb::JoinType::TypeInnerJoin);

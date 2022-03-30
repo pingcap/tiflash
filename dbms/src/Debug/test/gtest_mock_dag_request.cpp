@@ -38,6 +38,10 @@ try
     // ywq todo add a literal method to construct literal Field.
     // expression alias
     // support wildcard..
+    // more types of join..
+    // support join condition construct...
+    // add sum function
+    // add plus minus etc
     String empty_str;
 
     MockTableName right_table{"r_db", "r_table"};

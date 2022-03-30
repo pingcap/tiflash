@@ -43,8 +43,8 @@ public:
     }
     InterpreterTest()
         : context(TiFlashTestEnv::getContext())
-        {}
-    
+    {}
+
     virtual void initializeDAGContext()
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);

@@ -58,19 +58,19 @@ public:
 
     AstExprBuilder & appendList();
 
+    AstExprBuilder & appendAlias(String alias);
+
     AstExprBuilder & appendFunction(const String & func_name);
     AstExprBuilder & eq(AstExprBuilder & right_expr);
-    // AstExprBuilder & notEq(const AstExprBuilder & right_expr);
-    // AstExprBuilder & lt(const AstExprBuilder & right_expr);
-    // AstExprBuilder & gt(const AstExprBuilder & right_expr);
-    // AstExprBuilder & andFunc(const AstExprBuilder & right_expr);
-    // AstExprBuilder & orFunc(const AstExprBuilder & right_expr);
+    AstExprBuilder & notEq(AstExprBuilder & right_expr);
+    AstExprBuilder & lt(AstExprBuilder & right_expr);
+    AstExprBuilder & gt(AstExprBuilder & right_expr);
+    AstExprBuilder & andFunc(AstExprBuilder & right_expr);
+    AstExprBuilder & orFunc(AstExprBuilder & right_expr);
 
     ASTPtr build();
-
     ASTPtr buildEqualFunction(const String & column_left, const String & column_right);
     ASTPtr buildEqualFunction(const String & column_left, const Field & literal);
-
 
 private:
     std::vector<ASTPtr> vec;

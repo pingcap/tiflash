@@ -192,6 +192,15 @@ AstExprBuilder & AstExprBuilder::appendList()
     return *this;
 }
 
+AstExprBuilder & AstExprBuilder::appendAlias(String alias)
+{
+    assert(vec.size() == 1);
+    auto i = std::make_shared<ASTIdentifier>(alias);
+    i->children.push_back(vec.back());
+    vec.clear();
+    return *this;
+}
+
 AstExprBuilder & AstExprBuilder::appendFunction(const String & func_name)
 {
     appendList();
@@ -209,6 +218,36 @@ AstExprBuilder & AstExprBuilder::eq(AstExprBuilder & right_expr)
 {
     vec.push_back(right_expr.build());
     return appendFunction("equals");
+}
+
+AstExprBuilder & AstExprBuilder::notEq(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("notEquals");
+}
+
+AstExprBuilder & AstExprBuilder::lt(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("less");
+}
+
+AstExprBuilder & AstExprBuilder::gt(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("greater");
+}
+
+AstExprBuilder & AstExprBuilder::andFunc(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("and");
+}
+
+AstExprBuilder & AstExprBuilder::orFunc(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("or");
 }
 
 ASTPtr AstExprBuilder::build()
@@ -229,7 +268,7 @@ ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const Stri
     vec.clear();
     return ret;
 }
-// todo function should support chainable call
+
 ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const Field & literal)
 {
     appendColumnRef(column_left);

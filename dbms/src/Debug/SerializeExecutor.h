@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Statistics/traverseExecutors.h>
+
 #include <cstddef>
 
 #include "Common/FmtUtils.h"
@@ -147,7 +148,7 @@ private:
         });
     }
 
-    void addPrefix(size_t level) 
+    void addPrefix(size_t level)
     {
         for (size_t i = 0; i < level; ++i)
             context.buf.append(" ");

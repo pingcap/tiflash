@@ -11,7 +11,6 @@ namespace DB
 {
 namespace
 {
-
 String getFieldTypeName(Int32 tp)
 {
     switch (tp)
