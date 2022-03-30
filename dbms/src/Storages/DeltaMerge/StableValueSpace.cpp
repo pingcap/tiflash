@@ -360,7 +360,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
         auto filter = DMFilePackFilter::loadFrom(
             f,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
-            false,
+            /*set_cache_if_miss*/ false,
             {range},
             RSOperatorPtr{},
             IdSetPtr{},
