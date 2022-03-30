@@ -128,7 +128,7 @@ BlockInputStreamPtr HTTPDictionarySource::loadKeys(
     const Columns & key_columns,
     const std::vector<size_t> & requested_rows)
 {
-    LOG_FMT_TRACE(log, "loadKeys {}  size = {}", toString(), requested_rows.size());
+    LOG_FMT_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
 
     ReadWriteBufferFromHTTP::OutStreamCallback out_stream_callback = [&](std::ostream & ostr) {
         WriteBufferFromOStream out_buffer(ostr);
