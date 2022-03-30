@@ -448,7 +448,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
-
+        context->setSetting("enable_async_server", is_async ? "true" : "false");
         return std::make_tuple(context, grpc::Status::OK);
     }
     catch (Exception & e)
