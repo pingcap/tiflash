@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -103,7 +102,6 @@ private:
         std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
-    const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
@@ -119,6 +117,6 @@ private:
 
     std::vector<SubqueriesForSets> & subqueries_for_sets;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 } // namespace DB

@@ -54,7 +54,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     uint64_t total_rows;
 
@@ -91,7 +91,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
+                    LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -123,14 +123,14 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         auto result = remote_reader->nextResult(block_queue, sample_block);
         if (result.meet_error)
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
+            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
             throw Exception(result.error_msg);
         }
         if (result.eof)
             return false;
         if (result.resp != nullptr && result.resp->has_error())
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
+            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
         /// only the last response contains execution summaries
@@ -168,12 +168,12 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(getMPPTaskLog(log_, name))
+        , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
     {
         // generate sample block
@@ -236,6 +236,13 @@ public:
             collected = false;
             remote_reader->resetNewThreadCountCompute();
         }
+    }
+
+protected:
+    virtual void readSuffixImpl() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        remote_reader->close();
     }
 };
 

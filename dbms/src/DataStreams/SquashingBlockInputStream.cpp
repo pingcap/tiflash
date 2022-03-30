@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-
 
 namespace DB
 {
@@ -22,9 +20,9 @@ SquashingBlockInputStream::SquashingBlockInputStream(
     const BlockInputStreamPtr & src,
     size_t min_block_size_rows,
     size_t min_block_size_bytes,
-    const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, NAME))
-    , transform(min_block_size_rows, min_block_size_bytes, log)
+    const String & req_id)
+    : log(Logger::get(NAME, req_id))
+    , transform(min_block_size_rows, min_block_size_bytes, req_id)
 {
     children.emplace_back(src);
 }

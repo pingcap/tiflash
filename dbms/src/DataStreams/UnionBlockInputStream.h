@@ -17,7 +17,6 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -28,7 +27,7 @@ extern const int LOGICAL_ERROR;
 }
 
 
-namespace _UnionBlockInputStreamImpl
+namespace UnionBlockInputStreamImpl
 {
 template <StreamUnionMode mode>
 struct OutputData;
@@ -67,7 +66,7 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     {}
 };
 
-} // namespace _UnionBlockInputStreamImpl
+} // namespace UnionBlockInputStreamImpl
 
 /** Merges several sources into one.
   * Blocks from different sources are interleaved with each other in an arbitrary way.
@@ -97,10 +96,10 @@ public:
         BlockInputStreams inputs,
         BlockInputStreamPtr additional_input_at_end,
         size_t max_threads,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
@@ -168,7 +167,7 @@ protected:
         if (!started)
             return;
 
-        LOG_TRACE(log, "Waiting for threads to finish");
+        LOG_FMT_TRACE(log, "Waiting for threads to finish");
 
         std::exception_ptr exception;
         if (!all_read)
@@ -176,7 +175,7 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            _UnionBlockInputStreamImpl::OutputData<mode> res;
+            UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
                 output_queue.pop(res);
@@ -197,7 +196,7 @@ protected:
 
         processor.wait();
 
-        LOG_TRACE(log, "Waited for threads to finish");
+        LOG_FMT_TRACE(log, "Waited for threads to finish");
 
         if (exception)
             std::rethrow_exception(exception);
@@ -268,7 +267,7 @@ private:
     }
 
 private:
-    using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
+    using Payload = UnionBlockInputStreamImpl::OutputData<mode>;
     using OutputQueue = ConcurrentBoundedQueue<Payload>;
 
 private:
@@ -337,7 +336,7 @@ private:
         Self & parent;
     };
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     Handler handler;
     ParallelInputsProcessor<Handler, mode> processor;
