@@ -248,7 +248,8 @@ level = "debug"
         return;
     }
     char abs_path[PATH_MAX]{};
-    (void)::readlink("/proc/self/exe", abs_path, sizeof(abs_path));
+    if (ssize_t i_ret = ::readlink("/proc/self/exe", abs_path, sizeof(abs_path)); i_ret < 0)
+        throw Poco::Exception("can not locate the abs path of binary");
     auto stdout_name = fmt::format("/tmp/{}-{}.stdout", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
     auto stderr_name = fmt::format("/tmp/{}-{}.stderr", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
     auto stdout_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
