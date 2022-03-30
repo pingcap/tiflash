@@ -34,6 +34,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
     DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
         index_cache,
+        true,
         rowkey_ranges,
         rs_filter,
         read_packs,

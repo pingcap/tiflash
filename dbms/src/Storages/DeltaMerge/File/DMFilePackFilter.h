@@ -43,6 +43,7 @@ public:
     static DMFilePackFilter loadFrom(
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
+        bool  set_cache_if_miss,
         const RowKeyRanges & rowkey_ranges,
         const RSOperatorPtr & filter,
         const IdSetPtr & read_packs,
@@ -50,7 +51,7 @@ public:
         const ReadLimiterPtr & read_limiter,
         const DB::LoggerPtr & tracing_logger)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_logger);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_logger);
         pack_filter.init();
         return pack_filter;
     }
@@ -102,6 +103,7 @@ public:
 private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
+                     bool  set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
@@ -110,6 +112,7 @@ private:
                      const DB::LoggerPtr & tracing_logger)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
+        , set_cache_if_miss(set_cache_if_miss_)
         , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
@@ -212,6 +215,7 @@ private:
                           const DMFilePtr & dmfile,
                           const FileProviderPtr & file_provider,
                           const MinMaxIndexCachePtr & index_cache,
+                          bool  set_cache_if_miss,
                           ColId col_id,
                           const ReadLimiterPtr & read_limiter)
     {
@@ -250,13 +254,17 @@ private:
             }
         };
         MinMaxIndexPtr minmax_index;
-        if (index_cache)
+        if (index_cache && set_cache_if_miss)
         {
             minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
-            minmax_index = load();
+            // try load from the cache first
+            if (index_cache)
+                minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
+            if (!minmax_index)
+                minmax_index = load();
         }
         indexes.emplace(col_id, RSIndex(type, minmax_index));
     }
@@ -269,12 +277,13 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id, read_limiter);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
     }
 
 private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
+    bool set_cache_if_miss;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;
