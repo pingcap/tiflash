@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 /** Default engine of databases.
   * It stores tables list in filesystem using list of .sql files,
   *  that contain declaration of table represented by SQL ATTACH TABLE query.
@@ -87,4 +86,4 @@ private:
     ASTPtr getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const;
 };
 
-}
+} // namespace DB

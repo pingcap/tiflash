@@ -418,7 +418,9 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         else
             std::advance(end, bunch_size);
 
-        auto task = [begin, end] { task_function(begin, end); };
+        auto task = [begin, end] {
+            task_function(begin, end);
+        };
 
         if (thread_pool)
             thread_pool->schedule(task);

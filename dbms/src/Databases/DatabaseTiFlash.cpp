@@ -152,7 +152,9 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto begin = table_files.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
 
-        auto task = [begin, end] { task_function(begin, end); };
+        auto task = [begin, end] {
+            task_function(begin, end);
+        };
         if (thread_pool)
             thread_pool->schedule(task);
         else
