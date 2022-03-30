@@ -28,13 +28,14 @@ public:
     static DMFilePackFilter loadFrom(const DMFilePtr & dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
                                      UInt64 hash_salt,
+                                     bool set_cache_if_miss,
                                      const RowKeyRanges & rowkey_ranges,
                                      const RSOperatorPtr & filter,
                                      const IdSetPtr & read_packs,
                                      const FileProviderPtr & file_provider,
                                      const ReadLimiterPtr & read_limiter)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
         pack_filter.init();
         return pack_filter;
     }
@@ -87,6 +88,7 @@ private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      UInt64 hash_salt_,
+                     bool set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
@@ -95,6 +97,7 @@ private:
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , hash_salt(hash_salt_)
+        , set_cache_if_miss(set_cache_if_miss_)
         , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
@@ -199,6 +202,7 @@ private:
                           const DMFilePtr & dmfile,
                           const FileProviderPtr & file_provider,
                           const MinMaxIndexCachePtr & index_cache,
+                          bool set_cache_if_miss,
                           ColId col_id,
                           const ReadLimiterPtr & read_limiter)
     {
@@ -206,13 +210,16 @@ private:
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
+            auto index_file_size = dmfile->colIndexSize(file_name_base);
+            if (index_file_size == 0)
+                return std::make_shared<MinMaxIndex>(*type);
             if (!dmfile->configuration)
             {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
-                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)),
+                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
                 index_buf.seek(dmfile->colIndexOffset(file_name_base));
                 return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
@@ -227,21 +234,24 @@ private:
                                                                             dmfile->configuration->getChecksumAlgorithm(),
                                                                             dmfile->configuration->getChecksumFrameLength());
                 index_buf->seek(dmfile->colIndexOffset(file_name_base));
-                auto file_size = dmfile->colIndexSize(file_name_base);
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
                 auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
-                auto frame_count = file_size / frame_total_size + (file_size % frame_total_size != 0);
-                return MinMaxIndex::read(*type, *index_buf, file_size - header_size * frame_count);
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
             }
         };
         MinMaxIndexPtr minmax_index;
-        if (index_cache)
+        if (index_cache && set_cache_if_miss)
         {
             minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
-            minmax_index = load();
+            // try load from the cache first
+            if (index_cache)
+                minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
+            if (!minmax_index)
+                minmax_index = load();
         }
         indexes.emplace(col_id, RSIndex(type, minmax_index));
     }
@@ -254,13 +264,14 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id, read_limiter);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
     }
 
 private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
     UInt64 hash_salt;
+    bool set_cache_if_miss;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;

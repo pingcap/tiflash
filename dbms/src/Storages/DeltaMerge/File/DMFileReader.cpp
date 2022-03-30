@@ -208,7 +208,7 @@ DMFileReader::DMFileReader(
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
+    , pack_filter(dmfile_, index_cache_, hash_salt_, /*set_cache_if_miss*/ true, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
     , handle_res(pack_filter.getHandleRes())
     , use_packs(pack_filter.getUsePacks())
     , skip_packs_by_column(read_columns.size(), 0)
