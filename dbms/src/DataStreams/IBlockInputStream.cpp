@@ -30,22 +30,26 @@ extern const int TOO_DEEP_PIPELINE;
 
 String IBlockInputStream::getTreeID() const
 {
-    std::stringstream s;
-    s << getName();
-
-    if (!children.empty())
+    std::lock_guard lock(tree_id_mutex);
+    if (tree_id.empty())
     {
-        s << "(";
-        for (BlockInputStreams::const_iterator it = children.begin(); it != children.end(); ++it)
-        {
-            if (it != children.begin())
-                s << ", ";
-            s << (*it)->getTreeID();
-        }
-        s << ")";
-    }
+        std::stringstream s;
+        s << getName();
 
-    return s.str();
+        if (!children.empty())
+        {
+            s << "(";
+            for (BlockInputStreams::const_iterator it = children.begin(); it != children.end(); ++it)
+            {
+                if (it != children.begin())
+                    s << ", ";
+                s << (*it)->getTreeID();
+            }
+            s << ")";
+        }
+        tree_id = s.str();
+    }
+    return tree_id;
 }
 
 

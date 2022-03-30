@@ -386,10 +386,13 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             if (!internal && res.in)
             {
-                std::stringstream log_str;
-                log_str << "Query pipeline:\n";
-                res.in->dumpTree(log_str);
-                LOG_DEBUG(execute_query_logger, log_str.str());
+                if (execute_query_logger->debug())
+                {
+                    std::stringstream log_str;
+                    log_str << "Query pipeline:\n";
+                    res.in->dumpTree(log_str);
+                    LOG_DEBUG(execute_query_logger, log_str.str());
+                }
             }
         }
     }

@@ -184,8 +184,11 @@ private:
     TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
+    mutable std::mutex tree_id_mutex;
+    mutable String tree_id;
 
-    /// Get text with names of this source and the entire subtree.
+    /// Get text with names of this source and the entire subtree, this function should only be called after the
+    /// InputStream tree is constructed.
     String getTreeID() const;
 };
 
