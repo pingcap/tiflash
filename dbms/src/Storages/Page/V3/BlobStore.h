@@ -197,7 +197,7 @@ public:
         mutable std::mutex lock_stats;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+    BlobStore(String name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     std::vector<BlobFileId> getGCStats();
 

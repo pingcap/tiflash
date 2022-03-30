@@ -86,6 +86,7 @@ public:
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
+        String storage_name,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator);
 
@@ -113,6 +114,7 @@ public:
 
 private:
     WALStore(
+        String storage_name,
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
         Format::LogNumberType last_log_num_);
@@ -130,7 +132,7 @@ private:
     UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 } // namespace PS::V3

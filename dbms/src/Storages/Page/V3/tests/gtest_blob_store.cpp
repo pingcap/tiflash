@@ -280,7 +280,7 @@ try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     config.file_limit_size = 2560;
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
@@ -342,7 +342,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -434,7 +434,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         off += data_sz;
     }
 
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -490,7 +490,7 @@ TEST_F(BlobStoreTest, testWrite)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
     PageId page_id = 50;
     const size_t buff_size = 1024;
@@ -600,7 +600,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
     {
         config.file_limit_size = buff_size - 1;
-        auto blob_store = BlobStore(file_provider, delegator, config);
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff[buff_size];
@@ -624,7 +624,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
     for (auto & buf_size : buffer_sizes)
     {
-        auto blob_store = BlobStore(file_provider, delegator, config);
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff1[buf_size];
@@ -667,7 +667,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
@@ -751,7 +751,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
     WriteBatch wb;
@@ -811,7 +811,7 @@ TEST_F(BlobStoreTest, GC)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(file_provider, delegator, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -878,7 +878,7 @@ try
 
     BlobStore::Config config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -929,7 +929,7 @@ try
 
     BlobStore::Config config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
