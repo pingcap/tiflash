@@ -174,7 +174,7 @@ public:
         return active_threads;
     }
 
-    unsigned int getMaxThreads() const
+    size_t getMaxThreads() const
     {
         return max_threads;
     }
