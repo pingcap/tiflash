@@ -52,6 +52,28 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
 }
 
 template <typename Writer>
+MPPTunnelBase<Writer>::MPPTunnelBase(
+    const String & tunnel_id_,
+    const std::chrono::seconds timeout_,
+    int input_steams_num_,
+    bool is_local_,
+    bool is_async_,
+    const String & req_id)
+    : connected(false)
+    , finished(false)
+    , is_local(is_local_)
+    , is_async(is_async_)
+    , timeout(timeout_)
+    , tunnel_id(tunnel_id_)
+    , input_streams_num(input_steams_num_)
+    , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , thread_manager(newThreadManager())
+    , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+{
+    assert(!(is_local && is_async));
+}
+
+template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
     SCOPE_EXIT({
