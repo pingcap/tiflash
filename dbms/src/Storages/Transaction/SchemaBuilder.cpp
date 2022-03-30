@@ -332,22 +332,22 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         return;
     }
 
-    auto get_logging_msg = [&]() -> String {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
-        for (const auto & schema_change : schema_changes)
-            for (const auto & command : schema_change.first)
-            {
-                if (command.type == AlterCommand::ADD_COLUMN)
-                    fmt_buf.fmtAppend("ADD COLUMN {} , ", command.data_type->getName());
-                else if (command.type == AlterCommand::DROP_COLUMN)
-                    fmt_buf.fmtAppend("DROP COLUMN {} , ", command.data_type->getName());
-                else if (command.type == AlterCommand::MODIFY_COLUMN)
-                    fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
-                else if (command.type == AlterCommand::RENAME_COLUMN)
-                    fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
-            }
 
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
+    for (const auto & schema_change : schema_changes)
+        for (const auto & command : schema_change.first)
+        {
+            if (command.type == AlterCommand::ADD_COLUMN)
+                fmt_buf.fmtAppend("ADD COLUMN {} , ", command.data_type->getName());
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                fmt_buf.fmtAppend("DROP COLUMN {} , ", command.data_type->getName());
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+                fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
+        }
+    auto get_logging_msg = [&]() -> String {
         return fmt_buf.toString();
     };
 
