@@ -29,11 +29,11 @@
 #include <limits.h>
 
 #include <csignal>
-class DaemonConfig_test : public ::testing::Test
+class DaemonConfigTest : public ::testing::Test
 {
 public:
-    DaemonConfig_test()
-        : log(&Poco::Logger::get("DaemonConfig_test"))
+    DaemonConfigTest()
+        : log(&Poco::Logger::get("DaemonConfigTest"))
     {
     }
 
@@ -41,7 +41,7 @@ public:
 
 protected:
     Poco::Logger * log;
-    void clearFiles(String path)
+    static void clearFiles(String path)
     {
         Poco::File file(path);
         if (file.exists())
@@ -127,7 +127,7 @@ struct TestDaemon : public BaseDaemon
     }
 };
 
-TEST_F(DaemonConfig_test, ReloadLoggerConfig)
+TEST_F(DaemonConfigTest, ReloadLoggerConfig)
 try
 {
     DB::Strings tests = {
@@ -188,7 +188,7 @@ size = "1"
     };
     BaseDaemon app;
 
-    auto verifyLoggersConfig = [](size_t logger_num, Poco::Util::AbstractConfiguration & config) {
+    auto verify_loggers_config = [](size_t logger_num, Poco::Util::AbstractConfiguration & config) {
         for (size_t j = 0; j < logger_num; j++)
         {
             Poco::Logger & cur_logger = Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", j));
@@ -207,8 +207,8 @@ size = "1"
         auto config = loadConfigFromString(test_case);
         app.buildLoggers(*config);
         Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", i));
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
-        verifyLoggersConfig(i + 1, *config);
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        verify_loggers_config(i + 1, *config);
     }
     clearFiles("./tmp/log");
 }
@@ -219,7 +219,7 @@ extern "C" char ** environ;
 #if USE_UNWIND
 TEST(BaseDaemon, StackUnwind)
 {
-    auto conf = R"(
+    const auto * conf = R"(
 [application]
 runAsDaemon = false
 [profiles]
@@ -248,7 +248,8 @@ level = "debug"
         return;
     }
     char abs_path[PATH_MAX]{};
-    ::readlink("/proc/self/exe", abs_path, sizeof(abs_path));
+    if (ssize_t i_ret = ::readlink("/proc/self/exe", abs_path, sizeof(abs_path)); i_ret < 0)
+        throw Poco::Exception("can not locate the abs path of binary");
     auto stdout_name = fmt::format("/tmp/{}-{}.stdout", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
     auto stderr_name = fmt::format("/tmp/{}-{}.stderr", reinterpret_cast<uintptr_t>(&abs_path), ::time(nullptr));
     auto stdout_fd = ::open(stdout_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
