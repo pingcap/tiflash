@@ -55,7 +55,7 @@ ConnectionPoolWithFailover::ConnectionPoolWithFailover(
     }
 }
 
-IConnectionPool::Entry ConnectionPoolWithFailover::get(const Settings * settings, bool /*force_connected*/)
+IConnectionPool::Entry ConnectionPoolWithFailover::get(const Settings * settings, bool /*force_connected*/) // NOLINT
 {
     TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message) {
         return tryGetEntry(pool, fail_message, settings);
@@ -210,11 +210,13 @@ ConnectionPoolWithFailover::tryGetEntry(
             result.is_up_to_date = false;
             result.staleness = delay;
 
-            LOG_TRACE(
+            LOG_FMT_TRACE(
                 log,
-                "Server " << result.entry->getDescription() << " has unacceptable replica delay "
-                          << "for table " << table_to_check->database << "." << table_to_check->table
-                          << ": " << delay);
+                "Server {} has unacceptable replica delay for table {}.{}: {}",
+                result.entry->getDescription(),
+                table_to_check->database,
+                table_to_check->table,
+                delay);
             ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
         }
     }
