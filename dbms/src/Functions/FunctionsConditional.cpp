@@ -123,7 +123,7 @@ void FunctionMultiIf::executeImpl(Block & block, const ColumnNumbers & args, siz
         else
         {
             /// Cast all columns to result type.
-            converted_columns_holder.emplace_back(tiDBCastColumn(source_col, return_type, context));
+            converted_columns_holder.emplace_back(castColumn(source_col, return_type, context));
             instruction.source = converted_columns_holder.back().get();
         }
 

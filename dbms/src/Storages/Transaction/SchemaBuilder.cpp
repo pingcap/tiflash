@@ -87,7 +87,7 @@ inline void setAlterCommandColumn(Poco::Logger * log, AlterCommand & command, co
         args->children.emplace_back(arg0);
         args->children.emplace_back(arg1);
         auto func = std::make_shared<ASTFunction>();
-        func->name = "CAST";
+        func->name = "TIDB_CAST";
         func->arguments = args;
         command.default_expression = func;
     }
