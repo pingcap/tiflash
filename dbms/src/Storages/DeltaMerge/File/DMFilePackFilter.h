@@ -24,6 +24,7 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 class DMFilePackFilter
 {
 public:
+<<<<<<< HEAD
     static DMFilePackFilter loadFrom(const DMFilePtr &           dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
                                      const RowKeyRange &         rowkey_range,
@@ -32,6 +33,20 @@ public:
                                      const FileProviderPtr &     file_provider)
     {
         auto pack_filter = DMFilePackFilter(dmfile, index_cache, rowkey_range, filter, read_packs, file_provider);
+=======
+    static DMFilePackFilter loadFrom(
+        const DMFilePtr & dmfile,
+        const MinMaxIndexCachePtr & index_cache,
+        bool set_cache_if_miss,
+        const RowKeyRanges & rowkey_ranges,
+        const RSOperatorPtr & filter,
+        const IdSetPtr & read_packs,
+        const FileProviderPtr & file_provider,
+        const ReadLimiterPtr & read_limiter,
+        const DB::LoggerPtr & tracing_logger)
+    {
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_logger);
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
         pack_filter.init();
         return pack_filter;
     }
@@ -83,6 +98,7 @@ public:
 private:
     DMFilePackFilter(const DMFilePtr &           dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
+<<<<<<< HEAD
                      const RowKeyRange &         rowkey_range_, // filter by handle range
                      const RSOperatorPtr &       filter_,       // filter by push down where clause
                      const IdSetPtr &            read_packs_,   // filter by pack index
@@ -96,6 +112,26 @@ private:
           handle_res(dmfile->getPacks(), RSResult::All),
           use_packs(dmfile->getPacks()),
           log(&Logger::get("DMFilePackFilter"))
+=======
+                     bool set_cache_if_miss_,
+                     const RowKeyRanges & rowkey_ranges_, // filter by handle range
+                     const RSOperatorPtr & filter_, // filter by push down where clause
+                     const IdSetPtr & read_packs_, // filter by pack index
+                     const FileProviderPtr & file_provider_,
+                     const ReadLimiterPtr & read_limiter_,
+                     const DB::LoggerPtr & tracing_logger)
+        : dmfile(dmfile_)
+        , index_cache(index_cache_)
+        , set_cache_if_miss(set_cache_if_miss_)
+        , rowkey_ranges(rowkey_ranges_)
+        , filter(filter_)
+        , read_packs(read_packs_)
+        , file_provider(file_provider_)
+        , handle_res(dmfile->getPacks(), RSResult::All)
+        , use_packs(dmfile->getPacks())
+        , log(tracing_logger ? tracing_logger : DB::Logger::get("DMFilePackFilter"))
+        , read_limiter(read_limiter_)
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
     {
     }
 
@@ -181,12 +217,19 @@ private:
                           const DMFilePtr &           dmfile,
                           const FileProviderPtr &     file_provider,
                           const MinMaxIndexCachePtr & index_cache,
+<<<<<<< HEAD
                           ColId                       col_id)
+=======
+                          bool set_cache_if_miss,
+                          ColId col_id,
+                          const ReadLimiterPtr & read_limiter)
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
     {
         auto &     type           = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
+<<<<<<< HEAD
             auto index_buf
                 = ReadBufferFromFileProvider(file_provider,
                                              dmfile->colIndexPath(file_name_base),
@@ -194,15 +237,50 @@ private:
                                              std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)));
             index_buf.seek(dmfile->colIndexOffset(file_name_base));
             return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+=======
+            auto index_file_size = dmfile->colIndexSize(file_name_base);
+            if (index_file_size == 0)
+                return std::make_shared<MinMaxIndex>(*type);
+            if (!dmfile->configuration)
+            {
+                auto index_buf = ReadBufferFromFileProvider(
+                    file_provider,
+                    dmfile->colIndexPath(file_name_base),
+                    dmfile->encryptionIndexPath(file_name_base),
+                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
+                    read_limiter);
+                index_buf.seek(dmfile->colIndexOffset(file_name_base));
+                return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+            }
+            else
+            {
+                auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
+                                                                            dmfile->colIndexPath(file_name_base),
+                                                                            dmfile->encryptionIndexPath(file_name_base),
+                                                                            dmfile->colIndexSize(file_name_base),
+                                                                            read_limiter,
+                                                                            dmfile->configuration->getChecksumAlgorithm(),
+                                                                            dmfile->configuration->getChecksumFrameLength());
+                index_buf->seek(dmfile->colIndexOffset(file_name_base));
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
+            }
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
         };
         MinMaxIndexPtr minmax_index;
-        if (index_cache)
+        if (index_cache && set_cache_if_miss)
         {
             minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
-            minmax_index = load();
+            // try load from the cache first
+            if (index_cache)
+                minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
+            if (!minmax_index)
+                minmax_index = load();
         }
         indexes.emplace(col_id, RSIndex(type, minmax_index));
     }
@@ -215,16 +293,28 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
+<<<<<<< HEAD
         loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
+=======
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
     }
 
 private:
     DMFilePtr           dmfile;
     MinMaxIndexCachePtr index_cache;
+<<<<<<< HEAD
     RowKeyRange         rowkey_range;
     RSOperatorPtr       filter;
     IdSetPtr            read_packs;
     FileProviderPtr     file_provider;
+=======
+    bool set_cache_if_miss;
+    RowKeyRanges rowkey_ranges;
+    RSOperatorPtr filter;
+    IdSetPtr read_packs;
+    FileProviderPtr file_provider;
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 
     RSCheckParam param;
 

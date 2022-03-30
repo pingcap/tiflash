@@ -1332,6 +1332,208 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     return true;
 }
 
+<<<<<<< HEAD
+=======
+namespace GC
+{
+// Returns true if it needs gc.
+// This is for optimization purpose, does not mean to be accurate.
+bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Poco::Logger * log)
+{
+    // Always GC.
+    if (ratio_threshold < 1.0)
+        return true;
+
+    const auto & property = seg->getStable()->getStableProperty();
+    LOG_FMT_TRACE(log, "{}", property.toDebugString());
+    // No data older than safe_point to GC.
+    if (property.gc_hint_version > gc_safepoint)
+        return false;
+    // A lot of MVCC versions to GC.
+    if (property.num_versions > property.num_rows * ratio_threshold)
+        return true;
+    // A lot of non-effective MVCC versions to GC.
+    if (property.num_versions > property.num_puts * ratio_threshold)
+        return true;
+    return false;
+}
+
+bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double ratio_threshold, Poco::Logger * log)
+{
+    auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
+    if (actual_delete_range.none())
+        return false;
+
+    auto [delete_rows, delete_bytes] = snap->stable->getApproxRowsAndBytes(context, actual_delete_range);
+
+    auto stable_rows = snap->stable->getRows();
+    auto stable_bytes = snap->stable->getBytes();
+
+    LOG_FMT_TRACE(log, "delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", delete_rows, delete_bytes, stable_rows, stable_bytes);
+
+    // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
+    //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.
+    //   (i.e. `actual_delete_range` is not none, but `delete_rows` and `stable_rows` are both 0).
+    // 2. the disadvantage of `=` in `>=` is that it may trigger an extra gc when write apply snapshot file to an empty segment,
+    //   because before write apply snapshot file, it will write a delete range first, and will meet the following gc criteria.
+    //   But the cost should be really minor because merge delta on an empty segment should be very fast.
+    //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
+    bool should_compact = (delete_rows >= stable_rows * ratio_threshold) || (delete_bytes >= stable_bytes * ratio_threshold);
+    return should_compact;
+}
+} // namespace GC
+
+UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return 0;
+
+    if (!updateGCSafePoint())
+        return 0;
+
+    {
+        std::shared_lock lock(read_write_mutex);
+        // avoid gc on empty tables
+        if (segments.size() == 1)
+        {
+            const auto & seg = segments.begin()->second;
+            if (seg->getEstimatedRows() == 0)
+                return 0;
+        }
+    }
+
+    DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
+    LOG_FMT_DEBUG(log,
+                  "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
+                  table_name,
+                  next_gc_check_key.toDebugString(),
+                  gc_safe_point,
+                  limit);
+
+    UInt64 check_segments_num = 0;
+    Int64 gc_segments_num = 0;
+    while (gc_segments_num < limit)
+    {
+        // If the store is shut down, give up running GC on it.
+        if (shutdown_called.load(std::memory_order_relaxed))
+            break;
+
+        auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        SegmentPtr segment;
+        SegmentSnapshotPtr segment_snap;
+        {
+            std::shared_lock lock(read_write_mutex);
+
+            auto segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
+            if (segment_it == segments.end())
+                segment_it = segments.begin();
+
+            // we have check all segments, stop here
+            if (check_segments_num >= segments.size())
+                break;
+            check_segments_num++;
+
+            segment = segment_it->second;
+            next_gc_check_key = segment_it->first.toRowKeyValue();
+            segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        }
+
+        assert(segment != nullptr);
+        if (segment->hasAbandoned() || segment_snap == nullptr)
+            continue;
+
+        const auto segment_id = segment->segmentId();
+        RowKeyRange segment_range = segment->getRowKeyRange();
+
+        // meet empty segment, try merge it
+        if (segment_snap->getRows() == 0)
+        {
+            // release segment_snap before checkSegmentUpdate, otherwise this segment is still in update status.
+            segment_snap = {};
+            checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+            continue;
+        }
+
+        try
+        {
+            // Check whether we should apply gc on this segment
+            bool should_compact = false;
+            if (GC::shouldCompactDeltaWithStable(
+                    *dm_context,
+                    segment_snap,
+                    segment_range,
+                    global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc,
+                    log))
+            {
+                should_compact = true;
+            }
+            else if (segment->getLastCheckGCSafePoint() < gc_safe_point)
+            {
+                // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
+                // Because after we calculate StableProperty and compare it with this gc_safe_point,
+                // there is no need to recheck it again using the same gc_safe_point.
+                // On the other hand, if it should do DeltaMerge using this gc_safe_point, and the DeltaMerge is interruptted by other process,
+                // it's still worth to wait another gc_safe_point to check this segment again.
+                segment->setLastCheckGCSafePoint(gc_safe_point);
+                dm_context->min_version = gc_safe_point;
+
+                // calculate StableProperty if needed
+                if (!segment->getStable()->isStablePropertyCached())
+                    segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
+
+                should_compact = GC::shouldCompactStable(
+                    segment,
+                    gc_safe_point,
+                    global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
+                    log);
+            }
+            bool finish_gc_on_segment = false;
+            if (should_compact)
+            {
+                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread, segment_snap); segment)
+                {
+                    // Continue to check whether we need to apply more tasks on this segment
+                    segment_snap = {};
+                    checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+                    gc_segments_num++;
+                    finish_gc_on_segment = true;
+                    LOG_FMT_INFO(
+                        log,
+                        "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
+                        segment_id,
+                        segment_range.toDebugString(),
+                        table_name);
+                }
+                else
+                {
+                    LOG_FMT_INFO(
+                        log,
+                        "GC aborted on Segment [{}] [range={}] [table={}]",
+                        segment_id,
+                        segment_range.toDebugString(),
+                        table_name);
+                }
+            }
+            if (!finish_gc_on_segment)
+                LOG_FMT_DEBUG(
+                    log,
+                    "GC is skipped Segment [{}] [range={}] [table={}]",
+                    segment_id,
+                    segment_range.toDebugString(),
+                    table_name);
+        }
+        catch (Exception & e)
+        {
+            e.addMessage(fmt::format("while apply gc Segment [{}] [range={}] [table={}]", segment_id, segment_range.toDebugString(), table_name));
+            e.rethrow();
+        }
+    }
+
+    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    return gc_segments_num;
+}
+
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
 {
     LOG_DEBUG(log,

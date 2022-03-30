@@ -29,6 +29,66 @@ mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash
 |  1 | 2000-01-01 10:00:00 |
 +----+---------------------+
 
+<<<<<<< HEAD
+=======
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+## Tests using time_zone '+0:00'
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts > '1969-12-01 00:00:00';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts != '2000-01-01 10:00:00';
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+## Tests the direction between column and literal
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts > '2000-01-01 10:00:01';
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where '2000-01-01 10:00:01' < ts;
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts < '2000-01-01 10:00:01';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where '2000-01-01 10:00:01' > ts;
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 ## Tests using time_zone '+8:00'
 mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 18:00:00';
 +----+---------------------+
@@ -37,6 +97,21 @@ mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash
 |  1 | 2000-01-01 18:00:00 |
 +----+---------------------+
 
+<<<<<<< HEAD
+=======
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts != '2000-01-01 18:00:00';
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 
 mysql> drop table if exists test.t;
 
@@ -71,6 +146,14 @@ mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash
 |  1 | 2000-01-01 10:00:00 |
 +----+---------------------+
 
+<<<<<<< HEAD
+=======
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 ## Tests using time_zone '+8:00'
 mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 18:00:00';
 +----+---------------------+
@@ -79,5 +162,13 @@ mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash
 |  1 | 2000-01-01 18:00:00 |
 +----+---------------------+
 
+<<<<<<< HEAD
+=======
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 
 mysql> drop table if exists test.t;

@@ -1,0 +1,162 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('true')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64, col_2 default \'asTiDBType|timestamp(5)\'')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test)
+=> DBGInvoke __raft_insert_row(default, test, 4, 50, 50, '2019-06-10 09:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 51, 51, '2019-06-11 07:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 52, 52, '2019-06-12 08:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 53, 53, '2019-06-11 08:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 54, 54, '2019-06-13 09:00:01')
+=> DBGInvoke __raft_insert_row(default, test, 4, 55, 55, '2019-06-13 12:00:01')
+
+=> DBGInvoke __try_flush_region(4)
+
+=> manage table default.test flush
+=> manage table default.test merge delta
+=> select tidb_database, tidb_table, delta_rate_rows, total_stable_rows from system.dt_tables where tidb_database='default' and tidb_table='test' and is_tombstone = 0
+┌─tidb_database─┬─tidb_table─┬─delta_rate_rows─┬─total_stable_rows─┐
+│ default       │ test       │               0 │                 6 │
+└───────────────┴────────────┴─────────────────┴───────────────────┘
+
+# The default time zone in cop request is UTC
+=> DBGInvoke dag('select * from default.test')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+│         51 │ 2019-06-11 07:00:00.00000 │
+│         52 │ 2019-06-12 08:00:00.00000 │
+│         53 │ 2019-06-11 08:00:00.00000 │
+│         54 │ 2019-06-13 09:00:01.00000 │
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 09:00:00.00000\')')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 09:00:00.00000\')')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+# when using 'default' encoding, return timestamp value is shown in UTC time zone
+# but the literal timestamp value in where clause is in the time zone specified by the cop request
+# so '2019-06-10 17:00:00.00000'(tz_offset:28800) below is equal to '2019-06-10 09:00:00.00000' in UTC
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 12:00:01.00000\')')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 12:00:01.00000\')')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 100.00                                      │
+└─────────────────────────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+┌─search_log_for_key("RSFilter exclude rate")─┐
+│ 0.00                                        │
+└─────────────────────────────────────────────┘
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test

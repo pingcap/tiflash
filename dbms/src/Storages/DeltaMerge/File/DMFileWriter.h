@@ -165,7 +165,14 @@ private:
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
+<<<<<<< HEAD
     RateLimiterPtr  rate_limiter;
+=======
+    WriteLimiterPtr write_limiter;
+
+    // use to avoid write index data for empty file
+    bool is_empty_file = true;
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
 };
 
 } // namespace DM
