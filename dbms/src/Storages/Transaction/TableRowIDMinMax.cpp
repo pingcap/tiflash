@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 std::unordered_map<TableID, TableRowIDMinMax> TableRowIDMinMax::data;
 std::mutex TableRowIDMinMax::mutex;
 
