@@ -98,7 +98,7 @@ protected:
     {
         tipb::Sort sort;
         google::protobuf::util::JsonStringToMessage(sort_json_str, &sort);
-        mock_interpreter->handleWindowSort(pipeline, sort);
+        mock_interpreter->handleWindowOrder(pipeline, sort);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project;
         for (const auto & column : (*mock_interpreter->analyzer).source_columns)

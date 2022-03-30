@@ -35,7 +35,7 @@ struct WindowFunctionRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
@@ -43,7 +43,7 @@ struct WindowFunctionRank final : public IWindowFunction
     {
         IColumn & to = *stream->blockAt(stream->current_row)
                             .output_columns[function_index];
-        assert_cast<ColumnUInt64 &>(to).getData().push_back(
+        assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_start_row_number);
     }
 };
@@ -57,7 +57,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
 
@@ -66,7 +66,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
     {
         IColumn & to = *stream->blockAt(stream->current_row)
                             .output_columns[function_index];
-        assert_cast<ColumnUInt64 &>(to).getData().push_back(
+        assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_number);
     }
 };
@@ -80,7 +80,7 @@ struct WindowFunctionRowNumber final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
 
@@ -89,7 +89,7 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     {
         IColumn & to = *stream->blockAt(stream->current_row)
                             .output_columns[function_index];
-        assert_cast<ColumnUInt64 &>(to).getData().push_back(
+        assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->current_row_number);
     }
 };

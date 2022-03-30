@@ -755,7 +755,7 @@ const String & getAggFunctionName(const tipb::Expr & expr)
 const String & getWindowFunctionName(const tipb::Expr & expr)
 {
     auto it = window_func_map.find(expr.tp());
-    if (it != distinct_agg_func_map.end())
+    if (it != window_func_map.end())
         return it->second;
 
     const auto errmsg = fmt::format(

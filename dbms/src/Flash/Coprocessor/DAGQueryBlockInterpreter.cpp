@@ -1053,9 +1053,10 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window window)
+void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window & window)
 {
     std::vector<NameAndTypePair> input_columns;
+    assert(input_streams_vec.size() == 1);
     pipeline.streams = input_streams_vec[0];
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
@@ -1067,7 +1068,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
 
-void DAGQueryBlockInterpreter::handleWindowSort(DAGPipeline & pipeline, const tipb::Sort & window_sort)
+void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort)
 {
     std::vector<NameAndTypePair> input_columns;
     pipeline.streams = input_streams_vec[0];
@@ -1125,7 +1126,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeSort)
     {
-        handleWindowSort(pipeline, query_block.source->sort());
+        handleWindowOrder(pipeline, query_block.source->sort());
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
