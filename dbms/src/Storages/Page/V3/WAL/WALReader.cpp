@@ -143,7 +143,7 @@ WALStoreReader::WALStoreReader(String storage_name, FileProviderPtr & provider_,
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
-    , logger(Logger::get("LogReader", std::move(storage_name)))
+    , logger(Logger::get("WALStore", std::move(storage_name)))
 {}
 
 bool WALStoreReader::remained() const
