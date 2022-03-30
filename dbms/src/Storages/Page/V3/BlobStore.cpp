@@ -801,7 +801,6 @@ void BlobStore::BlobStats::restore()
 
     for (auto & [path, stats] : stats_map)
     {
-        (void)path;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
@@ -813,60 +812,63 @@ void BlobStore::BlobStats::restore()
         // And that blobs won't be restored by BlobStats.
 
         Poco::File store_path(path);
-        std::vector<String> file_list;
-        if (store_path.exists())
+
+        if (!store_path.exists())
         {
-            store_path.list(file_list);
-            for (const auto & blob_name : file_list)
+            continue;
+        }
+
+        std::vector<String> file_list;
+        store_path.list(file_list);
+        for (const auto & blob_name : file_list)
+        {
+            if (!startsWith(blob_name, BLOB_PREFIX_NAME))
             {
-                if (!startsWith(blob_name, BLOB_PREFIX_NAME))
-                {
-                    LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
-                    continue;
-                }
-
-                Strings ss;
-                boost::split(ss, blob_name, boost::is_any_of("_"));
-
-                if (ss.size() != 2)
-                {
-                    LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
-                    continue;
-                }
-
-                String err_msg;
-                try
-                {
-                    const auto & blob_id = std::stoull(ss[1]);
-                    bool found = false;
-                    for (const auto & stat : stats)
-                    {
-                        if (stat->id == blob_id)
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found)
-                    {
-                        LOG_FMT_INFO(log, "Remove invalid blob file [dir={}] [file={}]", path, blob_name);
-
-                        Poco::File invalid_blob(fmt::format("{}/{}", path, blob_name));
-                        invalid_blob.remove();
-                    }
-                    continue;
-                }
-                catch (std::invalid_argument & e)
-                {
-                    err_msg = e.what();
-                }
-                catch (std::out_of_range & e)
-                {
-                    err_msg = e.what();
-                }
-                LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
+                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+                continue;
             }
+
+            Strings ss;
+            boost::split(ss, blob_name, boost::is_any_of("_"));
+
+            if (ss.size() != 2)
+            {
+                LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
+                continue;
+            }
+
+            String err_msg;
+            try
+            {
+                const auto & blob_id = std::stoull(ss[1]);
+                bool found = false;
+                for (const auto & stat : stats)
+                {
+                    if (stat->id == blob_id)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    LOG_FMT_INFO(log, "Remove invalid blob file [dir={}] [file={}]", path, blob_name);
+
+                    Poco::File invalid_blob(fmt::format("{}/{}", path, blob_name));
+                    invalid_blob.remove();
+                }
+                continue;
+            }
+            catch (std::invalid_argument & e)
+            {
+                err_msg = e.what();
+            }
+            catch (std::out_of_range & e)
+            {
+                err_msg = e.what();
+            }
+            LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
         }
     }
 
