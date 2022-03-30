@@ -1,10 +1,19 @@
+#include <Common/TypeList.h>
 #include <Debug/MockDAGRequest.h>
+#include <Debug/MockExecutor.h>
+#include <IO/ReadHelpers.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <common/types.h>
+
+#include <cassert>
+#include <initializer_list>
+#include <memory>
 
 namespace DB
 {
@@ -51,6 +60,11 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::mockTable(String db, String table
     return *this;
 }
 
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::mockTable(MockTableName name, const std::vector<std::pair<String, TiDB::TP>> & columns)
+{
+    return mockTable(name.first, name.second, columns);
+}
+
 TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::filter(ASTPtr filter_expr)
 {
     assert(root);
@@ -58,12 +72,20 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::filter(ASTPtr filter_expr)
     return *this;
 }
 
-TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::limit(ASTPtr limit_expr)
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::filter(AstExprBuilder filter_expr)
 {
     assert(root);
-    root = compileLimit(root, getExecutorIndex(), limit_expr);
+    root = compileSelection(root, getExecutorIndex(), filter_expr.build());
     return *this;
 }
+
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::limit(int limit)
+{
+    assert(root);
+    root = compileLimit(root, getExecutorIndex(), AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
+    return *this;
+}
+
 
 TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::topN(ASTPtr order_exprs, ASTPtr limit_expr)
 {
@@ -72,10 +94,58 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::topN(ASTPtr order_exprs, ASTPtr l
     return *this;
 }
 
-TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(ASTPtr select_list)
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::topN(String col_name, bool desc, int limit)
 {
     assert(root);
-    root = compileProject(root, getExecutorIndex(), select_list);
+    root = compileTopN(root,
+                       getExecutorIndex(),
+                       AstExprBuilder().appendOrderByItem(col_name, desc).appendList().build(),
+                       AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
+    return *this;
+}
+
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::topN(std::initializer_list<String> cols, bool desc, int limit)
+{
+    assert(root);
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    AstExprBuilder expr_builder;
+    for (const auto & name : cols)
+        expr_builder.appendOrderByItem(name, desc);
+
+    root = compileTopN(root,
+                       getExecutorIndex(),
+                       expr_builder.appendList().build(),
+                       AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
+    return *this;
+}
+
+
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(String col_name)
+{
+    assert(root);
+    root = compileProject(root, getExecutorIndex(), AstExprBuilder().appendColumnRef(col_name).appendList().build());
+    return *this;
+}
+
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(std::initializer_list<ASTPtr> cols)
+{
+    assert(root);
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    for (const auto & ast_ptr : cols)
+        exp_list->children.push_back(ast_ptr);
+
+    root = compileProject(root, getExecutorIndex(), exp_list);
+    return *this;
+}
+
+TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(std::initializer_list<String> cols)
+{
+    assert(root);
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    for (const auto & name : cols)
+        exp_list->children.push_back(COL(name).build());
+
+    root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
 
@@ -135,6 +205,12 @@ AstExprBuilder & AstExprBuilder::appendFunction(const String & func_name)
     return *this;
 }
 
+AstExprBuilder & AstExprBuilder::eq(AstExprBuilder & right_expr)
+{
+    vec.push_back(right_expr.build());
+    return appendFunction("equals");
+}
+
 ASTPtr AstExprBuilder::build()
 {
     assert(vec.size() == 1);
@@ -142,4 +218,27 @@ ASTPtr AstExprBuilder::build()
     vec.clear();
     return ret;
 }
+
+ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const String & column_right)
+{
+    appendColumnRef(column_left);
+    appendColumnRef(column_right);
+    appendFunction("equals");
+    assert(vec.size() == 1);
+    ASTPtr ret = vec.back();
+    vec.clear();
+    return ret;
+}
+// todo function should support chainable call
+ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const Field & literal)
+{
+    appendColumnRef(column_left);
+    appendLiteral(literal);
+    appendFunction("equals");
+    assert(vec.size() == 1);
+    ASTPtr ret = vec.back();
+    vec.clear();
+    return ret;
+}
+
 } // namespace DB

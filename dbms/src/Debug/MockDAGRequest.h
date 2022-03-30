@@ -1,11 +1,17 @@
 #pragma once
 
 #include <Debug/MockExecutor.h>
+#include <Interpreters/Context.h>
+
+#include <initializer_list>
+#include <utility>
 
 namespace DB
 {
 // <name, type>
 using MockColumnInfo = std::pair<String, TiDB::TP>;
+using MockTableName = std::pair<String, String>;
+class AstExprBuilder;
 class TiPBDAGRequestBuilder
 {
 public:
@@ -18,16 +24,23 @@ public:
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
     TiPBDAGRequestBuilder & mockTable(String db, String table, const std::vector<MockColumnInfo> & columns);
+    TiPBDAGRequestBuilder & mockTable(MockTableName name, const std::vector<MockColumnInfo> & columns);
 
+
+    TiPBDAGRequestBuilder & filter(AstExprBuilder filter_expr);
     TiPBDAGRequestBuilder & filter(ASTPtr filter_expr);
 
-    TiPBDAGRequestBuilder & limit(ASTPtr limit_expr);
+    TiPBDAGRequestBuilder & limit(int limit);
 
     TiPBDAGRequestBuilder & topN(ASTPtr order_exprs, ASTPtr limit_expr);
+    TiPBDAGRequestBuilder & topN(String col_name, bool desc, int limit);
+    TiPBDAGRequestBuilder & topN(std::initializer_list<String> cols, bool desc, int limit); // ywq todo, support expressions.
 
-    TiPBDAGRequestBuilder & project(ASTPtr select_list);
+    TiPBDAGRequestBuilder & project(String col_name); // todo support expression
+    TiPBDAGRequestBuilder & project(std::initializer_list<ASTPtr> cols);
+    TiPBDAGRequestBuilder & project(std::initializer_list<String> cols);
 
-    // only support inner join
+    // only support inner join  todo support more joins
     TiPBDAGRequestBuilder & join(const TiPBDAGRequestBuilder & right, ASTPtr using_expr_list);
 
 private:
@@ -46,10 +59,25 @@ public:
     AstExprBuilder & appendList();
 
     AstExprBuilder & appendFunction(const String & func_name);
+    AstExprBuilder & eq(AstExprBuilder & right_expr);
+    // AstExprBuilder & notEq(const AstExprBuilder & right_expr);
+    // AstExprBuilder & lt(const AstExprBuilder & right_expr);
+    // AstExprBuilder & gt(const AstExprBuilder & right_expr);
+    // AstExprBuilder & andFunc(const AstExprBuilder & right_expr);
+    // AstExprBuilder & orFunc(const AstExprBuilder & right_expr);
 
     ASTPtr build();
+
+    ASTPtr buildEqualFunction(const String & column_left, const String & column_right);
+    ASTPtr buildEqualFunction(const String & column_left, const Field & literal);
+
 
 private:
     std::vector<ASTPtr> vec;
 };
+
+
+#define EQUALFUNCTION(col1, col2) AstExprBuilder().buildEqualFunction((col1), (col2))
+#define COL(name) AstExprBuilder().appendColumnRef((name))
+
 } // namespace DB

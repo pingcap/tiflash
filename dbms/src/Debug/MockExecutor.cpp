@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -12,6 +13,9 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
+
+#include <cstddef>
+#include <memory>
 
 namespace DB
 {
@@ -1316,6 +1320,10 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
         ci.setNotNullFlag();
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
     }
+    // // todo remove print schema
+    // for (auto & item : ts_output) {
+    //     std::cout << item.first << ":" << item.second.tp << item.second.flag << item.second.flen << item.second.decimal << std::endl;
+    // }
     return std::make_shared<mock::TableScan>(executor_index, ts_output, table_info);
 }
 
@@ -1434,7 +1442,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     DAGSchema output_schema;
     for (const auto & expr : select_list->children)
     {
-        if (typeid_cast<ASTAsterisk *>(expr.get()))
+        if (typeid_cast<ASTAsterisk *>(expr.get())) // ywq todo
         {
             /// special case, select *
             exprs.push_back(expr);
