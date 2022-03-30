@@ -12,7 +12,7 @@ public:
     static PhysicalPlanPtr build(
         const String & executor_id,
         const tipb::ExchangeSender & exchange_sender,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     PhysicalExchangeSender(
         const String & executor_id_,

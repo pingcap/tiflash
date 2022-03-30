@@ -11,7 +11,7 @@ public:
     static PhysicalPlanPtr buildNonRootFinal(
         const Context & context,
         const String & column_prefix,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     static PhysicalPlanPtr buildRootFinal(
         const Context & context,

@@ -11,7 +11,7 @@ namespace DB
 PhysicalPlanPtr PhysicalLimit::build(
     const String & executor_id,
     const tipb::Limit & limit,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 

@@ -11,7 +11,7 @@ public:
     static PhysicalPlanPtr build(
         const String & executor_id,
         const tipb::Limit & limit,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     PhysicalLimit(
         const String & executor_id_,

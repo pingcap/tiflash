@@ -25,6 +25,7 @@ public:
     {
         assert(i == 0);
         assert(new_child);
+        assert(new_child.get() != this);
         child = new_child;
     }
 
@@ -32,6 +33,7 @@ public:
     {
         assert(!child);
         assert(new_child);
+        assert(new_child.get() != this);
         child = new_child;
     }
 

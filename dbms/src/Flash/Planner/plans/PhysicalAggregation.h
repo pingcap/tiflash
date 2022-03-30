@@ -14,7 +14,7 @@ public:
         const Context & context,
         const String & executor_id,
         const tipb::Aggregation & aggregation,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     PhysicalAggregation(
         const String & executor_id_,

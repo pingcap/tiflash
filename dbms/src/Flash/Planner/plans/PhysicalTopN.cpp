@@ -17,7 +17,7 @@ PhysicalPlanPtr PhysicalTopN::build(
     const Context & context,
     const String & executor_id,
     const tipb::TopN & top_n,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 

@@ -13,7 +13,7 @@ namespace DB
 PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
     const Context & context,
     const String & column_prefix,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 

@@ -13,7 +13,7 @@ public:
         const Context & context,
         const String & executor_id,
         const tipb::Selection & selection,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     PhysicalFilter(
         const String & executor_id_,

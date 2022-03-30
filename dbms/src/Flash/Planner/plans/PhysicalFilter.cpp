@@ -15,7 +15,7 @@ PhysicalPlanPtr PhysicalFilter::build(
     const Context & context,
     const String & executor_id,
     const tipb::Selection & selection,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 

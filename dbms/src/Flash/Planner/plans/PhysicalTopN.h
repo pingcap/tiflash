@@ -14,7 +14,7 @@ public:
         const Context & context,
         const String & executor_id,
         const tipb::TopN & top_n,
-        const PhysicalPlanPtr & child);
+        PhysicalPlanPtr child);
 
     PhysicalTopN(
         const String & executor_id_,

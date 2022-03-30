@@ -13,7 +13,7 @@ namespace DB
 PhysicalPlanPtr PhysicalExchangeSender::build(
     const String & executor_id,
     const tipb::ExchangeSender & exchange_sender,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 

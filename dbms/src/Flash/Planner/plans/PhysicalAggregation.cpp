@@ -20,7 +20,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     const Context & context,
     const String & executor_id,
     const tipb::Aggregation & aggregation,
-    const PhysicalPlanPtr & child)
+    PhysicalPlanPtr child)
 {
     assert(child);
 
