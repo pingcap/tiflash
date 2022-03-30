@@ -874,7 +874,7 @@ void BlobStore::BlobStats::restore()
 
         if (blob_ids_in_disk.size() < blob_ids_in_stats.size())
         {
-            String stats_str = "";
+            String stats_str;
             for (const auto & id_in_stats : blob_ids_in_stats)
             {
                 stats_str += fmt::format("{},", id_in_stats);
@@ -907,7 +907,7 @@ void BlobStore::BlobStats::restore()
 
             if (last_check_it != blob_ids_in_disk_not_in_stats.begin())
             {
-                String stats_str = "";
+                String stats_str;
                 for (const auto & id_in_stats : blob_ids_in_stats)
                 {
                     stats_str += fmt::format("{},", id_in_stats);
