@@ -366,7 +366,7 @@ private:
 private:
     void onTerminate(const std::string & message, ThreadNumber thread_num) const
     {
-        LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
+        LOG_FMT_ERROR(log, "(from thread {}) {}", thread_num, message);
     }
 #if USE_UNWIND
     void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
@@ -374,10 +374,8 @@ private:
     void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
 #endif
     {
-        LOG_ERROR(log, "########################################");
-        LOG_ERROR(log, "(from thread " << thread_num << ") "
-                                       << "Received signal " << strsignal(sig) << " (" << sig << ")"
-                                       << ".");
+        LOG_FMT_ERROR(log, "########################################");
+        LOG_FMT_ERROR(log, "(from thread {}) Received signal {}({}).", thread_num, strsignal(sig), sig);
 
         void * caller_address = nullptr;
 
@@ -407,7 +405,7 @@ private:
             if (nullptr == info.si_addr)
                 LOG_ERROR(log, "Address: NULL pointer.");
             else
-                LOG_ERROR(log, "Address: " << info.si_addr);
+                LOG_FMT_ERROR(log, "Address: {}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__)
             if ((err_mask & 0x02))
@@ -601,7 +599,7 @@ static void terminate_handler()
             int status = -1;
             char * dem = nullptr;
 
-            dem = abi::__cxa_demangle(name, 0, 0, &status);
+            dem = abi::__cxa_demangle(name, nullptr, nullptr, &status);
 
             log << "Terminate called after throwing an instance of " << (status == 0 ? dem : name) << std::endl;
 
@@ -676,7 +674,7 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     catch (...)
     {
-        LOG_WARNING(logger, __PRETTY_FUNCTION__ << ": when creating " << path << ", " << DB::getCurrentExceptionMessage(true));
+        LOG_FMT_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
     }
     return false;
 }
@@ -899,8 +897,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     config.keys("logger.levels", levels);
 
     if (!levels.empty())
-        for (AbstractConfiguration::Keys::iterator it = levels.begin(); it != levels.end(); ++it)
-            Logger::get(*it).setLevel(config.getString("logger.levels." + *it, "trace"));
+        for (auto & level : levels)
+            Logger::get(level).setLevel(config.getString("logger.levels." + level, "trace"));
 }
 
 
@@ -931,7 +929,7 @@ void BaseDaemon::initialize(Application & self)
         /// Test: -- --1=1 --1=2 --3 5 7 8 -9 10 -11=12 14= 15== --16==17 --=18 --19= --20 21 22 --23 --24 25 --26 -27 28 ---29=30 -- ----31 32 --33 3-4
         Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
         std::string key;
-        for (auto & arg : argv())
+        for (const auto & arg : argv())
         {
             auto key_start = arg.find_first_not_of('-');
             auto pos_minus = arg.find('-');
@@ -1132,7 +1130,7 @@ void BaseDaemon::initialize(Application & self)
                         throw Poco::Exception("Cannot set signal handler.");
 
                 for (auto signal : signals)
-                    if (sigaction(signal, &sa, 0))
+                    if (sigaction(signal, &sa, nullptr))
                         throw Poco::Exception("Cannot set signal handler.");
             }
         };
@@ -1171,7 +1169,7 @@ void BaseDaemon::handleNotification(Poco::TaskFailedNotification * _tfn)
     task_failed = true;
     AutoPtr<Poco::TaskFailedNotification> fn(_tfn);
     Logger * lg = &(logger());
-    LOG_ERROR(lg, "Task '" << fn->task()->name() << "' failed. Daemon is shutting down. Reason - " << fn->reason().displayText());
+    LOG_FMT_ERROR(lg, "Task '{}' failed. Daemon is shutting down. Reason - {}", fn->task()->name(), fn->reason().displayText());
     ServerApplication::terminate();
 }
 
@@ -1298,7 +1296,7 @@ void BaseDaemon::handleSignal(int signal_id)
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_INFO(&logger(), "Received termination signal (" << strsignal(signal_id) << ")");
+    LOG_FMT_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
 
     if (sigint_signals_counter >= 2)
     {
