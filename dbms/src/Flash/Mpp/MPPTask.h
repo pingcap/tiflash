@@ -85,7 +85,7 @@ public:
     ~MPPTask();
 
 private:
-    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_, bool is_async_enabled);
+    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
 
     void runImpl();
 
@@ -141,7 +141,6 @@ private:
     std::mutex schedule_mu;
     std::condition_variable schedule_cv;
     ScheduleState schedule_state;
-    bool is_async_enabled;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

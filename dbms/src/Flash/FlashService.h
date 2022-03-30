@@ -82,7 +82,6 @@ protected:
     IServer & server;
     const TiFlashSecurityConfig & security_config;
     Poco::Logger * log;
-    bool is_async_enabled = false;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
@@ -98,7 +97,6 @@ public:
     explicit AsyncFlashService(IServer & server)
         : FlashService(server)
     {
-        is_async_enabled = true;
         ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);
     }
 

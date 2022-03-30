@@ -25,13 +25,11 @@ class MPPHandler
     const mpp::DispatchTaskRequest & task_request;
 
     Poco::Logger * log;
-    bool is_async_enabled;
 
 public:
-    MPPHandler(const mpp::DispatchTaskRequest & task_request_, bool is_async_enabled)
+    MPPHandler(const mpp::DispatchTaskRequest & task_request_)
         : task_request(task_request_)
         , log(&Poco::Logger::get("MPPHandler"))
-        , is_async_enabled(is_async_enabled)
     {}
     grpc::Status execute(const ContextPtr & context, mpp::DispatchTaskResponse * response);
     void handleError(const MPPTaskPtr & task, String error);

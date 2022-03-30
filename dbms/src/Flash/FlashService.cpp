@@ -177,7 +177,7 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    MPPHandler mpp_handler(*request, is_async_enabled);
+    MPPHandler mpp_handler(*request);
     return mpp_handler.execute(context, response);
 }
 
