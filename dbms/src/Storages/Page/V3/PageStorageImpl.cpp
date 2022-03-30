@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -35,7 +36,7 @@ PageStorageImpl::PageStorageImpl(
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , log(Logger::get("PageStorage", name))
-    , blob_store(file_provider_, delegator->defaultPath(), blob_config)
+    , blob_store(file_provider_, delegator, blob_config)
 {
 }
 
@@ -204,7 +205,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
+    Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3).Increment();
+        GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v3).Observe(watch.elapsedSeconds());
         bool is_running = true;
         gc_is_running.compare_exchange_strong(is_running, false);
     });
@@ -225,7 +229,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    [[maybe_unused]] bool is_snapshot_dumped = page_directory->tryDumpSnapshot(write_limiter);
+    if (page_directory->tryDumpSnapshot(write_limiter))
+    {
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
+    }
     const auto & del_entries = page_directory->gcInMemEntries();
     LOG_FMT_DEBUG(log, "Remove entries from memory [num_entries={}]", del_entries.size());
 
@@ -241,6 +248,10 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     {
         clean_external_page();
         return false;
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(blob_need_gc.size());
     }
 
     // Execute full gc
@@ -273,6 +284,7 @@ bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limite
     page_directory->gcApply(std::move(gc_edit), write_limiter);
 
     clean_external_page();
+
     return true;
 }
 
