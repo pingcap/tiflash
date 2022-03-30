@@ -74,6 +74,9 @@ public:
 
     struct Config
     {
+        //==========================================================================================
+        // V2 config
+        //==========================================================================================
         SettingBool sync_on_write = true;
 
         SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
@@ -108,6 +111,17 @@ public:
         SettingUInt64 prob_do_gc_when_write_is_low = 10;
 
         MVCC::VersionSetConfig version_set_config;
+
+        //==========================================================================================
+        // V3 config
+        //==========================================================================================
+        SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
+        SettingUInt64 blob_spacemap_type = 2;
+        SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingDouble blob_heavy_gc_valid_rate = 0.2;
+
+        SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
+        SettingUInt64 wal_recover_mode = 0;
 
         void reload(const Config & rhs)
         {

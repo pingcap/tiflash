@@ -22,9 +22,9 @@
 
 namespace DB::PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
+    auto [wal, reader] = WALStore::create(file_provider, delegator, std::move(config));
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
@@ -63,7 +63,7 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
 
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
+    auto [wal, reader] = WALStore::create(file_provider, delegator, WALStore::Config());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
     loadEdit(dir, edit);

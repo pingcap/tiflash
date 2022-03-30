@@ -119,28 +119,29 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     return {latest_checkpoint, std::move(all_files)};
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter)
 {
     Poco::Logger * logger = &Poco::Logger::get("WALStore");
     LogFilenameSet log_files = listAllFiles(delegator, logger);
-    return create(provider, std::move(log_files), read_limiter);
+    return create(provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_read_done(!checkpoint.has_value())
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
+    , recovery_mode(recovery_mode_)
     , logger(&Poco::Logger::get("LogReader"))
 {}
 
@@ -206,7 +207,7 @@ bool WALStoreReader::openNextFile()
             &reporter,
             /*verify_checksum*/ true,
             log_num,
-            WALRecoveryMode::TolerateCorruptedTailRecords);
+            recovery_mode);
     };
 
     if (!checkpoint_read_done)

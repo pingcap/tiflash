@@ -16,6 +16,7 @@
 
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
+#include <Storages/Page/V3/WALStore.h>
 
 namespace DB
 {
@@ -49,9 +50,15 @@ public:
     static std::tuple<std::optional<LogFilename>, LogFilenameSet>
     findCheckpoint(LogFilenameSet && all_files);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(FileProviderPtr & provider,
+                                    LogFilenameSet files,
+                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+                                    const ReadLimiterPtr & read_limiter = nullptr);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(FileProviderPtr & provider,
+                                    PSDiskDelegatorPtr & delegator,
+                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+                                    const ReadLimiterPtr & read_limiter = nullptr);
 
     bool remained() const;
 
@@ -78,6 +85,7 @@ public:
         FileProviderPtr & provider_,
         std::optional<LogFilename> checkpoint,
         LogFilenameSet && files_,
+        WALRecoveryMode recovery_mode_,
         const ReadLimiterPtr & read_limiter_);
 
     WALStoreReader(const WALStoreReader &) = delete;
@@ -96,6 +104,7 @@ private:
     LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
 
+    WALRecoveryMode recovery_mode;
     Poco::Logger * logger;
 };
 

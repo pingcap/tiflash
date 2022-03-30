@@ -46,7 +46,7 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
     // just for test
     PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);

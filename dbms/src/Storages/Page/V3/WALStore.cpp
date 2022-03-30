@@ -39,25 +39,30 @@ namespace DB::PS::V3
 {
 std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     FileProviderPtr & provider,
-    PSDiskDelegatorPtr & delegator)
+    PSDiskDelegatorPtr & delegator,
+    WALStore::Config config)
 {
-    auto reader = WALStoreReader::create(provider, delegator);
+    auto reader = WALStoreReader::create(provider,
+                                         delegator,
+                                         static_cast<WALRecoveryMode>(config.wal_recover_mode.get()));
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(delegator, provider, last_log_num)),
+        std::unique_ptr<WALStore>(new WALStore(delegator, provider, last_log_num, std::move(config))),
         reader};
 }
 
 WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
-    Format::LogNumberType last_log_num_)
+    Format::LogNumberType last_log_num_,
+    WALStore::Config config_)
     : delegator(delegator_)
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
     , logger(&Poco::Logger::get("WALStore"))
+    , config(config_)
 {
 }
 
@@ -79,7 +84,7 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
         std::lock_guard lock(log_file_mutex);
         // Roll to a new log file
         // TODO: Make it configurable
-        if (log_file == nullptr || log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
+        if (log_file == nullptr || log_file->writtenBytes() > config.roll_size)
         {
             auto log_num = last_log_num++;
             auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);

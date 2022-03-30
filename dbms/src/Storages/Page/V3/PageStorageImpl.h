@@ -19,6 +19,7 @@
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/WALStore.h>
 
 namespace DB
 {
@@ -34,6 +35,28 @@ public:
         const FileProviderPtr & file_provider_);
 
     ~PageStorageImpl();
+
+    BlobStore::Config parseBlobConfig(const Config & config)
+    {
+        BlobStore::Config blob_config;
+
+        blob_config.file_limit_size = config.blob_file_limit_size;
+        blob_config.cached_fd_size = config.blob_cached_fd_size;
+        blob_config.spacemap_type = config.blob_spacemap_type;
+        blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
+
+        return blob_config;
+    }
+
+    WALStore::Config parseWALConfig(const Config & config)
+    {
+        WALStore::Config wal_config;
+
+        wal_config.roll_size = config.wal_roll_size;
+        wal_config.wal_recover_mode = config.wal_recover_mode;
+
+        return wal_config;
+    }
 
     void restore() override;
 
@@ -91,8 +114,6 @@ private:
     LoggerPtr log;
 
     PageDirectoryPtr page_directory;
-
-    BlobStore::Config blob_config;
 
     BlobStore blob_store;
 
