@@ -36,6 +36,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
         auto hash_salt = dm_context->hash_salt;
         for (auto & file : files_)
         {
+<<<<<<< HEAD
             auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                           index_cache,
                                                           hash_salt,
@@ -44,6 +45,18 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                                                           {},
                                                           dm_context->db_context.getFileProvider(),
                                                           dm_context->getReadLimiter());
+=======
+            auto pack_filter = DMFilePackFilter::loadFrom(
+                file,
+                index_cache,
+                /*set_cache_if_miss*/ true,
+                {range},
+                EMPTY_FILTER,
+                {},
+                dm_context->db_context.getFileProvider(),
+                dm_context->getReadLimiter(),
+                /*tracing_logger*/ nullptr);
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -225,6 +238,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             }
             mvcc_stream->readSuffix();
         }
+<<<<<<< HEAD
         auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                       context.db_context.getGlobalContext().getMinMaxIndexCache(),
                                                       context.hash_salt,
@@ -234,6 +248,19 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                       context.db_context.getFileProvider(),
                                                       context.getReadLimiter());
         auto & use_packs = pack_filter.getUsePacks();
+=======
+        auto pack_filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
+            {rowkey_range},
+            EMPTY_FILTER,
+            {},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
+        const auto & use_packs = pack_filter.getUsePacks();
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
@@ -346,13 +373,12 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     size_t match_packs = 0;
     size_t total_match_rows = 0;
     size_t total_match_bytes = 0;
-    // Usually, this method will be called for some "cold" key ranges. Loading the index
-    // into cache may pollute the cache and make the hot index cache invalid. Set the
-    // index cache to nullptr so that the cache won't be polluted.
-    // TODO: We can use the cache if the index happens to exist in the cache, but
-    // don't refill the cache if the index does not exist.
+    // Usually, this method will be called for some "cold" key ranges.
+    // Loading the index into cache may pollute the cache and make the hot index cache invalid.
+    // So don't refill the cache if the index does not exist.
     for (auto & f : stable->files)
     {
+<<<<<<< HEAD
         auto filter = DMFilePackFilter::loadFrom(f, //
                                                  nullptr,
                                                  context.hash_salt,
@@ -363,6 +389,20 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
                                                  context.getReadLimiter());
         auto & pack_stats = f->getPackStats();
         auto & use_packs = filter.getUsePacks();
+=======
+        auto filter = DMFilePackFilter::loadFrom(
+            f,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            /*tracing_logger*/ nullptr);
+        const auto & pack_stats = f->getPackStats();
+        const auto & use_packs = filter.getUsePacks();
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])
