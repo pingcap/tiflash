@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::PS::V3::tests
@@ -35,16 +36,22 @@ class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 public:
     BlobStoreStatsTest()
         : logger(Logger::get("BlobStoreStatsTest"))
-    {}
+    {
+        auto path = getTemporaryPath();
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
+        createIfNotExist(path);
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+    }
 
 protected:
     BlobStore::Config config;
     LoggerPtr logger;
+    PSDiskDelegatorPtr delegator;
 };
 
 TEST_F(BlobStoreStatsTest, RestoreEmpty)
 {
-    BlobStats stats(logger, config);
+    BlobStats stats(logger, delegator, config);
 
     stats.restore();
 
@@ -58,7 +65,7 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
 TEST_F(BlobStoreStatsTest, Restore)
 try
 {
-    BlobStats stats(logger, config);
+    BlobStats stats(logger, delegator, config);
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
@@ -89,7 +96,9 @@ try
     }
 
     auto stats_copy = stats.getStats();
-    ASSERT_EQ(stats_copy.size(), 2);
+
+    ASSERT_EQ(stats_copy.size(), 1);
+    ASSERT_EQ(stats_copy.begin()->second.size(), 2);
     EXPECT_EQ(stats.roll_id, 13);
 
     auto stat1 = stats.blobIdToStat(file_id1);
@@ -111,7 +120,7 @@ CATCH
 
 TEST_F(BlobStoreStatsTest, testStats)
 {
-    BlobStats stats(logger, config);
+    BlobStats stats(logger, delegator, config);
 
     auto stat = stats.createStat(0, stats.lock());
 
@@ -120,7 +129,10 @@ TEST_F(BlobStoreStatsTest, testStats)
     stats.createStat(1, stats.lock());
     stats.createStat(2, stats.lock());
 
-    ASSERT_EQ(stats.stats_map.size(), 3);
+    auto stats_copy = stats.getStats();
+
+    ASSERT_EQ(stats_copy.size(), 1);
+    ASSERT_EQ(stats_copy.begin()->second.size(), 3);
     ASSERT_EQ(stats.roll_id, 3);
 
     stats.eraseStat(0, stats.lock());
@@ -135,7 +147,7 @@ TEST_F(BlobStoreStatsTest, testStat)
     BlobFileId blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
 
-    BlobStats stats(logger, config);
+    BlobStats stats(logger, delegator, config);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, 1);
@@ -208,7 +220,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     BlobStore::BlobStats::BlobStatPtr stat;
     BlobFileOffset offset = 0;
 
-    BlobStats stats(logger, config);
+    BlobStats stats(logger, delegator, config);
 
     stat = stats.createStat(1, stats.lock());
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
@@ -252,19 +264,15 @@ class BlobStoreTest : public DB::base::TiFlashStorageTestBasic
 public:
     void SetUp() override
     {
-        path = getTemporaryPath();
+        auto path = getTemporaryPath();
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
-
-        Poco::File file(path);
-        if (!file.exists())
-        {
-            file.createDirectories();
-        }
+        createIfNotExist(path);
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
     }
 
 protected:
     BlobStore::Config config;
-    String path{};
+    PSDiskDelegatorPtr delegator;
 };
 
 TEST_F(BlobStoreTest, Restore)
@@ -272,7 +280,7 @@ try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     config.file_limit_size = 2560;
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
@@ -304,19 +312,22 @@ try
 
     // check spacemap updated
     {
-        for (const auto & stat : blob_store.blob_stats.getStats())
+        for (const auto & [path, stats] : blob_store.blob_stats.getStats())
         {
-            if (stat->id == file_id1)
+            for (const auto & stat : stats)
             {
-                ASSERT_EQ(stat->sm_total_size, 2560);
-                ASSERT_EQ(stat->sm_valid_size, 640);
-                ASSERT_EQ(stat->sm_max_caps, 1024);
-            }
-            else if (stat->id == file_id2)
-            {
-                ASSERT_EQ(stat->sm_total_size, 2560);
-                ASSERT_EQ(stat->sm_valid_size, 512);
-                ASSERT_EQ(stat->sm_max_caps, 2048);
+                if (stat->id == file_id1)
+                {
+                    ASSERT_EQ(stat->sm_total_size, 2560);
+                    ASSERT_EQ(stat->sm_valid_size, 640);
+                    ASSERT_EQ(stat->sm_max_caps, 1024);
+                }
+                else if (stat->id == file_id2)
+                {
+                    ASSERT_EQ(stat->sm_total_size, 2560);
+                    ASSERT_EQ(stat->sm_valid_size, 512);
+                    ASSERT_EQ(stat->sm_max_caps, 2048);
+                }
             }
         }
     }
@@ -331,7 +342,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -423,7 +434,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         off += data_sz;
     }
 
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -479,7 +490,7 @@ TEST_F(BlobStoreTest, testWrite)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
 
     PageId page_id = 50;
     const size_t buff_size = 1024;
@@ -589,7 +600,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
 
     {
         config.file_limit_size = buff_size - 1;
-        auto blob_store = BlobStore(file_provider, path, config);
+        auto blob_store = BlobStore(file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff[buff_size];
@@ -613,7 +624,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
     for (auto & buf_size : buffer_sizes)
     {
-        auto blob_store = BlobStore(file_provider, path, config);
+        auto blob_store = BlobStore(file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff1[buf_size];
@@ -656,7 +667,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
     std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
@@ -740,7 +751,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
     WriteBatch wb;
@@ -800,7 +811,7 @@ TEST_F(BlobStoreTest, GC)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -867,7 +878,7 @@ try
 
     BlobStore::Config config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
+    auto blob_store = BlobStore(file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -918,7 +929,7 @@ try
 
     BlobStore::Config config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(file_provider, path, config_with_small_file_limit_size);
+    auto blob_store = BlobStore(file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
