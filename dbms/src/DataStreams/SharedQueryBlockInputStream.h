@@ -119,7 +119,10 @@ protected:
         if (!queue.pop(block))
         {
             if (!isCancelled())
+            {
+                // must be `fetchBlocks` finished, `waitThread` to get its final status
                 waitThread();
+            }
             return {};
         }
 
