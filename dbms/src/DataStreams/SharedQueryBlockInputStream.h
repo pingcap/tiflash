@@ -112,11 +112,13 @@ protected:
 
         if (!read_prefixed)
             throw Exception("read operation called before readPrefix");
+        if (read_suffixed)
+            throw Exception("read operation called after readSuffix");
 
         Block block;
         if (!queue.pop(block))
         {
-            if (!isCancelled() && !read_suffixed)
+            if (!isCancelled())
                 waitThread();
             return {};
         }
@@ -132,8 +134,8 @@ protected:
             while (true)
             {
                 Block block = in->read();
-                // canceled or in is finished
-                if (!queue.push(block) || !block)
+                // in is finished or queue is canceled
+                if (!block || !queue.push(block))
                     break;
             }
             in->readSuffix();
