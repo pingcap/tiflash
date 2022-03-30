@@ -263,6 +263,9 @@ libs/libtiflash-proxy
 tmp/
 
 tests/fullstack-test2/auto_gen
+tests/fullstack-test/data/
+tests/fullstack-test/log/
+
 
 CoverageReport
 
