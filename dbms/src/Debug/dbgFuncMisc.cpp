@@ -24,7 +24,6 @@ namespace DB
 {
 inline size_t getThreadIdForLog(const String & line)
 {
-    std::cout << "getThreadIdForLog " << line << std::endl;
     auto sub_line = line.substr(line.find("thread_id="));
     std::regex rx(R"((0|[1-9][0-9]*))");
     std::smatch m;
@@ -75,7 +74,6 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         return;
     }
     size_t target_thread_id = getThreadIdForLog(thread_hint_line_candidates.back());
-    std::cout << "target_thread_id " << target_thread_id << std::endl;
     if (target_thread_id == 0)
     {
         output("Invalid");
@@ -92,7 +90,6 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
     }
     // try parse the first number following the key
     auto sub_line = target_line.substr(target_line.find(key));
-    std::cout << "target_line " << sub_line << std::endl;
     std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
     std::smatch m;
     if (regex_search(sub_line, m, rx))

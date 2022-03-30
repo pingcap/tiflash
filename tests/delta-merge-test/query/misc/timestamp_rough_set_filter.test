@@ -54,7 +54,7 @@
 
 => DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 09:00:00.00000\')')
 
-=> DBGInvoke search_log_for_key('RSFilter exclude rate')
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
@@ -64,7 +64,7 @@
 │         50 │ 2019-06-10 09:00:00.00000 │
 └────────────┴───────────────────────────┘
 
-=> DBGInvoke search_log_for_key('RSFilter exclude rate')
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 0.00                                        │
 └─────────────────────────────────────────────┘
@@ -74,7 +74,7 @@
 # so '2019-06-10 17:00:00.00000'(tz_offset:28800) below is equal to '2019-06-10 09:00:00.00000' in UTC
 => DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800')
 
-=> DBGInvoke search_log_for_key('RSFilter exclude rate')
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘

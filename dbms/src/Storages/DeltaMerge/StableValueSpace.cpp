@@ -54,7 +54,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
             auto pack_filter = DMFilePackFilter::loadFrom(
                 file,
                 index_cache,
-                true,
+                /*set_cache_if_miss*/ true,
                 {range},
                 EMPTY_FILTER,
                 {},
@@ -237,7 +237,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         auto pack_filter = DMFilePackFilter::loadFrom(
             file,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
-            false,
+            /*set_cache_if_miss*/ false,
             {rowkey_range},
             EMPTY_FILTER,
             {},

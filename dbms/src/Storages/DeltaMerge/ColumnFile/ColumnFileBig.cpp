@@ -37,7 +37,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
     auto pack_filter = DMFilePackFilter::loadFrom(
         file,
         index_cache,
-        false,
+        /*set_cache_if_miss*/ false,
         {segment_range},
         EMPTY_FILTER,
         {},
