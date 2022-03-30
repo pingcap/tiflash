@@ -90,8 +90,11 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, const Context & c
 
 void PhysicalProjection::finalize(const Names & parent_require)
 {
-    // parent_require.size() >= schema.size()
-    FinalizeHelper::checkParentRequireContainsSchema(parent_require, schema);
+    // Maybe parent_require.size() >= schema.size()
+    if (parent_require.size() >= schema.size())
+        FinalizeHelper::checkParentRequireContainsSchema(parent_require, schema);
+    else
+        FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     project_actions->finalize(parent_require);
 
     child->finalize(project_actions->getRequiredColumns());
