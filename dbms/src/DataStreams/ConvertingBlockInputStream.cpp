@@ -69,7 +69,7 @@ ConvertingBlockInputStream::ConvertingBlockInputStream(
 
         /// Check conversion by dry run CAST function.
 
-        castColumn(src_elem, res_elem.type, context);
+        tiDBCastColumn(src_elem, res_elem.type, context);
     }
 }
 
@@ -87,7 +87,7 @@ Block ConvertingBlockInputStream::readImpl()
         const auto & src_elem = src.getByPosition(conversion[res_pos]);
         auto & res_elem = res.getByPosition(res_pos);
 
-        ColumnPtr converted = castColumn(src_elem, res_elem.type, context);
+        ColumnPtr converted = tiDBCastColumn(src_elem, res_elem.type, context);
 
         if (src_elem.column->isColumnConst() && !res_elem.column->isColumnConst())
             converted = converted->convertToFullColumnIfConst();
