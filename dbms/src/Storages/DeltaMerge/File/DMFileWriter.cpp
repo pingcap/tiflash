@@ -87,6 +87,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
+    is_empty_file = false;
     DMFile::PackStat stat;
     stat.rows      = block.rows();
     stat.not_clean = block_property.not_clean_rows;
@@ -94,17 +95,17 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {
-        auto & col = getByColumnId(block, cd.id).column;
+        const auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col, del_mark);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
         else if (cd.id == TAG_COLUMN_ID)
-            stat.first_tag = (UInt8)(col->get64(0));
+            stat.first_tag = static_cast<UInt8>(col->get64(0));
     }
 
     if (!options.flags.isSingleFile())
@@ -299,11 +300,44 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             if (stream->minmaxes)
             {
+<<<<<<< HEAD
                 WriteBufferFromFileProvider buf(
                     file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, rate_limiter);
                 stream->minmaxes->write(*type, buf);
                 buf.sync();
                 bytes_written += buf.getPositionInFile();
+=======
+                if (!dmfile->configuration)
+                {
+                    WriteBufferFromFileProvider buf(
+                        file_provider,
+                        dmfile->colIndexPath(stream_name),
+                        dmfile->encryptionIndexPath(stream_name),
+                        false,
+                        write_limiter);
+                    if (!is_empty_file)
+                        stream->minmaxes->write(*type, buf);
+                    buf.sync();
+                    bytes_written += buf.getMaterializedBytes();
+                }
+                else
+                {
+                    auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                           dmfile->colIndexPath(stream_name),
+                                                                           dmfile->encryptionIndexPath(stream_name),
+                                                                           false,
+                                                                           write_limiter,
+                                                                           dmfile->configuration->getChecksumAlgorithm(),
+                                                                           dmfile->configuration->getChecksumFrameLength());
+                    if (!is_empty_file)
+                        stream->minmaxes->write(*type, *buf);
+                    buf->sync();
+                    bytes_written += buf->getMaterializedBytes();
+#ifndef NDEBUG
+                    examine_buffer_size(*buf, *this->file_provider);
+#endif
+                }
+>>>>>>> 5e0c2f8f2e (fix empty segment cannot merge after gc and avoid write index data for empty dmfile (#4500))
             }
         };
         type->enumerateStreams(callback, {});
