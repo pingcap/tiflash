@@ -55,7 +55,7 @@ public:
 
 
     void alterTable(
-        const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & engine_modifier) override;
+        const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & storage_modifier) override;
 
     time_t getTableMetadataModificationTime(const Context & context, const String & table_name) override;
 

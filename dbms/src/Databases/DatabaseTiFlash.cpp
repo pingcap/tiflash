@@ -152,7 +152,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto begin = table_files.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
 
-        auto task = std::bind(task_function, begin, end);
+        auto task = [begin, end] { task_function(begin, end); };
         if (thread_pool)
             thread_pool->schedule(task);
         else
@@ -269,10 +269,10 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     // DatabaseTiFlash should only manage tables in TMTContext.
     ManageableStoragePtr table;
     {
-        StoragePtr table_ = tryGetTable(context, table_name);
-        if (!table_)
+        StoragePtr tmp = tryGetTable(context, table_name);
+        if (!tmp)
             throw Exception("Table " + name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
-        table = std::dynamic_pointer_cast<IManageableStorage>(table_);
+        table = std::dynamic_pointer_cast<IManageableStorage>(tmp);
         if (!table)
             throw Exception("Table " + name + "." + table_name + " is not manageable storage.", ErrorCodes::UNKNOWN_TABLE);
     }
@@ -315,7 +315,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         EncryptionPath encryption_path
             = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
-            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+            bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
             WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
@@ -414,7 +414,7 @@ void DatabaseTiFlash::alterTable(
     EncryptionPath encryption_path
         = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
         WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -519,7 +519,7 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
     {
         // Alter the attach statement in metadata.
         auto dbinfo_literal = std::make_shared<ASTLiteral>(Field(db_info == nullptr ? "" : (db_info->serialize())));
-        Field format_version_field((UInt64)DatabaseTiFlash::CURRENT_VERSION);
+        Field format_version_field(static_cast<UInt64>(DatabaseTiFlash::CURRENT_VERSION));
         auto version_literal = std::make_shared<ASTLiteral>(format_version_field);
         auto tombstone_literal = std::make_shared<ASTLiteral>(Field(tombstone_));
 

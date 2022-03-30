@@ -52,12 +52,12 @@ static bool isUnlimitedQuery(const IAST * ast)
     /// False negative: USE system; SELECT * FROM processes;
     /// False positive: SELECT * FROM system.processes CROSS JOIN (SELECT ...)
 
-    if (auto ast_selects = typeid_cast<const ASTSelectWithUnionQuery *>(ast))
+    if (const auto * ast_selects = typeid_cast<const ASTSelectWithUnionQuery *>(ast))
     {
         if (!ast_selects->list_of_selects || ast_selects->list_of_selects->children.empty())
             return false;
 
-        auto ast_select = typeid_cast<ASTSelectQuery *>(ast_selects->list_of_selects->children[0].get());
+        auto * ast_select = typeid_cast<ASTSelectQuery *>(ast_selects->list_of_selects->children[0].get());
 
         if (!ast_select)
             return false;
@@ -70,11 +70,11 @@ static bool isUnlimitedQuery(const IAST * ast)
         if (!ast_table)
             return false;
 
-        auto ast_database_id = typeid_cast<const ASTIdentifier *>(ast_database.get());
+        const auto * ast_database_id = typeid_cast<const ASTIdentifier *>(ast_database.get());
         if (!ast_database_id)
             return false;
 
-        auto ast_table_id = typeid_cast<const ASTIdentifier *>(ast_table.get());
+        const auto * ast_table_id = typeid_cast<const ASTIdentifier *>(ast_table.get());
         if (!ast_table_id)
             return false;
 

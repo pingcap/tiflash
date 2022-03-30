@@ -111,6 +111,8 @@ public:
     {
     }
 
+    using IConnectionPool::get;
+
     Entry getImpl(const Settings * settings, bool force_connected) override
     {
         Entry entry;

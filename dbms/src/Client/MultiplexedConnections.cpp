@@ -50,13 +50,13 @@ MultiplexedConnections::MultiplexedConnections(
         return;
 
     replica_states.reserve(connections.size());
-    for (size_t i = 0; i < connections.size(); ++i)
+    for (auto & conn : connections)
     {
-        Connection * connection = &(*connections[i]);
+        Connection * connection = &(*conn);
         connection->setThrottler(throttler);
 
         ReplicaState replica_state;
-        replica_state.pool_entry = std::move(connections[i]);
+        replica_state.pool_entry = std::move(conn);
         replica_state.connection = connection;
 
         replica_states.push_back(std::move(replica_state));
@@ -317,7 +317,7 @@ MultiplexedConnections::ReplicaState & MultiplexedConnections::getReplicaForRead
     /// TODO Absolutely wrong code: read_list could be empty; rand() is not thread safe and has low quality; motivation of rand is unclear.
     /// This code path is disabled by default.
 
-    auto & socket = read_list[rand() % read_list.size()];
+    auto & socket = read_list[rand() % read_list.size()]; // NOLINT(cert-msc50-cpp)
     if (fd_to_replica_state_idx.empty())
     {
         fd_to_replica_state_idx.reserve(replica_states.size());

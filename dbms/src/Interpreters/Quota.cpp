@@ -209,7 +209,7 @@ void QuotaForIntervals::setMax(const QuotaForIntervals & quota)
             cont.erase(it++);
     }
 
-    for (auto & x : quota.cont)
+    for (const auto & x : quota.cont)
     {
         if (!cont.count(x.first))
             cont.emplace(x.first, x.second);

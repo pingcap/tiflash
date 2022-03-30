@@ -49,7 +49,7 @@ public:
         : rand_gen(std::random_device()())
         , uniform_dist(dist_a, dist_b)
     {}
-    UniformDistributionKeyGenerator(uint64_t key_count)
+    explicit UniformDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
         , uniform_dist(0, key_count)
     {}
@@ -73,9 +73,9 @@ public:
         : rand_gen(std::random_device()())
         , normal_dist(mean, stddev)
     {}
-    NormalDistributionKeyGenerator(uint64_t key_count)
+    explicit NormalDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
-        , normal_dist(key_count / 2, key_count / 20)
+        , normal_dist(key_count / 2.0, key_count / 20.0)
     {}
 
     virtual uint64_t get64() override

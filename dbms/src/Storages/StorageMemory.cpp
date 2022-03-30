@@ -56,8 +56,8 @@ protected:
             Block res;
 
             /// Add only required columns to `res`.
-            for (size_t i = 0, size = column_names.size(); i < size; ++i)
-                res.insert(src.getByName(column_names[i]));
+            for (const auto & name : column_names)
+                res.insert(src.getByName(name));
 
             ++it;
             return res;

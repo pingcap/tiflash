@@ -198,7 +198,7 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 {
     try
     {
-        shutdown();
+        DatabaseWithOwnTablesBase::shutdown();
     }
     catch (...)
     {
@@ -348,9 +348,9 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     if (tables.empty())
         return;
 
-    for (auto it = tables.begin(); it != tables.end(); ++it)
+    for (const auto & table : tables)
     {
-        const String & table_name = it->first;
+        const String & table_name = table.first;
         LOG_FMT_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
         const String table_meta_path = database.getTableMetadataPath(table_name);
         if (!table_meta_path.empty())
@@ -418,7 +418,7 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         else
             std::advance(end, bunch_size);
 
-        auto task = std::bind(task_function, begin, end);
+        auto task = [begin, end] { task_function(begin, end); };
 
         if (thread_pool)
             thread_pool->schedule(task);
