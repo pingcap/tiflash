@@ -19,68 +19,9 @@
 #include <Poco/Logger.h>
 #include <fmt/format.h>
 
-#include <sstream>
-
 #ifndef QUERY_PREVIEW_LENGTH
 #define QUERY_PREVIEW_LENGTH 160
 #endif
-
-/// Logs a message to a specified logger with that level.
-
-#define LOG_TRACE(logger, message)                    \
-    do                                                \
-    {                                                 \
-        if ((logger)->trace())                        \
-        {                                             \
-            std::stringstream oss_internal_rare;      \
-            oss_internal_rare << message;             \
-            (logger)->trace(oss_internal_rare.str()); \
-        }                                             \
-    } while (false)
-
-#define LOG_DEBUG(logger, message)                    \
-    do                                                \
-    {                                                 \
-        if ((logger)->debug())                        \
-        {                                             \
-            std::stringstream oss_internal_rare;      \
-            oss_internal_rare << message;             \
-            (logger)->debug(oss_internal_rare.str()); \
-        }                                             \
-    } while (false)
-
-#define LOG_INFO(logger, message)                           \
-    do                                                      \
-    {                                                       \
-        if ((logger)->information())                        \
-        {                                                   \
-            std::stringstream oss_internal_rare;            \
-            oss_internal_rare << message;                   \
-            (logger)->information(oss_internal_rare.str()); \
-        }                                                   \
-    } while (false)
-
-#define LOG_WARNING(logger, message)                    \
-    do                                                  \
-    {                                                   \
-        if ((logger)->warning())                        \
-        {                                               \
-            std::stringstream oss_internal_rare;        \
-            oss_internal_rare << message;               \
-            (logger)->warning(oss_internal_rare.str()); \
-        }                                               \
-    } while (false)
-
-#define LOG_ERROR(logger, message)                    \
-    do                                                \
-    {                                                 \
-        if ((logger)->error())                        \
-        {                                             \
-            std::stringstream oss_internal_rare;      \
-            oss_internal_rare << message;             \
-            (logger)->error(oss_internal_rare.str()); \
-        }                                             \
-    } while (false)
 
 namespace LogFmtDetails
 {
@@ -117,6 +58,30 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
     return fmt::vformat(format, fmt::make_args_checked<Args...>(format, args...));
 }
 } // namespace LogFmtDetails
+
+/// Logs a message to a specified logger with that level.
+
+#define LOG_IMPL(logger, PRIORITY, message)                                     \
+    do                                                                          \
+    {                                                                           \
+        if ((logger)->is((PRIORITY)))                                           \
+        {                                                                       \
+            Poco::Message poco_message(                                         \
+                /*source*/ (logger)->name(),                                    \
+                /*text*/ message,                                               \
+                /*prio*/ (PRIORITY),                                            \
+                /*file*/ &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
+                /*line*/ __LINE__);                                             \
+            (logger)->log(poco_message);                                        \
+        }                                                                       \
+    } while (false)
+
+#define LOG_TRACE(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, message)
+#define LOG_DEBUG(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_DEBUG, message)
+#define LOG_INFO(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_INFORMATION, message)
+#define LOG_WARNING(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, message)
+#define LOG_ERROR(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, message)
+#define LOG_FATAL(logger, message) LOG_IMPL(logger, Poco::Message::PRIO_FATAL, message)
 
 
 /// Logs a message to a specified logger with that level.
