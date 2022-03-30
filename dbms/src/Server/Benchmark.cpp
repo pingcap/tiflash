@@ -12,37 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <port/unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <time.h>
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <random>
-#include <pcg_random.hpp>
-#include <Poco/File.h>
-#include <Poco/Util/Application.h>
-#include <Common/Stopwatch.h>
-#include <common/ThreadPool.h>
 #include <AggregateFunctions/ReservoirSampler.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <boost/program_options.hpp>
+#include <Client/Connection.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/randomSeed.h>
 #include <Core/Types.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/Operators.h>
-#include <IO/ConnectionTimeouts.h>
 #include <DataStreams/RemoteBlockInputStream.h>
+#include <IO/ConnectionTimeouts.h>
+#include <IO/Operators.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Client/Connection.h>
+#include <Poco/File.h>
+#include <Poco/Util/Application.h>
+#include <common/ThreadPool.h>
+#include <fcntl.h>
+#include <port/unistd.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <boost/program_options.hpp>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <pcg_random.hpp>
+#include <random>
+
 #include "InterruptListener.h"
 
 
@@ -52,28 +54,43 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int POCO_EXCEPTION;
-    extern const int STD_EXCEPTION;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int POCO_EXCEPTION;
+extern const int STD_EXCEPTION;
+extern const int UNKNOWN_EXCEPTION;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 class Benchmark
 {
 public:
-    Benchmark(unsigned concurrency_, double delay_,
-            const String & host_, UInt16 port_, const String & default_database_,
-            const String & user_, const String & password_, const String & stage,
-            bool randomize_, size_t max_iterations_, double max_time_,
-            const String & json_path_, const ConnectionTimeouts & timeouts, const Settings & settings_)
-        :
-        concurrency(concurrency_), delay(delay_), queue(concurrency),
-        connections(concurrency, host_, port_, default_database_, user_, password_, timeouts),
-        randomize(randomize_), max_iterations(max_iterations_), max_time(max_time_),
-        json_path(json_path_), settings(settings_), global_context(Context::createGlobal()), pool(concurrency)
+    Benchmark(
+        unsigned concurrency_,
+        double delay_,
+        const String & host_,
+        UInt16 port_,
+        const String & default_database_,
+        const String & user_,
+        const String & password_,
+        const String & stage,
+        bool randomize_,
+        size_t max_iterations_,
+        double max_time_,
+        const String & json_path_,
+        const ConnectionTimeouts & timeouts,
+        const Settings & settings_)
+        : concurrency(concurrency_)
+        , delay(delay_)
+        , queue(concurrency)
+        , connections(concurrency, host_, port_, default_database_, user_, password_, timeouts)
+        , randomize(randomize_)
+        , max_iterations(max_iterations_)
+        , max_time(max_time_)
+        , json_path(json_path_)
+        , settings(settings_)
+        , global_context(Context::createGlobal())
+        , pool(concurrency)
     {
         std::cerr << std::fixed << std::setprecision(3);
 
@@ -133,7 +150,7 @@ private:
         size_t result_bytes = 0;
 
         using Sampler = ReservoirSampler<double>;
-        Sampler sampler {1 << 16};
+        Sampler sampler{1 << 16};
 
         void add(double seconds, size_t read_rows_inc, size_t read_bytes_inc, size_t result_rows_inc, size_t result_bytes_inc)
         {
@@ -297,7 +314,8 @@ private:
         catch (...)
         {
             shutdown = true;
-            std::cerr << "An error occurred while processing query:\n" << query << "\n";
+            std::cerr << "An error occurred while processing query:\n"
+                      << query << "\n";
             throw;
         }
     }
@@ -345,8 +363,7 @@ private:
             << "result MiB/s: " << (info.result_bytes / seconds / 1048576) << "."
             << "\n";
 
-        auto print_percentile = [&](double percent)
-        {
+        auto print_percentile = [&](double percent) {
             std::cerr << percent << "%\t" << info.sampler.quantileInterpolated(percent / 100.0) << " sec." << std::endl;
         };
 
@@ -367,19 +384,19 @@ private:
 
         std::lock_guard lock(mutex);
 
-        auto print_key_value = [&](auto key, auto value, bool with_comma = true)
-        {
+        auto print_key_value = [&](auto key, auto value, bool with_comma = true) {
             json_out << double_quote << key << ": " << value << (with_comma ? ",\n" : "\n");
         };
 
-        auto print_percentile = [&json_out, &info](auto percent, bool with_comma = true)
-        {
-            json_out << "\"" << percent << "\"" << ": " << info.sampler.quantileInterpolated(percent / 100.0) << (with_comma ? ",\n" : "\n");
+        auto print_percentile = [&json_out, &info](auto percent, bool with_comma = true) {
+            json_out << "\"" << percent << "\""
+                     << ": " << info.sampler.quantileInterpolated(percent / 100.0) << (with_comma ? ",\n" : "\n");
         };
 
         json_out << "{\n";
 
-        json_out << double_quote << "statistics" << ": {\n";
+        json_out << double_quote << "statistics"
+                 << ": {\n";
 
         double seconds = info.watch.elapsedSeconds();
         print_key_value("QPS", info.queries / seconds);
@@ -391,7 +408,8 @@ private:
 
         json_out << "},\n";
 
-        json_out << double_quote << "query_time_percentiles" << ": {\n";
+        json_out << double_quote << "query_time_percentiles"
+                 << ": {\n";
 
         for (int percent = 0; percent <= 90; percent += 10)
             print_percentile(percent);
@@ -407,14 +425,13 @@ private:
     }
 
 public:
-
     ~Benchmark()
     {
         shutdown = true;
     }
 };
 
-}
+} // namespace DB
 
 
 int mainEntryClickHouseBenchmark(int argc, char ** argv)
@@ -427,6 +444,7 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
         using boost::program_options::value;
 
         boost::program_options::options_description desc("Allowed options");
+        // clang-format off
         desc.add_options()
             ("help",                                                                 "produce help message")
             ("concurrency,c",    value<unsigned>()->default_value(1),                 "number of parallel queries")
@@ -443,10 +461,11 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
             ("database",        value<std::string>()->default_value("default"),     "")
             ("stacktrace",                                                            "print stack traces of exceptions")
 
-        #define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) (#NAME, boost::program_options::value<std::string> (), DESCRIPTION)
+#define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) (#NAME, boost::program_options::value<std::string>(), DESCRIPTION)
             APPLY_FOR_SETTINGS(DECLARE_SETTING)
-        #undef DECLARE_SETTING
-        ;
+#undef DECLARE_SETTING
+            ;
+        // clang-format on
 
         boost::program_options::variables_map options;
         boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), options);
@@ -463,11 +482,11 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
         /// Extract `settings` and `limits` from received `options`
         Settings settings;
 
-        #define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
-        if (options.count(#NAME)) \
-            settings.set(#NAME, options[#NAME].as<std::string>());
+#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
+    if (options.count(#NAME))                             \
+        settings.set(#NAME, options[#NAME].as<std::string>());
         APPLY_FOR_SETTINGS(EXTRACT_SETTING)
-        #undef EXTRACT_SETTING
+#undef EXTRACT_SETTING
 
         Benchmark benchmark(
             options["concurrency"].as<unsigned>(),

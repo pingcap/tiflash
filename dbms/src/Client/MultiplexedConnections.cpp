@@ -16,14 +16,13 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int MISMATCH_REPLICAS_DATA_SOURCES;
-    extern const int NO_AVAILABLE_REPLICA;
-    extern const int TIMEOUT_EXCEEDED;
-}
+extern const int LOGICAL_ERROR;
+extern const int MISMATCH_REPLICAS_DATA_SOURCES;
+extern const int NO_AVAILABLE_REPLICA;
+extern const int TIMEOUT_EXCEEDED;
+} // namespace ErrorCodes
 
 
 MultiplexedConnections::MultiplexedConnections(Connection & connection, const Settings & settings_, const ThrottlerPtr & throttler)
@@ -39,8 +38,10 @@ MultiplexedConnections::MultiplexedConnections(Connection & connection, const Se
 }
 
 MultiplexedConnections::MultiplexedConnections(
-        std::vector<IConnectionPool::Entry> && connections,
-        const Settings & settings_, const ThrottlerPtr & throttler, bool append_extra_info)
+    std::vector<IConnectionPool::Entry> && connections,
+    const Settings & settings_,
+    const ThrottlerPtr & throttler,
+    bool append_extra_info)
     : settings(settings_)
 {
     /// If we didn't get any connections from pool and getMany() did not throw exceptions, this means that
@@ -146,7 +147,7 @@ BlockExtraInfo MultiplexedConnections::getBlockExtraInfo() const
 {
     if (!block_extra_info)
         throw Exception("MultiplexedConnections object not configured for block extra info support",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
     return *block_extra_info;
 }
 
@@ -198,19 +199,19 @@ Connection::Packet MultiplexedConnections::drain()
 
         switch (packet.type)
         {
-            case Protocol::Server::Data:
-            case Protocol::Server::Progress:
-            case Protocol::Server::ProfileInfo:
-            case Protocol::Server::Totals:
-            case Protocol::Server::Extremes:
-            case Protocol::Server::EndOfStream:
-                break;
+        case Protocol::Server::Data:
+        case Protocol::Server::Progress:
+        case Protocol::Server::ProfileInfo:
+        case Protocol::Server::Totals:
+        case Protocol::Server::Extremes:
+        case Protocol::Server::EndOfStream:
+            break;
 
-            case Protocol::Server::Exception:
-            default:
-                /// If we receive an exception or an unknown packet, we save it.
-                res = std::move(packet);
-                break;
+        case Protocol::Server::Exception:
+        default:
+            /// If we receive an exception or an unknown packet, we save it.
+            res = std::move(packet);
+            break;
         }
     }
 
@@ -256,22 +257,22 @@ Connection::Packet MultiplexedConnections::receivePacketUnlocked()
 
     switch (packet.type)
     {
-        case Protocol::Server::Data:
-        case Protocol::Server::Progress:
-        case Protocol::Server::ProfileInfo:
-        case Protocol::Server::Totals:
-        case Protocol::Server::Extremes:
-            break;
+    case Protocol::Server::Data:
+    case Protocol::Server::Progress:
+    case Protocol::Server::ProfileInfo:
+    case Protocol::Server::Totals:
+    case Protocol::Server::Extremes:
+        break;
 
-        case Protocol::Server::EndOfStream:
-            invalidateReplica(state);
-            break;
+    case Protocol::Server::EndOfStream:
+        invalidateReplica(state);
+        break;
 
-        case Protocol::Server::Exception:
-        default:
-            current_connection->disconnect();
-            invalidateReplica(state);
-            break;
+    case Protocol::Server::Exception:
+    default:
+        current_connection->disconnect();
+        invalidateReplica(state);
+        break;
     }
 
     return packet;
@@ -337,4 +338,4 @@ void MultiplexedConnections::invalidateReplica(ReplicaState & state)
     --active_connection_count;
 }
 
-}
+} // namespace DB

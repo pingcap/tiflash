@@ -17,7 +17,8 @@
 #include <iostream>
 
 
-ThreadPool::ThreadPool(size_t m_size, Job pre_worker) : m_size(m_size)
+ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
+    : m_size(m_size)
 {
     threads.reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)

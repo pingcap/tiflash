@@ -12,28 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/CatBoostModel.h>
-#include <Common/FieldVisitors.h>
-#include <mutex>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
+#include <Common/FieldVisitors.h>
 #include <Common/PODArray.h>
 #include <Common/SharedLibrary.h>
+#include <Common/typeid_cast.h>
+#include <Dictionaries/CatBoostModel.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
+
+#include <mutex>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int BAD_ARGUMENTS;
 extern const int CANNOT_LOAD_CATBOOST_MODEL;
 extern const int CANNOT_APPLY_CATBOOST_MODEL;
-}
+} // namespace ErrorCodes
 
 
 /// CatBoost wrapper interface functions.
@@ -41,59 +41,56 @@ struct CatBoostWrapperAPI
 {
     typedef void ModelCalcerHandle;
 
-    ModelCalcerHandle * (* ModelCalcerCreate)();
+    ModelCalcerHandle * (*ModelCalcerCreate)();
 
-    void (* ModelCalcerDelete)(ModelCalcerHandle * calcer);
+    void (*ModelCalcerDelete)(ModelCalcerHandle * calcer);
 
-    const char * (* GetErrorString)();
+    const char * (*GetErrorString)();
 
-    bool (* LoadFullModelFromFile)(ModelCalcerHandle * calcer, const char * filename);
+    bool (*LoadFullModelFromFile)(ModelCalcerHandle * calcer, const char * filename);
 
-    bool (* CalcModelPredictionFlat)(ModelCalcerHandle * calcer, size_t docCount,
-                                     const float ** floatFeatures, size_t floatFeaturesSize,
-                                     double * result, size_t resultSize);
+    bool (*CalcModelPredictionFlat)(ModelCalcerHandle * calcer, size_t docCount, const float ** floatFeatures, size_t floatFeaturesSize, double * result, size_t resultSize);
 
-    bool (* CalcModelPrediction)(ModelCalcerHandle * calcer, size_t docCount,
-                                 const float ** floatFeatures, size_t floatFeaturesSize,
-                                 const char *** catFeatures, size_t catFeaturesSize,
-                                 double * result, size_t resultSize);
+    bool (*CalcModelPrediction)(ModelCalcerHandle * calcer, size_t docCount, const float ** floatFeatures, size_t floatFeaturesSize, const char *** catFeatures, size_t catFeaturesSize, double * result, size_t resultSize);
 
-    bool (* CalcModelPredictionWithHashedCatFeatures)(ModelCalcerHandle * calcer, size_t docCount,
-                                                      const float ** floatFeatures, size_t floatFeaturesSize,
-                                                      const int ** catFeatures, size_t catFeaturesSize,
-                                                      double * result, size_t resultSize);
+    bool (*CalcModelPredictionWithHashedCatFeatures)(ModelCalcerHandle * calcer, size_t docCount, const float ** floatFeatures, size_t floatFeaturesSize, const int ** catFeatures, size_t catFeaturesSize, double * result, size_t resultSize);
 
-    int (* GetStringCatFeatureHash)(const char * data, size_t size);
+    int (*GetStringCatFeatureHash)(const char * data, size_t size);
 
-    int (* GetIntegerCatFeatureHash)(long long val);
+    int (*GetIntegerCatFeatureHash)(long long val);
 
-    size_t (* GetFloatFeaturesCount)(ModelCalcerHandle* calcer);
+    size_t (*GetFloatFeaturesCount)(ModelCalcerHandle * calcer);
 
-    size_t (* GetCatFeaturesCount)(ModelCalcerHandle* calcer);
+    size_t (*GetCatFeaturesCount)(ModelCalcerHandle * calcer);
 };
 
 
 namespace
 {
-
 class CatBoostModelHolder
 {
 private:
     CatBoostWrapperAPI::ModelCalcerHandle * handle;
     const CatBoostWrapperAPI * api;
+
 public:
-    explicit CatBoostModelHolder(const CatBoostWrapperAPI * api) : api(api) { handle = api->ModelCalcerCreate(); }
+    explicit CatBoostModelHolder(const CatBoostWrapperAPI * api)
+        : api(api)
+    {
+        handle = api->ModelCalcerCreate();
+    }
     ~CatBoostModelHolder() { api->ModelCalcerDelete(handle); }
 
     CatBoostWrapperAPI::ModelCalcerHandle * get() { return handle; }
-    explicit operator CatBoostWrapperAPI::ModelCalcerHandle * () { return handle; }
+    explicit operator CatBoostWrapperAPI::ModelCalcerHandle *() { return handle; }
 };
 
 
 class CatBoostModelImpl : public ICatBoostModel
 {
 public:
-    CatBoostModelImpl(const CatBoostWrapperAPI * api, const std::string & model_path) : api(api)
+    CatBoostModelImpl(const CatBoostWrapperAPI * api, const std::string & model_path)
+        : api(api)
     {
         auto handle_ = std::make_unique<CatBoostModelHolder>(api);
         if (!handle_)
@@ -205,7 +202,9 @@ private:
     /// Place string pointers in positions buffer[0], buffer[features_count], ... , buffer[size * features_count]
     /// Returns PODArray which holds data (because ColumnFixedString doesn't store terminating zero).
     PODArray<char> placeFixedStringColumn(
-            const ColumnFixedString & column, const char ** buffer, size_t features_count) const
+        const ColumnFixedString & column,
+        const char ** buffer,
+        size_t features_count) const
     {
         size_t size = column.size();
         size_t str_size = column.getN();
@@ -228,7 +227,9 @@ private:
     /// Place columns into buffer, returns column which holds placed data. Buffer should contains column->size() values.
     template <typename T>
     ColumnPtr placeNumericColumns(const ColumnRawPtrs & columns,
-                                  size_t offset, size_t size, const T** buffer) const
+                                  size_t offset,
+                                  size_t size,
+                                  const T ** buffer) const
     {
         if (size == 0)
             return nullptr;
@@ -255,7 +256,10 @@ private:
     /// Place columns into buffer, returns data which was used for fixed string columns.
     /// Buffer should contains column->size() values, each value contains size strings.
     std::vector<PODArray<char>> placeStringColumns(
-            const ColumnRawPtrs & columns, size_t offset, size_t size, const char ** buffer) const
+        const ColumnRawPtrs & columns,
+        size_t offset,
+        size_t size,
+        const char ** buffer) const
     {
         if (size == 0)
             return {};
@@ -321,8 +325,7 @@ private:
     }
 
     /// buffer[column_size * cat_features_count] -> char * => cat_features[column_size][cat_features_count] -> char *
-    void fillCatFeaturesBuffer(const char *** cat_features, const char ** buffer,
-                               size_t column_size, size_t cat_features_count) const
+    void fillCatFeaturesBuffer(const char *** cat_features, const char ** buffer, size_t column_size, size_t cat_features_count) const
     {
         for (size_t i = 0; i < column_size; ++i)
         {
@@ -336,8 +339,7 @@ private:
     ///  * CalcModelPredictionFlat if no cat features
     ///  * CalcModelPrediction if all cat features are strings
     ///  * CalcModelPredictionWithHashedCatFeatures if has int cat features.
-    ColumnPtr evalImpl(const ColumnRawPtrs & columns, size_t float_features_count, size_t cat_features_count,
-                       bool cat_features_are_strings) const
+    ColumnPtr evalImpl(const ColumnRawPtrs & columns, size_t float_features_count, size_t cat_features_count, bool cat_features_are_strings) const
     {
         std::string error_msg = "Error occurred while applying CatBoost model: ";
         size_t column_size = columns.front()->size();
@@ -353,11 +355,8 @@ private:
 
         if (cat_features_count == 0)
         {
-            if (!api->CalcModelPredictionFlat(handle->get(), column_size,
-                                              float_features_buf, float_features_count,
-                                              result_buf, column_size))
+            if (!api->CalcModelPredictionFlat(handle->get(), column_size, float_features_buf, float_features_count, result_buf, column_size))
             {
-
                 throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
             }
             return result;
@@ -373,13 +372,9 @@ private:
 
             fillCatFeaturesBuffer(cat_features_buf, cat_features_holder.data(), column_size, cat_features_count);
             /// Fixed strings are stored without termination zero, so have to copy data into fixed_strings_data.
-            auto fixed_strings_data = placeStringColumns(columns, float_features_count,
-                                                         cat_features_count, cat_features_holder.data());
+            auto fixed_strings_data = placeStringColumns(columns, float_features_count, cat_features_count, cat_features_holder.data());
 
-            if (!api->CalcModelPrediction(handle->get(), column_size,
-                                          float_features_buf, float_features_count,
-                                          cat_features_buf, cat_features_count,
-                                          result_buf, column_size))
+            if (!api->CalcModelPrediction(handle->get(), column_size, float_features_buf, float_features_count, cat_features_buf, cat_features_count, result_buf, column_size))
             {
                 throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
             }
@@ -388,14 +383,17 @@ private:
         {
             PODArray<const int *> cat_features(column_size);
             auto cat_features_buf = cat_features.data();
-            auto cat_features_col = placeNumericColumns<int>(columns, float_features_count,
-                                                             cat_features_count, cat_features_buf);
+            auto cat_features_col = placeNumericColumns<int>(columns, float_features_count, cat_features_count, cat_features_buf);
             calcHashes(columns, float_features_count, cat_features_count, cat_features_buf);
             if (!api->CalcModelPredictionWithHashedCatFeatures(
-                    handle->get(), column_size,
-                    float_features_buf, float_features_count,
-                    cat_features_buf, cat_features_count,
-                    result_buf, column_size))
+                    handle->get(),
+                    column_size,
+                    float_features_buf,
+                    float_features_count,
+                    cat_features_buf,
+                    cat_features_count,
+                    result_buf,
+                    column_size))
             {
                 throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
             }
@@ -407,10 +405,15 @@ private:
 
 
 /// Holds CatBoost wrapper library and provides wrapper interface.
-class CatBoostLibHolder: public CatBoostWrapperAPIProvider
+class CatBoostLibHolder : public CatBoostWrapperAPIProvider
 {
 public:
-    explicit CatBoostLibHolder(std::string lib_path_) : lib_path(std::move(lib_path_)), lib(lib_path) { initAPI(); }
+    explicit CatBoostLibHolder(std::string lib_path_)
+        : lib_path(std::move(lib_path_))
+        , lib(lib_path)
+    {
+        initAPI();
+    }
 
     const CatBoostWrapperAPI & getAPI() const override { return api; }
     const std::string & getCurrentPath() const { return lib_path; }
@@ -423,7 +426,10 @@ private:
     void initAPI();
 
     template <typename T>
-    void load(T& func, const std::string & name) { func = lib.get<T>(name); }
+    void load(T & func, const std::string & name)
+    {
+        func = lib.get<T>(name);
+    }
 };
 
 void CatBoostLibHolder::initAPI()
@@ -459,12 +465,14 @@ std::shared_ptr<CatBoostLibHolder> getCatBoostWrapperHolder(const std::string & 
     return result;
 }
 
-}
+} // namespace
 
 
-CatBoostModel::CatBoostModel(std::string name_, std::string model_path_, std::string lib_path_,
-                             const ExternalLoadableLifetime & lifetime)
-    : name(std::move(name_)), model_path(std::move(model_path_)), lib_path(std::move(lib_path_)), lifetime(lifetime)
+CatBoostModel::CatBoostModel(std::string name_, std::string model_path_, std::string lib_path_, const ExternalLoadableLifetime & lifetime)
+    : name(std::move(name_))
+    , model_path(std::move(model_path_))
+    , lib_path(std::move(lib_path_))
+    , lifetime(lifetime)
 {
     try
     {
@@ -519,4 +527,4 @@ ColumnPtr CatBoostModel::evaluate(const ColumnRawPtrs & columns) const
     return model->evaluate(columns);
 }
 
-}
+} // namespace DB
