@@ -332,7 +332,6 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         return;
     }
 
-
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
     for (const auto & schema_change : schema_changes)
