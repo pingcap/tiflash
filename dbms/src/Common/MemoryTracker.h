@@ -110,7 +110,7 @@ extern thread_local MemoryTracker * current_memory_tracker;
 namespace CurrentMemoryTracker
 {
 void disableThreshold();
-void submitLocalDeltaMemory(bool check_memory_limit);
+void submitLocalDeltaMemory();
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);

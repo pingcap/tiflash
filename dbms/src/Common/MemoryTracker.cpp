@@ -203,7 +203,7 @@ void disableThreshold()
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
-void submitLocalDeltaMemory(bool check_memory_limit)
+void submitLocalDeltaMemory()
 {
     if (current_memory_tracker)
     {
@@ -211,7 +211,7 @@ void submitLocalDeltaMemory(bool check_memory_limit)
         {
             if (local_delta > 0)
             {
-                current_memory_tracker->alloc(local_delta, check_memory_limit);
+                current_memory_tracker->alloc(local_delta, false);
             }
             else if (local_delta < 0)
             {
