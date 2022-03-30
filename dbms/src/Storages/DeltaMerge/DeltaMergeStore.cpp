@@ -1604,7 +1604,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment_snap->getRows() == 0)
         {
             // release segment_snap before checkSegmentUpdate, otherwise this segment is still in update status.
-            segment_snap = nullptr;
+            segment_snap = {};
             checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
             continue;
         }
