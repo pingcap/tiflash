@@ -59,7 +59,7 @@ public:
 
     void readPrefix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (read_prefixed)
             return;
@@ -71,7 +71,7 @@ public:
 
     void readSuffix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (read_suffixed)
             return;
@@ -108,7 +108,7 @@ public:
 protected:
     Block readImpl() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (!read_prefixed)
             throw Exception("read operation called before readPrefix");
