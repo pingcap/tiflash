@@ -67,8 +67,6 @@ private:
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    void handleExchangeReceiver(DAGPipeline & pipeline);
-    void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     ExpressionActionsPtr genJoinOtherConditionAction(
         const tipb::Join & join,
         std::vector<NameAndTypePair> & source_columns,

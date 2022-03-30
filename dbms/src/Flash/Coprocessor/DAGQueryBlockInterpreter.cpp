@@ -19,7 +19,6 @@
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -31,7 +30,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/traversePhysicalPlans.h>
-#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -79,15 +78,11 @@ bool addExtraCastsAfterTs(
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
-PhysicalPlanPtr analysePhysicalPlan(
-    Context & context,
-    DAGExpressionAnalyzer & analyzer,
+void analysePhysicalPlan(
+    PhysicalPlanBuilder & builder,
     const DAGQueryBlock & query_block,
-    bool keep_session_timezone_info,
-    const Block & source_sample_block)
+    bool keep_session_timezone_info)
 {
-    PhysicalPlanBuilder builder{context};
-    builder.buildSource(query_block.source_name, analyzer.getCurrentInputColumns(), source_sample_block);
     // selection on table scan had been executed in handleTableScan
     if (query_block.selection && !query_block.isTableScanSource())
     {
@@ -128,8 +123,6 @@ PhysicalPlanPtr analysePhysicalPlan(
     {
         builder.build(query_block.exchange_sender_name, query_block.exchange_sender);
     }
-
-    return builder.getResult();
 }
 
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
@@ -758,55 +751,6 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     }
 }
 
-void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
-{
-    auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
-    if (unlikely(it == dagContext().getMPPExchangeReceiverMap().end()))
-        throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
-    // todo choose a more reasonable stream number
-    auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    for (size_t i = 0; i < max_streams; ++i)
-    {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
-        exchange_receiver_io_input_streams.push_back(stream);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        pipeline.streams.push_back(stream);
-    }
-    std::vector<NameAndTypePair> source_columns;
-    Block block = pipeline.firstStream()->getHeader();
-    for (const auto & col : block.getColumnsWithTypeAndName())
-    {
-        source_columns.emplace_back(NameAndTypePair(col.name, col.type));
-    }
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-}
-
-void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
-{
-    std::vector<NameAndTypePair> input_columns;
-    pipeline.streams = input_streams_vec[0];
-    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
-        input_columns.emplace_back(p.name, p.type);
-    DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
-    ExpressionActionsChain chain;
-    auto & last_step = dag_analyzer.initAndGetLastStep(chain);
-    std::vector<NameAndTypePair> output_columns;
-    NamesWithAliases project_cols;
-    UniqueNameGenerator unique_name_generator;
-    for (const auto & expr : projection.exprs())
-    {
-        auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
-        last_step.required_output.emplace_back(expr_name);
-        const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
-        String alias = unique_name_generator.toUniqueName(col.name);
-        output_columns.emplace_back(alias, col.type);
-        project_cols.emplace_back(col.name, alias);
-    }
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
-    executeProject(pipeline, project_cols);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
-}
-
 // To execute a query block, you have to:
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
@@ -819,6 +763,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    PhysicalPlanBuilder physical_plan_builder{context};
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueryForSet right_query;
@@ -828,22 +773,30 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         SubqueriesForSets subquries;
         subquries[query_block.source_name] = right_query;
         subqueries_for_sets.emplace_back(subquries);
+
+        physical_plan_builder.buildSource(
+            query_block.source_name,
+            analyzer->getCurrentInputColumns(),
+            pipeline.firstStream()->getHeader());
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        handleExchangeReceiver(pipeline);
-        recordProfileStreams(pipeline, query_block.source_name);
+        physical_plan_builder.build(query_block.source_name, query_block.source);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
-        handleProjection(pipeline, query_block.source->projection());
-        recordProfileStreams(pipeline, query_block.source_name);
+        physical_plan_builder.build(query_block.source_name, query_block.source);
     }
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
+
+        physical_plan_builder.buildSource(
+            query_block.source_name,
+            analyzer->getCurrentInputColumns(),
+            pipeline.firstStream()->getHeader());
     }
     else
     {
@@ -861,17 +814,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
 
     assert(pipeline.hasMoreThanOneStream());
-    auto physical_plan = analysePhysicalPlan(
-        context,
-        *analyzer,
-        query_block,
-        keep_session_timezone_info,
-        pipeline.firstStream()->getHeader());
+    analysePhysicalPlan(physical_plan_builder, query_block, keep_session_timezone_info);
+    auto physical_plan = physical_plan_builder.getResult();
     LOG_FMT_DEBUG(log, "begin finalize physical plan");
     physical_plan->finalize();
     LOG_FMT_DEBUG(log, "finish finalize physical plan");
 
-    auto physical_plan_to_string = [&physical_plan]() -> String {
+    auto physical_plan_to_string = [&physical_plan]() {
         FmtBuffer buffer;
         // now all physical_plan.childrenSize() == 0 or 1.
         String prefix;

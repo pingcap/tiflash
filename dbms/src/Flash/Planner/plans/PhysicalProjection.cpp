@@ -10,6 +10,40 @@
 
 namespace DB
 {
+PhysicalPlanPtr PhysicalProjection::build(
+    const Context & context,
+    const String & executor_id,
+    const tipb::Projection & projection,
+    PhysicalPlanPtr child)
+{
+    assert(child);
+
+    DAGExpressionAnalyzer analyzer{child->getSchema(), context};
+    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+
+    NamesAndTypes schema;
+    NamesWithAliases project_aliases;
+    UniqueNameGenerator unique_name_generator;
+    bool should_add_project_alias = false;
+    for (const auto & expr : projection.exprs())
+    {
+        auto expr_name = analyzer.getActions(expr, project_actions);
+        const auto & col = project_actions->getSampleBlock().getByName(expr_name);
+
+        String alias = unique_name_generator.toUniqueName(col.name);
+        project_aliases.emplace_back(col.name, alias);
+        should_add_project_alias |= (alias != col.name);
+
+        schema.emplace_back(alias, col.type);
+    }
+    if (should_add_project_alias)
+        project_actions->add(ExpressionAction::project(project_aliases));
+
+    auto physical_projection = std::make_shared<PhysicalProjection>(executor_id, schema, project_actions);
+    physical_projection->appendChild(child);
+    return physical_projection;
+}
+
 PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
     const Context & context,
     const String & column_prefix,
@@ -90,8 +124,8 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, const Context & c
 
 void PhysicalProjection::finalize(const Names & parent_require)
 {
-    // Maybe parent_require.size() >= schema.size()
-    if (parent_require.size() >= schema.size())
+    // Maybe parent_require.size() > schema.size() for root final projection.
+    if (parent_require.size() > schema.size())
         FinalizeHelper::checkParentRequireContainsSchema(parent_require, schema);
     else
         FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);

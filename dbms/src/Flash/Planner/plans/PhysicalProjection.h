@@ -2,12 +2,19 @@
 
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <Interpreters/ExpressionActions.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
 class PhysicalProjection : public PhysicalUnary
 {
 public:
+    static PhysicalPlanPtr build(
+        const Context & context,
+        const String & executor_id,
+        const tipb::Projection & projection,
+        PhysicalPlanPtr child);
+
     static PhysicalPlanPtr buildNonRootFinal(
         const Context & context,
         const String & column_prefix,

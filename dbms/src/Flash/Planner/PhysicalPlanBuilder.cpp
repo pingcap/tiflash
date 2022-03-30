@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
@@ -14,7 +15,6 @@ namespace DB
 void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor * executor)
 {
     assert(executor);
-    assert(cur_plan);
     switch (executor->tp())
     {
     case tipb::ExecType::TypeSelection:
@@ -30,8 +30,14 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     case tipb::ExecType::TypeLimit:
         cur_plan = PhysicalLimit::build(executor_id, executor->limit(), cur_plan);
         break;
+    case tipb::ExecType::TypeProjection:
+        cur_plan = PhysicalProjection::build(context, executor_id, executor->projection(), cur_plan);
+        break;
     case tipb::ExecType::TypeExchangeSender:
         cur_plan = PhysicalExchangeSender::build(executor_id, executor->exchange_sender(), cur_plan);
+        break;
+    case tipb::ExecType::TypeExchangeReceiver:
+        cur_plan = PhysicalExchangeReceiver::build(context, executor_id);
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Coprocessor::Unimplemented);
