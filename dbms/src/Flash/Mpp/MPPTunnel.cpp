@@ -47,7 +47,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , thread_manager(newThreadManager())
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
 {
-    assert(!(is_local && is_async));
+    RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 
@@ -152,7 +152,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
-    assert(!is_local);
+    RUNTIME_ASSERT(!is_local, log, "should not reach sendJob for local tunnels");
     if (!is_async)
     {
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
@@ -220,7 +220,7 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
-    assert(is_local);
+    RUNTIME_ASSERT(!is_local, log, "should not reach readForLocal for remote tunnels");
     MPPDataPacketPtr res;
     if (send_queue.pop(res))
         return res;
@@ -240,7 +240,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
         LOG_FMT_TRACE(log, "ready to connect");
         if (is_local)
-            assert(writer_ == nullptr);
+            RUNTIME_ASSERT(writer_ == nullptr, log);
         else
         {
             writer = writer_;
