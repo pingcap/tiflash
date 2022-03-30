@@ -22,7 +22,7 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     auto hash_salt = context.hash_salt;
 
     auto pack_filter
-        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, /*set_cache_if_miss*/ false, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
