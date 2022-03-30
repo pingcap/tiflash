@@ -43,7 +43,7 @@ public:
     static DMFilePackFilter loadFrom(
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
-        bool  set_cache_if_miss,
+        bool set_cache_if_miss,
         const RowKeyRanges & rowkey_ranges,
         const RSOperatorPtr & filter,
         const IdSetPtr & read_packs,
@@ -103,7 +103,7 @@ public:
 private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
-                     bool  set_cache_if_miss_,
+                     bool set_cache_if_miss_,
                      const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
@@ -220,7 +220,7 @@ private:
                           const DMFilePtr & dmfile,
                           const FileProviderPtr & file_provider,
                           const MinMaxIndexCachePtr & index_cache,
-                          bool  set_cache_if_miss,
+                          bool set_cache_if_miss,
                           ColId col_id,
                           const ReadLimiterPtr & read_limiter)
     {

@@ -31,7 +31,7 @@ inline size_t getThreadIdForLog(const String & line)
     if (regex_search(sub_line, m, rx))
         return std::stoi(m[1]);
     else
-       return 0;
+        return 0;
 }
 
 // Usage example:

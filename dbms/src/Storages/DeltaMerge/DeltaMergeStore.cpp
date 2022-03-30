@@ -1652,6 +1652,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread, segment_snap); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
+                    segment_snap = {};
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
