@@ -51,9 +51,6 @@ add_executable (two_level_hash_map two_level_hash_map.cpp)
 target_include_directories (two_level_hash_map BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
 target_link_libraries (two_level_hash_map dbms)
 
-add_executable (compiler_test compiler_test.cpp)
-target_link_libraries (compiler_test dbms)
-
 add_executable (logical_expressions_optimizer logical_expressions_optimizer.cpp)
 target_link_libraries (logical_expressions_optimizer dbms)
 
