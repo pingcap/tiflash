@@ -73,7 +73,7 @@ static Field convertNumericTypeImpl(const Field & from)
 template <typename From, typename To>
 static Field convertDecimalTypeImpl(const Field & from)
 {
-    auto decimal_field = from.safeGet<DecimalField<From>>();
+    const auto & decimal_field = from.safeGet<DecimalField<From>>();
     // FIXME:: There is some bugs when `to` is int;
     return Field(typename NearestFieldType<To>::Type(static_cast<To>(decimal_field)));
 }
