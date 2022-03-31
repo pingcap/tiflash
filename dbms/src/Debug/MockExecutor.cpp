@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <memory>
 
+#include "common/logger_useful.h"
+
 namespace DB
 {
 namespace
@@ -1230,7 +1232,7 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(1);
     for (auto & key : join_params.using_expression_list->children)
-    {
+    { // ywq todo
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }

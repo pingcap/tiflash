@@ -80,11 +80,12 @@ public:
                 return true;
             });
             return buffer.toString();
-            // remove it...
+            // ywq todo check and remove it?
         }
     }
 
 private:
+    // ywq todo more detailed infomation.
     void toString(const tipb::Executor & root_executor, size_t level)
     {
         auto append_str = [&level, this](const tipb::Executor & executor) {

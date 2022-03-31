@@ -44,6 +44,8 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include <memory>
+
 namespace DB
 {
 namespace FailPoints
@@ -318,6 +320,113 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
         executePushedDownFilter(conditions, remote_read_streams_start_index, pipeline);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
+}
+
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(
+    const TiDBTableScan & table_scan,
+    Int64 max_columns_to_read)
+{
+    // todo handle alias column
+    if (max_columns_to_read && table_scan.getColumnSize() > max_columns_to_read)
+    {
+        throw TiFlashException("Limit for number of columns to read exceeded. "
+                               "Requested: "
+                                   + toString(table_scan.getColumnSize()) + ", maximum: " + toString(max_columns_to_read),
+                               Errors::BroadcastJoin::TooManyColumns);
+    }
+
+    Names required_columns_tmp;
+    NamesAndTypes source_columns_tmp;
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.getColumnSize());
+    // String handle_column_name = MutableSupport::tidb_pk_column_name;
+    // if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
+    //     handle_column_name = pk_handle_col->get().name;
+
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        auto const & ci = table_scan.getColumns()[i];
+        ColumnID cid = ci.column_id();
+
+        // Column ID -1 return the handle column
+        String name = "test";
+        // if (cid == TiDBPkColumnID)
+        //     name = handle_column_name;
+        // else if (cid == ExtraTableIDColumnID)
+        //     name = MutableSupport::extra_table_id_column_name;
+        // else
+        //     name = storage_for_logical_table->getTableInfo().getColumnName(cid);
+
+        NameAndTypePair extra_table_id_column_pair = {name, std::make_shared<DataTypeUInt8>()};
+        source_columns_tmp.emplace_back(std::move(extra_table_id_column_pair));
+
+        required_columns_tmp.emplace_back(std::move(name));
+        if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+        else if (cid != -1 && ci.tp() == TiDB::TypeTime)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+        else
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+    }
+
+    return {required_columns_tmp, source_columns_tmp, need_cast_column};
+}
+
+void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan [[maybe_unused]], DAGPipeline & pipeline)
+{
+    // has table to read
+    // construct pushed down filter conditions.
+    std::vector<const tipb::Expr *> conditions;
+    if (query_block.selection)
+    {
+        for (const auto & condition : query_block.selection->selection().conditions())
+            conditions.push_back(&condition);
+    }
+
+    // DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
+    // storage_interpreter.execute(pipeline);
+
+    // analyzer = std::move(storage_interpreter.analyzer);
+
+    auto t = getColumnsForTableScan(table_scan, 1000);
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(std::get<1>(t)), context);
+    Block res;
+    for (const auto & col_info : table_scan.getColumns())
+    {
+        String name = "test";
+        std::cout << col_info.SerializeAsString() << std::endl;
+        auto col = NameAndTypePair(name, std::make_shared<DataTypeUInt8>());
+        res.insert({col.type->createColumn(), col.type, name});
+    }
+
+
+    // auto remote_requests = std::move(storage_interpreter.remote_requests);
+    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(res);
+
+    /// record local and remote io input stream
+    // auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
+    // pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+
+    // if (pipeline.streams.empty())
+    // {
+    pipeline.streams.emplace_back(null_stream_if_empty);
+    // }
+
+    /// Set the limits and quota for reading data, the speed and time of the query.
+    setQuotaAndLimitsOnTableScan(context, pipeline);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+
+    /// handle timezone/duration cast for local and remote table scan.
+    // executeCastAfterTableScan(storage_interpreter.is_need_add_cast_column, 1, pipeline);
+    recordProfileStreams(pipeline, query_block.source_name);
+
+    /// handle pushed down filter for local and remote table scan.
+    // if (query_block.selection)
+    // {
+    //     executePushedDownFilter(conditions, 1, pipeline);
+    //     recordProfileStreams(pipeline, query_block.selection_name);
+    // }
 }
 
 void DAGQueryBlockInterpreter::executePushedDownFilter(
@@ -1037,9 +1146,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
+        // ywq todo
         TiDBTableScan table_scan(query_block.source, dagContext());
-        handleTableScan(table_scan, pipeline);
+        // handleTableScan(table_scan, pipeline);
+        handleMockTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
+        std::cout << "reach here..." << std::endl;
     }
     else
     {

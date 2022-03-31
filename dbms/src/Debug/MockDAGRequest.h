@@ -34,9 +34,9 @@ public:
 
     TiPBDAGRequestBuilder & topN(ASTPtr order_exprs, ASTPtr limit_expr);
     TiPBDAGRequestBuilder & topN(String col_name, bool desc, int limit);
-    TiPBDAGRequestBuilder & topN(std::initializer_list<String> cols, bool desc, int limit); // ywq todo, support expressions.
+    TiPBDAGRequestBuilder & topN(std::initializer_list<String> cols, bool desc, int limit);
 
-    TiPBDAGRequestBuilder & project(String col_name); // todo support expression
+    TiPBDAGRequestBuilder & project(String col_name);
     TiPBDAGRequestBuilder & project(std::initializer_list<ASTPtr> cols);
     TiPBDAGRequestBuilder & project(std::initializer_list<String> cols);
 
@@ -63,16 +63,11 @@ public:
     AstExprBuilder & appendFunction(const String & func_name);
 
     ASTPtr build();
+
 private:
     std::vector<ASTPtr> vec;
 };
 
-// ywq todo
-// class NaryExprBuilder
-// {
-// public:
-//     ASTPtr build();
-// };
 ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, String name);
 
 #define EQUALFUNCTION(col1, col2) AstExprBuilder().buildEqualFunction((col1), (col2))

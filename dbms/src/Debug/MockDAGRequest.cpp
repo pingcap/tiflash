@@ -132,9 +132,9 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(std::initializer_list<AST
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & col : cols)
-	{
-		exp_list->children.push_back(col);
-	}
+    {
+        exp_list->children.push_back(col);
+    }
 
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
