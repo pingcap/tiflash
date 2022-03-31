@@ -74,25 +74,26 @@ public:
 
         struct BlobStat
         {
-            const SpaceMapPtr smap;
             const BlobFileId id;
-            BlobStatType type;
+            std::atomic<BlobStatType> type;
 
             std::mutex sm_lock;
+            const SpaceMapPtr smap;
             /**
-            * If no any data inside. It shoule be same as space map `biggest_cap`
-            */
+             * If no any data inside. It shoule be same as space map `biggest_cap`,
+             * It is a hint for choosing quickly, should use `recalculateCapacity`
+             * to update it after some space are free in the spacemap.
+             */
             UInt64 sm_max_caps = 0;
-
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
             double sm_valid_rate = 1.0;
 
         public:
             BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
-                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
-                , id(id_)
+                : id(id_)
                 , type(BlobStatType::NORMAL)
+                , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
             {}
 
@@ -103,12 +104,12 @@ public:
 
             bool isReadOnly() const
             {
-                return type == BlobStatType::READ_ONLY;
+                return type.load() == BlobStatType::READ_ONLY;
             }
 
             void changeToReadOnly()
             {
-                type = BlobStatType::READ_ONLY;
+                type.store(BlobStatType::READ_ONLY);
             }
 
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
