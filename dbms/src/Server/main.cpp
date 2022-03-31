@@ -32,9 +32,6 @@
 #if ENABLE_CLICKHOUSE_SERVER
 #include "Server.h"
 #endif
-#if ENABLE_CLICKHOUSE_LOCAL
-#include "LocalServer.h"
-#endif
 #if ENABLE_TIFLASH_DTTOOL
 #include <Server/DTTool/DTTool.h>
 #endif
@@ -51,24 +48,6 @@ int mainEntryClickHouseServer(int argc, char ** argv);
 #if ENABLE_CLICKHOUSE_CLIENT
 int mainEntryClickHouseClient(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_LOCAL
-int mainEntryClickHouseLocal(int argc, char ** argv);
-#endif
-#if ENABLE_CLICKHOUSE_BENCHMARK
-int mainEntryClickHouseBenchmark(int argc, char ** argv);
-#endif
-#if ENABLE_CLICKHOUSE_PERFORMANCE
-int mainEntryClickHousePerformanceTest(int argc, char ** argv);
-#endif
-#if ENABLE_CLICKHOUSE_TOOLS
-int mainEntryClickHouseExtractFromConfig(int argc, char ** argv);
-int mainEntryClickHouseCompressor(int argc, char ** argv);
-int mainEntryClickHouseFormat(int argc, char ** argv);
-#endif
-#if ENABLE_CLICKHOUSE_COPIER
-int mainEntryClickHouseClusterCopier(int argc, char ** argv);
-#endif
-
 #if USE_EMBEDDED_COMPILER
 int mainEntryClickHouseClang(int argc, char ** argv);
 int mainEntryClickHouseLLD(int argc, char ** argv);
@@ -117,28 +96,11 @@ using MainFunc = int (*)(int, char **);
 
 /// Add an item here to register new application
 std::pair<const char *, MainFunc> clickhouse_applications[] = {
-#if ENABLE_CLICKHOUSE_LOCAL
-    {"local", mainEntryClickHouseLocal},
-#endif
 #if ENABLE_CLICKHOUSE_CLIENT
     {"client", mainEntryClickHouseClient},
 #endif
-#if ENABLE_CLICKHOUSE_BENCHMARK
-    {"benchmark", mainEntryClickHouseBenchmark},
-#endif
 #if ENABLE_CLICKHOUSE_SERVER
     {"server", mainEntryClickHouseServer},
-#endif
-#if ENABLE_CLICKHOUSE_PERFORMANCE
-    {"performance-test", mainEntryClickHousePerformanceTest},
-#endif
-#if ENABLE_CLICKHOUSE_TOOLS
-    {"extract-from-config", mainEntryClickHouseExtractFromConfig},
-    {"compressor", mainEntryClickHouseCompressor},
-    {"format", mainEntryClickHouseFormat},
-#endif
-#if ENABLE_CLICKHOUSE_COPIER
-    {"copier", mainEntryClickHouseClusterCopier},
 #endif
 #if USE_EMBEDDED_COMPILER
     {"clang", mainEntryClickHouseClang},
