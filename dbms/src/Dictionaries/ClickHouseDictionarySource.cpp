@@ -12,59 +12,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Client/ConnectionPool.h>
+#include <Common/isLocalAddress.h>
 #include <Dictionaries/ClickHouseDictionarySource.h>
 #include <Dictionaries/ExternalQueryBuilder.h>
 #include <Dictionaries/writeParenthesisedString.h>
-#include <Client/ConnectionPool.h>
-#include <Interpreters/executeQuery.h>
-#include <Common/isLocalAddress.h>
-#include <memory>
-#include <ext/range.h>
 #include <IO/ConnectionTimeouts.h>
+#include <Interpreters/executeQuery.h>
+
+#include <ext/range.h>
+#include <memory>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNSUPPORTED_METHOD;
+extern const int UNSUPPORTED_METHOD;
 }
 
 
 ClickHouseDictionarySource::ClickHouseDictionarySource(
-        const DictionaryStructure & dict_struct_,
-        const Poco::Util::AbstractConfiguration & config,
-        const std::string & config_prefix,
-        const Block & sample_block, Context & context)
-    : update_time{std::chrono::system_clock::from_time_t(0)},
-        dict_struct{dict_struct_},
-        host{config.getString(config_prefix + ".host")},
-        port(config.getInt(config_prefix + ".port")),
-        secure(config.getBool(config_prefix + ".secure", false)),
-        user{config.getString(config_prefix + ".user", "")},
-        password{config.getString(config_prefix + ".password", "")},
-        db{config.getString(config_prefix + ".db", "")},
-        table{config.getString(config_prefix + ".table")},
-        where{config.getString(config_prefix + ".where", "")},
-        update_field{config.getString(config_prefix + ".update_field", "")},
-        query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks},
-        sample_block{sample_block}, context(context),
-        load_all_query{query_builder.composeLoadAllQuery()}
+    const DictionaryStructure & dict_struct_,
+    const Poco::Util::AbstractConfiguration & config,
+    const std::string & config_prefix,
+    const Block & sample_block,
+    Context & context)
+    : update_time{std::chrono::system_clock::from_time_t(0)}
+    , dict_struct{dict_struct_}
+    , host{config.getString(config_prefix + ".host")}
+    , port(config.getInt(config_prefix + ".port"))
+    , secure(config.getBool(config_prefix + ".secure", false))
+    , user{config.getString(config_prefix + ".user", "")}
+    , password{config.getString(config_prefix + ".password", "")}
+    , db{config.getString(config_prefix + ".db", "")}
+    , table{config.getString(config_prefix + ".table")}
+    , where{config.getString(config_prefix + ".where", "")}
+    , update_field{config.getString(config_prefix + ".update_field", "")}
+    , query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks}
+    , sample_block{sample_block}
+    , context(context)
+    , load_all_query{query_builder.composeLoadAllQuery()}
 {}
 
 
 ClickHouseDictionarySource::ClickHouseDictionarySource(const ClickHouseDictionarySource & other)
-    : update_time{other.update_time},
-        dict_struct{other.dict_struct},
-        host{other.host}, port{other.port},
-        secure{other.secure},
-        user{other.user}, password{other.password},
-        db{other.db}, table{other.table},
-        where{other.where},
-        update_field{other.update_field},
-        query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks},
-        sample_block{other.sample_block}, context(other.context),
-        load_all_query{other.load_all_query}
+    : update_time{other.update_time}
+    , dict_struct{other.dict_struct}
+    , host{other.host}
+    , port{other.port}
+    , secure{other.secure}
+    , user{other.user}
+    , password{other.password}
+    , db{other.db}
+    , table{other.table}
+    , where{other.where}
+    , update_field{other.update_field}
+    , query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks}
+    , sample_block{other.sample_block}
+    , context(other.context)
+    , load_all_query{other.load_all_query}
 {}
 
 std::string ClickHouseDictionarySource::getUpdateFieldAndDate()
@@ -107,11 +113,14 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadIds(const std::vector<UInt64
 
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadKeys(
-    const Columns & key_columns, const std::vector<size_t> & requested_rows)
+    const Columns & key_columns,
+    const std::vector<size_t> & requested_rows)
 {
     return createStreamForSelectiveLoad(
         query_builder.composeLoadKeysQuery(
-            key_columns, requested_rows, ExternalQueryBuilder::IN_WITH_TUPLES));
+            key_columns,
+            requested_rows,
+            ExternalQueryBuilder::IN_WITH_TUPLES));
 }
 
 bool ClickHouseDictionarySource::hasUpdateField() const
@@ -130,4 +139,4 @@ BlockInputStreamPtr ClickHouseDictionarySource::createStreamForSelectiveLoad(con
     return executeQuery(query, context, true).in;
 }
 
-}
+} // namespace DB

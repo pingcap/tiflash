@@ -14,17 +14,17 @@
 
 #pragma once
 
-#include <Dictionaries/IDictionarySource.h>
+#include <Client/ConnectionPoolWithFailover.h>
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/ExternalQueryBuilder.h>
-#include <Client/ConnectionPoolWithFailover.h>
+#include <Dictionaries/IDictionarySource.h>
 #include <Poco/Util/AbstractConfiguration.h>
+
 #include <memory>
 
 
 namespace DB
 {
-
 /** Allows loading dictionaries from local ClickHouse instance
   *    @todo use ConnectionPoolWithFailover
   *    @todo invent a way to keep track of source modifications
@@ -33,9 +33,10 @@ class ClickHouseDictionarySource final : public IDictionarySource
 {
 public:
     ClickHouseDictionarySource(const DictionaryStructure & dict_struct_,
-        const Poco::Util::AbstractConfiguration & config,
-        const std::string & config_prefix,
-        const Block & sample_block, Context & context);
+                               const Poco::Util::AbstractConfiguration & config,
+                               const std::string & config_prefix,
+                               const Block & sample_block,
+                               Context & context);
 
     /// copy-constructor is provided in order to support cloneability
     ClickHouseDictionarySource(const ClickHouseDictionarySource & other);
@@ -47,7 +48,8 @@ public:
     BlockInputStreamPtr loadIds(const std::vector<UInt64> & ids) override;
 
     BlockInputStreamPtr loadKeys(
-        const Columns & key_columns, const std::vector<size_t> & requested_rows) override;
+        const Columns & key_columns,
+        const std::vector<size_t> & requested_rows) override;
 
     bool isModified() const override { return true; }
     bool supportsSelectiveLoad() const override { return true; }
@@ -80,4 +82,4 @@ private:
     const std::string load_all_query;
 };
 
-}
+} // namespace DB
