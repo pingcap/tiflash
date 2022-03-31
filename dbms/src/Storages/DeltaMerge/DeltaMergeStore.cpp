@@ -374,6 +374,7 @@ void DeltaMergeStore::drop()
     shutdown();
 
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
@@ -384,7 +385,6 @@ void DeltaMergeStore::drop()
             auto segment = id_to_segment[segment_id];
             segment_id = segment->nextSegmentId();
         }
-        auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
         WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
         while (!segment_ids.empty())
         {
@@ -439,7 +439,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end [{}.{}]", db_name, table_name);
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id)
