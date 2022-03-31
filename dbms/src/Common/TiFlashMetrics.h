@@ -142,10 +142,16 @@ namespace DB
     M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                            /**/                    \
         F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.0005, 2, 20}))                              /**/                    \
-    M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter, F(type_exec, {"type", "exec"}),                     \
-        F(type_low_write, {"type", "low_write"}))                                                                                         \
+    M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter,                                                     \
+        F(type_exec, {"type", "exec"}),                                                                                                   \
+        F(type_low_write, {"type", "low_write"}),                                                                                         \
+        F(type_v3, {"type", "v3"}),                                                                                                       \
+        F(type_v3_mvcc_dumped, {"type", "v3_mvcc_dumped"}),                                                                               \
+        F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
-        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
+        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
+        F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+        F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \

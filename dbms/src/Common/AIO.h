@@ -164,7 +164,7 @@ class AIOContextPool : public ext::Singleton<AIOContextPool>
         if (num_events == 0)
             return;
 
-        const std::lock_guard<std::mutex> lock{mutex};
+        const std::lock_guard lock{mutex};
 
         /// look at returned events and find corresponding promise, set result and erase promise from map
         for (const auto & event : boost::make_iterator_range(events, events + num_events))
@@ -198,7 +198,7 @@ class AIOContextPool : public ext::Singleton<AIOContextPool>
 
     void reportExceptionToAnyProducer()
     {
-        const std::lock_guard<std::mutex> lock{mutex};
+        const std::lock_guard lock{mutex};
 
         const auto any_promise_it = std::begin(promises);
         any_promise_it->second.set_exception(std::current_exception());
@@ -208,7 +208,7 @@ public:
     /// Request AIO read operation for iocb, returns a future with number of bytes read
     std::future<BytesRead> post(struct iocb & iocb)
     {
-        std::unique_lock<std::mutex> lock{mutex};
+        std::unique_lock lock{mutex};
 
         /// get current id and increment it by one
         const auto request_id = id++;

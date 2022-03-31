@@ -107,7 +107,7 @@ public:
 
         for (unsigned i = 0; i < connection_retries; ++i)
         {
-            LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending write request to " << host << ":" << port << uri_str);
+            LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending write request to {}:{}{}", host, port, uri_str);
 
             try
             {
@@ -228,7 +228,7 @@ private:
 
         for (unsigned i = 0; i < connection_retries; ++i)
         {
-            LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending rename request to " << host << ":" << port << uri_str);
+            LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending rename request to {}:{}{}", host, port, uri_str);
 
             try
             {
@@ -259,7 +259,7 @@ private:
                 if (i != 0 && e.code() == ErrorCodes::RECEIVED_ERROR_FROM_REMOTE_IO_SERVER
                     && nullptr != strstr(e.displayText().data(), "File not found"))
                 {
-                    LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
+                    LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
                 }
                 else
                     throw;

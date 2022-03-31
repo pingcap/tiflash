@@ -54,6 +54,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
             auto pack_filter = DMFilePackFilter::loadFrom(
                 file,
                 index_cache,
+                /*set_cache_if_miss*/ true,
                 {range},
                 EMPTY_FILTER,
                 {},
@@ -236,6 +237,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         auto pack_filter = DMFilePackFilter::loadFrom(
             file,
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
             {rowkey_range},
             EMPTY_FILTER,
             {},
@@ -350,16 +352,15 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     size_t match_packs = 0;
     size_t total_match_rows = 0;
     size_t total_match_bytes = 0;
-    // Usually, this method will be called for some "cold" key ranges. Loading the index
-    // into cache may pollute the cache and make the hot index cache invalid. Set the
-    // index cache to nullptr so that the cache won't be polluted.
-    // TODO: We can use the cache if the index happens to exist in the cache, but
-    // don't refill the cache if the index does not exist.
+    // Usually, this method will be called for some "cold" key ranges.
+    // Loading the index into cache may pollute the cache and make the hot index cache invalid.
+    // So don't refill the cache if the index does not exist.
     for (auto & f : stable->files)
     {
         auto filter = DMFilePackFilter::loadFrom(
             f,
-            nullptr,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
             {range},
             RSOperatorPtr{},
             IdSetPtr{},

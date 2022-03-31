@@ -170,6 +170,15 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
     }
 }
 
+namespace exception_details
+{
+template <typename T, typename... Args>
+inline std::string generateLogMessage(const char * condition, T && fmt_str, Args &&... args)
+{
+    return fmt::format(std::forward<T>(fmt_str), condition, std::forward<Args>(args)...);
+}
+} // namespace exception_details
+
 #define RUNTIME_CHECK(condition, ExceptionType, ...) \
     do                                               \
     {                                                \
@@ -177,14 +186,14 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
             throw ExceptionType(__VA_ARGS__);        \
     } while (false)
 
-#define RUNTIME_ASSERT(condition, logger, fmt_str, ...)                                   \
-    do                                                                                    \
-    {                                                                                     \
-        if (unlikely(!(condition)))                                                       \
-        {                                                                                 \
-            LOG_FMT_FATAL((logger), "Assert {} fail! " fmt_str, #condition, __VA_ARGS__); \
-            std::terminate();                                                             \
-        }                                                                                 \
+#define RUNTIME_ASSERT(condition, logger, ...)                                                                      \
+    do                                                                                                              \
+    {                                                                                                               \
+        if (unlikely(!(condition)))                                                                                 \
+        {                                                                                                           \
+            LOG_FATAL((logger), exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
+            std::terminate();                                                                                       \
+        }                                                                                                           \
     } while (false)
 
 } // namespace DB
