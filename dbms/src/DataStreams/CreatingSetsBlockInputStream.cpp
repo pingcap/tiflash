@@ -233,6 +233,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
                 break;
             }
+
+            adaptive_yield();
         }
 
 

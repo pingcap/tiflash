@@ -1,0 +1,2344 @@
+diff --git a/dbms/src/DataStreams/SharedQueryBlockInputStream.h b/dbms/src/DataStreams/SharedQueryBlockInputStream.h
+index 2ef20404257..f80370eeede 100644
+--- a/dbms/src/DataStreams/SharedQueryBlockInputStream.h
++++ b/dbms/src/DataStreams/SharedQueryBlockInputStream.h
+@@ -1,13 +1,12 @@
+ #pragma once
+ 
+-#include <Common/ConcurrentBoundedQueue.h>
++#include <Common/FiberPool.hpp>
++#include <Common/IOThreadPool.h>
+ #include <Common/ThreadFactory.h>
+ #include <Common/typeid_cast.h>
+ #include <DataStreams/IProfilingBlockInputStream.h>
+ #include <Flash/Mpp/getMPPTaskLog.h>
+ 
+-#include <thread>
+-
+ namespace DB
+ {
+ /** This block input stream is used by SharedQuery.
+@@ -16,8 +15,13 @@ namespace DB
+ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
+ {
+ public:
+-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+-        : queue(clients)
++    SharedQueryBlockInputStream(
++        size_t clients [[maybe_unused]],
++        const BlockInputStreamPtr & in_,
++        const LogWithPrefixPtr & log_,
++        bool run_in_thread_)
++        : queue(1024)
++        , run_in_thread(run_in_thread_)
+         , log(getMPPTaskLog(log_, getName()))
+         , in(in_)
+     {
+@@ -43,50 +47,64 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
+ 
+     void readPrefix() override
+     {
+-        std::lock_guard<std::mutex> lock(mutex);
++        std::lock_guard lock(mutex);
+ 
+         if (read_prefixed)
+             return;
+         read_prefixed = true;
+ 
+-        /// Start reading thread.
+-        thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
++        if (run_in_thread)
++            future = IOThreadPool::instance().schedule([this] { fetchBlocks(); });
++        else
++            future = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
+     }
+ 
+     void readSuffix() override
+     {
+-        std::lock_guard<std::mutex> lock(mutex);
++        std::lock_guard lock(mutex);
+ 
+         if (read_suffixed)
+             return;
+         read_suffixed = true;
++        queue.close();
+ 
+-        if (thread.joinable())
+-            thread.join();
++        if (future.has_value())
++        {
++            future.value().wait();
++            future.reset();
++        }
+         if (!exception_msg.empty())
+             throw Exception(exception_msg);
+     }
+ 
++    BlockInputStreamPtr getNestedInputStream() const
++    {
++        return children.back();
++    }
++
+ protected:
+     Block readImpl() override
+     {
+-        std::lock_guard<std::mutex> lock(mutex);
++        std::lock_guard lock(mutex);
+ 
+         if (!read_prefixed)
+             throw Exception("read operation called before readPrefix");
+ 
+         Block block;
+-        do
++        while (true)
+         {
+             if (!exception_msg.empty())
+             {
+                 throw Exception(exception_msg);
+             }
+-            if (isCancelled() || read_suffixed)
++            if (isCancelled())
+                 return {};
+-        } while (!queue.tryPop(block, try_action_millisecionds));
+-
+-        return block;
++            auto res = queue.pop_wait_for(block, try_action_timeout);
++            if (res == boost::fibers::channel_op_status::success)
++                return block;
++            if (res == boost::fibers::channel_op_status::closed)
++                return {};
++        }
+     }
+ 
+     void fetchBlocks()
+@@ -97,20 +115,26 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
+             while (!isCancelled())
+             {
+                 Block block = in->read();
+-                do
++                while (true)
+                 {
+-                    if (isCancelled() || read_suffixed)
++                    if (isCancelled())
+                     {
+                         // Notify waiting client.
+-                        queue.tryEmplace(0);
++                        queue.close();
+                         break;
+                     }
+-                } while (!queue.tryPush(block, try_action_millisecionds));
++                    auto res = queue.push_wait_for(block, try_action_timeout);
++                    if (res == boost::fibers::channel_op_status::success ||
++                        res == boost::fibers::channel_op_status::closed)
++                        break;
++                }
+ 
+-                if (!block)
++                if (!block || queue.is_closed())
+                     break;
+             }
+-            in->readSuffix();
++            if (!isCancelled())
++                in->readSuffix();
++            adaptive_yield();
+         }
+         catch (Exception & e)
+         {
+@@ -127,15 +151,16 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
+     }
+ 
+ private:
+-    static constexpr UInt64 try_action_millisecionds = 200;
++    static constexpr auto try_action_timeout = std::chrono::milliseconds(200);
+ 
+-    ConcurrentBoundedQueue<Block> queue;
++    boost::fibers::buffered_channel<Block> queue;
+ 
++    bool run_in_thread;
+     bool read_prefixed = false;
+     bool read_suffixed = false;
+ 
+-    std::thread thread;
+-    std::mutex mutex;
++    std::optional<boost::fibers::future<void>> future;
++    boost::fibers::mutex mutex;
+ 
+     std::string exception_msg;
+ 
+diff --git a/dbms/src/DataStreams/TiRemoteBlockInputStream.h b/dbms/src/DataStreams/TiRemoteBlockInputStream.h
+index 95a00e02e8b..f3373b0083f 100644
+--- a/dbms/src/DataStreams/TiRemoteBlockInputStream.h
++++ b/dbms/src/DataStreams/TiRemoteBlockInputStream.h
+@@ -43,6 +43,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
+ 
+     uint64_t total_rows;
+ 
++    std::map<tipb::EncodeType, std::unique_ptr<ChunkCodec>> codecs;
++
+     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
+     {
+         for (auto & execution_summary : resp.execution_summaries())
+@@ -136,20 +138,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
+         {
+             Block block;
+             const tipb::Chunk & chunk = result.resp->chunks(i);
+-            switch (result.resp->encode_type())
+-            {
+-            case tipb::EncodeType::TypeCHBlock:
+-                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+-                break;
+-            case tipb::EncodeType::TypeChunk:
+-                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+-                break;
+-            case tipb::EncodeType::TypeDefault:
+-                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+-                break;
+-            default:
++            auto it = codecs.find(result.resp->encode_type());
++            if (it == end(codecs))
+                 throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+-            }
++
++            block = it->second->decode(chunk, remote_reader->getOutputSchema());
+ 
+             total_rows += block.rows();
+ 
+@@ -191,6 +184,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
+         }
+         execution_summaries.resize(source_num);
+         sample_block = Block(columns);
++
++        codecs.emplace(tipb::TypeCHBlock, std::make_unique<CHBlockChunkCodec>());
++        codecs.emplace(tipb::TypeChunk, std::make_unique<ArrowChunkCodec>());
++        codecs.emplace(tipb::TypeDefault, std::make_unique<DefaultChunkCodec>());
+     }
+ 
+     Block getHeader() const override { return sample_block; }
+diff --git a/dbms/src/DataStreams/UnionBlockInputStream.h b/dbms/src/DataStreams/UnionBlockInputStream.h
+index 38769d3b8b1..21882312f2c 100644
+--- a/dbms/src/DataStreams/UnionBlockInputStream.h
++++ b/dbms/src/DataStreams/UnionBlockInputStream.h
+@@ -1,6 +1,6 @@
+ #pragma once
+ 
+-#include <Common/ConcurrentBoundedQueue.h>
++#include <Common/FiberPool.hpp>
+ #include <DataStreams/IProfilingBlockInputStream.h>
+ #include <DataStreams/ParallelInputsProcessor.h>
+ #include <Flash/Mpp/getMPPTaskLog.h>
+@@ -84,7 +84,7 @@ class UnionBlockInputStream final : public IProfilingBlockInputStream
+         size_t max_threads,
+         const LogWithPrefixPtr & log_,
+         ExceptionCallback exception_callback_ = ExceptionCallback())
+-        : output_queue(std::min(inputs.size(), max_threads))
++        : output_queue(1024)
+         , handler(*this)
+         , processor(inputs, additional_input_at_end, max_threads, handler)
+         , exception_callback(exception_callback_)
+@@ -252,7 +252,7 @@ class UnionBlockInputStream final : public IProfilingBlockInputStream
+ 
+ private:
+     using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
+-    using OutputQueue = ConcurrentBoundedQueue<Payload>;
++    using OutputQueue = boost::fibers::buffered_channel<Payload>;
+ 
+ private:
+     /** The queue of the finished blocks. Also, you can put an exception instead of a block.
+diff --git a/dbms/src/DataStreams/UnionWaitInputStream.h b/dbms/src/DataStreams/UnionWaitInputStream.h
+new file mode 100644
+index 00000000000..a2f7687003f
+--- /dev/null
++++ b/dbms/src/DataStreams/UnionWaitInputStream.h
+@@ -0,0 +1,248 @@
++#pragma once
++
++#include <Common/FiberPool.hpp>
++#include <DataStreams/IProfilingBlockInputStream.h>
++#include <DataStreams/ParallelInputsProcessor.h>
++#include <Flash/Mpp/getMPPTaskLog.h>
++
++
++namespace DB
++{
++namespace ErrorCodes
++{
++extern const int LOGICAL_ERROR;
++}
++
++
++/** Merges several sources into one.
++  * Blocks from different sources are interleaved with each other in an arbitrary way.
++  * You can specify the number of threads (max_threads),
++  *  in which data will be retrieved from different sources.
++  *
++  * It's managed like this:
++  * - with the help of ParallelInputsProcessor in several threads it takes out blocks from the sources;
++  * - the completed blocks are added to a limited queue of finished blocks;
++  * - the main thread takes out completed blocks from the queue of finished blocks;
++  */
++
++class UnionWaitInputStream final : public IProfilingBlockInputStream
++{
++public:
++    using ExceptionCallback = std::function<void()>;
++
++private:
++    using Self = UnionWaitInputStream;
++
++public:
++    UnionWaitInputStream(
++        BlockInputStreams inputs,
++        BlockInputStreamPtr additional_input_at_end,
++        size_t max_threads,
++        const LogWithPrefixPtr & log_,
++        ExceptionCallback exception_callback_ = ExceptionCallback())
++        : output_queue(1024)
++        , handler(*this)
++        , processor(inputs, additional_input_at_end, max_threads, handler)
++        , exception_callback(exception_callback_)
++        , log(getMPPTaskLog(log_, getName()))
++    {
++        children = inputs;
++        if (additional_input_at_end)
++            children.push_back(additional_input_at_end);
++
++        size_t num_children = children.size();
++        if (num_children > 1)
++        {
++            Block header = children.at(0)->getHeader();
++            for (size_t i = 1; i < num_children; ++i)
++                assertBlocksHaveEqualStructure(children[i]->getHeader(), header, "UNION_WAIT");
++        }
++    }
++
++    String getName() const override { return "UnionWait"; }
++
++    ~UnionWaitInputStream() override
++    {
++        try
++        {
++            if (!all_read)
++                cancel(false);
++
++            finalize();
++        }
++        catch (...)
++        {
++            tryLogCurrentException(__PRETTY_FUNCTION__);
++        }
++    }
++
++    /** Different from the default implementation by trying to stop all sources,
++      * skipping failed by execution.
++      */
++    void cancel(bool kill) override
++    {
++        if (kill)
++            is_killed = true;
++
++        bool old_val = false;
++        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
++            return;
++
++        //std::cerr << "cancelling\n";
++        processor.cancel(kill);
++    }
++
++    Block getHeader() const override { return children.at(0)->getHeader(); }
++
++protected:
++    void finalize()
++    {
++        if (!started)
++            return;
++
++        LOG_TRACE(log, "Waiting for threads to finish");
++
++        std::exception_ptr exception;
++        if (!all_read)
++        {
++            /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
++              * Maybe there is an exception in the queue.
++              */
++            std::exception_ptr res;
++            while (true)
++            {
++                //std::cerr << "popping\n";
++                output_queue.pop(res);
++
++                if (res)
++                {
++                    if (!exception)
++                        exception = res;
++                    else if (Exception * e = exception_cast<Exception *>(exception))
++                        e->addMessage("\n" + getExceptionMessage(res, false));
++                }
++                else
++                    break;
++            }
++
++            all_read = true;
++        }
++
++        processor.wait();
++
++        LOG_TRACE(log, "Waited for threads to finish");
++
++        if (exception)
++            std::rethrow_exception(exception);
++    }
++
++    /// Do nothing, to make the preparation for the query execution in parallel, in ParallelInputsProcessor.
++    void readPrefix() override
++    {
++    }
++
++    /** The following options are possible:
++      * 1. `readImpl` function is called until it returns an empty block.
++      *  Then `readSuffix` function is called and then destructor.
++      * 2. `readImpl` function is called. At some point, `cancel` function is called perhaps from another thread.
++      *  Then `readSuffix` function is called and then destructor.
++      * 3. At any time, the object can be destroyed (destructor called).
++      */
++
++    Block readImpl() override
++    {
++        if (all_read)
++            return {};
++
++        /// Run threads if this has not already been done.
++        if (!started)
++        {
++            started = true;
++            processor.process();
++        }
++
++        finalize();
++
++        return {};
++    }
++
++    /// Called either after everything is read, or after cancel.
++    void readSuffix() override
++    {
++        //std::cerr << "readSuffix\n";
++        if (!all_read && !isCancelled())
++            throw Exception("readSuffix called before all data is read", ErrorCodes::LOGICAL_ERROR);
++
++        finalize();
++
++        for (size_t i = 0; i < children.size(); ++i)
++            children[i]->readSuffix();
++    }
++
++private:
++    using OutputQueue = boost::fibers::buffered_channel<std::exception_ptr>;
++
++private:
++    /** The queue of the finished blocks. Also, you can put an exception instead of a block.
++      * When data is run out, an empty block is inserted into the queue.
++      * Sooner or later, an empty block is always inserted into the queue (even after exception or query cancellation).
++      * The queue is always (even after exception or canceling the query, even in destructor) you must read up to an empty block,
++      *  otherwise ParallelInputsProcessor can be blocked during insertion into the queue.
++      */
++    OutputQueue output_queue;
++
++    struct Handler
++    {
++        Handler(Self & parent_)
++            : parent(parent_)
++        {}
++
++        void onBlock(Block & /*block*/, size_t /*thread_num*/)
++        {
++        }
++
++        void onBlock(Block & /*block*/, BlockExtraInfo & /*extra_info*/, size_t /*thread_num*/)
++        {
++        }
++
++        void onFinish()
++        {
++            parent.output_queue.push(std::exception_ptr{});
++        }
++
++        void onFinishThread(size_t /*thread_num*/)
++        {
++        }
++
++        void onException(std::exception_ptr & exception, size_t /*thread_num*/)
++        {
++            //std::cerr << "pushing exception\n";
++
++            /// The order of the rows matters. If it is changed, then the situation is possible,
++            ///  when before exception, an empty block (end of data) will be put into the queue,
++            ///  and the exception is lost.
++
++            parent.output_queue.push(exception);
++            parent.cancel(false); /// Does not throw exceptions.
++        }
++
++        String getName() const
++        {
++            return "ParallelUnion";
++        }
++
++        Self & parent;
++    };
++
++    Handler handler;
++    ParallelInputsProcessor<Handler> processor;
++
++    ExceptionCallback exception_callback;
++
++    bool started = false;
++    bool all_read = false;
++
++    LogWithPrefixPtr log;
++};
++
++} // namespace DB
+diff --git a/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.cpp b/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.cpp
+index 239583d377e..62d6018fe2d 100644
+--- a/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.cpp
++++ b/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.cpp
+@@ -87,7 +87,7 @@ Block CHBlockChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
+     std::vector<String> output_names;
+     for (const auto & c : schema)
+         output_names.push_back(c.first);
+-    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
++    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names), &cached_data_types);
+     return block_in.read();
+ }
+ 
+diff --git a/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.h b/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.h
+index fce2d468a7c..2d8c46485ac 100644
+--- a/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.h
++++ b/dbms/src/Flash/Coprocessor/CHBlockChunkCodec.h
+@@ -11,6 +11,8 @@ class CHBlockChunkCodec : public ChunkCodec
+     CHBlockChunkCodec() = default;
+     Block decode(const tipb::Chunk &, const DAGSchema &) override;
+     std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types) override;
++private:
++    std::map<String, DataTypePtr> cached_data_types;
+ };
+ 
+ } // namespace DB
+diff --git a/dbms/src/Flash/Coprocessor/DAGContext.h b/dbms/src/Flash/Coprocessor/DAGContext.h
+index 90a5669e901..55bc592fed9 100644
+--- a/dbms/src/Flash/Coprocessor/DAGContext.h
++++ b/dbms/src/Flash/Coprocessor/DAGContext.h
+@@ -6,7 +6,7 @@
+ #include <tipb/select.pb.h>
+ #pragma GCC diagnostic pop
+ 
+-#include <Common/ConcurrentBoundedQueue.h>
++#include <boost/fiber/all.hpp>
+ #include <Common/LogWithPrefix.h>
+ #include <DataStreams/IBlockInputStream.h>
+ #include <Flash/Coprocessor/DAGDriver.h>
+@@ -34,7 +34,6 @@ class DAGContext
+         , tunnel_set(nullptr)
+         , flags(dag_request.flags())
+         , sql_mode(dag_request.sql_mode())
+-        , warnings(std::numeric_limits<int>::max())
+     {
+         assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
+         return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
+@@ -48,7 +47,6 @@ class DAGContext
+         , flags(dag_request.flags())
+         , sql_mode(dag_request.sql_mode())
+         , mpp_task_meta(meta_)
+-        , warnings(std::numeric_limits<int>::max())
+     {
+         assert(dag_request.has_root_executor());
+ 
+@@ -73,7 +71,6 @@ class DAGContext
+         , tunnel_set(nullptr)
+         , flags(0)
+         , sql_mode(0)
+-        , warnings(std::numeric_limits<int>::max())
+     {}
+ 
+     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
+@@ -90,23 +87,22 @@ class DAGContext
+     /// This method is thread-safe.
+     void appendWarning(const tipb::Error & warning)
+     {
+-        if (!warnings.tryPush(warning))
+-            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
++        warnings.push(warning);
+     }
+     /// Consume all warnings. Once this method called, every warning will be cleared.
+     /// This method is not thread-safe.
+     void consumeWarnings(std::vector<tipb::Error> & warnings_)
+     {
+-        const size_t warnings_size = warnings.size();
+-        warnings_.reserve(warnings_size);
+-        for (size_t i = 0; i < warnings_size; ++i)
+-        {
+-            tipb::Error error;
+-            warnings.pop(error);
++        tipb::Error error;
++        while (warnings.pop(error) == boost::fibers::channel_op_status::success)
+             warnings_.push_back(error);
+-        }
+     }
+-    void clearWarnings() { warnings.clear(); }
++    void clearWarnings()
++    {
++        std::vector<tipb::Error> dummy;
++        consumeWarnings(dummy);
++    }
++
+     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
+     bool isMPPTask() const { return is_mpp_task; }
+     /// root mpp task means mpp task that send data back to TiDB
+@@ -122,7 +118,7 @@ class DAGContext
+ 
+     std::pair<bool, double> getTableScanThroughput();
+ 
+-    size_t final_concurrency;
++    size_t final_concurrency = 1;
+     Int64 compile_time_ns;
+     String table_scan_executor_id = "";
+     String exchange_sender_executor_id = "";
+@@ -151,7 +147,7 @@ class DAGContext
+     UInt64 flags;
+     UInt64 sql_mode;
+     mpp::TaskMeta mpp_task_meta;
+-    ConcurrentBoundedQueue<tipb::Error> warnings;
++    boost::fibers::unbuffered_channel<tipb::Error> warnings;
+ };
+ 
+ } // namespace DB
+diff --git a/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.cpp b/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.cpp
+index 14c1147901d..24ec530c3b6 100644
+--- a/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.cpp
++++ b/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.cpp
+@@ -14,6 +14,7 @@
+ #include <DataStreams/SquashingBlockInputStream.h>
+ #include <DataStreams/TiRemoteBlockInputStream.h>
+ #include <DataStreams/UnionBlockInputStream.h>
++#include <DataStreams/UnionWaitInputStream.h>
+ #include <DataTypes/DataTypeNullable.h>
+ #include <DataTypes/getLeastSupertype.h>
+ #include <Flash/Coprocessor/DAGCodec.h>
+@@ -21,6 +22,7 @@
+ #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+ #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+ #include <Flash/Coprocessor/DAGUtils.h>
++#include <Flash/Coprocessor/InterpreterUtils.h>
+ #include <Flash/Mpp/ExchangeReceiver.h>
+ #include <Interpreters/Aggregator.h>
+ #include <Interpreters/ExpressionAnalyzer.h>
+@@ -71,13 +73,18 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
+     }
+ }
+ 
+-BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads, const LogWithPrefixPtr & log)
++BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads, const LogWithPrefixPtr & log, bool need_block = true)
+ {
+     BlockInputStreamPtr ret = nullptr;
+     if (pipeline.streams_with_non_joined_data.size() == 1)
+         ret = pipeline.streams_with_non_joined_data.at(0);
+     else if (pipeline.streams_with_non_joined_data.size() > 1)
+-        ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
++    {
++        if (need_block)
++            ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
++        else
++            ret = std::make_shared<UnionWaitInputStream>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
++    }
+     pipeline.streams_with_non_joined_data.clear();
+     return ret;
+ }
+@@ -340,6 +347,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
+     /// Set the limits and quota for reading data, the speed and time of the query.
+     setQuotaAndLimitsOnTableScan(context, pipeline);
+     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
++
++    pipeline.transform(
++        [&](auto & stream) {
++            stream = std::make_shared<SharedQueryBlockInputStream>(10, stream, log, true);
++            });
+ }
+ 
+ void DAGQueryBlockInterpreter::prepareJoin(
+@@ -603,7 +615,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline
+     size_t stream_index = 0;
+     right_pipeline.transform(
+         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++, log); });
+-    executeUnion(right_pipeline, max_streams, log);
++    executeUnion(right_pipeline, max_streams, log, false);
+ 
+     right_query.source = right_pipeline.firstStream();
+     right_query.join = joinPtr;
+@@ -711,6 +723,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
+             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+             log);
+         pipeline.streams.resize(1);
++        restoreConcurrency(pipeline, before_agg_streams, log);
+     }
+     else
+     {
+@@ -740,14 +753,36 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
+     }
+ }
+ 
+-void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log)
++void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log, bool need_block)
+ {
+     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
+         return;
+-    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log);
++    if (pipeline.streams.size() > 1 && pipeline.streams_with_non_joined_data.empty())
++    {
++        bool all_same = true;
++        for (const auto & stream : pipeline.streams)
++        {
++            if (stream != pipeline.streams[0])
++            {
++                all_same = false;
++                break;
++            }
++        }
++        if (all_same)
++        {
++            auto shared_query_stream = std::dynamic_pointer_cast<SharedQueryBlockInputStream>(pipeline.firstStream());
++            assert(shared_query_stream);
++            pipeline.streams.assign(1, shared_query_stream->getNestedInputStream());
++            return;
++        }
++    }
++    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, need_block);
+     if (pipeline.streams.size() > 0)
+     {
+-        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams, log);
++        if (need_block)
++            pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams, log);
++        else
++            pipeline.firstStream() = std::make_shared<UnionWaitInputStream>(pipeline.streams, non_joined_data_stream, max_streams, log);
+         pipeline.streams.resize(1);
+     }
+     else if (non_joined_data_stream != nullptr)
+@@ -960,6 +995,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
+ 
+         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
++        input = std::make_shared<SharedQueryBlockInputStream>(10, input, log, true);
+         pipeline.streams.push_back(input);
+         dag.getDAGContext().getRemoteInputStreams().push_back(input);
+         task_start = task_end;
+@@ -1106,7 +1142,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
+     LOG_INFO(log,
+              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+ 
+-    dag.getDAGContext().final_concurrency = pipeline.streams.size();
++    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
+     if (res.need_aggregate)
+     {
+         // execute aggregation
+@@ -1141,6 +1177,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
+         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
+     }
+ 
++    restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
++
+     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
+     {
+         SubqueriesForSets subquries;
+@@ -1180,21 +1218,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
+     {
+         size_t concurrency = pipeline.streams.size();
+         executeUnion(pipeline, max_streams, log);
+-        if (!query_block.isRootQueryBlock() && concurrency > 1)
+-        {
+-            BlockInputStreamPtr shared_query_block_input_stream
+-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
+-            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
+-        }
+-    }
+-
+-    /// expand concurrency after agg
+-    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
+-    {
+-        size_t concurrency = before_agg_streams;
+-        BlockInputStreamPtr shared_query_block_input_stream
+-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
+-        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
++        restoreConcurrency(pipeline, concurrency, log);
+     }
+ 
+     return pipeline.streams;
+diff --git a/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.h b/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.h
+index a5bb4b350f6..82afbb65fca 100644
+--- a/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.h
++++ b/dbms/src/Flash/Coprocessor/DAGQueryBlockInterpreter.h
+@@ -46,7 +46,7 @@ class DAGQueryBlockInterpreter
+ 
+     BlockInputStreams execute();
+ 
+-    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
++    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log, bool need_block = true);
+ 
+ private:
+     void executeRemoteQuery(DAGPipeline & pipeline);
+diff --git a/dbms/src/Flash/Coprocessor/DAGQuerySource.h b/dbms/src/Flash/Coprocessor/DAGQuerySource.h
+index f783808edb3..799f1e74fa9 100644
+--- a/dbms/src/Flash/Coprocessor/DAGQuerySource.h
++++ b/dbms/src/Flash/Coprocessor/DAGQuerySource.h
+@@ -14,6 +14,7 @@
+ #include <Storages/Transaction/TiDB.h>
+ #include <Storages/Transaction/TiKVKeyValue.h>
+ #include <Storages/Transaction/Types.h>
++#include <boost/fiber/all.hpp> 
+ 
+ 
+ namespace DB
+@@ -23,7 +24,7 @@ class Context;
+ struct StreamWriter
+ {
+     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
+-    std::mutex write_mutex;
++    boost::fibers::mutex write_mutex;
+ 
+     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+         : writer(writer_)
+@@ -34,7 +35,7 @@ struct StreamWriter
+         ::coprocessor::BatchResponse resp;
+         if (!response.SerializeToString(resp.mutable_data()))
+             throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+-        std::lock_guard<std::mutex> lk(write_mutex);
++        std::lock_guard lk(write_mutex);
+         if (!writer->Write(resp))
+             throw Exception("Failed to write resp");
+     }
+diff --git a/dbms/src/Flash/Coprocessor/DAGStorageInterpreter.cpp b/dbms/src/Flash/Coprocessor/DAGStorageInterpreter.cpp
+index cac8c37b885..b25c0f430ed 100644
+--- a/dbms/src/Flash/Coprocessor/DAGStorageInterpreter.cpp
++++ b/dbms/src/Flash/Coprocessor/DAGStorageInterpreter.cpp
+@@ -1,4 +1,6 @@
+ #include <Common/FailPoint.h>
++#include <Common/FiberPool.hpp>
++#include <Common/IOThreadPool.h>
+ #include <Common/TiFlashMetrics.h>
+ #include <DataStreams/NullBlockInputStream.h>
+ #include <Flash/Coprocessor/DAGQueryInfo.h>
+@@ -153,7 +155,17 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
+     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
+ 
+     if (!mvcc_query_info->regions_query_info.empty())
+-        doLocalRead(pipeline, settings.max_block_size);
++    {
++        auto job = [&] { doLocalRead(pipeline, settings.max_block_size); };
++        if (g_run_in_fiber)
++        {
++            auto future = IOThreadPool::instance().schedule(job);
++            future.wait();
++            future.get();
++        }
++        else
++            job();
++    }
+ 
+     for (auto & region_info : dag.getRegionsForRemoteRead())
+         region_retry.emplace_back(region_info);
+diff --git a/dbms/src/Flash/Coprocessor/InterpreterDAG.cpp b/dbms/src/Flash/Coprocessor/InterpreterDAG.cpp
+index 1dd51f1fb4b..b8ad79ff935 100644
+--- a/dbms/src/Flash/Coprocessor/InterpreterDAG.cpp
++++ b/dbms/src/Flash/Coprocessor/InterpreterDAG.cpp
+@@ -7,6 +7,7 @@
+ #include <Flash/Coprocessor/DAGQueryInfo.h>
+ #include <Flash/Coprocessor/DAGStringConverter.h>
+ #include <Flash/Coprocessor/InterpreterDAG.h>
++#include <Flash/Coprocessor/InterpreterUtils.h>
+ #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+ #include <Flash/Mpp/ExchangeReceiver.h>
+ #include <Interpreters/Aggregator.h>
+@@ -127,6 +128,7 @@ BlockIO InterpreterDAG::execute()
+                 collators.emplace_back(nullptr);
+             }
+         }
++        restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
+         pipeline.transform([&](auto & stream) {
+             // construct writer
+             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+@@ -145,7 +147,7 @@ BlockIO InterpreterDAG::execute()
+     }
+ 
+     /// add union to run in parallel if needed
+-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
++    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log, false);
+     if (!subqueriesForSets.empty())
+     {
+         const Settings & settings = context.getSettingsRef();
+diff --git a/dbms/src/Flash/Coprocessor/InterpreterUtils.cpp b/dbms/src/Flash/Coprocessor/InterpreterUtils.cpp
+new file mode 100644
+index 00000000000..d928d95d0b3
+--- /dev/null
++++ b/dbms/src/Flash/Coprocessor/InterpreterUtils.cpp
+@@ -0,0 +1,16 @@
++#include <DataStreams/SharedQueryBlockInputStream.h>
++#include <Flash/Coprocessor/InterpreterUtils.h>
++
++namespace DB
++{
++void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, const LogWithPrefixPtr & log)
++{
++    if (concurrency > 1 && pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
++    {
++        BlockInputStreamPtr shared_query_block_input_stream
++            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log, false);
++        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
++    }
++}
++}
++
+diff --git a/dbms/src/Flash/Coprocessor/InterpreterUtils.h b/dbms/src/Flash/Coprocessor/InterpreterUtils.h
+new file mode 100644
+index 00000000000..8a7cc0035e1
+--- /dev/null
++++ b/dbms/src/Flash/Coprocessor/InterpreterUtils.h
+@@ -0,0 +1,10 @@
++#pragma once
++
++#include <Common/LogWithPrefix.h>
++#include <Flash/Coprocessor/DAGPipeline.h>
++
++namespace DB
++{
++void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, const LogWithPrefixPtr & log);
++} // namespace DB
++
+diff --git a/dbms/src/Flash/Coprocessor/StreamingDAGResponseWriter.cpp b/dbms/src/Flash/Coprocessor/StreamingDAGResponseWriter.cpp
+index 342c5d0e191..b4ccc15102b 100644
+--- a/dbms/src/Flash/Coprocessor/StreamingDAGResponseWriter.cpp
++++ b/dbms/src/Flash/Coprocessor/StreamingDAGResponseWriter.cpp
+@@ -255,8 +255,10 @@ template <bool for_last_response>
+ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
+ {
+     tipb::SelectResponse response;
++    /*
+     if constexpr (for_last_response)
+         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
++        */
+     if (exchange_type == tipb::ExchangeType::Hash)
+     {
+         partitionAndEncodeThenWriteBlocks<for_last_response>(blocks, response);
+diff --git a/dbms/src/Flash/Mpp/ExchangeReceiver.cpp b/dbms/src/Flash/Mpp/ExchangeReceiver.cpp
+index b34f90d630b..52c7777d18a 100644
+--- a/dbms/src/Flash/Mpp/ExchangeReceiver.cpp
++++ b/dbms/src/Flash/Mpp/ExchangeReceiver.cpp
+@@ -5,6 +5,9 @@
+ 
+ namespace DB
+ {
++static thread_local size_t push_channel_index = std::hash<std::thread::id>()(std::this_thread::get_id());
++static thread_local size_t pop_channel_index = std::hash<std::thread::id>()(std::this_thread::get_id());
++
+ template <typename RPCContext>
+ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
+     std::shared_ptr<RPCContext> rpc_context_,
+@@ -17,8 +20,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
+     , source_num(pb_exchange_receiver.encoded_task_meta_size())
+     , task_meta(meta)
+     , max_streams(max_streams_)
+-    , max_buffer_size(max_streams_ * 2)
+-    , res_buffer(max_buffer_size)
++    , max_buffer_size(128)
+     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+     , state(ExchangeReceiverState::NORMAL)
+     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
+@@ -30,6 +32,11 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
+         schema.push_back(std::make_pair(name, info));
+     }
+ 
++    for (size_t i = 0; i < 4; ++i)
++    {
++        channels.push_back(std::make_unique<Channel>(max_buffer_size));
++    }
++
+     setUpConnection();
+ }
+ 
+@@ -37,33 +44,34 @@ template <typename RPCContext>
+ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
+ {
+     {
+-        std::unique_lock<std::mutex> lk(mu);
++        std::unique_lock lk(mu);
+         state = ExchangeReceiverState::CLOSED;
+-        cv.notify_all();
+     }
+ 
+-    for (auto & worker : workers)
+-    {
+-        worker.join();
+-    }
++    for (const auto & channel : channels)
++        channel->close();
++
++    for (size_t i = 0; i < source_num; ++i)
++        workers_done[i].wait();
+ }
+ 
+ template <typename RPCContext>
+ void ExchangeReceiverBase<RPCContext>::cancel()
+ {
+-    std::unique_lock<std::mutex> lk(mu);
+-    state = ExchangeReceiverState::CANCELED;
+-    cv.notify_all();
++    {
++        std::unique_lock lk(mu);
++        state = ExchangeReceiverState::CANCELED;
++    }
++    for (const auto & channel : channels)
++        channel->close();
+ }
+ 
+ template <typename RPCContext>
+ void ExchangeReceiverBase<RPCContext>::setUpConnection()
+ {
++    LOG_DEBUG(log, "setUpConnection");
+     for (size_t index = 0; index < source_num; ++index)
+-    {
+-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+-        workers.push_back(std::move(t));
+-    }
++        workers_done.emplace_back(DefaultFiberPool::submit_job(&ExchangeReceiverBase<RPCContext>::readLoop, this, index).value());
+ }
+ 
+ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
+@@ -86,13 +94,14 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
+ template <typename RPCContext>
+ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
+ {
+-    CPUAffinityManager::getInstance().bindSelfQueryThread();
+     bool meet_error = false;
+     String local_err_msg;
+ 
+     Int64 send_task_id = -1;
+     Int64 recv_task_id = task_meta.task_id();
+ 
++    static constexpr size_t batch_packets_size = 16;
++
+     try
+     {
+         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
+@@ -104,54 +113,46 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
+         {
+             auto reader = rpc_context->makeReader(req);
+             reader->initialize();
+-            std::shared_ptr<ReceivedPacket> packet;
+             bool has_data = false;
+             for (;;)
+             {
+                 LOG_TRACE(log, "begin next ");
++                std::vector<std::shared_ptr<ReceivedPacket>> received_packets;
++                std::vector<mpp::MPPDataPacket*> raw_packets;
++                received_packets.reserve(batch_packets_size);
++                raw_packets.reserve(batch_packets_size);
++                for (size_t i = 0; i < batch_packets_size; ++i)
+                 {
+-                    std::unique_lock<std::mutex> lock(mu);
+-                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
+-                    if (state == ExchangeReceiverState::NORMAL)
+-                    {
+-                        res_buffer.popEmpty(packet);
+-                        cv.notify_all();
+-                    }
+-                    else
+-                    {
+-                        meet_error = true;
+-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+-                        LOG_WARNING(log, local_err_msg);
+-                        break;
+-                    }
+-                }
+-                packet->req_info = req_info;
+-                packet->source_index = source_index;
+-                bool success = reader->read(packet->packet.get());
+-                if (!success)
+-                    break;
+-                else
+-                    has_data = true;
+-                if (packet->packet->has_error())
+-                {
+-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
++                    auto packet = std::make_shared<ReceivedPacket>();
++                    packet->req_info = req_info;
++                    packet->source_index = source_index;
++                    raw_packets.push_back(packet->packet.get());
++                    received_packets.push_back(std::move(packet));
+                 }
++                size_t cnt = reader->batchRead(raw_packets);
++                has_data = cnt > 0;
++                LOG_DEBUG(log, "read packets " << cnt);
++                for (size_t i = 0; i < cnt; ++i)
+                 {
+-                    std::unique_lock<std::mutex> lock(mu);
+-                    cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
+-                    if (state == ExchangeReceiverState::NORMAL)
++                    auto & packet = received_packets[i];
++                    if (packet->packet->has_error())
+                     {
+-                        res_buffer.pushObject(packet);
+-                        cv.notify_all();
++                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                     }
+-                    else
++                    auto res = channels[push_channel_index++ % channels.size()]->push(std::move(packet));
++                    if (res != boost::fibers::channel_op_status::success)
+                     {
+                         meet_error = true;
++                        std::unique_lock lock(mu);
++                        assert(state != ExchangeReceiverState::NORMAL);
+                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                         LOG_WARNING(log, local_err_msg);
+                         break;
+                     }
++                    LOG_DEBUG(log, "pushed one full packet");
+                 }
++                if (meet_error || cnt < batch_packets_size)
++                    break;
+             }
+             // if meet error, such as decode packect fails, it will not retry.
+             if (meet_error)
+@@ -174,7 +175,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
+                     break;
+ 
+                 using namespace std::chrono_literals;
+-                std::this_thread::sleep_for(1s);
++                boost::this_fiber::sleep_for(1s);
+             }
+         }
+         if (!status.ok())
+@@ -200,19 +201,21 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
+     }
+     Int32 copy_live_conn = -1;
+     {
+-        std::unique_lock<std::mutex> lock(mu);
++        std::unique_lock lock(mu);
+         live_connections--;
+         if (meet_error && state == ExchangeReceiverState::NORMAL)
+             state = ExchangeReceiverState::ERROR;
+         if (meet_error && err_msg.empty())
+             err_msg = local_err_msg;
+         copy_live_conn = live_connections;
+-        cv.notify_all();
+     }
+     LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
+ 
+-    if (copy_live_conn == 0)
+-        LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
++    if (meet_error || copy_live_conn == 0)
++    {
++        for (const auto & channel : channels)
++            channel->close();
++    }
+     else if (copy_live_conn < 0)
+         throw Exception("live_connections should not be less than 0!");
+ }
+@@ -221,10 +224,25 @@ template <typename RPCContext>
+ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
+ {
+     std::shared_ptr<ReceivedPacket> packet;
++    static constexpr auto timeout = std::chrono::milliseconds(1);
++    auto res = boost::fibers::channel_op_status::empty;
++    for (size_t i = 0; i < channels.size() && res == boost::fibers::channel_op_status::empty; ++i)
++        res = channels[pop_channel_index++ % channels.size()]->try_pop(packet);
++    if (res == boost::fibers::channel_op_status::empty)
+     {
+-        std::unique_lock<std::mutex> lock(mu);
+-        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
+-
++        do
++        {
++            res = channels[pop_channel_index++ % channels.size()]->pop_wait_for(packet, timeout);
++        } while (res == boost::fibers::channel_op_status::timeout);
++    }
++    if (res == boost::fibers::channel_op_status::closed)
++    {
++        for (size_t i = 0; i < channels.size() && res == boost::fibers::channel_op_status::closed; ++i)
++            res = channels[pop_channel_index++ % channels.size()]->pop(packet);
++    }
++    if (res == boost::fibers::channel_op_status::closed)
++    {
++        std::unique_lock lock(mu);
+         if (state != ExchangeReceiverState::NORMAL)
+         {
+             String msg;
+@@ -238,11 +256,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
+                 msg = "Unknown error";
+             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
+         }
+-        else if (res_buffer.hasObjects())
+-        {
+-            res_buffer.popObject(packet);
+-            cv.notify_all();
+-        }
+         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
+         {
+             return {nullptr, 0, "ExchangeReceiver", false, "", true};
+@@ -266,11 +279,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
+             result = {resp_ptr, packet->source_index, packet->req_info};
+         }
+     }
+-    packet->packet->Clear();
+-    std::unique_lock<std::mutex> lock(mu);
+-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
+-    res_buffer.pushEmpty(std::move(packet));
+-    cv.notify_all();
+     return result;
+ }
+ 
+diff --git a/dbms/src/Flash/Mpp/ExchangeReceiver.h b/dbms/src/Flash/Mpp/ExchangeReceiver.h
+index 597b9a376fd..696e3cd7c9d 100644
+--- a/dbms/src/Flash/Mpp/ExchangeReceiver.h
++++ b/dbms/src/Flash/Mpp/ExchangeReceiver.h
+@@ -1,6 +1,6 @@
+ #pragma once
+ 
+-#include <Common/RecyclableBuffer.h>
++#include <Common/FiberPool.hpp>
+ #include <Flash/Coprocessor/ChunkCodec.h>
+ #include <Flash/Coprocessor/DAGContext.h>
+ #include <Flash/Mpp/GRPCReceiverContext.h>
+@@ -10,9 +10,6 @@
+ #include <tipb/executor.pb.h>
+ #include <tipb/select.pb.h>
+ 
+-#include <mutex>
+-#include <thread>
+-
+ namespace DB
+ {
+ struct ExchangeReceiverResult
+@@ -101,13 +98,14 @@ class ExchangeReceiverBase
+     const size_t max_streams;
+     const size_t max_buffer_size;
+ 
+-    std::vector<std::thread> workers;
++    std::vector<boost::fibers::future<void>> workers_done;
+     DAGSchema schema;
+ 
+-    std::mutex mu;
+-    std::condition_variable cv;
++    using Channel = boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>>;
++    std::vector<std::unique_ptr<Channel>> channels;
++
++    boost::fibers::mutex mu;
+     /// should lock `mu` when visit these members
+-    RecyclableBuffer<ReceivedPacket> res_buffer;
+     Int32 live_connections;
+     ExchangeReceiverState state;
+     String err_msg;
+diff --git a/dbms/src/Flash/Mpp/GRPCCompletionQueuePool.h b/dbms/src/Flash/Mpp/GRPCCompletionQueuePool.h
+new file mode 100644
+index 00000000000..9b0734a43dc
+--- /dev/null
++++ b/dbms/src/Flash/Mpp/GRPCCompletionQueuePool.h
+@@ -0,0 +1,63 @@
++#pragma once
++
++#include <Common/ThreadFactory.h>
++#include <common/logger_useful.h>
++#include <boost/fiber/all.hpp>
++#include <grpc++/grpc++.h>
++#include <atomic>
++
++namespace DB
++{
++class GRPCCompletionQueuePool
++{
++public:
++    static GRPCCompletionQueuePool * Instance()
++    {
++        static auto concurrency = std::max(std::thread::hardware_concurrency(), 2u) - 1u;
++        static GRPCCompletionQueuePool pool(concurrency);
++        return &pool;
++    }
++
++    ::grpc::CompletionQueue & pickQueue()
++    {
++        return queues[next.fetch_add(1, std::memory_order_acq_rel) % queues.size()];
++    }
++
++    struct Callback
++    {
++        virtual void run(bool ok) = 0;
++        virtual ~Callback() = default;
++    };
++private:
++    explicit GRPCCompletionQueuePool(size_t count)
++        : queues(count)
++        , log(&Poco::Logger::get("GRPCCompletionQueuePool"))
++    {
++        LOG_DEBUG(log, "Construct count = " << count);
++        for (size_t i = 0; i < count; ++i)
++            workers.emplace_back(ThreadFactory(true, "GRPCComp").newThread(&GRPCCompletionQueuePool::thread, this, i));
++    }
++
++    void thread(size_t index)
++    {
++        LOG_DEBUG(log, "Thread start index = " << index);
++        auto & q = queues[index];
++        while (true)
++        {
++            void* got_tag = nullptr;
++            bool ok = false;
++            if (!q.Next(&got_tag, &ok)) {
++                LOG_DEBUG(log, "Thread end index = " << index);
++                break;
++            }
++            reinterpret_cast<Callback *>(got_tag)->run(ok);
++        }
++    }
++
++    std::atomic<size_t> next = 0;
++    std::vector<::grpc::CompletionQueue> queues;
++    std::vector<std::thread> workers;
++    Poco::Logger * log;
++};
++} // namespace
++
+diff --git a/dbms/src/Flash/Mpp/GRPCReceiverContext.cpp b/dbms/src/Flash/Mpp/GRPCReceiverContext.cpp
+index f39d2f7e8e7..5bf32fe25c5 100644
+--- a/dbms/src/Flash/Mpp/GRPCReceiverContext.cpp
++++ b/dbms/src/Flash/Mpp/GRPCReceiverContext.cpp
+@@ -1,4 +1,7 @@
+ #include <Common/Exception.h>
++#include <Common/FiberPool.hpp>
++#include <Common/IOThreadPool.h>
++#include <Flash/Mpp/GRPCCompletionQueuePool.h>
+ #include <Flash/Mpp/GRPCReceiverContext.h>
+ 
+ namespace pingcap
+@@ -24,7 +27,14 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
+         grpc::CompletionQueue & cq,
+         void * call)
+     {
+-        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
++        auto job = [&] { return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call); };
++        if (g_run_in_fiber)
++        {
++            auto future = DB::IOThreadPool::instance().schedule(job);
++            future.wait();
++            return future.get();
++        }
++        return job();
+     }
+ };
+ 
+@@ -33,8 +43,60 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
+ 
+ namespace DB
+ {
++namespace
++{
++using BoolPromise = boost::fibers::promise<bool>; 
++using SizePromise = boost::fibers::promise<size_t>; 
++
++struct PromiseCallback : public GRPCCompletionQueuePool::Callback
++{
++    BoolPromise promise;
++
++    void run(bool ok) override
++    {
++        promise.set_value(ok);
++        delete this;
++    }
++};
++
++struct BatchReadCallback : public GRPCCompletionQueuePool::Callback
++{
++    SizePromise promise;
++    size_t read_index = 0;
++    const std::vector<mpp::MPPDataPacket *> & packets;
++    ::grpc::ClientAsyncReader<::mpp::MPPDataPacket> & reader;
++
++    BatchReadCallback(
++        const std::vector<mpp::MPPDataPacket *> & packets_,
++        ::grpc::ClientAsyncReader<::mpp::MPPDataPacket> & reader_)
++        : packets(packets_)
++        , reader(reader_)
++    {
++    }
++
++    void run(bool ok) override
++    {
++        if (!ok)
++        {
++            promise.set_value(read_index);
++            delete this;
++            return;
++        }
++        ++read_index;
++        if (read_index == packets.size())
++        {
++            promise.set_value(read_index);
++            delete this;
++            return;
++        }
++        reader.Read(packets[read_index], this);
++    }
++};
++} // namespace
++
+ GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_)
+     : cluster(cluster_)
++    , log(&Poco::Logger::get("GRPCReceiverContext"))
+ {}
+ 
+ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
+@@ -57,11 +119,22 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
+ 
+ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
+ {
++    auto callback = std::make_unique<PromiseCallback>();
++    auto future = callback->promise.get_future();
+     auto reader = std::make_shared<Reader>(request);
+-    reader->reader = cluster->rpc_client->sendStreamRequest(
++    reader->log = log;
++    reader->reader = cluster->rpc_client->sendStreamRequestAsync(
+         request.req->sender_meta().address(),
+         &reader->client_context,
+-        *reader->call);
++        *reader->call,
++        GRPCCompletionQueuePool::Instance()->pickQueue(),
++        callback.release());
++
++    future.wait();
++    auto res = future.get();
++    if (!res)
++        throw Exception("Send async stream request fail");
++
+     return reader;
+ }
+ 
+@@ -80,17 +153,38 @@ GRPCReceiverContext::Reader::~Reader()
+ 
+ void GRPCReceiverContext::Reader::initialize() const
+ {
+-    reader->WaitForInitialMetadata();
+ }
+ 
+ bool GRPCReceiverContext::Reader::read(mpp::MPPDataPacket * packet) const
+ {
+-    return reader->Read(packet);
++    auto callback = std::make_unique<PromiseCallback>();
++    auto future = callback->promise.get_future();
++    reader->Read(packet, callback.release());
++
++    future.wait();
++    auto res = future.get();
++    return res;
++}
++
++size_t GRPCReceiverContext::Reader::batchRead(const std::vector<mpp::MPPDataPacket *> & packets) const
++{
++    auto callback = std::make_unique<BatchReadCallback>(packets, *reader);
++    auto future = callback->promise.get_future();
++    reader->Read(packets[0], callback.release());
++
++    future.wait();
++    return future.get();
+ }
+ 
+ GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
+ {
+-    return reader->Finish();
++    auto callback = std::make_unique<PromiseCallback>();
++    auto future = callback->promise.get_future();
++    auto status = getStatusOK();
++    reader->Finish(&status, callback.release());
++
++    future.wait();
++    return status;
+ }
+ 
+ } // namespace DB
+diff --git a/dbms/src/Flash/Mpp/GRPCReceiverContext.h b/dbms/src/Flash/Mpp/GRPCReceiverContext.h
+index 707b6d67c3b..b4848ffa868 100644
+--- a/dbms/src/Flash/Mpp/GRPCReceiverContext.h
++++ b/dbms/src/Flash/Mpp/GRPCReceiverContext.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <common/logger_useful.h>
+ #include <common/types.h>
+ #include <grpc++/grpc++.h>
+ #include <kvproto/mpp.pb.h>
+@@ -27,7 +28,8 @@ class GRPCReceiverContext
+     {
+         std::unique_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
+         grpc::ClientContext client_context;
+-        std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
++        std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
++        Poco::Logger * log = nullptr;
+ 
+         explicit Reader(const Request & req);
+         /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+@@ -36,6 +38,7 @@ class GRPCReceiverContext
+ 
+         void initialize() const;
+         bool read(mpp::MPPDataPacket * packet) const;
++        size_t batchRead(const std::vector<mpp::MPPDataPacket *> & packets) const;
+         StatusType finish() const;
+     };
+ 
+@@ -55,5 +58,6 @@ class GRPCReceiverContext
+ 
+ private:
+     pingcap::kv::Cluster * cluster;
++    Poco::Logger * log;
+ };
+ } // namespace DB
+diff --git a/dbms/src/Flash/Mpp/MPPTask.cpp b/dbms/src/Flash/Mpp/MPPTask.cpp
+index 64f98e3f53f..d7c3e31bcbd 100644
+--- a/dbms/src/Flash/Mpp/MPPTask.cpp
++++ b/dbms/src/Flash/Mpp/MPPTask.cpp
+@@ -1,6 +1,5 @@
+ #include <Common/CPUAffinityManager.h>
+ #include <Common/FailPoint.h>
+-#include <Common/ThreadFactory.h>
+ #include <Common/TiFlashMetrics.h>
+ #include <DataStreams/IProfilingBlockInputStream.h>
+ #include <DataStreams/SquashingBlockOutputStream.h>
+@@ -58,7 +57,7 @@ MPPTask::~MPPTask()
+ {
+     /// MPPTask maybe destructed by different thread, set the query memory_tracker
+     /// to current_memory_tracker in the destructor
+-    current_memory_tracker = memory_tracker;
++    // current_memory_tracker = memory_tracker;
+     closeAllTunnels("");
+     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
+ }
+@@ -82,8 +81,7 @@ void MPPTask::finishWrite()
+ void MPPTask::run()
+ {
+     memory_tracker = current_memory_tracker;
+-    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
+-    worker.detach();
++    DefaultFiberPool::submit_job(&MPPTask::runImpl, this->shared_from_this());
+ }
+ 
+ void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
+@@ -287,7 +285,7 @@ void MPPTask::runImpl()
+         return;
+     }
+ 
+-    current_memory_tracker = memory_tracker;
++    // current_memory_tracker = memory_tracker;
+     Stopwatch stopwatch;
+     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+diff --git a/dbms/src/Flash/Mpp/MPPTaskManager.cpp b/dbms/src/Flash/Mpp/MPPTaskManager.cpp
+index f83451843e7..d10159cdc06 100644
+--- a/dbms/src/Flash/Mpp/MPPTaskManager.cpp
++++ b/dbms/src/Flash/Mpp/MPPTaskManager.cpp
+@@ -14,7 +14,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
+     MPPTaskId id{meta.start_ts(), meta.task_id()};
+     std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+     bool cancelled = false;
+-    std::unique_lock<std::mutex> lock(mu);
++    std::unique_lock lock(mu);
+     auto ret = cv.wait_for(lock, timeout, [&] {
+         auto query_it = mpp_query_map.find(id.start_ts);
+         // TODO: how about the query has been cancelled in advance?
+@@ -52,7 +52,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
+         /// cancel task may take a long time, so first
+         /// set a flag, so we can cancel task one by
+         /// one without holding the lock
+-        std::lock_guard<std::mutex> lock(mu);
++        std::lock_guard lock(mu);
+         auto it = mpp_query_map.find(query_id);
+         if (it == mpp_query_map.end() || it->second.to_be_cancelled)
+             return;
+@@ -64,21 +64,21 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
+     std::stringstream ss;
+     ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
+     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
+-    std::vector<std::thread> cancel_workers;
++    std::vector<std::optional<boost::fibers::future<void>>> cancel_workers;
+     for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
+     {
+         ss << task_it->first.toString() << " ";
+-        std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
++        auto t = DefaultFiberPool::submit_job(&MPPTask::cancel, task_it->second, std::ref(reason));
+         cancel_workers.push_back(std::move(t));
+     }
+     LOG_WARNING(log, ss.str());
+     for (auto & worker : cancel_workers)
+     {
+-        worker.join();
++        worker.value().wait();
+     }
+     MPPQueryTaskSet canceled_task_set;
+     {
+-        std::lock_guard<std::mutex> lock(mu);
++        std::lock_guard lock(mu);
+         /// just to double check the query still exists
+         auto it = mpp_query_map.find(query_id);
+         if (it != mpp_query_map.end())
+@@ -94,7 +94,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
+ 
+ bool MPPTaskManager::registerTask(MPPTaskPtr task)
+ {
+-    std::unique_lock<std::mutex> lock(mu);
++    std::unique_lock lock(mu);
+     const auto & it = mpp_query_map.find(task->id.start_ts);
+     if (it != mpp_query_map.end() && it->second.to_be_cancelled)
+     {
+@@ -114,7 +114,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
+ 
+ void MPPTaskManager::unregisterTask(MPPTask * task)
+ {
+-    std::unique_lock<std::mutex> lock(mu);
++    std::unique_lock lock(mu);
+     auto it = mpp_query_map.find(task->id.start_ts);
+     if (it != mpp_query_map.end())
+     {
+@@ -138,7 +138,7 @@ MPPTaskManager::~MPPTaskManager() {}
+ std::vector<UInt64> MPPTaskManager::getCurrentQueries()
+ {
+     std::vector<UInt64> ret;
+-    std::lock_guard<std::mutex> lock(mu);
++    std::lock_guard lock(mu);
+     for (auto & it : mpp_query_map)
+     {
+         ret.push_back(it.first);
+@@ -149,7 +149,7 @@ std::vector<UInt64> MPPTaskManager::getCurrentQueries()
+ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
+ {
+     std::vector<MPPTaskPtr> ret;
+-    std::lock_guard<std::mutex> lock(mu);
++    std::lock_guard lock(mu);
+     const auto & it = mpp_query_map.find(query_id);
+     if (it == mpp_query_map.end() || it->second.to_be_cancelled)
+         return ret;
+@@ -160,7 +160,7 @@ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
+ 
+ String MPPTaskManager::toString()
+ {
+-    std::lock_guard<std::mutex> lock(mu);
++    std::lock_guard lock(mu);
+     String res("(");
+     for (auto & query_it : mpp_query_map)
+     {
+diff --git a/dbms/src/Flash/Mpp/MPPTaskManager.h b/dbms/src/Flash/Mpp/MPPTaskManager.h
+index cdc1d617bf4..4a758a47d69 100644
+--- a/dbms/src/Flash/Mpp/MPPTaskManager.h
++++ b/dbms/src/Flash/Mpp/MPPTaskManager.h
+@@ -1,12 +1,11 @@
+ #pragma once
+ 
+ #include <Flash/Mpp/MPPTask.h>
++#include <boost/fiber/all.hpp> 
+ #include <common/logger_useful.h>
+ #include <kvproto/mpp.pb.h>
+ 
+ #include <chrono>
+-#include <condition_variable>
+-#include <mutex>
+ 
+ namespace DB
+ {
+@@ -29,13 +28,13 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
+ // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
+ class MPPTaskManager : private boost::noncopyable
+ {
+-    std::mutex mu;
++    boost::fibers::mutex mu;
+ 
+     MPPQueryMap mpp_query_map;
+ 
+     Poco::Logger * log;
+ 
+-    std::condition_variable cv;
++    boost::fibers::condition_variable cv;
+ 
+ public:
+     MPPTaskManager();
+diff --git a/dbms/src/Flash/Mpp/MPPTunnel.cpp b/dbms/src/Flash/Mpp/MPPTunnel.cpp
+index 63c145330ba..99237dad1bf 100644
+--- a/dbms/src/Flash/Mpp/MPPTunnel.cpp
++++ b/dbms/src/Flash/Mpp/MPPTunnel.cpp
+@@ -1,5 +1,6 @@
+ #include <Common/Exception.h>
+ #include <Common/FailPoint.h>
++#include <Common/IOThreadPool.h>
+ #include <Common/ThreadFactory.h>
+ #include <Flash/Mpp/MPPTunnel.h>
+ #include <Flash/Mpp/Utils.h>
+@@ -26,8 +27,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
+     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
+     , send_loop_msg("")
+     , input_streams_num(input_steams_num_)
+-    , send_thread(nullptr)
+-    , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
++    , send_queue(1024) /// TODO(fzh) set a reasonable parameter
+     , log(&Poco::Logger::get(tunnel_id))
+ {
+ }
+@@ -39,15 +39,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
+     {
+         if (!finished)
+             writeDone();
+-        if (nullptr != send_thread && send_thread->joinable())
++        send_queue.close();
++        if (send_thread.has_value())
+         {
+-            send_thread->join();
+-        }
+-        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+-        MPPDataPacketPtr res;
+-        while (send_queue.size() > 0)
+-        {
+-            send_queue.pop(res);
++            send_thread.value().wait();
++            send_thread.value().get();
+         }
+     }
+     catch (...)
+@@ -60,7 +56,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
+ template <typename Writer>
+ void MPPTunnelBase<Writer>::close(const String & reason)
+ {
+-    std::unique_lock<std::mutex> lk(mu);
++    std::unique_lock lk(mu);
+     if (finished)
+         return;
+     if (connected && !reason.empty())
+@@ -68,7 +64,9 @@ void MPPTunnelBase<Writer>::close(const String & reason)
+         try
+         {
+             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+-            send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
++            auto res = send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
++            if (res != boost::fibers::channel_op_status::success)
++                throw Exception("write to tunnel which is already closed");
+         }
+         catch (...)
+         {
+@@ -77,7 +75,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
+     }
+     if (connected)
+     {
+-        send_queue.push(nullptr);
++        send_queue.close();
+         /// should wait the errors being sent in abnormal cases.
+         cv_for_finished.wait(lk, [&]() { return finished.load(); });
+     }
+@@ -100,22 +98,20 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
+     LOG_TRACE(log, "ready to write");
+     {
+         {
+-            std::unique_lock<std::mutex> lk(mu);
++            std::unique_lock lk(mu);
+             waitUntilConnectedOrCancelled(lk);
+             if (finished)
+                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
+         }
+ 
+-        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
++        auto res = send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
++        if (res != boost::fibers::channel_op_status::success)
++            throw Exception("write to tunnel which is already closed");
+         if (close_after_write)
+         {
+-            std::unique_lock<std::mutex> lk(mu);
++            std::unique_lock lk(mu);
+             if (!finished)
+-            {
+-                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
+-                send_queue.push(nullptr);
+-                LOG_TRACE(log, "sending a nullptr to finish write.");
+-            }
++                send_queue.close();
+         }
+     }
+ }
+@@ -130,11 +126,10 @@ void MPPTunnelBase<Writer>::sendLoop()
+         MPPDataPacketPtr res;
+         while (!finished)
+         {
+-            send_queue.pop(res);
+-            if (nullptr == res)
++            auto status = send_queue.pop(res);
++            if (status == boost::fibers::channel_op_status::closed)
+             {
+-                finishWithLock();
+-                return;
++                break;
+             }
+             else
+             {
+@@ -150,17 +145,17 @@ void MPPTunnelBase<Writer>::sendLoop()
+     }
+     catch (Exception & e)
+     {
+-        std::unique_lock<std::mutex> lk(mu);
++        std::unique_lock lk(mu);
+         send_loop_msg = e.message();
+     }
+     catch (std::exception & e)
+     {
+-        std::unique_lock<std::mutex> lk(mu);
++        std::unique_lock lk(mu);
+         send_loop_msg = e.what();
+     }
+     catch (...)
+     {
+-        std::unique_lock<std::mutex> lk(mu);
++        std::unique_lock lk(mu);
+         send_loop_msg = "fatal error in sendLoop()";
+     }
+     if (!finished)
+@@ -174,14 +169,14 @@ template <typename Writer>
+ void MPPTunnelBase<Writer>::writeDone()
+ {
+     LOG_TRACE(log, "ready to finish");
+-    std::unique_lock<std::mutex> lk(mu);
++    std::unique_lock lk(mu);
+     if (finished)
+         throw Exception("has finished, " + send_loop_msg);
+     /// make sure to finish the tunnel after it is connected
+     waitUntilConnectedOrCancelled(lk);
+     lk.unlock();
+     /// in normal cases, send nullptr to notify finish
+-    send_queue.push(nullptr);
++    send_queue.close();
+     waitForFinish();
+     LOG_TRACE(log, "done to finish");
+ }
+@@ -189,13 +184,13 @@ void MPPTunnelBase<Writer>::writeDone()
+ template <typename Writer>
+ void MPPTunnelBase<Writer>::connect(Writer * writer_)
+ {
+-    std::lock_guard<std::mutex> lk(mu);
++    std::lock_guard lk(mu);
+     if (connected)
+         throw Exception("has connected");
+ 
+     LOG_DEBUG(log, "ready to connect");
+     writer = writer_;
+-    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
++    send_thread = IOThreadPool::instance().schedule([this] { sendLoop(); });
+ 
+     connected = true;
+     cv_for_connected.notify_all();
+@@ -204,7 +199,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
+ template <typename Writer>
+ void MPPTunnelBase<Writer>::waitForFinish()
+ {
+-    std::unique_lock<std::mutex> lk(mu);
++    std::unique_lock lk(mu);
+ 
+     cv_for_finished.wait(lk, [&]() { return finished.load(); });
+ 
+@@ -214,7 +209,7 @@ void MPPTunnelBase<Writer>::waitForFinish()
+ }
+ 
+ template <typename Writer>
+-void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
++void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<boost::fibers::mutex> & lk)
+ {
+     auto connected_or_cancelled = [&] {
+         return connected || isTaskCancelled();
+@@ -235,7 +230,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
+ template <typename Writer>
+ void MPPTunnelBase<Writer>::finishWithLock()
+ {
+-    std::unique_lock<std::mutex> lk(mu);
++    std::unique_lock lk(mu);
+     finished = true;
+     cv_for_finished.notify_all();
+ }
+diff --git a/dbms/src/Flash/Mpp/MPPTunnel.h b/dbms/src/Flash/Mpp/MPPTunnel.h
+index 2b8c4b5c2c2..3c5a9ad2abb 100644
+--- a/dbms/src/Flash/Mpp/MPPTunnel.h
++++ b/dbms/src/Flash/Mpp/MPPTunnel.h
+@@ -1,12 +1,13 @@
+ #pragma once
+ 
+-#include <Common/ConcurrentBoundedQueue.h>
++#include <Common/FiberPool.hpp>
+ #include <common/logger_useful.h>
+ #include <common/types.h>
+ #include <grpcpp/server_context.h>
+ #include <kvproto/mpp.pb.h>
+ #include <kvproto/tikvpb.grpc.pb.h>
+ 
++#include <boost/fiber/all.hpp> 
+ #include <boost/noncopyable.hpp>
+ #include <chrono>
+ #include <condition_variable>
+@@ -52,7 +53,7 @@ class MPPTunnelBase : private boost::noncopyable
+     void waitForFinish();
+ 
+ private:
+-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
++    void waitUntilConnectedOrCancelled(std::unique_lock<boost::fibers::mutex> & lk);
+ 
+     // must under mu's protection
+     void finishWithLock();
+@@ -60,9 +61,9 @@ class MPPTunnelBase : private boost::noncopyable
+     /// to avoid being blocked when pop(), we should send nullptr into send_queue
+     void sendLoop();
+ 
+-    std::mutex mu;
+-    std::condition_variable cv_for_connected;
+-    std::condition_variable cv_for_finished;
++    boost::fibers::mutex mu;
++    boost::fibers::condition_variable cv_for_connected;
++    boost::fibers::condition_variable cv_for_finished;
+ 
+     bool connected; // if the exchange in has connected this tunnel.
+ 
+@@ -81,10 +82,10 @@ class MPPTunnelBase : private boost::noncopyable
+ 
+     int input_streams_num;
+ 
+-    std::unique_ptr<std::thread> send_thread;
++    std::optional<boost::fibers::future<void>> send_thread;
+ 
+     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
++    boost::fibers::buffered_channel<MPPDataPacketPtr> send_queue;
+ 
+     Poco::Logger * log;
+ };
+diff --git a/dbms/src/Interpreters/Aggregator.cpp b/dbms/src/Interpreters/Aggregator.cpp
+index 07a9d8efc50..45d5d71f92a 100644
+--- a/dbms/src/Interpreters/Aggregator.cpp
++++ b/dbms/src/Interpreters/Aggregator.cpp
+@@ -5,9 +5,9 @@
+ #include <Columns/ColumnTuple.h>
+ #include <Columns/ColumnsNumber.h>
+ #include <Common/ClickHouseRevision.h>
++#include <Common/FiberPool.hpp>
+ #include <Common/MemoryTracker.h>
+ #include <Common/Stopwatch.h>
+-#include <Common/ThreadFactory.h>
+ #include <Common/setThreadName.h>
+ #include <Common/typeid_cast.h>
+ #include <DataStreams/IProfilingBlockInputStream.h>
+@@ -791,6 +791,8 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
+ 
+         if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
+             break;
++
++        adaptive_yield();
+     }
+ 
+     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
+@@ -1090,10 +1092,10 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
+ }
+ 
+ 
+-BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
++BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const
+ {
+ #define M(NAME) \
+-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
++    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, max_threads);
+ 
+     if (false)
+     {
+@@ -1109,9 +1111,8 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
+     AggregatedDataVariants & data_variants,
+     Method & method,
+     bool final,
+-    ThreadPool * thread_pool) const
++    size_t max_threads) const
+ {
+-    size_t max_threads = thread_pool ? thread_pool->size() : 1;
+     if (max_threads > data_variants.aggregates_pools.size())
+         for (size_t i = data_variants.aggregates_pools.size(); i < max_threads; ++i)
+             data_variants.aggregates_pools.push_back(std::make_shared<Arena>());
+@@ -1133,6 +1134,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
+             /// Select Arena to avoid race conditions
+             Arena * arena = data_variants.aggregates_pools.at(thread_id).get();
+             blocks.emplace_back(convertOneBucketToBlock(data_variants, method, arena, final, bucket));
++            adaptive_yield();
+         }
+         return blocks;
+     };
+@@ -1140,6 +1142,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
+     /// packaged_task is used to ensure that exceptions are automatically thrown into the main stream.
+ 
+     std::vector<std::packaged_task<BlocksList()>> tasks(max_threads);
++    std::vector<boost::fibers::future<void>> futures;
+ 
+     try
+     {
+@@ -1148,8 +1151,8 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
+             tasks[thread_id] = std::packaged_task<BlocksList()>(
+                 [thread_id, &converter] { return converter(thread_id); });
+ 
+-            if (thread_pool)
+-                thread_pool->schedule(ThreadFactory().newJob([thread_id, &tasks] { tasks[thread_id](); }));
++            if (max_threads > 1)
++                futures.push_back(DefaultFiberPool::submit_job([thread_id, &tasks] { tasks[thread_id](); }).value());
+             else
+                 tasks[thread_id]();
+         }
+@@ -1157,14 +1160,14 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
+     catch (...)
+     {
+         /// If this is not done, then in case of an exception, tasks will be destroyed before the threads are completed, and it will be bad.
+-        if (thread_pool)
+-            thread_pool->wait();
++        for (auto & f : futures)
++            f.wait();
+ 
+         throw;
+     }
+ 
+-    if (thread_pool)
+-        thread_pool->wait();
++    for (auto & f : futures)
++        f.wait();
+ 
+     BlocksList blocks;
+ 
+@@ -1195,10 +1198,9 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
+     if (data_variants.empty())
+         return blocks;
+ 
+-    std::unique_ptr<ThreadPool> thread_pool;
+-    if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
+-        && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
+-        thread_pool = std::make_unique<ThreadPool>(max_threads);
++    if (data_variants.sizeWithoutOverflowRow() <= 100000 /// TODO Make a custom threshold.
++        || data_variants.isTwoLevel())
++        max_threads = 1;
+ 
+     if (isCancelled())
+         return BlocksList();
+@@ -1217,7 +1219,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
+         if (!data_variants.isTwoLevel())
+             blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final));
+         else
+-            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
++            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, max_threads));
+     }
+ 
+     if (!final)
+@@ -1454,7 +1456,8 @@ class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
+         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
+         ///  because the threads access 'parallel_merge_data'.
+         if (parallel_merge_data)
+-            parallel_merge_data->pool.wait();
++            for (auto & f : parallel_merge_data->futures)
++                f.wait();
+     }
+ 
+ protected:
+@@ -1517,7 +1520,7 @@ class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
+ 
+             while (true)
+             {
+-                std::unique_lock<std::mutex> lock(parallel_merge_data->mutex);
++                std::unique_lock lock(parallel_merge_data->mutex);
+ 
+                 if (parallel_merge_data->exception)
+                     std::rethrow_exception(parallel_merge_data->exception);
+@@ -1558,12 +1561,11 @@ class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
+     {
+         std::map<Int32, Block> ready_blocks;
+         std::exception_ptr exception;
+-        std::mutex mutex;
+-        std::condition_variable condvar;
+-        ThreadPool pool;
++        boost::fibers::mutex mutex;
++        boost::fibers::condition_variable condvar;
++        std::vector<boost::fibers::future<void>> futures;
+ 
+-        explicit ParallelMergeData(size_t threads)
+-            : pool(threads)
++        explicit ParallelMergeData(size_t)
+         {}
+     };
+ 
+@@ -1575,8 +1577,7 @@ class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
+         if (num >= NUM_BUCKETS)
+             return;
+ 
+-        parallel_merge_data->pool.schedule(
+-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
++        parallel_merge_data->futures.push_back(DefaultFiberPool::submit_job([this, num] { thread(num); }).value());
+     }
+ 
+     void thread(Int32 bucket_num)
+@@ -1606,12 +1607,12 @@ class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
+             APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+ #undef M
+ 
+-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
++            std::lock_guard lock(parallel_merge_data->mutex);
+             parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
+         }
+         catch (...)
+         {
+-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
++            std::lock_guard lock(parallel_merge_data->mutex);
+             if (!parallel_merge_data->exception)
+                 parallel_merge_data->exception = std::current_exception();
+         }
+@@ -1912,6 +1913,9 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
+     auto max_bucket = bucket_to_blocks.rbegin()->first;
+     size_t has_two_level = max_bucket > 0;
+ 
++    if (total_input_rows <= 100000 || !has_two_level)
++        max_threads = 1;
++
+     if (has_two_level)
+     {
+ #define M(NAME)                                              \
+@@ -1961,14 +1965,12 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
+                 APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+ #undef M
+                 else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
++
++                adaptive_yield();
+             }
+         };
+ 
+-        std::unique_ptr<ThreadPool> thread_pool;
+-        if (max_threads > 1 && total_input_rows > 100000 /// TODO Make a custom threshold.
+-            && has_two_level)
+-            thread_pool = std::make_unique<ThreadPool>(max_threads);
+-
++        std::vector<boost::fibers::future<void>> futures;
+         for (const auto & bucket_blocks : bucket_to_blocks)
+         {
+             const auto bucket = bucket_blocks.first;
+@@ -1981,14 +1983,14 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
+ 
+             auto task = std::bind(merge_bucket, bucket, aggregates_pool);
+ 
+-            if (thread_pool)
+-                thread_pool->schedule(ThreadFactory().newJob(task));
++            if (max_threads > 1)
++                futures.push_back(DefaultFiberPool::submit_job(task).value());
+             else
+                 task();
+         }
+ 
+-        if (thread_pool)
+-            thread_pool->wait();
++        for (auto & f : futures)
++            f.wait();
+ 
+         LOG_TRACE(log, "Merged partially aggregated two-level data.");
+     }
+diff --git a/dbms/src/Interpreters/Aggregator.h b/dbms/src/Interpreters/Aggregator.h
+index aa2a2a13072..e736f6b7918 100644
+--- a/dbms/src/Interpreters/Aggregator.h
++++ b/dbms/src/Interpreters/Aggregator.h
+@@ -892,7 +892,7 @@ class Aggregator
+     /// How many RAM were used to process the query before processing the first block.
+     Int64 memory_usage_before_aggregation = 0;
+ 
+-    std::mutex mutex;
++    boost::fibers::mutex mutex;
+ 
+     Poco::Logger * log = &Poco::Logger::get("Aggregator");
+ 
+@@ -1034,14 +1034,14 @@ class Aggregator
+ 
+     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
+     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
++    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
+ 
+     template <typename Method>
+     BlocksList prepareBlocksAndFillTwoLevelImpl(
+         AggregatedDataVariants & data_variants,
+         Method & method,
+         bool final,
+-        ThreadPool * thread_pool) const;
++        size_t max_threads) const;
+ 
+     template <bool no_more_keys, typename Method, typename Table>
+     void mergeStreamsImplCase(
+diff --git a/dbms/src/Interpreters/Join.cpp b/dbms/src/Interpreters/Join.cpp
+index 639464ed9f6..ae86e64d5d9 100644
+--- a/dbms/src/Interpreters/Join.cpp
++++ b/dbms/src/Interpreters/Join.cpp
+@@ -98,7 +98,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
+ 
+ void Join::setFinishBuildTable(bool finish_)
+ {
+-    std::lock_guard<std::mutex> lk(build_table_mutex);
++    std::lock_guard lk(build_table_mutex);
+     have_finish_build = finish_;
+     build_table_cv.notify_all();
+ }
+@@ -576,7 +576,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
+         }
+         else
+         {
+-            std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
++            std::lock_guard lk(map.getSegmentMutex(segment_index));
+             for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+             {
+                 Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key_getter, stored_block, segment_index_info[segment_index][i], pool, sort_key_containers);
+@@ -732,7 +732,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
+     std::shared_lock lock(rwlock);
+     Block * stored_block = nullptr;
+     {
+-        std::lock_guard<std::mutex> lk(blocks_lock);
++        std::lock_guard lk(blocks_lock);
+         blocks.push_back(block);
+         stored_block = &blocks.back();
+         original_blocks.push_back(block);
+diff --git a/dbms/src/Interpreters/Join.h b/dbms/src/Interpreters/Join.h
+index f8586a1a929..b77eab87746 100644
+--- a/dbms/src/Interpreters/Join.h
++++ b/dbms/src/Interpreters/Join.h
+@@ -4,6 +4,8 @@
+ #include <Columns/ColumnNullable.h>
+ #include <Columns/ColumnString.h>
+ #include <Common/Arena.h>
++#include <Common/FiberPool.hpp>
++#include <Common/FiberRWLock.h>
+ #include <Common/HashTable/HashMap.h>
+ #include <DataStreams/IBlockInputStream.h>
+ #include <DataStreams/SizeLimits.h>
+@@ -267,7 +269,7 @@ class Join
+       */
+     BlocksList blocks;
+     /// mutex to protect concurrent insert to blocks
+-    std::mutex blocks_lock;
++    boost::fibers::mutex blocks_lock;
+     /// keep original block for concurrent build
+     Blocks original_blocks;
+ 
+@@ -296,8 +298,8 @@ class Join
+     /// Block with key columns in the same order they appear in the right-side table.
+     Block sample_block_with_keys;
+ 
+-    mutable std::mutex build_table_mutex;
+-    mutable std::condition_variable build_table_cv;
++    mutable boost::fibers::mutex build_table_mutex;
++    mutable boost::fibers::condition_variable build_table_cv;
+     bool have_finish_build;
+ 
+     Poco::Logger * log;
+@@ -311,7 +313,7 @@ class Join
+       *  and StorageJoin only calls these two methods.
+       * That's why another methods are not guarded.
+       */
+-    mutable std::shared_mutex rwlock;
++    mutable FiberRWLock rwlock;
+ 
+     void init(Type type_);
+ 
+diff --git a/dbms/src/Interpreters/ProcessList.cpp b/dbms/src/Interpreters/ProcessList.cpp
+index 30419509d0d..9d83fe82d4f 100644
+--- a/dbms/src/Interpreters/ProcessList.cpp
++++ b/dbms/src/Interpreters/ProcessList.cpp
+@@ -244,7 +244,7 @@ ProcessListEntry::~ProcessListEntry()
+ 
+ void ProcessListElement::setQueryStreams(const BlockIO & io)
+ {
+-    std::lock_guard<std::mutex> lock(query_streams_mutex);
++    std::lock_guard lock(query_streams_mutex);
+ 
+     query_stream_in = io.in;
+     query_stream_out = io.out;
+@@ -257,7 +257,7 @@ void ProcessListElement::releaseQueryStreams()
+     BlockOutputStreamPtr out;
+ 
+     {
+-        std::lock_guard<std::mutex> lock(query_streams_mutex);
++        std::lock_guard lock(query_streams_mutex);
+ 
+         query_streams_status = QueryStreamsStatus::Released;
+         in = std::move(query_stream_in);
+@@ -269,14 +269,14 @@ void ProcessListElement::releaseQueryStreams()
+ 
+ bool ProcessListElement::streamsAreReleased()
+ {
+-    std::lock_guard<std::mutex> lock(query_streams_mutex);
++    std::lock_guard lock(query_streams_mutex);
+ 
+     return query_streams_status == QueryStreamsStatus::Released;
+ }
+ 
+ bool ProcessListElement::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const
+ {
+-    std::lock_guard<std::mutex> lock(query_streams_mutex);
++    std::lock_guard lock(query_streams_mutex);
+ 
+     if (query_streams_status != QueryStreamsStatus::Initialized)
+         return false;
+diff --git a/dbms/src/Interpreters/ProcessList.h b/dbms/src/Interpreters/ProcessList.h
+index 19cf01732d7..788c7de62cc 100644
+--- a/dbms/src/Interpreters/ProcessList.h
++++ b/dbms/src/Interpreters/ProcessList.h
+@@ -83,7 +83,7 @@ class ProcessListElement
+     /// Be careful using it. For example, queries field could be modified concurrently.
+     const ProcessListForUser * user_process_list = nullptr;
+ 
+-    mutable std::mutex query_streams_mutex;
++    mutable boost::fibers::mutex query_streams_mutex;
+ 
+     /// Streams with query results, point to BlockIO from executeQuery()
+     /// This declaration is compatible with notes about BlockIO::process_list_entry:
+@@ -111,7 +111,7 @@ class ProcessListElement
+         priority_handle(std::move(priority_handle_))
+     {
+         memory_tracker.setDescription("(for query)");
+-        current_memory_tracker = &memory_tracker;
++        // current_memory_tracker = &memory_tracker;
+ 
+         if (memory_tracker_fault_probability)
+             memory_tracker.setFaultProbability(memory_tracker_fault_probability);
+diff --git a/dbms/src/Interpreters/SharedQueries.h b/dbms/src/Interpreters/SharedQueries.h
+index c7e83ebf446..d7383f45e42 100644
+--- a/dbms/src/Interpreters/SharedQueries.h
++++ b/dbms/src/Interpreters/SharedQueries.h
+@@ -113,7 +113,7 @@ class SharedQueries
+         else
+         {
+             BlockIO io = creator();
+-            io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, nullptr);
++            io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, nullptr, true);
+             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
+ 
+             LOG_TRACE(log, "getOrCreateBlockIO, query_id: " << query_id << ", clients: " << clients << ", connected_clients: " << 1);
+diff --git a/dbms/src/Server/Server.cpp b/dbms/src/Server/Server.cpp
+index 29944346e04..8f471a01ddb 100644
+--- a/dbms/src/Server/Server.cpp
++++ b/dbms/src/Server/Server.cpp
+@@ -5,6 +5,7 @@
+ #include <Common/ClickHouseRevision.h>
+ #include <Common/Config/ConfigReloader.h>
+ #include <Common/CurrentMetrics.h>
++#include <Common/IOThreadPool.h>
+ #include <Common/Macros.h>
+ #include <Common/RedactHelpers.h>
+ #include <Common/StringUtils/StringUtils.h>
+@@ -24,6 +25,7 @@
+ #include <Encryption/RateLimiter.h>
+ #include <Flash/DiagnosticsService.h>
+ #include <Flash/FlashService.h>
++#include <Flash/Mpp/GRPCCompletionQueuePool.h>
+ #include <Functions/registerFunctions.h>
+ #include <IO/HTTPCommon.h>
+ #include <IO/ReadHelpers.h>
+@@ -954,6 +956,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
+         global_context->initializeFileProvider(key_manager, false);
+     }
+ 
++    (void)GRPCCompletionQueuePool::Instance()->pickQueue();
++    (void)IOThreadPool::instance();
++
+     /// ===== Paths related configuration initialized start ===== ///
+     /// Note that theses global variables should be initialized by the following order:
+     // 1. capacity

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FiberTraits.h>
 #include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
@@ -178,7 +179,7 @@ public:
 
 protected:
     BlockInputStreams children;
-    mutable std::shared_mutex children_mutex;
+    mutable FiberTraits::SharedMutex children_mutex;
     bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
 
 private:
