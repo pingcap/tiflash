@@ -16,8 +16,9 @@
 
 namespace DB
 {
-TiDBTableScan::TiDBTableScan(const tipb::Executor * table_scan_, const DAGContext & dag_context)
+TiDBTableScan::TiDBTableScan(const tipb::Executor * table_scan_, const String & executor_id_, const DAGContext & dag_context)
     : table_scan(table_scan_)
+    , executor_id(executor_id_)
     , is_partition_table_scan(table_scan->tp() == tipb::TypePartitionTableScan)
     , columns(is_partition_table_scan ? table_scan->partition_table_scan().columns() : table_scan->tbl_scan().columns())
 {

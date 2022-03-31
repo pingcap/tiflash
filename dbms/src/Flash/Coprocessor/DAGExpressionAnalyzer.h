@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -52,6 +53,12 @@ public:
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
 
+    void reset(const std::vector<NameAndTypePair> & source_columns_)
+    {
+        source_columns = source_columns_;
+        prepared_sets.clear();
+    }
+
     const Context & getContext() const { return context; }
 
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
@@ -61,17 +68,6 @@ public:
     String appendWhere(
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
-
-    std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::TopN & topN);
-
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
-    /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        bool group_by_collation_sensitive);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -87,14 +83,12 @@ public:
     // Generate a project action for non-root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same, and
     // guarantee that left/right block of join don't have duplicated column names.
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix) const;
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     // Generate a project action for root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same.
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
+    NamesWithAliases buildFinalProjection(
+        const ExpressionActionsPtr & actions,
         const std::vector<tipb::FieldType> & schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
@@ -122,7 +116,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const tipb::TableScan & table_scan);
+        const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -135,7 +129,6 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
-private:
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
@@ -144,6 +137,27 @@ private:
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
+private:
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -166,22 +180,6 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
-
-    void buildAggFuncs(
-        const tipb::Aggregation & aggregation,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns);
-
-    void buildAggGroupBy(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
-        Names & aggregation_keys,
-        std::unordered_set<String> & agg_key_set,
-        bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
 
     void fillAggArgumentDetail(
         const ExpressionActionsPtr & actions,
@@ -258,12 +256,6 @@ private:
     String buildFunction(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
-
-    String buildFilterColumn(
-        const ExpressionActionsPtr & actions,
-        const std::vector<const tipb::Expr *> & conditions);
-
-    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,

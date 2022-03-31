@@ -365,50 +365,6 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> DAGExpressionAnalyzer::appendAggregation(
-    ExpressionActionsChain & chain,
-    const tipb::Aggregation & agg,
-    bool group_by_collation_sensitive)
-{
-    if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
-    {
-        //should not reach here
-        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-
-    NamesAndTypes aggregated_columns;
-    AggregateDescriptions aggregate_descriptions;
-    Names aggregation_keys;
-    TiDB::TiDBCollators collators;
-    std::unordered_set<String> agg_key_set;
-    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
-    buildAggGroupBy(agg.group_by(), step.actions, aggregate_descriptions, aggregated_columns, aggregation_keys, agg_key_set, group_by_collation_sensitive, collators);
-    // set required output for agg funcs's arguments and group by keys.
-    for (const auto & aggregate_description : aggregate_descriptions)
-    {
-        for (const auto & argument_name : aggregate_description.argument_names)
-            step.required_output.push_back(argument_name);
-    }
-    for (const auto & aggregation_key : aggregation_keys)
-        step.required_output.push_back(aggregation_key);
-
-    source_columns = std::move(aggregated_columns);
-
-    auto before_agg = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    auto & after_agg_step = initAndGetLastStep(chain);
-    appendCastAfterAgg(after_agg_step.actions, agg);
-    // after appendCastAfterAgg, current input columns has been modified.
-    for (const auto & column : getCurrentInputColumns())
-        after_agg_step.required_output.push_back(column.name);
-
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg};
-}
-
 String DAGExpressionAnalyzer::applyFunction(
     const String & func_name,
     const Names & arg_names,
@@ -532,25 +488,6 @@ NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
     return order_columns;
 }
 
-std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
-    ExpressionActionsChain & chain,
-    const tipb::TopN & topN)
-{
-    if (topN.order_by_size() == 0)
-    {
-        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-    auto order_columns = buildOrderColumns(step.actions, topN.order_by());
-
-    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
-    for (const auto & order_column : order_columns)
-        step.required_output.push_back(order_column.name);
-
-    return order_columns;
-}
-
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
 {
     return source_columns;
@@ -616,11 +553,11 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const tipb::TableScan & table_scan)
+    const TiDBTableScan & table_scan)
 {
     auto & step = initAndGetLastStep(chain);
 
-    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.columns());
+    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.getColumns());
 
     for (auto & col : source_columns)
         step.required_output.push_back(col.name);
@@ -817,18 +754,6 @@ NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const Stri
     return final_project_aliases;
 }
 
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const String & column_prefix) const
-{
-    NamesWithAliases final_project = genNonRootFinalProjectAliases(column_prefix);
-
-    auto & step = initAndGetLastStep(chain);
-    for (const auto & name : final_project)
-        step.required_output.push_back(name.first);
-    return final_project;
-}
-
 NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
     const String & column_prefix,
     const std::vector<Int32> & output_offsets) const
@@ -935,8 +860,8 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
     return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
 }
 
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    ExpressionActionsChain & chain,
+NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
+    const ExpressionActionsPtr & actions,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
@@ -949,22 +874,14 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
     assert(need_append_type_cast_vec.size() == output_offsets.size());
 
-    auto & step = initAndGetLastStep(chain);
-
     if (need_append_timezone_cast || need_append_type_cast)
     {
         // after appendCastForRootFinalProjection, source_columns has been modified.
-        appendCastForRootFinalProjection(step.actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+        appendCastForRootFinalProjection(actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
     }
 
     // generate project aliases from source_columns.
-    NamesWithAliases final_project = genRootFinalProjectAliases(column_prefix, output_offsets);
-
-    for (const auto & name : final_project)
-    {
-        step.required_output.push_back(name.first);
-    }
-    return final_project;
+    return genRootFinalProjectAliases(column_prefix, output_offsets);
 }
 
 String DAGExpressionAnalyzer::alignReturnType(
