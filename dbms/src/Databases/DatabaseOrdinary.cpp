@@ -159,7 +159,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
     /// But there is protection from it - see using DDLGuard in InterpreterCreateQuery.
 
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (tables.find(table_name) != tables.end())
             throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
     }
@@ -184,7 +184,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
     {
         /// Add a table to the map of known tables.
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             if (!tables.emplace(table_name, table).second)
                 throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
         }
@@ -296,7 +296,7 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context, const 
         /// Handle system.* tables for which there are no table.sql files.
         bool has_table = tryGetTable(context, table_name) != nullptr;
 
-        auto msg = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
+        const auto * msg = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
 
         throw Exception(fmt::format("{}{}", msg, table_name), ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
     }
@@ -339,7 +339,7 @@ void DatabaseOrdinary::shutdown()
 
     Tables tables_snapshot;
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         tables_snapshot = tables;
     }
 
@@ -348,7 +348,7 @@ void DatabaseOrdinary::shutdown()
         kv.second->shutdown();
     }
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     tables.clear();
 }
 
@@ -421,7 +421,7 @@ void DatabaseOrdinary::alterTable(
     EncryptionPath encryption_path
         = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
         WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();

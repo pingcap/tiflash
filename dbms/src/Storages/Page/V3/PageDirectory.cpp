@@ -639,10 +639,10 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   * PageDirectory methods *
   *************************/
 
-PageDirectory::PageDirectory(WALStorePtr && wal_)
+PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_)
     : sequence(0)
     , wal(std::move(wal_))
-    , log(Logger::get("PageDirectory"))
+    , log(Logger::get("PageDirectory", std::move(storage_name)))
 {
 }
 

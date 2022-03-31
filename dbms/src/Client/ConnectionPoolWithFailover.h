@@ -54,7 +54,7 @@ public:
     using Entry = IConnectionPool::Entry;
 
     /** Allocates connection to work. */
-    Entry get(const Settings * settings, bool force_connected) override; /// From IConnectionPool
+    Entry getImpl(const Settings * settings, bool force_connected) override; /// From IConnectionPool
 
     /** Allocates up to the specified number of connections to work.
       * Connections provide access to different replicas of one shard.

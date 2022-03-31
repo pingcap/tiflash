@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/PathPool.h>
 
 #include <mutex>
 
@@ -88,10 +89,12 @@ public:
 
             std::mutex sm_lock;
 
-            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
-                : smap(std::move(smap_))
+        public:
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , id(id_)
                 , type(BlobStatType::NORMAL)
+                , sm_max_caps(sm_max_caps_)
             {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
@@ -135,11 +138,11 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(LoggerPtr log_, BlobStore::Config config);
+        BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
@@ -165,11 +168,12 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
 
-        std::list<BlobStatPtr> getStats() const
+        std::map<String, std::list<BlobStatPtr>> getStats() const
         {
             auto guard = lock();
             return stats_map;
         }
+
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
@@ -185,11 +189,15 @@ public:
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
-        std::list<BlobStatPtr> stats_map;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
+        // Index for selecting next path for creating new blobfile
+        UInt16 stats_map_path_index = 0;
+
+        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
+    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -242,7 +250,7 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id) const;
+    String getBlobFilePath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
@@ -250,9 +258,11 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    constexpr static const char * blob_prefix_name = "/blobfile_";
+
+    PSDiskDelegatorPtr delegator;
 
     FileProviderPtr file_provider;
-    String path{};
     Config config;
 
     LoggerPtr log;

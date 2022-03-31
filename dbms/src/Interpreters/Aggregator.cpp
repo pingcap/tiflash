@@ -675,7 +675,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     double uncompressed_bytes = compressed_buf.count();
 
     {
-        std::lock_guard<std::mutex> lock(temporary_files.mutex);
+        std::lock_guard lock(temporary_files.mutex);
         temporary_files.files.emplace_back(std::move(file));
         temporary_files.sum_size_uncompressed += uncompressed_bytes;
         temporary_files.sum_size_compressed += compressed_bytes;
@@ -1555,7 +1555,7 @@ protected:
 
             while (true)
             {
-                std::unique_lock<std::mutex> lock(parallel_merge_data->mutex);
+                std::unique_lock lock(parallel_merge_data->mutex);
 
                 if (parallel_merge_data->exception)
                     std::rethrow_exception(parallel_merge_data->exception);
@@ -1644,12 +1644,12 @@ private:
             APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
 
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
         }
         catch (...)
         {
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             if (!parallel_merge_data->exception)
                 parallel_merge_data->exception = std::current_exception();
         }

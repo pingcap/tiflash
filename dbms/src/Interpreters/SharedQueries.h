@@ -57,12 +57,11 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_FMT_TRACE(
-            log,
-            "onClientFinish, SharedQuery({}), clients: {}, finished_clients: {}",
-            query_id,
-            clients,
-            finished_clients);
+        LOG_FMT_TRACE(log,
+                      "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+                      query_id,
+                      clients,
+                      finished_clients);
     }
 
     bool isDone() const
@@ -100,7 +99,7 @@ public:
         if (!clients)
             throw Exception("Illegal client count: " + toString(clients));
 
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         const auto it = queries.find(query_id);
         if (it != queries.end())
@@ -124,13 +123,11 @@ public:
             }
             query.connected_clients++;
 
-            LOG_FMT_TRACE(
-                log,
-                "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
-                query_id,
-                clients,
-                query.connected_clients);
-
+            LOG_FMT_TRACE(log,
+                          "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                          query_id,
+                          clients,
+                          query.connected_clients);
             return query.io;
         }
         else
@@ -147,7 +144,7 @@ public:
 
     void onSharedQueryFinish(String query_id)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         const auto it = queries.find(query_id);
         if (it == queries.end())
@@ -162,14 +159,14 @@ public:
 
         //        if (it->second->isDone())
         //        {
-        //            LOG_TRACE(log, "Remove shared query(" << it->second->query_id << ")");
+        //            LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
         //            queries.erase(it);
         //        }
     }
 
     void checkAll()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         for (auto it = queries.begin(); it != queries.end();)
         {
