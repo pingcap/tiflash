@@ -60,7 +60,7 @@ TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain
   Click sections below to see detailed instructions:
 
   <details>
-  <summary><b>Set up LLVM via TiFlash Env</b></summary>
+  <summary><b>Set up LLVM via TiFlash Env (for internal developers of PingCAP)</b></summary>
 
   TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
 
@@ -239,6 +239,9 @@ TBD.
 
 ## Generate LLVM Coverage Report
 
+<details>
+  <summary><b>internal developers of PingCAP</b></summary>
+
 [//]: <> (TODO: This section is not proper for developers outside PingCAP, as it uses docker image only available on internal network.)
 [//]: <> (TODO: Should refine to use local commands rather than docker.)
 To get a coverage report of unit tests, we recommend using the docker image and our scripts.
@@ -266,6 +269,7 @@ llvm-cov export \
 mkdir -p /build/tiflash/report
 genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
 ```
+</details>
 
 ## Contributing
 
