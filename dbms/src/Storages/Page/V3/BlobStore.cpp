@@ -355,7 +355,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
-                                getBlobFilePath(entry.file_id)),
+                                getBlobFileParentPath(entry.file_id)),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
@@ -426,7 +426,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                                     beg_offset,
                                     size_to_read,
                                     toDebugString(entry),
-                                    getBlobFilePath(entry.file_id)),
+                                    getBlobFileParentPath(entry.file_id)),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
                 }
             }
@@ -494,7 +494,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
-                                getBlobFilePath(entry.file_id)),
+                                getBlobFileParentPath(entry.file_id)),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
@@ -541,7 +541,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
                             entry.checksum,
                             checksum,
                             toDebugString(entry),
-                            getBlobFilePath(entry.file_id)),
+                            getBlobFileParentPath(entry.file_id)),
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
     }
@@ -763,18 +763,21 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 }
 
 
-String BlobStore::getBlobFilePath(BlobFileId blob_id)
+String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 {
     PageFileIdAndLevel id_lvl{blob_id, 0};
     String parent_path = delegator->choosePath(id_lvl);
 
-    return parent_path + "/blobfile_" + DB::toString(blob_id);
+    if (auto f = Poco::File(parent_path); !f.exists())
+        f.createDirectories();
+
+    return parent_path;
 }
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 {
     return cached_files.getOrSet(blob_id, [this, blob_id]() -> BlobFilePtr {
-                           return std::make_shared<BlobFile>(getBlobFilePath(blob_id), blob_id, file_provider, delegator);
+                           return std::make_shared<BlobFile>(getBlobFileParentPath(blob_id), blob_id, file_provider, delegator);
                        })
         .first;
 }

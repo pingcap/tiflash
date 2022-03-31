@@ -29,19 +29,21 @@ namespace DB::PS::V3
 class BlobFile
 {
 public:
-    BlobFile(String path_,
+    constexpr static const char * BLOB_PREFIX_NAME = "blobfile_";
+public:
+    BlobFile(String parent_path_,
              BlobFileId blob_id_,
              FileProviderPtr file_provider_,
              PSDiskDelegatorPtr delegator_);
 
     ~BlobFile();
 
-    String getPath()
+    String getPath() const
     {
-        return path;
+        return fmt::format("{}/{}{}", parent_path, BLOB_PREFIX_NAME, blob_id);
     }
 
-    EncryptionPath getEncryptionPath()
+    EncryptionPath getEncryptionPath() const
     {
         return EncryptionPath(getPath(), "");
     }
@@ -61,7 +63,7 @@ private:
 
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
-    String path;
+    const String parent_path;
 
     WriteReadableFilePtr wrfile;
 
