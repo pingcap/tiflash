@@ -201,11 +201,19 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
     {
         lazily_init_store = (*lazily_init != 0);
     }
+    else if (auto lazily_init_b = table->get_qualified_as<bool>("lazily_init_store"); lazily_init_b)
+    {
+        enable_ps_v3 = *lazily_init_b;
+    }
 
     // config for experimental feature, may remove later
     if (auto enable_v3 = table->get_qualified_as<Int32>("enable_ps_v3"); enable_v3)
     {
         enable_ps_v3 = (*enable_v3 != 0);
+    }
+    else if (auto enable_v3_b = table->get_qualified_as<bool>("enable_ps_v3"); enable_v3_b)
+    {
+        enable_ps_v3 = *enable_v3_b;
     }
 
     LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
