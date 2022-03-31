@@ -312,7 +312,7 @@ void handleTableScan(
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        executeRemoteQueryImpl(context, pipeline, remote_requests);
+        executeRemoteQueryImpl(context, pipeline, table_scan.getTableScanExecutorID(), remote_requests);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
@@ -352,7 +352,7 @@ void handleTableScan(
     /// handle pushed down filter for local and remote table scan.
     if (!conditions.empty())
     {
-        executePushedDownFilter(*analyzer, conditions, remote_read_streams_start_index, pipeline);
+        executePushedDownFilter(*analyzer, conditions, remote_read_streams_start_index, pipeline, dag_context.log->identifier());
         recordProfileStreams(dag_context, pipeline, filter_executor_id);
     }
 }

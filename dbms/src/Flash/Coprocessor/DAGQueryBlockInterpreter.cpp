@@ -531,7 +531,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, dagContext());
+        TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
 
