@@ -16,7 +16,6 @@
 #include <Dictionaries/ExternalQueryBuilder.h>
 #include <Dictionaries/writeParenthesisedString.h>
 #include <Client/ConnectionPool.h>
-#include <DataStreams/RemoteBlockInputStream.h>
 #include <Interpreters/executeQuery.h>
 #include <Common/isLocalAddress.h>
 #include <memory>
@@ -29,22 +28,6 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNSUPPORTED_METHOD;
-}
-
-
-static const size_t MAX_CONNECTIONS = 16;
-
-static ConnectionPoolWithFailoverPtr createPool(
-        const std::string & host, UInt16 port, bool secure, const std::string & db,
-        const std::string & user, const std::string & password, const Context & context)
-{
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(context.getSettingsRef());
-    ConnectionPoolPtrs pools;
-    pools.emplace_back(std::make_shared<ConnectionPool>(
-            MAX_CONNECTIONS, host, port, db, user, password, timeouts, "ClickHouseDictionarySource",
-            Protocol::Compression::Enable,
-            secure ? Protocol::Secure::Enable : Protocol::Secure::Disable));
-    return std::make_shared<ConnectionPoolWithFailover>(pools, LoadBalancing::RANDOM);
 }
 
 
@@ -66,8 +49,6 @@ ClickHouseDictionarySource::ClickHouseDictionarySource(
         update_field{config.getString(config_prefix + ".update_field", "")},
         query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks},
         sample_block{sample_block}, context(context),
-        is_local{isLocalAddress({ host, port }, config.getInt("tcp_port", 0))},
-        pool{is_local ? nullptr : createPool(host, port, secure, db, user, password, context)},
         load_all_query{query_builder.composeLoadAllQuery()}
 {}
 
@@ -83,8 +64,6 @@ ClickHouseDictionarySource::ClickHouseDictionarySource(const ClickHouseDictionar
         update_field{other.update_field},
         query_builder{dict_struct, db, table, where, ExternalQueryBuilder::Backticks},
         sample_block{other.sample_block}, context(other.context),
-        is_local{other.is_local},
-        pool{is_local ? nullptr : createPool(host, port, secure, db, user, password, context)},
         load_all_query{other.load_all_query}
 {}
 
@@ -111,17 +90,13 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadAll()
     /** Query to local ClickHouse is marked internal in order to avoid
       *    the necessity of holding process_list_element shared pointer.
       */
-    if (is_local)
-        return executeQuery(load_all_query, context, true).in;
-    return std::make_shared<RemoteBlockInputStream>(pool, load_all_query, sample_block, context);
+    return executeQuery(load_all_query, context, true).in;
 }
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadUpdatedAll()
 {
     std::string load_update_query = getUpdateFieldAndDate();
-    if (is_local)
-        return executeQuery(load_update_query, context, true).in;
-    return std::make_shared<RemoteBlockInputStream>(pool, load_update_query, sample_block, context);
+    return executeQuery(load_update_query, context, true).in;
 }
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadIds(const std::vector<UInt64> & ids)
@@ -152,9 +127,7 @@ std::string ClickHouseDictionarySource::toString() const
 
 BlockInputStreamPtr ClickHouseDictionarySource::createStreamForSelectiveLoad(const std::string & query)
 {
-    if (is_local)
-        return executeQuery(query, context, true).in;
-    return std::make_shared<RemoteBlockInputStream>(pool, query, sample_block, context);
+    return executeQuery(query, context, true).in;
 }
 
 }

@@ -25,7 +25,7 @@
 namespace DB
 {
 
-/** Allows loading dictionaries from local or remote ClickHouse instance
+/** Allows loading dictionaries from local ClickHouse instance
   *    @todo use ConnectionPoolWithFailover
   *    @todo invent a way to keep track of source modifications
   */
@@ -77,8 +77,6 @@ private:
     ExternalQueryBuilder query_builder;
     Block sample_block;
     Context & context;
-    const bool is_local;
-    ConnectionPoolWithFailoverPtr pool;
     const std::string load_all_query;
 };
 
