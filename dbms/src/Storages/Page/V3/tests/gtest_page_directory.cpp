@@ -54,7 +54,7 @@ public:
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create(provider, delegator);
+        dir = factory.create("PageDirectoryTest", provider, delegator);
     }
 
 protected:
@@ -1769,7 +1769,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(provider, delegator, edit);
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
 
@@ -1982,13 +1982,15 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.setBlobStats(stats).createFromEdit(provider, delegator, edit);
+        auto d = factory.setBlobStats(stats).createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
     {
         auto snap = dir->createSnapshot();
         auto edit = dir->dumpSnapshotToEdit(snap);
-        BlobStore::BlobStats stats(log, BlobStore::Config{});
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        BlobStore::BlobStats stats(log, delegator, BlobStore::Config{});
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();
         EXPECT_SAME_ENTRY(entry_1_v1, restored_dir->get(2, temp_snap).second);

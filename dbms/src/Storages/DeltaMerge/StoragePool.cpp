@@ -42,8 +42,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
     config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
     config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
-    config.gc_force_hardlink_rate = settings.dt_storage_pool_##NAME##_gc_force_hardlink_rate;
+    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
 
     PageStorage::Config config = getConfigFromSettings(settings);
 
@@ -137,7 +136,7 @@ GlobalStoragePool::~GlobalStoragePool()
 bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         Timepoint now = Clock::now();
         if (now < (last_try_gc_time.load() + try_gc_period))
@@ -221,7 +220,7 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
         return false;
 
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         // Just do gc for owned storage, otherwise the gc will be handled globally
 
         Timepoint now = Clock::now();
@@ -252,10 +251,6 @@ void StoragePool::drop()
         meta_storage->drop();
         data_storage->drop();
         log_storage->drop();
-    }
-    else
-    {
-        // FIXME: drop data for this table
     }
 }
 

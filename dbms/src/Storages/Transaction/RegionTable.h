@@ -100,14 +100,14 @@ public:
         {
             auto flush_thresholds = std::make_shared<FlushThresholdsData>(flush_thresholds_);
             {
-                std::lock_guard<std::mutex> lock(mutex);
+                std::lock_guard lock(mutex);
                 data = std::move(flush_thresholds);
             }
         }
 
         auto getData() const
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             return data;
         }
 

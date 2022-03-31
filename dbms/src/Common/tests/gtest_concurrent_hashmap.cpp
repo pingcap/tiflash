@@ -87,7 +87,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
                         segment_index = hash_value % test_concurrency;
                     }
                     bool inserted;
-                    std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
+                    std::lock_guard lk(map.getSegmentMutex(segment_index));
                     typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                     map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
                     it->getMapped().value++;
@@ -202,7 +202,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
                     }
                     bool inserted;
                     {
-                        std::lock_guard<std::mutex> lk(concurrent_map.getSegmentMutex(segment_index));
+                        std::lock_guard lk(concurrent_map.getSegmentMutex(segment_index));
                         typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                         concurrent_map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
                         it->getMapped().value++;
