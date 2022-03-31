@@ -1117,7 +1117,9 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
-    LOG_FMT_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", total_page_size, total_page_nums);
+    LOG_FMT_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", //
+                 total_page_size, //
+                 total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
@@ -1234,7 +1236,15 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         }
     }
 
-    LOG_FMT_INFO(log, "After MVCC gc in memory, clean [invalid_snpashot_nums={}] [invalid_page_nums={}] [total_deref_counter={}] [all_del_entries={}]. still exist [snpashot_nums={}], [page_nums={}]", invalid_snpashot_nums, invalid_page_nums, total_deref_counter, all_del_entries.size(), valid_snpashot_nums, valid_page_nums);
+    LOG_FMT_INFO(log, "After MVCC gc in memory, clean [invalid_snpashot_nums={}] [invalid_page_nums={}] "
+                      "[total_deref_counter={}] [all_del_entries={}]."
+                      "Still exist [snpashot_nums={}], [page_nums={}].",
+                 invalid_snpashot_nums,
+                 invalid_page_nums,
+                 total_deref_counter,
+                 all_del_entries.size(),
+                 valid_snpashot_nums,
+                 valid_page_nums);
 
     return all_del_entries;
 }

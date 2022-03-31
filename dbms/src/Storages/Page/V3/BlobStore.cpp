@@ -249,7 +249,13 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
                 auto lock = stat->lock();
                 stat->recalculateCapacity();
             }
-            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] [total_size={}] [valid_size={}] [valid_rate={}]", blob_id, stat->sm_max_caps, stat->sm_total_size, stat->sm_valid_size, stat->sm_valid_rate);
+            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
+                               "[total_size={}] [valid_size={}] [valid_rate={}]",
+                          blob_id,
+                          stat->sm_max_caps,
+                          stat->sm_total_size,
+                          stat->sm_valid_size,
+                          stat->sm_valid_rate);
         }
     }
 }
