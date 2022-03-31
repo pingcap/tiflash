@@ -101,7 +101,7 @@ protected:
             return res;
         has_been_read = true;
 
-        std::lock_guard<std::mutex> lock(buffer.mutex);
+        std::lock_guard lock(buffer.mutex);
 
         if (!buffer.data.rows())
             return res;
@@ -281,7 +281,7 @@ public:
 
         for (size_t try_no = 0; try_no < storage.num_shards; ++try_no)
         {
-            std::unique_lock<std::mutex> lock(storage.buffers[shard_num].mutex, std::try_to_lock_t());
+            std::unique_lock lock(storage.buffers[shard_num].mutex, std::try_to_lock_t());
 
             if (lock.owns_lock())
             {
@@ -299,7 +299,7 @@ public:
 
         /// If you still can not lock anything at once, then we'll wait on mutex.
         if (!least_busy_buffer)
-            insertIntoBuffer(block, storage.buffers[start_shard_num], std::unique_lock<std::mutex>(storage.buffers[start_shard_num].mutex));
+            insertIntoBuffer(block, storage.buffers[start_shard_num], std::unique_lock(storage.buffers[start_shard_num].mutex));
         else
             insertIntoBuffer(block, *least_busy_buffer, std::move(least_busy_lock));
     }
@@ -472,7 +472,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     size_t bytes = 0;
     time_t time_passed = 0;
 
-    std::lock_guard<std::mutex> lock(buffer.mutex);
+    std::lock_guard lock(buffer.mutex);
 
     block_to_write = buffer.data.cloneEmpty();
 

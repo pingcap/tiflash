@@ -258,7 +258,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
     BlobStatPtr stat;
 
-    auto lock_stat = [size, this, &stat]() -> std::lock_guard<std::mutex> {
+    auto lock_stat = [size, this, &stat]() {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, lock_stats);
