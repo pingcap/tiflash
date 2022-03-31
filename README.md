@@ -186,32 +186,7 @@ TBD.
 
 ## Generate LLVM Coverage Report
 
-
-To get a coverage report of unit tests, we recommend using the docker image and our scripts. The docker image `hub.pingcap.net/tiflash/tiflash-llvm-base:amd64` can be built via [`release-centos7-llvm/Makefile`](https://github.com/pingcap/tiflash/blob/master/release-centos7-llvm/Makefile#L16).
-
-```shell
-docker run --rm -it -v /path/to/tiflash/src:/build/tiflash hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /bin/bash # or aarch64
-cd /build/tiflash/release-centos7-llvm
-sh scripts/build-tiflash-ut-coverage.sh
-sh scripts/run-ut.sh
-
-# after running complete
-
-llvm-profdata merge -sparse /tiflash/profile/*.profraw -o /tiflash/profile/merged.profdata
-llvm-cov export \
-    /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon \
-    --format=lcov \
-    --instr-profile /tiflash/profile/merged.profdata \
-    --ignore-filename-regex "/usr/include/.*" \
-    --ignore-filename-regex "/usr/local/.*" \
-    --ignore-filename-regex "/usr/lib/.*" \
-    --ignore-filename-regex ".*/contrib/.*" \
-    --ignore-filename-regex ".*/dbms/src/Debug/.*" \
-    --ignore-filename-regex ".*/dbms/src/Client/.*" \
-    > /tiflash/profile/lcov.info
-mkdir -p /build/tiflash/report
-genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
-```
+TBD.
 
 ## Contributing
 
