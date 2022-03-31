@@ -1045,6 +1045,8 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
         const auto & versioned_entries = iter->second;
         versioned_entries->createNewEntry(record.version, record.entry);
     }
+
+    LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
 std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
@@ -1086,13 +1088,19 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             return {blob_versioned_entries, total_page_size};
     }
 
+    UInt64 total_page_nums = 0;
     while (true)
     {
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do scan on the version list without lock on `mvcc_table_directory`.
         auto page_id = iter->first;
         const auto & version_entries = iter->second;
-        total_page_size += version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
+        auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
+        total_page_size += single_page_size;
+        if (single_page_size != 0)
+        {
+            total_page_nums++;
+        }
 
         {
             std::shared_lock read_lock(table_rw_mutex);
@@ -1108,6 +1116,8 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
         }
     }
+
+    LOG_FMT_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", total_page_size, total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
@@ -1129,17 +1139,24 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
 {
     UInt64 lowest_seq = sequence.load();
 
+    UInt64 invalid_snpashot_nums = 0;
+    UInt64 valid_snpashot_nums = 0;
+
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
+            {
                 iter = snapshots.erase(iter);
+                invalid_snpashot_nums++;
+            }
             else
             {
                 lowest_seq = std::min(lowest_seq, snap->sequence);
                 ++iter;
+                valid_snpashot_nums++;
             }
         }
     }
@@ -1152,6 +1169,9 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         if (iter == mvcc_table_directory.end())
             return all_del_entries;
     }
+
+    UInt64 invalid_page_nums = 0;
+    UInt64 valid_page_nums = 0;
 
     // The page_id that we need to decrease ref count
     // { id_0: <version, num to decrease>, id_1: <...>, ... }
@@ -1172,9 +1192,11 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
+                invalid_page_nums++;
             }
             else
             {
+                valid_page_nums++;
                 iter++;
             }
 
@@ -1182,6 +1204,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
                 break;
         }
     }
+
+    UInt64 total_deref_counter = 0;
 
     // Iterate all page_id that need to decrease ref count of specified version.
     for (const auto & [page_id, deref_counter] : normal_entries_to_deref)
@@ -1205,8 +1229,12 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         {
             std::unique_lock write_lock(table_rw_mutex);
             mvcc_table_directory.erase(iter);
+            invalid_page_nums++;
+            valid_page_nums--;
         }
     }
+
+    LOG_FMT_INFO(log, "After MVCC gc in memory, clean [invalid_snpashot_nums={}] [invalid_page_nums={}] [total_deref_counter={}] [all_del_entries={}]. still exist [snpashot_nums={}], [page_nums={}]", invalid_snpashot_nums, invalid_page_nums, total_deref_counter, all_del_entries.size(), valid_snpashot_nums, valid_page_nums);
 
     return all_del_entries;
 }
@@ -1237,7 +1265,8 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
                 break;
         }
     }
-    // TODO: log down the sequence and time elapsed
+
+    LOG_FMT_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
     return edit;
 }
 
