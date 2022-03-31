@@ -57,7 +57,7 @@ struct CatBoostWrapperAPI
 
     int (*get_string_cat_feature_hash)(const char * data, size_t size);
 
-    int (*get_integer_cat_feature_hash)(long long val);
+    int (*get_integer_cat_feature_hash)(Int64 val);
 
     size_t (*get_float_features_count)(ModelCalcerHandle * calcer);
 
@@ -255,11 +255,11 @@ private:
 
     /// Place columns into buffer, returns data which was used for fixed string columns.
     /// Buffer should contains column->size() values, each value contains size strings.
-    std::vector<PODArray<char>> placeStringColumns(
+    static std::vector<PODArray<char>> placeStringColumns(
         const ColumnRawPtrs & columns,
         size_t offset,
         size_t size,
-        const char ** buffer) const
+        const char ** buffer)
     {
         if (size == 0)
             return {};
