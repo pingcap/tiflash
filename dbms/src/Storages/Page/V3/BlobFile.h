@@ -48,8 +48,6 @@ public:
         return EncryptionPath(getPath(), "");
     }
 
-    BlobFileId getBlobFileId();
-
     void read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter);
 
     void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter);

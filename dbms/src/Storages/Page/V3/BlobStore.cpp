@@ -340,7 +340,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
     for (const auto & [page_id_v3, entry] : entries)
     {
-        read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
+        auto blob_file = read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -355,7 +355,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
-                                getBlobFileParentPath(entry.file_id)),
+                                blob_file->getPath()),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
@@ -403,7 +403,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read = end_offset - beg_offset;
-            read(entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+            auto blob_file = read(entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
@@ -426,7 +426,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                                     beg_offset,
                                     size_to_read,
                                     toDebugString(entry),
-                                    getBlobFileParentPath(entry.file_id)),
+                                    blob_file->getPath()),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
                 }
             }
@@ -479,7 +479,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     PageMap page_map;
     for (const auto & [page_id_v3, entry] : entries)
     {
-        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        auto blob_file = read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -494,7 +494,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
                                 entry.checksum,
                                 checksum,
                                 toDebugString(entry),
-                                getBlobFileParentPath(entry.file_id)),
+                                blob_file->getPath()),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
@@ -527,7 +527,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         free(p, buf_size);
     });
 
-    read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    auto blob_file = read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
     if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
     {
         ChecksumClass digest;
@@ -541,7 +541,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
                             entry.checksum,
                             checksum,
                             toDebugString(entry),
-                            getBlobFileParentPath(entry.file_id)),
+                            blob_file->getPath()),
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
     }
@@ -554,10 +554,12 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
+BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
 {
     assert(buffers != nullptr);
-    getBlobFile(blob_id)->read(buffers, offset, size, read_limiter);
+    auto blob_file = getBlobFile(blob_id);
+    blob_file->read(buffers, offset, size, read_limiter);
+    return blob_file;
 }
 
 
