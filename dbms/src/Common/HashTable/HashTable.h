@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FiberTraits.h>
 #include <Common/HashTable/HashTableAllocator.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
 #include <Core/Defines.h>
@@ -1364,7 +1365,7 @@ class HashTableWithLock
 {
 public:
     using HashTable = HashTableType;
-    using LockGuard = std::lock_guard<std::mutex>;
+    using LockGuard = std::lock_guard<FiberTraits::Mutex>;
     /// Maybe it's more reasonable to hold a write lock for IteratorWithLock and a read lock for ConstIteratorWithLock, however,
     /// when I refine the code using shared_mutex to return read lock for ConstIterator and write lock for Iterator, the tests
     /// in gtest_concurrent_hashmap(with test_loop = 1000) is about 5 times slower. Since the typical usage of concurrent hash map
@@ -1375,7 +1376,7 @@ public:
     explicit HashTableWithLock(size_t reserve_for_num_elements)
         : hash_table(reserve_for_num_elements)
     {}
-    std::mutex & getMutex() { return mutex; }
+    FiberTraits::Mutex & getMutex() { return mutex; }
     HashTableType & getHashTable() { return hash_table; }
     IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x)
     {
@@ -1435,7 +1436,7 @@ public:
 
 private:
     HashTableType hash_table;
-    mutable std::mutex mutex;
+    mutable FiberTraits::Mutex mutex;
 };
 
 template <typename HashTableType>
@@ -1478,7 +1479,7 @@ public:
         return segments[segment_index]->getHashTable();
     }
 
-    std::mutex & getSegmentMutex(size_t segment_index)
+    FiberTraits::Mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
     }

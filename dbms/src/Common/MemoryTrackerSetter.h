@@ -30,13 +30,17 @@ public:
         : enable(enable_)
         , old_memory_tracker(current_memory_tracker)
     {
+#ifndef TIFLASH_USE_FIBER
         if (enable)
             current_memory_tracker = memory_tracker;
+#endif
     }
 
     ~MemoryTrackerSetter()
     {
+#ifndef TIFLASH_USE_FIBER
         current_memory_tracker = old_memory_tracker;
+#endif
     }
 
 private:
